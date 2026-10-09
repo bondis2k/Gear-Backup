@@ -2,3 +2,4 @@
 .test-runs/
 .test-output.txt
 tests/.build/
+*.exe
