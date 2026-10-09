@@ -183,8 +183,30 @@ partial class M8Backup
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         string temp = path + ".tmp";
         File.WriteAllText(temp, contents, new UTF8Encoding(false));
-        if (File.Exists(path)) File.Replace(temp, path, null);
+        if (File.Exists(path)) ReplaceSafely(temp, path);
         else File.Move(temp, path);
+    }
+
+    static void ReplaceSafely(string staged, string target)
+    {
+        // ReplaceFile can lose the old name on certain failures without a backup argument.
+        // Keep a transient on-volume rollback file even when optional PC recovery is off.
+        string rollback = Path.Combine(Path.GetDirectoryName(target), ".m8rollback-" + Guid.NewGuid().ToString("N") + ".tmp");
+        try { File.Replace(staged, target, rollback); }
+        catch (Exception ex)
+        {
+            try
+            {
+                if (!File.Exists(target) && File.Exists(rollback)) File.Move(rollback, target);
+            }
+            catch (Exception rollbackError)
+            {
+                throw new IOException("Replacement failed. Original copy is at " + rollback + "; rollback failed: " + rollbackError.Message, ex);
+            }
+            if (File.Exists(rollback)) throw new IOException("Replacement failed. Retained original copy: " + rollback, ex);
+            throw;
+        }
+        TryDelete(rollback);
     }
 
     static string BackupStatus(string folder)

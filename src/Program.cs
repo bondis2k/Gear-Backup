@@ -1,9 +1,9 @@
 // Finds a Dirtywave M8 connected in USB disk mode and backs up its SD card
-// to <BackupFolder>\M8 Backups\<date>, or incrementally into the latest existing backup,
+// to <BackupFolder>\M8 Backups\profiles\<profile>\<date>, or incrementally into the latest existing backup,
 // or restores a backup (or a single file) to the M8. Settings are in M8Backup.ini next to the exe.
 // Afterwards it offers to eject the M8 via a Windows notification.
 //
-// Usage: M8Backup.exe [--restore | --check] [--no-pause]
+// Usage: M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--preview] [--no-pause]
 // Build: build.cmd
 using System;
 using System.Collections.Generic;
@@ -70,10 +70,8 @@ partial class M8Backup
         string source = SelectSource(config, out pnpId);
         if (source == null)
         {
-            WriteColored("  No M8 found. Connect it by USB and turn on disk mode, then try again.", ConsoleColor.Red);
-            Console.WriteLine("  (To check your backups without the M8, run: M8Backup.exe --check)");
-            ShowToast("No M8 found", "Connect it by USB and turn on disk mode, then try again.", false);
-            return 1;
+            Console.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
+            return 0;
         }
         WriteColored("  Source: " + source, ConsoleColor.Green);
         if (Within(histories, source) || Within(source, histories))
@@ -102,6 +100,7 @@ partial class M8Backup
                 char choice = AskKey("  Choose 1, 2, 3 or 4: ", "1234");
                 if (choice == '4')
                 {
+                    if (PreviewOnly) { Console.WriteLine("  Preview only; check not started."); return 0; }
                     Console.WriteLine();
                     using (LockHistory(backupRoot)) return Check(backups);
                 }
@@ -119,6 +118,7 @@ partial class M8Backup
             restore = choice == '3';
             if (choice == '4')
             {
+                if (PreviewOnly) { Console.WriteLine("  Preview only; check not started."); return 0; }
                 string selected = ChooseHistory(histories, null);
                 if (selected == null) return 0;
                 using (LockHistory(selected)) return Check(ListBackups(selected));
@@ -127,7 +127,8 @@ partial class M8Backup
         Console.WriteLine();
         if (!restore && previous != null && (BackupStatus(previous) == "incomplete" || BackupStatus(previous) == "failed"))
         {
-            Console.WriteLine("  Latest backup is " + BackupStatus(previous) + ". Resume uses content verification.");
+            Console.WriteLine("  Latest backup is " + BackupStatus(previous) + ". Resume uses " +
+                (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
             char answer = AskKey("  [R]esume into it, [N]ew full backup, or [C]ancel? ", "rnc");
             if (answer == 'c') return 0;
             incremental = answer == 'r';

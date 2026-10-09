@@ -10,7 +10,7 @@ partial class M8Backup
     {
         public string BackupFolder;
         public string Mode = "ask";     // ask, full or incremental
-        public bool Verify = true;
+        public bool Verify = false;
         public int KeepBackups = 0;     // 0 = keep all
         public int MaxNameLength = 64;  // 0 = don't check
         public string Eject = "no";     // no, ask or yes
@@ -30,11 +30,11 @@ partial class M8Backup
         new[] { "RecoveryFolder", "\r\n; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\M8 Recovery.\r\n; Environment variables work. Must be outside the source card/folder.\r\nRecoveryFolder=\r\n" },
         new[] { "SourceFolder", "\r\n; SourceFolder: optional SD card drive or folder, e.g. E:\\ or D:\\M8Card.\r\n; Empty = detect the M8, or offer manual selection if detection fails.\r\nSourceFolder=\r\n" },
         new[] { "Profile", "\r\n; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\nProfile=\r\n" },
-        new[] { "Thorough", "\r\n; Thorough: yes = compare file contents with SHA-256, no = size and modified time.\r\n; Interrupted backups are always resumed using content comparison.\r\nThorough=no\r\n" },
+        new[] { "Thorough", "\r\n; Thorough: yes = compare file contents with SHA-256 during backup/restore,\r\n; no = compare size and modified time. Applies to resume too. Default no.\r\nThorough=no\r\n" },
         new[] { "Preview", "\r\n; Preview: show the file plan and ask before backups/restores. --preview only shows the plan.\r\nPreview=yes\r\n" },
         new[] { "BackupFolder",
             "; BackupFolder: where backups go. Each backup is saved to\r\n" +
-            ";   <BackupFolder>\\M8 Backups\\<date>\r\n" +
+            ";   <BackupFolder>\\M8 Backups\\profiles\\<profile>\\<date>\r\n" +
             "; Leave it empty to use your Music folder. Environment variables work,\r\n" +
             "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" +
             "BackupFolder=\r\n" },
@@ -49,8 +49,10 @@ partial class M8Backup
         new[] { "Verify",
             "\r\n" +
             "; Verify: yes = read every copied file back and compare its SHA-256 checksum\r\n" +
-            "; with the original, to catch bad copies (slower). no = skip this.\r\n" +
-            "Verify=yes\r\n" },
+            "; with the original, to catch bad copies (slower). Also checks restore sources,\r\n" +
+            "; history objects and recovery copies. no = skip automatic checksum checks.\r\n" +
+            "; Hashes are still recorded; Check backups explicitly verifies them. Default no.\r\n" +
+            "Verify=no\r\n" },
         new[] { "KeepBackups",
             "\r\n" +
             "; KeepBackups: how many backup folders to keep. After a successful backup the\r\n" +

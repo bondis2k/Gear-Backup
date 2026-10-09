@@ -30,7 +30,7 @@ partial class M8Backup
     }
 
     // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
-    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started)
+    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify)
     {
         var rows = new StringBuilder("M8SNAPSHOT\t1\n");
         foreach (string folder in scan.Folders)
@@ -44,10 +44,10 @@ partial class M8Backup
                 throw new IOException("No trustworthy checksum for " + relative);
             string obj = ObjectPath(backup, hash);
             Directory.CreateDirectory(Path.GetDirectoryName(obj));
-            // Read back even when Verify=no: history must not silently bless a damaged backup.
+            // Optional integrity checks are independent of generating object identities.
             if (File.Exists(obj))
             {
-                if (HashFile(obj) != hash) throw new IOException("Damaged history object for " + relative);
+                if (verify && HashFile(obj) != hash) throw new IOException("Damaged history object for " + relative);
             }
             else
             {
@@ -55,7 +55,8 @@ partial class M8Backup
                 TryDelete(temp);
                 try
                 {
-                    if (CopyFile(new FileInfo(path), temp, true) != hash)
+                    string copiedHash = CopyFile(new FileInfo(path), temp, verify);
+                    if (verify && copiedHash != hash)
                         throw new IOException("Backup checksum differs for " + relative);
                     File.Move(temp, obj);
                 }

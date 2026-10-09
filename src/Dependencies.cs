@@ -38,9 +38,9 @@ partial class M8Backup
         return result;
     }
 
-    static List<RestoreEntry> SongDependencies(RestoreEntry song, Snapshot snapshot, string target)
+    static List<RestoreEntry> SongDependencies(RestoreEntry song, Snapshot snapshot, string target, bool verify = true)
     {
-        ValidateEntry(song);
+        ValidateEntry(song, verify);
         var result = new List<RestoreEntry> { song };
         var available = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (RestoreEntry item in snapshot.Files) available[item.Relative] = item;

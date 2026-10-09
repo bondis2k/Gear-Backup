@@ -39,7 +39,7 @@ Restore and check offer a history selector, including existing backups directly 
 
 ## Full and incremental backup
 
-**Full:** copy the card's user files into a new dated folder. If the date is already used, a numbered suffix creates a distinct folder.
+**Full:** copy the card's user files into a new dated folder. If the date is already used, the time and fractional seconds are added to create a distinct folder.
 
 **Incremental:** add and update files in the latest backup of the current profile. Changed files keep their previous browsable copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`. Deleted source files remain in the browsable backup. A dated snapshot separately records which files actually existed during this run.
 
@@ -59,13 +59,19 @@ Linked files and folders (Windows reparse points) are rejected. An unreadable so
 Thorough=no
 ```
 
-The default comparison uses file size and modified time, allowing two seconds for FAT timestamps. This can miss an edit that leaves both unchanged. Use:
+The default comparison uses file size and modified time, allowing two seconds for FAT timestamps. This can miss an edit that leaves both unchanged.
+
+Some M8/FAT files have no usable timestamp (Windows reports 1 January 1601). For those files, the program compares the actual bytes instead of the date. Identical undated files are skipped; same-size edits are still detected. This fallback also applies during restore and does not enable SHA-256 comparison. Copies with missing timestamps retain the destination filesystem's normal timestamps.
+
+For SHA-256 comparison of all files, use:
 
 ```ini
 Thorough=yes
 ```
 
-Thorough mode compares content hashes. Identical contents can be skipped even when timestamps differ. Restore always compares contents, regardless of this setting. Resuming an incomplete backup always uses content comparison.
+Thorough mode compares content hashes. Identical contents can be skipped even when timestamps differ. The setting applies to backups, restores, and resume. With the default `Thorough=no`, those operations compare size and modified time, which can miss changes preserving both.
+
+Automatic SHA-256 integrity comparison is independently controlled by `Verify=no` (the default). Set `Verify=yes` to check copied files, restore sources, snapshot objects, and recovery copies. Hashes are still generated for integrity records and history object identities when comparison is off. Selecting **Check backups** explicitly runs checksum checks regardless of either setting.
 
 ### Completion status and resume
 
@@ -75,12 +81,12 @@ Each new backup has one of these statuses:
 |---|---|
 | `incomplete` | A run started but did not reach its final status, for example because the process stopped or USB was disconnected. |
 | `failed` | The run reached the end with file, history, or checksum-list failures. |
-| `complete` | The run finished with its files, snapshot, and checksum list saved. |
+| `complete` | The run finished with its files, snapshot, and checksum list saved, using the selected verification settings. |
 | `legacy (status unknown)` | An older backup without status metadata. |
 
-When the latest backup is incomplete or failed, choose **Resume**, **New full backup**, or **Cancel**. Resume compares the current source with existing copies using hashes, repairs partial or missing copies, and refreshes checksums. It resumes against the source as it exists now; it cannot reconstruct unsaved files or a previous source state that was never copied.
+When the latest backup is incomplete or failed, choose **Resume**, **New full backup**, or **Cancel**. Resume uses the selected `Thorough` comparison, repairs partial or missing copies it detects, and refreshes checksum records. Use `Thorough=yes` to detect partial/corrupt copies that retain the correct size and time. It resumes against the source as it exists now; it cannot reconstruct unsaved files or a previous source state that was never copied.
 
-Existing copies that fail their recorded checksum, or changed copies from an interrupted run without a recorded checksum, are preserved under `.m8backup\quarantine` rather than presented as valid old versions. Quarantine is excluded from normal restore and integrity lists; inspect those files manually if needed.
+With `Verify=yes`, existing copies that fail their recorded checksum are preserved under `.m8backup\quarantine` rather than presented as valid old versions. Changed copies from an interrupted run without a recorded checksum are also quarantined. Quarantine is excluded from normal restore and integrity lists; inspect those files manually if needed.
 
 Older completed snapshots remain selectable even if the latest incremental run failed. Browsing the current files of an incomplete or legacy backup requires an explicit acknowledgement of its status.
 
@@ -140,13 +146,17 @@ Exact removal is listed in the preview and requires a separate confirmation. If 
 
 ### Overwrites and copy safety
 
-Files with identical contents are skipped. If files differ, choose to replace them, keep them and copy only missing files, or cancel. A warning identifies target files newer than the selected backup.
+Files considered unchanged by the selected `Thorough` comparison are skipped. If files differ, choose to replace them, keep them and copy only missing files, or cancel. A warning identifies target files newer than the selected backup.
 
-Every selected file with a stored checksum is checked before target changes. Damaged, missing, or truncated files abort the plan. Files in legacy backups without checksums can be copied but have no historical integrity guarantee.
+With `Verify=yes`, every selected file with a stored checksum is checked before target changes; a mismatch aborts the plan. With `Verify=no`, checksum comparisons are skipped. Missing files and size mismatches still abort the plan. Files in legacy backups without checksums can be copied but have no historical integrity guarantee.
 
-Restored files are staged beside the destination under a unique `.m8restore-*.tmp` name. Replacements use Windows' file-replacement operation rather than deleting the destination first. If the filesystem cannot support replacement, that file fails and its existing copy is retained. A normal failure removes the temporary file. An abruptly stopped process can leave a hidden temporary file; rerunning restore uses a fresh temporary name.
+Restored files are staged beside the destination under a unique `.m8restore-*.tmp` name. Replacements use Windows' file-replacement operation rather than deleting the destination first. If the filesystem cannot support replacement, that file fails and its existing copy is retained. A normal failure removes the temporary file. An abruptly stopped process can leave a dot-prefixed temporary file; rerunning restore uses a fresh temporary name.
 
-The target is checked again before replacement/removal. A file changed since the preview is not overwritten. This is not a transaction across the entire card: already completed file restores remain if a later file fails. Keep the card idle until completion.
+Replacement also uses a transient `.m8rollback-*.tmp` copy of the original on the target volume. It is removed after a successful replacement and used to restore the original name if replacement fails. This is separate from optional persistent PC recovery: `Recovery=no` still uses replacement rollback. If interrupted or rollback itself fails, keep any remaining rollback file until you have checked its contents. This follows [Windows ReplaceFile failure handling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).
+
+The working-space estimate includes added files, growth of replacements, and staging space. With recovery on the same volume, it also reserves space for all recovery copies before starting.
+
+The target is checked again before replacement/removal. With both settings off, this guard uses size and modified time; with either setting on, it uses SHA-256. Detected changes stop replacement. This is not a transaction across the entire card: already completed file restores remain if a later file fails. Keep the card idle until completion.
 
 ### Optional recovery copies
 
@@ -166,13 +176,17 @@ RecoveryFolder=D:\M8 Recovery
 
 With `RecoveryFolder=` empty, the location is `<BackupFolder>\M8 Recovery`. Environment variables work, for example `%USERPROFILE%\Documents\M8 Recovery`.
 
-Each restore makes a distinct dated recovery folder and preserves original relative paths. **All recovery copies must finish and verify before any target files or folders are changed.** An inaccessible destination, insufficient space, or a failed recovery copy cancels the restore. The recovery folder and target must not contain one another. Files that are identical or only being added need no recovery copy.
+Each restore makes a distinct dated recovery folder and preserves original relative paths. **All recovery copies must finish before any target files or folders are changed.** They are also read back and checksum-verified when `Verify=yes`. An inaccessible destination, insufficient space, or a failed recovery copy cancels the restore. The recovery folder and target must not contain one another. Files considered unchanged or only being added need no recovery copy.
 
 Recovery metadata is under `.m8backup`: `recovery-status.txt` records completion and the original target; `recovery-checksums.sha256` records the copied file hashes. Copy recovered files back to their original card paths when needed. Recovery folders are separate from normal backup histories and are not automatically pruned or offered in the backup selector.
 
 ## Preview
 
 `Preview=yes` displays the file plan and asks before copying. Set `Preview=no` to suppress that general prompt. Restore overwrite choices, exact-removal confirmations, backup selection, and retention questions still apply.
+
+Incremental backup previews list only new and changed files. Unchanged files are shown as a total count, without listing their names.
+
+When an incremental backup has no new or changed files to copy, it skips the Proceed prompt automatically. It still records the current snapshot membership, including deleted files and empty folders, and updates the backup status and statistics.
 
 `--preview` displays the plan and exits without writing files. It can be combined with `--restore`. Selection questions remain so you can choose the intended operation. Preview reads and hashes files; it is not an unattended operation.
 
@@ -200,7 +214,7 @@ Windows notifications summarize backup, restore, or check results. `Eject=no` le
 |---|---|---|
 | `BackupFolder` | empty | Windows Music folder; base for backups and default recovery location. |
 | `Mode` | `ask` | `ask`, `full`, or `incremental`. |
-| `Verify` | `yes` | Read back newly copied files and compare hashes. History objects and recovery copies are always verified. |
+| `Verify` | `no` | Enable automatic SHA-256 integrity comparisons for copies, restore sources, history objects, and recovery copies. |
 | `KeepBackups` | `0` | Number of backup folders to retain per profile; 0 keeps all. |
 | `KeepOldVersions` | `0` | Browsable old versions per file; 0 keeps all. |
 | `MaxNameLength` | `64` | Warn about longer file/folder names; 0 disables length warnings. |
@@ -209,7 +223,7 @@ Windows notifications summarize backup, restore, or check results. `Eject=no` le
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
 | `SourceFolder` | empty | Detect M8, with manual fallback; otherwise use this drive/folder. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
-| `Thorough` | `no` | Content-hash comparison for backup change detection. |
+| `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
 
 ## Command line and exit codes
@@ -238,6 +252,8 @@ Unknown arguments and missing argument values are errors. The program remains in
 ## Building and testing
 
 Run `build.cmd --no-pause` to build `M8Backup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
+
+If `M8Backup.exe` is running and Windows locks it, use `build.cmd --no-pause M8Backup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. They create isolated fixtures under `.test-runs`, use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. They do not write to a connected M8 or test hardware ejection.
 

@@ -22,9 +22,9 @@ partial class M8Backup
         }
         else
         {
-            dest = UniqueFolder(backupRoot, started.ToString("yyyy-MM-dd"));
+            dest = Path.Combine(backupRoot, started.ToString("yyyy-MM-dd"));
             if (Directory.Exists(dest))
-                dest = Path.Combine(backupRoot, started.ToString("yyyy-MM-dd_HHmmss"));
+                dest = UniqueFolder(backupRoot, started.ToString("yyyy-MM-dd_HHmmss_fffffff"));
         }
 
         Console.WriteLine((incremental ? "  Updating " : "  Backing up to ") + dest);
@@ -38,6 +38,7 @@ partial class M8Backup
         bool resuming = incremental && (BackupStatus(dest) == "incomplete" || BackupStatus(dest) == "failed");
         var states = new FileState[scan.Files.Count];
         var plan = new List<string>();
+        int skippedInPlan = 0;
         Dictionary<string, string> oldSums = previous == null ? null : LoadChecksums(previous);
         var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0, neededBytes = 0;
@@ -47,11 +48,12 @@ partial class M8Backup
             FileInfo file = scan.Files[i];
             states[i] = previous == null
                 ? FileState.New
-                : CompareContent(file, SafePath(previous, file.FullName.Substring(source.Length)), config.Thorough || resuming);
+                : CompareContent(file, SafePath(previous, file.FullName.Substring(source.Length)), config.Thorough);
             totalBytes += file.Length;
             if (!incremental || states[i] != FileState.Same) neededBytes += file.Length;
             string relative = file.FullName.Substring(source.Length);
-            plan.Add((!incremental ? "Copy: " : states[i] == FileState.New ? "New: " : states[i] == FileState.Changed ? "Changed: " : "Skip unchanged: ") + relative);
+            if (incremental && states[i] == FileState.Same) skippedInPlan++;
+            else plan.Add((!incremental ? "Copy: " : states[i] == FileState.New ? "New: " : "Changed: ") + relative);
             string hash;
             if (!resuming && incremental && states[i] == FileState.Same && oldSums != null && oldSums.TryGetValue(relative, out hash)) { }
             else hash = HashFile(file.FullName);
@@ -68,16 +70,19 @@ partial class M8Backup
         if (spaceError != null)
         {
             WriteColored("  " + spaceError, ConsoleColor.Red);
-            ShowToast("M8 backup not started", spaceError, false);
+            if (!PreviewOnly) ShowToast("M8 backup not started", spaceError, false);
             return 1;
         }
 
-        if (!ShowPlan(resuming ? "Resume backup" : "Backup preview", plan, neededBytes, config)) return 0;
+        if (incremental) Console.WriteLine("  Unchanged files skipped: {0:N0}.", skippedInPlan);
+        if (incremental && plan.Count == 0 && !PreviewOnly)
+            Console.WriteLine("  No new or changed files to copy.");
+        else if (!ShowPlan(resuming ? "Resume backup" : "Backup preview", plan, neededBytes, config)) return 0;
         // Mark before the first mutation. A killed process leaves an incomplete status.
         Directory.CreateDirectory(dest);
         SetBackupStatus(dest, "incomplete");
         foreach (string folder in scan.Folders)
-            Directory.CreateDirectory(Path.Combine(dest, folder.Substring(source.Length)));
+            Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
         int folders = scan.Folders.Count;
 
         int copied = 0, failed = 0, updated = 0, unchanged = 0;
@@ -113,7 +118,7 @@ partial class M8Backup
                     // Changed on the M8: keep the old copy, renamed with its own modified date and time
                     string expectedOld;
                     bool hasOldHash = sums.TryGetValue(relative, out expectedOld);
-                    bool suspect = (hasOldHash && HashFile(target) != expectedOld) || (resuming && !hasOldHash);
+                    bool suspect = (config.Verify && hasOldHash && HashFile(target) != expectedOld) || (resuming && !hasOldHash);
                     if (suspect)
                     {
                         oldVersion = SafePath(Path.Combine(dest, ".m8backup", "quarantine", Guid.NewGuid().ToString("N")), relative);
@@ -171,7 +176,7 @@ partial class M8Backup
                 string rel = f.FullName.Substring(source.Length);
                 if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
             }
-            if (failed == 0) SaveSnapshot(dest, source, scan, sums, started);
+            if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify);
         }
         catch (Exception ex)
         {

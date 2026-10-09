@@ -12,10 +12,43 @@ partial class M8Backup
     {
         var other = new FileInfo(otherPath);
         if (!other.Exists) return FileState.New;
-        return other.Length == file.Length &&
-               Math.Abs((other.LastWriteTimeUtc - file.LastWriteTimeUtc).TotalSeconds) <= 2
-            ? FileState.Same
-            : FileState.Changed;
+        if (other.Length != file.Length) return FileState.Changed;
+        // M8/FAT files can report a missing date as FILETIME zero (1601-01-01).
+        // Setting that date on Windows means "leave unchanged", so copies retain
+        // the copy time. Compare bytes instead of treating that time as an edit.
+        if (!UsableFileTime(file.LastWriteTimeUtc) || !UsableFileTime(other.LastWriteTimeUtc))
+            return FilesEqual(file.FullName, otherPath) ? FileState.Same : FileState.Changed;
+        return Math.Abs((other.LastWriteTimeUtc - file.LastWriteTimeUtc).TotalSeconds) <= 2 ? FileState.Same : FileState.Changed;
+    }
+
+    static bool UsableFileTime(DateTime time)
+    {
+        return time >= new DateTime(1980, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    // Exact comparison for missing timestamps; no SHA-256 calculation/comparison.
+    static bool FilesEqual(string first, string second)
+    {
+        using (var a = new FileStream(first, FileMode.Open, FileAccess.Read, FileShare.Read))
+        using (var b = new FileStream(second, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            if (a.Length != b.Length) return false;
+            byte[] left = new byte[65536], right = new byte[65536];
+            int count;
+            while ((count = ReadBlock(a, left)) > 0)
+            {
+                if (ReadBlock(b, right) != count) return false;
+                for (int i = 0; i < count; i++) if (left[i] != right[i]) return false;
+            }
+            return b.ReadByte() == -1;
+        }
+    }
+
+    static int ReadBlock(Stream stream, byte[] buffer)
+    {
+        int count = 0, read;
+        while (count < buffer.Length && (read = stream.Read(buffer, count, buffer.Length - count)) > 0) count += read;
+        return count;
     }
 
     // Copies a file (target must not exist yet) and returns the SHA-256 checksum of the original.
@@ -36,8 +69,8 @@ partial class M8Backup
                 file.Refresh();
                 if (file.Length != originalSize || file.LastWriteTimeUtc != originalWrite)
                     throw new IOException("the source changed while it was being copied; retry with the M8 idle");
-                File.SetCreationTimeUtc(target, file.CreationTimeUtc);
-                File.SetLastWriteTimeUtc(target, file.LastWriteTimeUtc);
+                if (UsableFileTime(file.CreationTimeUtc)) File.SetCreationTimeUtc(target, file.CreationTimeUtc);
+                if (UsableFileTime(file.LastWriteTimeUtc)) File.SetLastWriteTimeUtc(target, file.LastWriteTimeUtc);
                 if (!verify || HashFile(target) == sourceHash) return sourceHash;
             }
             catch (Exception)

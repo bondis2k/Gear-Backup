@@ -43,9 +43,9 @@ partial class M8Backup
         foreach (RestoreEntry item in copies)
         {
             string path = SafePath(target, item.Relative);
-            result[item.Relative] = File.Exists(path) ? HashFile(path) : null;
+            result[item.Relative] = Fingerprint(path, true);
         }
-        foreach (string path in removals) result[path] = HashFile(SafePath(target, path));
+        foreach (string path in removals) result[path] = Fingerprint(SafePath(target, path), true);
         return result;
     }
     public static void RunTests()
@@ -55,8 +55,10 @@ partial class M8Backup
         string source = Rooted(Path.Combine(root, "card"));
         string history = Path.Combine(root, "history");
         string title, summary;
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true };
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
+        Assert(!new Config().Verify && !new Config().Thorough, "SHA-256 comparisons default off");
         Assert(!config.Recovery, "recovery defaults to no");
+        Assert(RecoveryRoot(config) == Path.Combine(root, "M8 Recovery"), "empty recovery location defaults under backup folder");
         ApplySetting(config, "RecoveryFolder", "%USERPROFILE%\\M8-test-recovery");
         Assert(config.RecoveryFolder == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "M8-test-recovery"), "recovery folder expands environment variables");
         ApplySetting(config, "Recovery", "yes"); Assert(config.Recovery, "INI enables recovery");
@@ -108,7 +110,8 @@ partial class M8Backup
 
         SetBackupStatus(backup, "incomplete");
         Put(Path.Combine(backup, "Songs", "one.m8s"), "PARTIAL");
-        config.Thorough = false;
+        // Content comparison is explicitly opted in for resume repair tests.
+        config.Thorough = true;
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 0, "resume repairs partial file despite fast setting");
         Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "BBBB", "resume restores source content");
         Assert(BackupStatus(backup) == "complete", "resume complete status");
@@ -147,6 +150,12 @@ partial class M8Backup
         ExecuteRestore(noRecovery, one, new List<string>(), new List<string>(), new List<string>(), TargetHashes(noRecovery, one, new List<string>()), config, out title, out summary);
         Assert(!Directory.Exists(config.RecoveryFolder), "Recovery=no creates no recovery folder");
         Assert(File.ReadAllText(Path.Combine(noRecovery, "Songs", "one.m8s")) == "AAAA", "restore works with recovery disabled");
+        Assert(Directory.GetFiles(noRecovery, ".m8rollback-*", SearchOption.AllDirectories).Length == 0, "successful replacements clean transient rollback files");
+        string lockedTarget = Path.Combine(root, "locked.txt"), stagedFile = Path.Combine(root, "staged.txt");
+        Put(lockedTarget, "ORIGINAL"); Put(stagedFile, "REPLACEMENT");
+        using (var locked = new FileStream(lockedTarget, FileMode.Open, FileAccess.Read, FileShare.None))
+            Throws(() => ReplaceSafely(stagedFile, lockedTarget), "locked replacement fails safely");
+        Assert(File.ReadAllText(lockedTarget) == "ORIGINAL" && File.ReadAllText(stagedFile) == "REPLACEMENT", "replacement failure retains both contents");
 
         Put(Path.Combine(noRecovery, "Songs", "one.m8s"), "PROTECT");
         config.Recovery = true; config.RecoveryFolder = Path.Combine(root, "blocked-recovery");
@@ -217,6 +226,12 @@ partial class M8Backup
         Throws(() => Run(false, false, new[] { "--source" }), "CLI missing argument rejected");
         Throws(() => Run(false, false, new[] { "--invalid" }), "CLI unknown argument rejected");
         Throws(() => Run(false, false, new[] { "--source", root }), "overlapping source and backup rejected");
+        string namingHistory = Path.Combine(root, "same-day-fulls");
+        Assert(Backup(source, namingHistory, null, false, config, out title, out summary) == 0, "first same-day full backup");
+        string firstFull = ListBackups(namingHistory)[0];
+        Assert(Backup(source, namingHistory, firstFull, false, config, out title, out summary) == 0, "second same-day full backup");
+        var sameDay = ListBackups(namingHistory);
+        Assert(sameDay.Count == 2 && sameDay[0] == firstFull && sameDay[1] != firstFull, "new full backup names sort chronologically without collision");
 
         // Test the exact-restore public planner and removal confirmation, rather than just its executor.
         string exactTarget = Rooted(Path.Combine(root, "exact-ui-target"));
@@ -233,6 +248,18 @@ partial class M8Backup
         Console.SetIn(new StringReader("1\n1\na\nm\n"));
         Throws(() => Restore(blockedTarget, new List<string> { backup }, config, out title, out summary), "restore parent conflict fails before target changes");
         Assert(!Directory.Exists(Path.Combine(blockedTarget, "Bundles")), "parent conflict preflight leaves target untouched");
+        string growingTarget = Rooted(Path.Combine(root, "growing-files"));
+        Put(Path.Combine(growingTarget, "a"), "AAAA"); Put(Path.Combine(growingTarget, "b"), "BBBB");
+        var growing = new List<RestoreEntry> { new RestoreEntry { Relative = "a", Size = 12 }, new RestoreEntry { Relative = "b", Size = 16 },
+            new RestoreEntry { Relative = "new", Size = 10 } };
+        Assert(RestoreSpaceNeeded(growingTarget, growing) == 46, "space estimate includes accumulated growth and staging");
+
+        // Keeping differing files disables exact removal, even if it was initially selected.
+        Put(Path.Combine(exactTarget, "Songs", "one.m8s"), "MY NEW SONG");
+        Put(Path.Combine(exactTarget, "keep-extra.txt"), "keep");
+        Console.SetIn(new StringReader("1\n1\na\ne\nk\n"));
+        Assert(Restore(exactTarget, new List<string> { backup }, config, out title, out summary) == 0, "keep-existing restore choice");
+        Assert(File.ReadAllText(Path.Combine(exactTarget, "Songs", "one.m8s")) == "MY NEW SONG" && File.Exists(Path.Combine(exactTarget, "keep-extra.txt")), "keep mode preserves differing and extra files");
 
         string malicious = Path.Combine(root, "bad.manifest");
         Put(malicious, "M8SNAPSHOT\t1\nD\t" + Encode("..\\outside") + "\n");
@@ -251,6 +278,74 @@ partial class M8Backup
         Put(currentSong.StoredPath, "BAD");
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 2, "history failure prevents successful backup");
         Assert(BackupStatus(backup) == "failed", "history failure sets failed status");
+        // Opt-out tests: preserve hashing records without comparing SHA-256 automatically.
+        string optionalPath = Path.Combine(root, "optional-check.bin");
+        Put(optionalPath, "AAAA");
+        var optionalEntry = new RestoreEntry { Relative = "optional.bin", StoredPath = optionalPath, Hash = HashFile(optionalPath),
+            Size = 4, ModifiedTicks = File.GetLastWriteTimeUtc(optionalPath).Ticks, CreatedTicks = File.GetCreationTimeUtc(optionalPath).Ticks };
+        Put(optionalPath, "BBBB");
+        ValidateEntry(optionalEntry, false);
+        Assert(true, "Verify=no skips restore-source checksum comparison");
+        Throws(() => ValidateEntry(optionalEntry, true), "Verify=yes detects same-size source corruption");
+        string optionalTarget = Rooted(Path.Combine(root, "optional-target"));
+        Put(Path.Combine(optionalTarget, "optional.bin"), "CCCC");
+        File.SetLastWriteTimeUtc(Path.Combine(optionalTarget, "optional.bin"), new DateTime(optionalEntry.ModifiedTicks, DateTimeKind.Utc));
+        Assert(EntryMatchesTarget(optionalEntry, Path.Combine(optionalTarget, "optional.bin"), false), "Thorough=no uses metadata instead of content");
+        Assert(!EntryMatchesTarget(optionalEntry, Path.Combine(optionalTarget, "optional.bin"), true), "Thorough=yes compares content");
+        Assert(Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false).StartsWith("meta:"), "default guard records metadata fingerprint");
+        var optionalCopies = new List<RestoreEntry> { optionalEntry };
+        var optionalHashes = new Dictionary<string, string> { { "optional.bin", Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false) } };
+        var offConfig = new Config { BackupFolder = root, Preview = false };
+        ExecuteRestore(optionalTarget, optionalCopies, new List<string>(), new List<string>(), new List<string>(), optionalHashes, offConfig, out title, out summary);
+        Assert(title == "M8 restore complete" && File.ReadAllText(Path.Combine(optionalTarget, "optional.bin")) == "BBBB", "Verify=no permits restore without stored-checksum comparison");
+        Assert(CopyFile(new FileInfo(optionalPath), Path.Combine(root, "optional-copy.bin"), false) == HashFile(optionalPath), "checksum records are generated when verification is off");
+        config.Verify = false;
+        Put(currentSong.StoredPath, "DDDD"); // Same size as the source; only its checksum differs.
+        Assert(Backup(source, history, backup, true, config, out title, out summary) == 0, "Verify=no skips snapshot object checksum comparison");
+        int optionalOk = 0, optionalDamaged = 0, optionalMissing = 0;
+        CheckSnapshots(backup, ref optionalOk, ref optionalDamaged, ref optionalMissing);
+        Assert(optionalDamaged > 0, "explicit integrity check still detects corruption with defaults off");
+        // Reproduce undated M8 files without enabling SHA-256 comparison.
+        Assert(!UsableFileTime(new DateTime(1601, 1, 1, 0, 0, 0, DateTimeKind.Utc)), "FILETIME-zero timestamp is unusable");
+        string undatedSource = Rooted(Path.Combine(root, "undated-card"));
+        string undatedSong = Path.Combine(undatedSource, "Songs", "undated.m8s");
+        Put(undatedSong, "UNCHANGED");
+        File.SetLastWriteTimeUtc(undatedSong, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+        string undatedHistory = Path.Combine(root, "undated-history");
+        var fastConfig = new Config { BackupFolder = root, Preview = false };
+        Assert(Backup(undatedSource, undatedHistory, null, false, fastConfig, out title, out summary) == 0, "undated initial backup succeeds with SHA off");
+        string undatedBackup = ListBackups(undatedHistory)[0];
+        string undatedCopy = Path.Combine(undatedBackup, "Songs", "undated.m8s");
+        Assert(UsableFileTime(File.GetLastWriteTimeUtc(undatedCopy)), "undated copy retains destination timestamp");
+        Assert(CompareContent(new FileInfo(undatedSong), undatedCopy, false) == FileState.Same, "different timestamps do not mark identical undated contents changed");
+        TextWriter previousOutput = Console.Out;
+        var captured = new StringWriter();
+        PreviewOnly = true;
+        try { Console.SetOut(captured); Backup(undatedSource, undatedHistory, undatedBackup, true, fastConfig, out title, out summary); }
+        finally { Console.SetOut(previousOutput); PreviewOnly = false; }
+        Assert(captured.ToString().Contains("0 action(s)") && !captured.ToString().Contains("Changed: Songs"), "incremental preview excludes unchanged undated files");
+        fastConfig.Preview = true;
+        Console.SetIn(new StringReader("")); // Any unexpected acceptance prompt must fail rather than block.
+        var noChangesOutput = new StringWriter();
+        int noChangesResult;
+        try { Console.SetOut(noChangesOutput); noChangesResult = Backup(undatedSource, undatedHistory, undatedBackup, true, fastConfig, out title, out summary); }
+        finally { Console.SetOut(previousOutput); fastConfig.Preview = false; }
+        Assert(noChangesResult == 0, "unchanged incremental succeeds without confirmation even with Preview=yes");
+        Assert(!noChangesOutput.ToString().Contains("Proceed?") && noChangesOutput.ToString().Contains("No new or changed files"), "no-change run reports result without acceptance prompt");
+        Assert(Directory.GetFiles(Path.Combine(undatedBackup, "Songs"), "*.m8s").Length == 1, "no spurious old versions for undated files");
+        var missingDateEntry = new RestoreEntry { Relative = "Songs\\undated.m8s", StoredPath = undatedCopy, Size = 9,
+            ModifiedTicks = new DateTime(1601, 1, 1, 0, 0, 0, DateTimeKind.Utc).Ticks };
+        Assert(EntryMatchesTarget(missingDateEntry, undatedSong, false), "restore skips identical FILETIME-zero snapshot contents");
+        Put(undatedSong, "EDITED!!!");
+        File.SetLastWriteTimeUtc(undatedSong, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+        Assert(CompareContent(new FileInfo(undatedSong), undatedCopy, false) == FileState.Changed, "same-size undated edit detected without SHA-256");
+        Assert(!EntryMatchesTarget(missingDateEntry, undatedSong, false), "restore detects differing undated contents");
+        string blockA = Path.Combine(root, "blocks-a.bin"), blockB = Path.Combine(root, "blocks-b.bin");
+        byte[] blockBytes = new byte[131077];
+        File.WriteAllBytes(blockA, blockBytes); File.WriteAllBytes(blockB, blockBytes);
+        Assert(FilesEqual(blockA, blockB), "byte comparison spans multiple buffers");
+        blockBytes[131076] = 1; File.WriteAllBytes(blockB, blockBytes);
+        Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions. Fixtures: " + root);
     }
