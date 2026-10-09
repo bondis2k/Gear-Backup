@@ -13,307 +13,10 @@ partial class M8Backup
     static int Backup(string source, string backupRoot, string previous, bool incremental, Config config,
                       out string title, out string summary)
     {
-        title = summary = null;
-        DateTime started = DateTime.Now;
-        string dest;
-        if (incremental)
-        {
-            dest = previous;
-        }
-        else
-        {
-            dest = Path.Combine(backupRoot, started.ToString("yyyy-MM-dd"));
-            if (Directory.Exists(dest))
-                dest = UniqueFolder(backupRoot, started.ToString("yyyy-MM-dd_HHmmss_fffffff"));
-        }
-
-        Console.WriteLine((incremental ? "  Updating " : "  Backing up to ") + dest);
-        Console.WriteLine();
-
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var scan = new ScanResult();
-        CollectFiles(source, scan);
-
-        // Compare every file with the last backup: tells what changed, and what an incremental run must copy
-        bool resuming = incremental && (BackupStatus(dest) == "incomplete" || BackupStatus(dest) == "failed");
-        var states = new FileState[scan.Files.Count];
-        var plan = new List<string>();
-        int skippedInPlan = 0;
-        Dictionary<string, string> oldSums = previous == null ? null : LoadChecksums(previous);
-        var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        long totalBytes = 0, neededBytes = 0;
-        long historyBytes = 0;
-        for (int i = 0; i < scan.Files.Count; i++)
-        {
-            FileInfo file = scan.Files[i];
-            states[i] = previous == null
-                ? FileState.New
-                : CompareContent(file, SafePath(previous, file.FullName.Substring(source.Length)), config.Thorough);
-            totalBytes += file.Length;
-            if (!incremental || states[i] != FileState.Same) neededBytes += file.Length;
-            string relative = file.FullName.Substring(source.Length);
-            if (incremental && states[i] == FileState.Same) skippedInPlan++;
-            else plan.Add((!incremental ? "Copy: " : states[i] == FileState.New ? "New: " : "Changed: ") + relative);
-            string hash;
-            if (!resuming && incremental && states[i] == FileState.Same && oldSums != null && oldSums.TryGetValue(relative, out hash)) { }
-            else hash = HashFile(file.FullName);
-            if (!File.Exists(ObjectPath(dest, hash)) && pendingObjects.Add(hash)) historyBytes += file.Length;
-        }
-        Changes changes = FindChanges(scan, source, states, previous);
-
-        List<string> nameWarnings = CheckNames(scan, source, config.MaxNameLength);
-        if (nameWarnings.Count > 0)
-            WriteColored("  " + nameWarnings.Count + " name(s) the M8 may not handle well (listed in the statistics).", ConsoleColor.Yellow);
-
-        Console.WriteLine("  History store needs up to {0} additional space (identical content is shared).", FormatSize(historyBytes));
-        string spaceError = CheckFreeSpace(backupRoot, neededBytes + historyBytes);
-        if (spaceError != null)
-        {
-            WriteColored("  " + spaceError, ConsoleColor.Red);
-            if (!PreviewOnly) ShowToast("M8 backup not started", spaceError, false);
-            return 1;
-        }
-
-        if (incremental) Console.WriteLine("  Unchanged files skipped: {0:N0}.", skippedInPlan);
-        if (incremental && plan.Count == 0 && !PreviewOnly)
-            Console.WriteLine("  No new or changed files to copy.");
-        else if (!ShowPlan(resuming ? "Resume backup" : "Backup preview", plan, neededBytes, config)) return 0;
-        // Mark before the first mutation. A killed process leaves an incomplete status.
-        Directory.CreateDirectory(dest);
-        SetBackupStatus(dest, "incomplete");
-        foreach (string folder in scan.Folders)
-            Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
-        int folders = scan.Folders.Count;
-
-        int copied = 0, failed = 0, updated = 0, unchanged = 0;
-        long copiedBytes = 0, processedBytes = 0;
-        FileInfo largest = null;
-        var failures = new List<string>();
-        var keptVersions = new List<string>();
-        // Per top-level folder (Songs, Samples, ...): [files, bytes]
-        var perFolder = new SortedDictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
-        // Checksums for the backup's checksum list; an incremental run starts from the existing list
-        var sums = (incremental ? LoadChecksums(dest) : null) ??
-                   new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        for (int i = 0; i < scan.Files.Count; i++)
-        {
-            FileInfo file = scan.Files[i];
-            string relative = file.FullName.Substring(source.Length);
-            string target = SafePath(dest, relative);
-            processedBytes += file.Length;
-            if (incremental && states[i] == FileState.Same)
-            {
-                if (resuming) sums[relative] = HashFile(target);
-                unchanged++;
-                PrintProgress(processedBytes, totalBytes, copied + unchanged, scan.Files.Count, copiedBytes);
-                continue;
-            }
-
-            string oldVersion = null;
-            try
-            {
-                if (incremental && states[i] == FileState.Changed)
-                {
-                    // Changed on the M8: keep the old copy, renamed with its own modified date and time
-                    string expectedOld;
-                    bool hasOldHash = sums.TryGetValue(relative, out expectedOld);
-                    bool suspect = (config.Verify && hasOldHash && HashFile(target) != expectedOld) || (resuming && !hasOldHash);
-                    if (suspect)
-                    {
-                        oldVersion = SafePath(Path.Combine(dest, ".m8backup", "quarantine", Guid.NewGuid().ToString("N")), relative);
-                        Directory.CreateDirectory(Path.GetDirectoryName(oldVersion));
-                        WriteColored("  Preserving unverified/partial existing copy in quarantine: " + relative, ConsoleColor.Yellow);
-                    }
-                    else oldVersion = VersionedName(target, File.GetLastWriteTime(target));
-                    File.Move(target, oldVersion);
-                }
-                string hash = CopyFile(file, target, config.Verify);
-                copied++;
-                if (oldVersion != null)
-                {
-                    updated++;
-                    string oldRelative = oldVersion.Substring(dest.Length).TrimStart('\\');
-                    keptVersions.Add(oldRelative);
-                    // The old version keeps the checksum it had under its original name
-                    string oldHash;
-                    if (!IsBackupMetaFile(oldVersion) && sums.TryGetValue(relative, out oldHash)) sums[oldRelative] = oldHash;
-                }
-                sums[relative] = hash;
-                copiedBytes += file.Length;
-                if (largest == null || file.Length > largest.Length) largest = file;
-
-                int slash = relative.IndexOf('\\');
-                string top = slash < 0 ? "(root)" : relative.Substring(0, slash);
-                long[] entry;
-                if (!perFolder.TryGetValue(top, out entry)) perFolder[top] = entry = new long[2];
-                entry[0]++;
-                entry[1] += file.Length;
-            }
-            catch (Exception ex)
-            {
-                // Put the old copy back if the new one couldn't be copied
-                if (oldVersion != null && File.Exists(oldVersion) && !File.Exists(target))
-                    try { File.Move(oldVersion, target); } catch (Exception) { }
-                failed++;
-                string message = relative + " (" + ex.Message + ")";
-                failures.Add(message);
-                Console.WriteLine();
-                WriteColored("  Failed: " + message, ConsoleColor.Red);
-            }
-            PrintProgress(processedBytes, totalBytes, copied + unchanged, scan.Files.Count, copiedBytes);
-        }
-        stopwatch.Stop();
-        Console.WriteLine();
-        Console.WriteLine();
-
-        int prunedVersions = 0;
-        try
-        {
-            // Populate missing hashes for verified resume/legacy files before creating history.
-            foreach (FileInfo f in scan.Files)
-            {
-                string rel = f.FullName.Substring(source.Length);
-                if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
-            }
-            if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify);
-        }
-        catch (Exception ex)
-        {
-            failed++;
-            failures.Add("Point-in-time history: " + ex.Message);
-            WriteColored("  Could not save point-in-time history: " + ex.Message, ConsoleColor.Red);
-        }
-        if (failed == 0 && incremental && config.KeepOldVersions > 0)
-        {
-            var onM8 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (FileInfo f in scan.Files) onM8.Add(f.FullName.Substring(source.Length));
-            prunedVersions = PruneOldVersions(dest, config.KeepOldVersions, onM8);
-        }
-
-        // Checksum list for the whole backup folder (files without a known checksum are read and hashed)
-        string checksumStatus;
-        try
-        {
-            Console.WriteLine("  Saving checksum list...");
-            int listed = WriteChecksums(dest, sums);
-            checksumStatus = string.Format("{0:N0} files listed in {1}", listed, ChecksumFileName);
-        }
-        catch (Exception ex)
-        {
-            failed++;
-            failures.Add("Checksum list: " + ex.Message);
-            checksumStatus = "could not be saved: " + ex.Message;
-            WriteColored("  Checksum list " + checksumStatus, ConsoleColor.Yellow);
-        }
-        Console.WriteLine();
-
-        // Statistics, written to both the console and a text file in the backup folder
-        double seconds = Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
-        var report = new StringWriter();
-        report.WriteLine("  ----------------------------------------");
-        report.WriteLine("  Date:          {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now);
-        report.WriteLine("  Type:          {0}", incremental ? "Incremental" : "Full");
-        report.WriteLine("  Source:        {0}", source);
-        report.WriteLine("  Destination:   {0}", dest);
-        report.WriteLine("  Files copied:  {0:N0}", copied);
-        if (incremental)
-        {
-            report.WriteLine("    New:         {0:N0}", copied - updated);
-            report.WriteLine("    Updated:     {0:N0}", updated);
-            report.WriteLine("  Unchanged:     {0:N0}", unchanged);
-        }
-        report.WriteLine("  Folders:       {0:N0}", folders);
-        report.WriteLine("  Data copied:   {0}", FormatSize(copiedBytes));
-        report.WriteLine("  Time:          {0}", FormatTime(stopwatch.Elapsed));
-        report.WriteLine("  Average speed: {0}/s", FormatSize((long)(copiedBytes / seconds)));
-        report.WriteLine("  Verified:      {0}", config.Verify
-            ? "yes (each copy read back and its SHA-256 checksum compared)"
-            : "no (Verify=no in M8Backup.ini)");
-        report.WriteLine("  Checksums:     {0}", checksumStatus);
-        if (largest != null)
-            report.WriteLine("  Largest file:  {0} ({1})", largest.FullName.Substring(source.Length), FormatSize(largest.Length));
-        report.WriteLine();
-
-        WriteChanges(report, changes, previous);
-
-        report.WriteLine("  {0,-16}{1,10}{2,14}", "Folder", "Files", "Size");
-        foreach (var pair in perFolder)
-            report.WriteLine("  {0,-16}{1,10:N0}{2,14}", pair.Key, pair.Value[0], FormatSize(pair.Value[1]));
-        report.WriteLine();
-
-        report.WriteLine("  Skipped (leftovers from macOS, Linux and Windows, e.g. .DS_Store, .Trash-1000, Thumbs.db):");
-        report.WriteLine("    {0:N0} folder(s) containing {1:N0} files, {2}", scan.SkippedFolders, scan.SkippedFolderFiles, FormatSize(scan.SkippedFolderBytes));
-        report.WriteLine("    {0:N0} file(s), {1}", scan.SkippedFiles, FormatSize(scan.SkippedFileBytes));
-        foreach (string path in scan.SkippedNamed)
-            report.WriteLine("    skipped: " + path.Substring(source.Length));
-
-        var m8Drive = new DriveInfo(Path.GetPathRoot(source));
-        report.WriteLine("  Free space on M8:       {0} of {1}", FormatSize(m8Drive.AvailableFreeSpace), FormatSize(m8Drive.TotalSize));
-        string destRoot = Path.GetPathRoot(dest);
-        report.WriteLine("  Free space left on {0}  {1}", destRoot, FreeSpaceText(destRoot));
-        report.WriteLine();
-
-        if (nameWarnings.Count > 0)
-        {
-            report.WriteLine("  Names the M8 may not handle well ({0}):", nameWarnings.Count);
-            foreach (string w in nameWarnings) report.WriteLine("    " + w);
-            report.WriteLine();
-        }
-
-        if (keptVersions.Count > 0)
-        {
-            report.WriteLine("  Old versions of updated files, kept as ({0}):", keptVersions.Count);
-            foreach (string f in keptVersions) report.WriteLine("    " + f);
-            report.WriteLine();
-        }
-        if (prunedVersions > 0)
-        {
-            report.WriteLine("  Older versions moved to the Recycle Bin (KeepOldVersions={0}): {1:N0}", config.KeepOldVersions, prunedVersions);
-            report.WriteLine();
-        }
-
-        if (failures.Count > 0)
-        {
-            report.WriteLine("  Failed files ({0}):", failures.Count);
-            foreach (string f in failures) report.WriteLine("    " + f);
-            report.WriteLine();
-        }
-        string status = failed == 0
-            ? "Backup complete."
-            : "Backup finished with " + failed + " failed file(s).";
-
-        WriteColored("  Statistics", ConsoleColor.Cyan);
-        Console.Write(report.ToString());
-
-        // An incremental run gets its own dated file so the earlier statistics are kept
-        string statsFile = Path.Combine(dest, incremental
-            ? "backup-statistics_" + started.ToString("yyyy-MM-dd_HHmmss_fffffff") + ".txt"
-            : "backup-statistics.txt");
-        try
-        {
-            File.WriteAllText(statsFile, "  M8 " + (incremental ? "incremental " : "") + "backup statistics\r\n" + report + "  " + status + "\r\n");
-            Console.WriteLine("  Statistics saved to " + statsFile);
-        }
-        catch (Exception ex)
-        {
-            WriteColored("  Could not save statistics file: " + ex.Message, ConsoleColor.Yellow);
-        }
-        Console.WriteLine();
-
-        SetBackupStatus(dest, failed == 0 ? "complete" : "failed");
-        WriteColored("  " + status, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
-        Console.WriteLine();
-
-        // Only tidy up old backups once this one is known to be good
-        if (failed == 0 && config.KeepBackups > 0)
-            PruneBackups(backupRoot, config.KeepBackups, dest);
-
-        title = failed == 0 ? "M8 backup complete" : "M8 backup finished with errors";
-        summary = string.Format("{0:N0} files, {1} copied in {2}.", copied, FormatSize(copiedBytes), FormatTime(stopwatch.Elapsed));
-        if (failed > 0) summary += " " + failed + " file(s) failed.";
-        summary += ShortSongSummary(changes);
-        return failed == 0 ? 0 : 2;
+        OperationResult result = new BackupEngine().Run(source, backupRoot, previous, incremental, config, OperationContext.Current);
+        title = result.Title;
+        summary = result.Summary;
+        return result.ExitCode;
     }
 
     // "Songs\Song.m8s" -> "Songs\Song_2026-10-01_143000.m8s" (adds _2, _3, ... if that name is taken)
@@ -346,7 +49,7 @@ partial class M8Backup
     static int PruneOldVersions(string backup, int keep, HashSet<string> onM8)
     {
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (string path in Directory.GetFiles(backup, "*", SearchOption.AllDirectories))
+        foreach (string path in BackupFiles(backup))
         {
             if (IsBackupMetaFile(path) || !IsOldVersion(path)) continue;
             if (onM8.Contains(path.Substring(backup.Length).TrimStart('\\'))) continue;
@@ -367,13 +70,13 @@ partial class M8Backup
         if (extra.Count == 0) return 0;
 
         extra.Sort(StringComparer.OrdinalIgnoreCase);
-        Console.WriteLine("  KeepOldVersions is {0}, so these {1} older version(s) can go:", keep, extra.Count);
+        OperationOutput.WriteLine("  KeepOldVersions is {0}, so these {1} older version(s) can go:", keep, extra.Count);
         for (int i = 0; i < extra.Count && i < 15; i++)
-            Console.WriteLine("    " + extra[i].Substring(backup.Length).TrimStart('\\'));
-        if (extra.Count > 15) Console.WriteLine("    ... and {0} more", extra.Count - 15);
+            OperationOutput.WriteLine("    " + extra[i].Substring(backup.Length).TrimStart('\\'));
+        if (extra.Count > 15) OperationOutput.WriteLine("    ... and {0} more", extra.Count - 15);
         if (!AskInConsole("  Move them to the Recycle Bin? (y/n) "))
         {
-            Console.WriteLine();
+            OperationOutput.WriteLine();
             return 0;
         }
 
@@ -392,8 +95,8 @@ partial class M8Backup
                 WriteColored("  Could not remove " + Path.GetFileName(path) + ": " + ex.Message, ConsoleColor.Yellow);
             }
         }
-        Console.WriteLine("  Moved {0} older version(s) to the Recycle Bin.", moved);
-        Console.WriteLine();
+        OperationOutput.WriteLine("  Moved {0} older version(s) to the Recycle Bin.", moved);
+        OperationOutput.WriteLine();
         return moved;
     }
 
@@ -430,8 +133,8 @@ partial class M8Backup
         if (extra <= 0) return;
 
         List<string> old = backups.GetRange(0, extra);
-        Console.WriteLine("  KeepBackups is {0}, so these {1} old backup(s) can go:", keep, old.Count);
-        foreach (string dir in old) Console.WriteLine("    " + Path.GetFileName(dir));
+        OperationOutput.WriteLine("  KeepBackups is {0}, so these {1} old backup(s) can go:", keep, old.Count);
+        foreach (string dir in old) OperationOutput.WriteLine("    " + Path.GetFileName(dir));
         if (!AskInConsole("  Move them to the Recycle Bin? (y/n) ")) return;
 
         foreach (string dir in old)
@@ -441,14 +144,14 @@ partial class M8Backup
                 Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(dir,
                     Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
                     Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                Console.WriteLine("  Moved to Recycle Bin: " + Path.GetFileName(dir));
+                OperationOutput.WriteLine("  Moved to Recycle Bin: " + Path.GetFileName(dir));
             }
             catch (Exception ex)
             {
                 WriteColored("  Could not remove " + Path.GetFileName(dir) + ": " + ex.Message, ConsoleColor.Yellow);
             }
         }
-        Console.WriteLine();
+        OperationOutput.WriteLine();
     }
 
     class ScanResult
@@ -482,10 +185,12 @@ partial class M8Backup
     // Walks the tree, skipping Windows system folders and leftovers from other computers (see IsLeftover).
     static void CollectFiles(string dir, ScanResult scan)
     {
+        OperationContext.Current.Progress("Scanning", dir, 0, 0, scan.Files.Count);
         try
         {
-            foreach (FileInfo file in new DirectoryInfo(dir).GetFiles())
+            foreach (FileInfo file in new DirectoryInfo(dir).EnumerateFiles())
             {
+                OperationContext.Current.CheckCancellation();
                 if ((file.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked file is not supported: " + file.FullName);
                 if (IsLeftover(file.Name, false))
                 {
@@ -498,8 +203,9 @@ partial class M8Backup
                     scan.Files.Add(file);
                 }
             }
-            foreach (string sub in Directory.GetDirectories(dir))
+            foreach (string sub in Directory.EnumerateDirectories(dir))
             {
+                OperationContext.Current.CheckCancellation();
                 string name = Path.GetFileName(sub);
                 if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked folder is not supported: " + sub);
                 if (name == "System Volume Information" || name == "$RECYCLE.BIN") continue;
@@ -511,10 +217,12 @@ partial class M8Backup
                     {
                         foreach (FileInfo f in new DirectoryInfo(sub).GetFiles("*", SearchOption.AllDirectories))
                         {
+                            OperationContext.Current.CheckCancellation();
                             scan.SkippedFolderFiles++;
                             scan.SkippedFolderBytes += f.Length;
                         }
                     }
+                    catch (OperationCanceledException) { throw; }
                     catch (Exception) { }  // only used for the statistics
                     continue;
                 }

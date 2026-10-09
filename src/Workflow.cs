@@ -8,7 +8,11 @@ using System.Text.RegularExpressions;
 
 partial class M8Backup
 {
-    static bool PreviewOnly;
+    static bool PreviewOnly
+    {
+        get { return OperationContext.Current.PreviewOnly; }
+        set { OperationContext.Current.PreviewOnly = value; }
+    }
     static string ExpandPath(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? "" : Path.GetFullPath(Environment.ExpandEnvironmentVariables(value));
@@ -115,9 +119,9 @@ partial class M8Backup
         if (ListBackups(root).Count > 0) roots.Add(root);
         roots.Sort(StringComparer.OrdinalIgnoreCase);
         if (roots.Count == 0) return preferred ?? root;
-        Console.WriteLine("  Backup histories:");
+        OperationOutput.WriteLine("  Backup histories:");
         for (int i = 0; i < roots.Count; i++)
-            Console.WriteLine("    {0}) {1}{2}", i + 1, roots[i] == root ? "Legacy backups" : Path.GetFileName(roots[i]),
+            OperationOutput.WriteLine("    {0}) {1}{2}", i + 1, roots[i] == root ? "Legacy backups" : Path.GetFileName(roots[i]),
                 string.Equals(roots[i], preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : "");
         int pick = AskNumber("  Choose history, Enter = cancel: ", roots.Count);
         return pick == 0 ? null : roots[pick - 1];
@@ -139,12 +143,12 @@ partial class M8Backup
         if (source.Length == 0)
         {
             try { source = FindM8Drive(out pnpId); }
-            catch (Exception ex) { Console.WriteLine("  Automatic detection failed: " + ex.Message); source = null; }
+            catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); source = null; }
             if (source == null)
             {
-                Console.WriteLine("  No M8 detected. Select an SD card in a reader or a folder instead.");
-                Console.Write("  Source path (Enter = cancel): ");
-                source = ExpandPath(Console.ReadLine());
+                OperationOutput.WriteLine("  No M8 detected. Select an SD card in a reader or a folder instead.");
+                OperationOutput.Write("  Source path (Enter = cancel): ");
+                source = ExpandPath(OperationOutput.ReadLine());
             }
         }
         if (string.IsNullOrEmpty(source)) return null;
@@ -156,19 +160,28 @@ partial class M8Backup
 
     static FileState CompareContent(FileInfo file, string target, bool thorough)
     {
-        FileState state = Compare(file, target);
-        if (!thorough || state == FileState.New) return state;
+        string sourceHash;
+        return CompareContent(file, target, thorough, out sourceHash);
+    }
+
+    static FileState CompareContent(FileInfo file, string target, bool thorough, out string sourceHash)
+    {
+        sourceHash = null;
+        if (!thorough) return Compare(file, target);
         var other = new FileInfo(target);
-        return other.Length == file.Length && HashFile(file.FullName) == HashFile(target) ? FileState.Same : FileState.Changed;
+        if (!other.Exists) return FileState.New;
+        if (other.Length != file.Length) return FileState.Changed;
+        sourceHash = HashFile(file.FullName);
+        return sourceHash == HashFile(target) ? FileState.Same : FileState.Changed;
     }
 
     static bool ShowPlan(string label, List<string> lines, long bytes, Config config)
     {
-        Console.WriteLine("  {0}: {1:N0} action(s), {2} to copy.", label, lines.Count, FormatSize(bytes));
-        if (config.Preview || PreviewOnly)
-            foreach (string line in lines) Console.WriteLine("    " + line);
-        if (PreviewOnly) { Console.WriteLine("  Preview only; no files changed."); return false; }
-        return !config.Preview || AskInConsole("  Proceed? (y/n) ");
+        OperationContext.Current.CheckCancellation();
+        bool approved = OperationContext.Current.Interaction.ReviewPlan(new OperationPlan {
+            Label = label, Actions = lines, Bytes = bytes, ShowDetails = config.Preview, PreviewOnly = PreviewOnly });
+        OperationContext.Current.CheckCancellation();
+        return approved && !PreviewOnly;
     }
 
     static string UniqueFolder(string root, string name)
@@ -180,6 +193,7 @@ partial class M8Backup
 
     static void AtomicText(string path, string contents)
     {
+        OperationContext.Current.CheckCancellation();
         Directory.CreateDirectory(Path.GetDirectoryName(path));
         string temp = path + ".tmp";
         File.WriteAllText(temp, contents, new UTF8Encoding(false));

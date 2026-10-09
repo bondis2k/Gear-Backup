@@ -53,11 +53,11 @@ partial class M8Backup
         }
         if (missing.Count > 0)
         {
-            Console.WriteLine("  Referenced samples missing from this backup:");
-            foreach (string path in missing) Console.WriteLine("    " + path);
+            OperationOutput.WriteLine("  Referenced samples missing from this backup:");
+            foreach (string path in missing) OperationOutput.WriteLine("    " + path);
             throw new IOException("Cannot restore a complete song. Use a backup containing its samples, or restore the song file separately.");
         }
-        Console.WriteLine("  Song plus {0} referenced sample(s), including any unused sampler slots.", result.Count - 1);
+        OperationOutput.WriteLine("  Song plus {0} referenced sample(s), including any unused sampler slots.", result.Count - 1);
         return result;
     }
 }

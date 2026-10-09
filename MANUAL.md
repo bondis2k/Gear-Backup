@@ -4,6 +4,8 @@ M8 Backup is a Windows console program for backing up and restoring a Dirtywave 
 
 Requires Windows 10 or 11 and the built-in .NET Framework. No installation or extra runtime is needed.
 
+Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `M8Backup.exe` before following the steps below.
+
 ## Getting started
 
 1. Connect the M8 by USB and enable USB drive mode. Save your song first and leave the M8 idle while copying.
@@ -102,6 +104,8 @@ The manifest records file membership, hashes, sizes, timestamps, and empty folde
 
 **Storage:** the first snapshot adds a separate history copy of each unique file's contents, alongside the normal browsable backup. Plan for up to roughly twice the card's data for a first full backup. Objects are shared within one backup folder, not between separate full backups. The free-space check includes missing history objects.
 
+Space planning reuses hashes already available from thorough comparison or existing checksum records. For contents whose hashes are not yet known, it reserves their full size without reading them just to estimate space. This estimate can exceed the eventual requirement when identical contents share an object. Copying still generates SHA-256 identities, and optional read-back verification still runs when enabled. A shared existing history object is verified once per backup run.
+
 `KeepOldVersions` limits only browsable dated copies. Snapshot history and its objects remain until the whole backup folder is removed. Existing backups gain history only from subsequent successful runs; earlier states cannot be reconstructed retroactively. Keep the entire backup folder, including `.m8backup`, when moving it to another disk.
 
 Fast comparison has the same limitations for snapshot content as for ordinary incremental copying. Choose `Thorough=yes` when capturing edits that may preserve size and time.
@@ -198,6 +202,20 @@ Missing or damaged objects and malformed manifests are reported. Backups without
 
 Checksum files use the standard `sha256sum` format with forward slashes. Checksum and manifest paths are validated to prevent paths escaping the selected backup/target. The files are integrity baselines, not signed authenticity records.
 
+## Progress and cancellation
+
+The console reports progress during scanning, planning, hashing, copying, saving history, recovery, and integrity checks. Interactive progress updates are throttled; redirected output retains the regular messages and statistics without continuous progress lines.
+
+Full backups show overall copy progress and stage labels, without individual file paths or per-file progress. The acceptance preview and any errors still list relevant files.
+
+Press **Ctrl+C** to request cancellation. The program checks between files and during copy/hash/byte-comparison loops. A blocking filesystem or device operation may need to return before cancellation can take effect.
+
+Cancelled backups keep completed copies and leave an interrupted run marked `incomplete` so it can be resumed. A cancelled changed-file copy restores its previous browsable backup copy when cleanup succeeds. Already completed snapshots remain available. Cancelling after the backup has completed, such as during retention questions, leaves that completed status intact.
+
+Cancelled restores clean up the staged copy and retain its existing target file. Files already restored remain restored; cancellation stops further copying and removal. Recovery copies must still finish before any target changes. A cancelled integrity check reports cancellation rather than treating unchecked files as valid or damaged. Cancellation does not automatically eject the M8.
+
+The backup statistics duration includes scanning, planning, copying, snapshot creation, and saving checksum records. It excludes time waiting for plan acceptance and subsequent report writing or retention prompts. The average speed uses copied data divided by that duration.
+
 ## Retention, statistics, and notifications
 
 `KeepBackups=N` offers to move excess older backup folders of the current profile to the Recycle Bin after a successful backup. This removes each folder's snapshots too. `KeepBackups=0` keeps all.
@@ -257,16 +275,22 @@ If `M8Backup.exe` is running and Windows locks it, use `build.cmd --no-pause M8B
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. They create isolated fixtures under `.test-runs`, use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. They do not write to a connected M8 or test hardware ejection.
 
-Source files are parts of the same `M8Backup` class:
+The source uses a partial `M8Backup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the current CLI frontend. A future GUI can provide its own adapter and call the same engines on a worker thread. Each synchronous operation activates its context on that thread; callbacks should marshal to the GUI thread as needed. The CLI holds the history lock around mutations, and another frontend must do the same.
+
+Backup file traversal skips metadata folders before descending into them, so normal browsing, checksum-list writing, and retention do not scan history objects as user files.
 
 | File | Responsibility |
 |---|---|
 | `Program.cs` | Arguments, source/profile selection, menu, history locking. |
 | `Config.cs` | INI defaults and parsing. |
 | `Workflow.cs` | Path validation, profiles, previews, status, atomic metadata writes. |
-| `Backup.cs` | Full/incremental copy, resume, reports, retention, scanning. |
+| `Backup.cs` | CLI backup entry, retention, source scanning, version naming. |
+| `BackupEngine.cs` | Full/incremental execution, resume, space planning, reports. |
 | `Snapshots.cs` | Manifests, deduplicated objects, historical selection and integrity checks. |
-| `Restore.cs` | Restore planning, bundles, recovery copies, staged replacements, exact removal. |
+| `Restore.cs` | CLI restore selection, bundles, file validation, recovery helpers. |
+| `RestoreEngine.cs` | Restore planning and execution, staged replacements, exact removal. |
+| `IntegrityEngine.cs` | Integrity-check execution and result handling. |
+| `Operations.cs` | Frontend interface, plans, progress/results, cancellation context, backup traversal. |
 | `Dependencies.cs` | Bounded firmware-6 sample-reference extraction. |
 | `Checksums.cs` | Browsable-file checksum lists and check menu. |
 | `FileCopy.cs` | Copying/hashing, verification, free-space checks. |

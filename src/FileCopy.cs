@@ -37,6 +37,7 @@ partial class M8Backup
             int count;
             while ((count = ReadBlock(a, left)) > 0)
             {
+                OperationContext.Current.Progress("Comparing", first, a.Position, a.Length);
                 if (ReadBlock(b, right) != count) return false;
                 for (int i = 0; i < count; i++) if (left[i] != right[i]) return false;
             }
@@ -96,6 +97,7 @@ partial class M8Backup
 
     static string CopyAndHash(string from, string to)
     {
+        OperationContext.Current.CheckCancellation();
         using (var sha = SHA256.Create())
         using (var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
         using (var output = new FileStream(to, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.WriteThrough))
@@ -104,8 +106,10 @@ partial class M8Backup
             int read;
             while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
             {
+                OperationContext.Current.CheckCancellation();
                 sha.TransformBlock(buffer, 0, read, null, 0);
                 output.Write(buffer, 0, read);
+                OperationContext.Current.Progress("Copying", from, input.Position, input.Length);
             }
             sha.TransformFinalBlock(buffer, 0, 0);
             return ToHex(sha.Hash);
@@ -114,9 +118,20 @@ partial class M8Backup
 
     static string HashFile(string path)
     {
+        OperationContext.Current.CheckCancellation();
         using (var sha = SHA256.Create())
         using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan))
-            return ToHex(sha.ComputeHash(input));
+        {
+            var buffer = new byte[1 << 20];
+            int read;
+            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                sha.TransformBlock(buffer, 0, read, null, 0);
+                OperationContext.Current.Progress("Hashing", path, input.Position, input.Length);
+            }
+            sha.TransformFinalBlock(buffer, 0, 0);
+            return ToHex(sha.Hash);
+        }
     }
 
     // Returns an error message if the drive holding `path` has less than `needed` bytes free, otherwise null.

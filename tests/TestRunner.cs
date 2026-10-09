@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 class TestRunner
 {
@@ -346,8 +347,167 @@ partial class M8Backup
         Assert(FilesEqual(blockA, blockB), "byte comparison spans multiple buffers");
         blockBytes[131076] = 1; File.WriteAllBytes(blockB, blockBytes);
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
+        TestEngineOperations(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions. Fixtures: " + root);
+    }
+
+    sealed class TestInteraction : IOperationInteraction
+    {
+        public readonly StringBuilder Output = new StringBuilder();
+        public readonly List<OperationProgress> Progress = new List<OperationProgress>();
+        public Action<OperationProgress> OnProgress;
+        public int Plans;
+        public void Write(string text) { Output.Append(text); }
+        public void WriteLine(string text) { Output.AppendLine(text); }
+        public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
+        public string ReadLine() { throw new Exception("Engine unexpectedly requested console-style input"); }
+        public char ChooseKey(string question, string allowed) { return allowed[0]; }
+        public int ChooseNumber(string question, int max) { throw new Exception("Engine unexpectedly requested backup selection"); }
+        public bool ReviewPlan(OperationPlan plan) { Plans++; return !plan.PreviewOnly; }
+        public void ReportProgress(OperationProgress progress)
+        {
+            Progress.Add(progress);
+            if (OnProgress != null) OnProgress(progress);
+        }
+    }
+
+    static void TestEngineOperations(string root)
+    {
+        string source = Rooted(Path.Combine(root, "engine-source"));
+        Put(Path.Combine(source, "Songs", "one.m8s"), "HEADLESS");
+        Put(Path.Combine(source, "Songs", "two.m8s"), "HEADLESS");
+        string history = Path.Combine(root, "engine-history");
+        var config = new Config { BackupFolder = root, Preview = true };
+        var ui = new TestInteraction();
+        bool delayed = false;
+        ui.OnProgress = delegate(OperationProgress p) {
+            if (!delayed && p.Stage == "Saving history") { delayed = true; Thread.Sleep(350); }
+        };
+        var context = new OperationContext(ui, CancellationToken.None);
+        OperationResult result = new BackupEngine().Run(source, history, null, false, config, context);
+        Assert(result.ExitCode == 0 && !result.Cancelled && ui.Plans == 1, "backup engine uses injected plan review without console input");
+        Assert(ui.Progress.Exists(p => p.Stage == "Scanning") && ui.Progress.Exists(p => p.Stage == "Copying") &&
+            ui.Progress.Exists(p => p.Stage == "Saving history"), "structured backup progress covers scan, copy, and history");
+        Assert(!ui.Progress.Exists(p => p.Stage == "Hashing"), "default full backup avoids standalone preflight hashing reads");
+        Assert(result.Elapsed.TotalMilliseconds >= 350, "engine elapsed time includes snapshot creation");
+        var time = System.Text.RegularExpressions.Regex.Match(ui.Output.ToString(), @"Time:\s+([\d.,]+)s");
+        Assert(time.Success && double.Parse(time.Groups[1].Value.Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture) >= 0.3,
+            "printed backup duration includes snapshot creation");
+        string backup = ListBackups(history)[0];
+        Snapshot snapshot = LatestSnapshot(backup);
+        Put(Path.Combine(backup, ".m8backup", "objects", "not-a-user-file"), "HIDDEN");
+        Assert(BackupFiles(backup).Count == 2, "backup traversal excludes metadata and statistics");
+        Assert(CurrentBackup(backup).Files.Count == 2, "current restore view excludes history store contents");
+
+        ui = new TestInteraction();
+        config.Thorough = true;
+        config.Verify = true;
+        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, CancellationToken.None));
+        string sharedObject = snapshot.Files[0].StoredPath;
+        Assert(ui.Progress.FindAll(p => p.Stage == "Hashing" && p.Path == sharedObject && p.Bytes == p.TotalBytes).Count == 1,
+            "shared snapshot object verified only once per run");
+        Assert(ui.Progress.FindAll(p => p.Stage == "Hashing" && p.Path == Path.Combine(source, "Songs", "one.m8s") && p.Bytes == p.TotalBytes).Count == 1,
+            "thorough planning reuses source hash instead of rehashing for space estimate");
+        Assert(result.ExitCode == 0 && ui.Plans == 0, "unchanged incremental needs no injected confirmation");
+
+        string target = Rooted(Path.Combine(root, "engine-target"));
+        Directory.CreateDirectory(target);
+        ui = new TestInteraction();
+        result = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, 'a', null, false,
+            config, new OperationContext(ui, CancellationToken.None));
+        Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "HEADLESS",
+            "restore planning and execution run through injected frontend");
+        Assert(ui.Plans == 1 && ui.Progress.Exists(p => p.Stage == "Planning restore"), "restore engine reports planning and reviews plan");
+
+        string cancelSource = Rooted(Path.Combine(root, "cancel-source"));
+        FileInfo large = new FileInfo(Path.Combine(cancelSource, "large.wav"));
+        Directory.CreateDirectory(cancelSource);
+        File.WriteAllBytes(large.FullName, new byte[2 * 1024 * 1024]);
+        string cancelHistory = Path.Combine(root, "cancel-history");
+        config = new Config { BackupFolder = root, Preview = false };
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            result = new BackupEngine().Run(cancelSource, cancelHistory, null, false, config, new OperationContext(ui, cancellation.Token));
+            string interrupted = ListBackups(cancelHistory)[0];
+            Assert(result.Cancelled && result.ExitCode == 0 && BackupStatus(interrupted) == "incomplete", "cancelled backup remains resumable");
+            Assert(!File.Exists(Path.Combine(interrupted, "large.wav")), "cancelling during copy removes partial backup file");
+        }
+
+        // Cancelling a changed incremental copy restores its previous browsable version.
+        Put(Path.Combine(source, "Songs", "one.m8s"), "CHANGED CONTENT");
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "HEADLESS",
+                "cancelled incremental replacement puts old backup copy back");
+            Assert(Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == 2, "cancelled backup does not publish a snapshot");
+        }
+
+        string cancelTarget = Rooted(Path.Combine(root, "cancel-target"));
+        Put(Path.Combine(cancelTarget, "Songs", "one.m8s"), "KEEP ORIGINAL");
+        Put(Path.Combine(cancelTarget, "extra.wav"), "KEEP EXTRA");
+        var copies = new List<RestoreEntry> { snapshot.Files.Find(f => f.Relative == "Songs\\one.m8s") };
+        var removals = new List<string> { "extra.wav" };
+        var fingerprints = TargetHashes(cancelTarget, copies, removals);
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
+                config, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL",
+                "cancelled staged restore preserves existing target");
+            Assert(File.Exists(Path.Combine(cancelTarget, "extra.wav")), "cancelled restore does not remove extras");
+            Assert(Directory.GetFiles(cancelTarget, ".m8restore-*.tmp", SearchOption.AllDirectories).Length == 0,
+                "cancelled restore cleans staged file");
+        }
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Hashing") cancellation.Cancel(); };
+            result = new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && result.Title == "M8 check cancelled", "integrity cancellation is not reported as corruption or success");
+        }
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            var recoveryConfig = new Config { BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
+            result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
+                recoveryConfig, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL" &&
+                File.ReadAllText(Path.Combine(cancelTarget, "extra.wav")) == "KEEP EXTRA", "cancelling recovery leaves every target file untouched");
+            string recoveryFolder = Directory.GetDirectories(recoveryConfig.RecoveryFolder)[0];
+            Assert(File.ReadAllText(Path.Combine(recoveryFolder, ".m8backup", "recovery-status.txt")).Trim() == "incomplete",
+                "cancelled recovery does not claim completion");
+        }
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == "Saving history") cancellation.Cancel(); };
+            string cancelledHistory = Path.Combine(root, "cancel-history-save");
+            result = new BackupEngine().Run(cancelSource, cancelledHistory, null, false, config, new OperationContext(ui, cancellation.Token));
+            string interrupted = ListBackups(cancelledHistory)[0];
+            Assert(result.Cancelled && File.Exists(Path.Combine(interrupted, "large.wav")) && BackupStatus(interrupted) == "incomplete",
+                "history cancellation retains completed browsable copies for resume");
+            Assert(!Directory.Exists(SnapshotRoot(interrupted)), "history cancellation does not publish manifest");
+        }
+        using (var cancellation = new CancellationTokenSource())
+        {
+            cancellation.Cancel();
+            string untouched = Path.Combine(root, "pre-cancelled-history");
+            result = new BackupEngine().Run(source, untouched, null, false, config, new OperationContext(new TestInteraction(), cancellation.Token));
+            Assert(result.Cancelled && !Directory.Exists(untouched), "pre-cancelled operation makes no directories");
+            Assert(new IntegrityEngine().Run(new List<string>(), new OperationContext(new TestInteraction(), cancellation.Token)).Cancelled,
+                "pre-cancelled empty integrity request reports cancellation");
+        }
+        Assert(OperationContext.Current == context || OperationContext.Current.Interaction is ConsoleInteraction,
+            "engine restores calling context after completion and cancellation");
     }
     // Tests exclude Windows toast code to avoid registry writes/desktop notifications.
     static bool? ShowToast(string title, string summary, bool ask) { return false; }

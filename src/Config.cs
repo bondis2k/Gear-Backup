@@ -6,7 +6,7 @@ using System.Text;
 
 partial class M8Backup
 {
-    class Config
+    internal class Config
     {
         public string BackupFolder;
         public string Mode = "ask";     // ask, full or incremental

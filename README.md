@@ -24,3 +24,5 @@ M8Backup.exe --source E:\
 Configure backup locations and options in `M8Backup.ini`. SHA-256 comparison (`Thorough`), automatic integrity verification (`Verify`), and recovery copies (`Recovery`) default to `no`. Change previews default to `yes`; incremental backups with no file changes skip the proceed prompt.
 
 Executable builds are ignored by Git; build from source locally. See [MANUAL.md](MANUAL.md) for all settings, restore options, and command-line arguments.
+
+Long operations report progress. Press Ctrl+C to cancel safely; interrupted backups can be resumed. Backup, restore, and integrity-check engines share a frontend interface so a GUI can be added alongside the CLI.

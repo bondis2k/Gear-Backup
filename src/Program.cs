@@ -8,6 +8,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 
 partial class M8Backup
 {
@@ -22,7 +23,28 @@ partial class M8Backup
         try
         {
             PreviewOnly = Array.IndexOf(args, "--preview") >= 0;
-            result = Run(restore, check, args);
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var context = new OperationContext(new ConsoleInteraction(), cancellation.Token) { PreviewOnly = PreviewOnly };
+                ConsoleCancelEventHandler handler = delegate(object sender, ConsoleCancelEventArgs e)
+                {
+                    e.Cancel = true;
+                    cancellation.Cancel();
+                };
+                Console.CancelKeyPress += handler;
+                try
+                {
+                    using (context.Activate()) result = Run(restore, check, args);
+                    if (cancellation.IsCancellationRequested) pause = false;
+                }
+                finally { Console.CancelKeyPress -= handler; }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("  Operation cancelled.");
+            pause = false;
+            result = 0;
         }
         catch (Exception ex)
         {
@@ -149,7 +171,12 @@ partial class M8Backup
                 : Backup(source, backupRoot, previous, incremental, config, out title, out summary);
             if (title != null && !PreviewOnly)
             {
-                if (pnpId != null) Finish(pnpId, title, summary, config.Eject);
+                if (OperationContext.Current.Cancellation.IsCancellationRequested || title.EndsWith(" cancelled", StringComparison.Ordinal))
+                {
+                    Console.WriteLine("  " + summary);
+                    ShowToast(title, summary, false);
+                }
+                else if (pnpId != null) Finish(pnpId, title, summary, config.Eject);
                 else ShowToast(title, summary, false);
             }
             return result;

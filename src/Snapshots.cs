@@ -7,12 +7,12 @@ using System.Text.RegularExpressions;
 
 partial class M8Backup
 {
-    class RestoreEntry
+    internal class RestoreEntry
     {
         public string Relative, StoredPath, Hash;
         public long Size, ModifiedTicks, CreatedTicks;
     }
-    class Snapshot
+    internal class Snapshot
     {
         public string Name;
         public List<RestoreEntry> Files = new List<RestoreEntry>();
@@ -33,10 +33,12 @@ partial class M8Backup
     static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify)
     {
         var rows = new StringBuilder("M8SNAPSHOT\t1\n");
+        var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string folder in scan.Folders)
             rows.Append("D\t").Append(Encode(folder.Substring(source.Length))).Append('\n');
         foreach (FileInfo original in scan.Files)
         {
+            OperationContext.Current.Progress("Saving history", original.FullName, 0, 0);
             string relative = original.FullName.Substring(source.Length);
             string path = SafePath(backup, relative);
             string hash;
@@ -47,7 +49,7 @@ partial class M8Backup
             // Optional integrity checks are independent of generating object identities.
             if (File.Exists(obj))
             {
-                if (verify && HashFile(obj) != hash) throw new IOException("Damaged history object for " + relative);
+                if (verify && checkedObjects.Add(hash) && HashFile(obj) != hash) throw new IOException("Damaged history object for " + relative);
             }
             else
             {
@@ -59,6 +61,7 @@ partial class M8Backup
                     if (verify && copiedHash != hash)
                         throw new IOException("Backup checksum differs for " + relative);
                     File.Move(temp, obj);
+                    checkedObjects.Add(hash);
                 }
                 finally { TryDelete(temp); }
             }
@@ -70,7 +73,7 @@ partial class M8Backup
         }
         string name = started.ToString("yyyy-MM-dd_HHmmss_fffffff", CultureInfo.InvariantCulture) + ".manifest";
         AtomicText(Path.Combine(SnapshotRoot(backup), name), rows.ToString());
-        Console.WriteLine("  Point-in-time snapshot saved: " + Path.GetFileNameWithoutExtension(name));
+        OperationOutput.WriteLine("  Point-in-time snapshot saved: " + Path.GetFileNameWithoutExtension(name));
     }
 
     static Snapshot ReadSnapshot(string backup, string manifest)
@@ -121,8 +124,8 @@ partial class M8Backup
         files.Sort(StringComparer.OrdinalIgnoreCase);
         files.Reverse();
         if (files.Count == 0) return null;
-        Console.WriteLine("  Saved points in time:");
-        for (int i = 0; i < files.Count; i++) Console.WriteLine("    {0}) {1}", i + 1, Path.GetFileNameWithoutExtension(files[i]));
+        OperationOutput.WriteLine("  Saved points in time:");
+        for (int i = 0; i < files.Count; i++) OperationOutput.WriteLine("    {0}) {1}", i + 1, Path.GetFileNameWithoutExtension(files[i]));
         int pick = AskNumber("  Choose snapshot (Enter = browse current backup files): ", files.Count);
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
@@ -131,9 +134,14 @@ partial class M8Backup
     {
         var result = new Snapshot { Name = "current backup files" };
         Dictionary<string, string> sums = LoadChecksums(backup);
-        foreach (string path in Directory.GetFiles(backup, "*", SearchOption.AllDirectories))
+        foreach (FileSystemInfo entry in BackupEntries(backup))
         {
-            if (IsBackupMetaFile(path)) continue;
+            if (entry is DirectoryInfo)
+            {
+                result.Folders.Add(entry.FullName.Substring(backup.Length).TrimStart('\\'));
+                continue;
+            }
+            string path = entry.FullName;
             string relative = path.Substring(backup.Length).TrimStart('\\');
             SafePath(backup, relative);
             string hash = null;
@@ -142,8 +150,6 @@ partial class M8Backup
             result.Files.Add(new RestoreEntry { Relative = relative, StoredPath = path, Hash = hash,
                 Size = info.Length, ModifiedTicks = info.LastWriteTimeUtc.Ticks, CreatedTicks = info.CreationTimeUtc.Ticks });
         }
-        foreach (string folder in Directory.GetDirectories(backup, "*", SearchOption.AllDirectories))
-            if (!IsBackupMetaFile(folder)) result.Folders.Add(folder.Substring(backup.Length).TrimStart('\\'));
         return result;
     }
 
@@ -154,22 +160,25 @@ partial class M8Backup
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
         {
+            OperationContext.Current.Progress("Checking history", manifest, 0, 0);
             try
             {
                 Snapshot snapshot = ReadSnapshot(backup, manifest);
                 foreach (RestoreEntry item in snapshot.Files)
                 {
                     if (!checkedObjects.Add(item.Hash)) continue;
-                    if (!File.Exists(item.StoredPath)) { missing++; Console.WriteLine("    Missing history object: " + item.Hash); }
+                    if (!File.Exists(item.StoredPath)) { missing++; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
                     else
                     {
                         try { ValidateEntry(item); ok++; }
-                        catch (Exception ex) { damaged++; Console.WriteLine("    Damaged history: " + ex.Message); }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) { damaged++; OperationOutput.WriteLine("    Damaged history: " + ex.Message); }
                     }
                 }
             }
-            catch (Exception ex) { damaged++; Console.WriteLine("    Invalid snapshot: " + ex.Message); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { damaged++; OperationOutput.WriteLine("    Invalid snapshot: " + ex.Message); }
         }
-        Console.WriteLine("    {0} unique history object(s) checked.", checkedObjects.Count);
+        OperationOutput.WriteLine("    {0} unique history object(s) checked.", checkedObjects.Count);
     }
 }

@@ -41,12 +41,12 @@ partial class M8Backup
     // any other file is read and hashed. Returns the number of files listed.
     static int WriteChecksums(string folder, Dictionary<string, string> known)
     {
-        string[] files = Directory.GetFiles(folder, "*", SearchOption.AllDirectories);
-        Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+        List<string> files = BackupFiles(folder);
         var text = new StringBuilder();
         int count = 0;
         foreach (string path in files)
         {
+            OperationContext.Current.Progress("Saving checksums", path, 0, 0);
             if (IsBackupMetaFile(path)) continue;
             string relative = path.Substring(folder.Length).TrimStart('\\');
             string hash;
@@ -78,46 +78,34 @@ partial class M8Backup
         newestFirst.Reverse();
         int shown = Math.Min(newestFirst.Count, 20);
         for (int i = 0; i < shown; i++)
-            Console.WriteLine("    {0,2}) {1} [{2}]", i + 1, Path.GetFileName(newestFirst[i]), BackupStatus(newestFirst[i]));
+            OperationOutput.WriteLine("    {0,2}) {1} [{2}]", i + 1, Path.GetFileName(newestFirst[i]), BackupStatus(newestFirst[i]));
 
         List<string> toCheck = null;
         while (toCheck == null)
         {
-            Console.Write("  Check which backup? Number, A = all " + newestFirst.Count + " backups, Enter = cancel: ");
-            string line = (Console.ReadLine() ?? "").Trim();
+            OperationOutput.Write("  Check which backup? Number, A = all " + newestFirst.Count + " backups, Enter = cancel: ");
+            string line = (OperationOutput.ReadLine() ?? "").Trim();
             int n;
             if (line.Length == 0)
             {
-                Console.WriteLine("  Check cancelled.");
+                OperationOutput.WriteLine("  Check cancelled.");
                 return 0;
             }
             if (line.Equals("a", StringComparison.OrdinalIgnoreCase)) toCheck = newestFirst;
             else if (int.TryParse(line, out n) && n >= 1 && n <= shown) toCheck = new List<string> { newestFirst[n - 1] };
-            else Console.WriteLine("  Please enter a number from 1 to " + shown + ", or A.");
+            else OperationOutput.WriteLine("  Please enter a number from 1 to " + shown + ", or A.");
         }
-        Console.WriteLine();
+        OperationOutput.WriteLine();
 
-        int ok = 0, damaged = 0, missing = 0, unchecked_ = 0;
-        foreach (string backup in toCheck)
-        {
-            CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_);
-            CheckSnapshots(backup, ref ok, ref damaged, ref missing);
-        }
-
-        summary = string.Format("{0:N0} file(s) OK", ok);
-        if (damaged > 0) summary += string.Format(", {0:N0} damaged", damaged);
-        if (missing > 0) summary += string.Format(", {0:N0} missing", missing);
-        if (unchecked_ > 0) summary += string.Format(", {0} backup(s) without a checksum list", unchecked_);
-        summary += ".";
-        bool good = damaged == 0 && missing == 0;
-        WriteColored("  " + summary, good ? ConsoleColor.Green : ConsoleColor.Red);
-        title = good ? "M8 backups OK" : "M8 backup problems found";
-        return good ? 0 : 2;
+        OperationResult result = new IntegrityEngine().Run(toCheck, OperationContext.Current);
+        title = result.Title;
+        summary = result.Summary;
+        return result.ExitCode;
     }
 
     static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_)
     {
-        Console.WriteLine("  " + Path.GetFileName(backup));
+        OperationOutput.WriteLine("  " + Path.GetFileName(backup));
         Dictionary<string, string> sums = LoadChecksums(backup);
         if (sums == null)
         {
@@ -125,13 +113,13 @@ partial class M8Backup
             if (AskInConsole("    Create one now from the files as they are? (y/n) "))
             {
                 int count = WriteChecksums(backup, null);
-                Console.WriteLine("    Checksum list created for {0:N0} files. Future checks will compare against it.", count);
+                OperationOutput.WriteLine("    Checksum list created for {0:N0} files. Future checks will compare against it.", count);
             }
             else
             {
                 unchecked_++;
             }
-            Console.WriteLine();
+            OperationOutput.WriteLine();
             return;
         }
 
@@ -146,6 +134,7 @@ partial class M8Backup
         int done = 0;
         foreach (var entry in sums)
         {
+            OperationContext.Current.CheckCancellation();
             string path = Path.Combine(backup, entry.Key);
             done++;
             if (!File.Exists(path))
@@ -157,6 +146,7 @@ partial class M8Backup
             doneBytes += new FileInfo(path).Length;
             string hash;
             try { hash = HashFile(path); }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex) { hash = null; problems.Add("unreadable: " + entry.Key + " (" + ex.Message + ")"); }
             if (hash == entry.Value) ok++;
             else
@@ -164,14 +154,13 @@ partial class M8Backup
                 damaged++;
                 if (hash != null) problems.Add("damaged: " + entry.Key);
             }
-            int percent = totalBytes == 0 ? 100 : (int)(doneBytes * 100 / totalBytes);
-            Console.Write("\r    {0,3}%  {1}/{2} files checked      ", percent, done, sums.Count);
+            OperationContext.Current.Progress("Checking backup", entry.Key, doneBytes, totalBytes, done, sums.Count);
         }
-        Console.WriteLine();
+        OperationOutput.WriteLine();
 
         // Files that were added to the folder by hand aren't in the list; just mention them
         int extra = 0;
-        foreach (string path in Directory.GetFiles(backup, "*", SearchOption.AllDirectories))
+        foreach (string path in BackupFiles(backup))
             if (!IsBackupMetaFile(path) && !sums.ContainsKey(path.Substring(backup.Length).TrimStart('\\'))) extra++;
 
         if (problems.Count == 0)
@@ -179,7 +168,7 @@ partial class M8Backup
         else
             foreach (string p in problems) WriteColored("    " + p, ConsoleColor.Red);
         if (extra > 0)
-            Console.WriteLine("    {0:N0} file(s) in the folder aren't in the checksum list (added later by hand?), not checked.", extra);
-        Console.WriteLine();
+            OperationOutput.WriteLine("    {0:N0} file(s) in the folder aren't in the checksum list (added later by hand?), not checked.", extra);
+        OperationOutput.WriteLine();
     }
 }
