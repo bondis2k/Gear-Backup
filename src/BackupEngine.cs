@@ -99,6 +99,7 @@ partial class M8Backup
             CopyFiles();
             SaveHistory();
             Report();
+            string zipPath = SaveZip();
 
             // Only tidy up old backups once this one is known to be good
             if (failed == 0 && config.KeepBackups > 0)
@@ -108,7 +109,44 @@ partial class M8Backup
             summary = string.Format("{0:N0} files, {1} copied in {2}.", copied, FormatSize(copiedBytes), FormatTime(stopwatch.Elapsed));
             if (failed > 0) summary += " " + failed + " file(s) failed.";
             summary += ShortSongSummary(changes);
-            return failed == 0 ? 0 : 2;
+            if (zipPath != null) summary += " Zip: " + Path.GetFileName(zipPath) + ".";
+            if (zipFailed) summary += " The zip could not be saved.";
+            return failed == 0 && !zipFailed ? 0 : 2;
+        }
+
+        bool zipFailed;
+
+        // --zip: after a successful full backup, also save it as a zip next to its folder.
+        // Returns the zip's path, or null when none was made.
+        string SaveZip()
+        {
+            if (!config.Zip) return null;
+            if (incremental)
+            {
+                OperationOutput.WriteLine("  --zip applies to full backups; no zip made for this incremental backup.");
+                return null;
+            }
+            if (failed > 0)
+            {
+                WriteColored("  No zip made, because some files failed to back up.", ConsoleColor.Yellow);
+                return null;
+            }
+            try
+            {
+                OperationOutput.WriteLine("  Saving zip...");
+                string zipPath = ZipBackup(dest);
+                OperationOutput.WriteLine();
+                OperationOutput.WriteLine("  Zip saved to " + zipPath);
+                OperationOutput.WriteLine();
+                return zipPath;
+            }
+            catch (Exception ex)
+            {
+                if (ex is OperationCanceledException) throw;
+                zipFailed = true;
+                WriteColored("  Could not save the zip: " + ex.Message, ConsoleColor.Yellow);
+                return null;
+            }
         }
 
         string Relative(FileInfo file) { return file.FullName.Substring(source.Length); }
@@ -179,7 +217,10 @@ partial class M8Backup
                 OperationOutput.WriteLine("  History store shares the backup files through hard links; no extra space needed.");
             else
                 OperationOutput.WriteLine("  History store needs up to {0} additional space (identical content is shared).", FormatSize(historyBytes));
-            string spaceError = CheckFreeSpace(backupRoot, neededBytes + historyBytes);
+            // A zip can be up to the card's size (WAV samples barely compress).
+            long zipBytes = config.Zip && !incremental ? totalBytes : 0;
+            if (zipBytes > 0) OperationOutput.WriteLine("  The zip needs up to {0}.", FormatSize(zipBytes));
+            string spaceError = CheckFreeSpace(backupRoot, neededBytes + historyBytes + zipBytes);
             if (spaceError == null) return true;
             WriteColored("  " + spaceError, ConsoleColor.Red);
             return false;

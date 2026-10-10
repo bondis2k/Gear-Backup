@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using System.Threading;
 
@@ -373,6 +374,7 @@ partial class M8Backup
         TestEngineOperations(root);
         TestOptimizations(root);
         TestCopyPipeline(root);
+        TestZip(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions.");
         RemoveFixtures(root);
@@ -419,6 +421,45 @@ partial class M8Backup
         public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
         public override void SetLength(long value) { throw new NotSupportedException(); }
         public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+    }
+
+    static void TestZip(string root)
+    {
+        string source = Rooted(Path.Combine(root, "zip-source"));
+        Put(Path.Combine(source, "Songs", "a.m8s"), "ZIP SONG");
+        Put(Path.Combine(source, "Samples", "kick.wav"), "ZIP KICK");
+        string undated = Path.Combine(source, "Songs", "undated.m8s");
+        Put(undated, "OLD");
+        File.SetLastWriteTimeUtc(undated, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+        Directory.CreateDirectory(Path.Combine(source, "Empty"));
+        string history = Path.Combine(root, "zip-history");
+        var config = new Config { BackupFolder = root, Preview = false, Zip = true };
+
+        var ui = new TestInteraction();
+        OperationResult full = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
+        string backup = ListBackups(history)[0], zipPath = backup + ".zip";
+        Assert(full.ExitCode == 0 && File.Exists(zipPath) && full.Summary.Contains(Path.GetFileName(zipPath)),
+            "full backup with --zip saves a zip next to the backup folder");
+        Assert(!File.Exists(zipPath + ".tmp"), "no temporary zip left behind");
+        using (var zip = new ZipArchive(File.OpenRead(zipPath), ZipArchiveMode.Read))
+        {
+            var names = new HashSet<string>();
+            foreach (ZipArchiveEntry entry in zip.Entries) names.Add(entry.FullName);
+            Assert(names.Contains("Songs/a.m8s") && names.Contains("Samples/kick.wav") && names.Contains("Empty/") &&
+                names.Contains("checksums.sha256") && names.Contains("backup-statistics.txt"),
+                "zip holds the card's files, empty folders, checksums and statistics");
+            Assert(!new List<string>(names).Exists(n => n.StartsWith(".m8backup")), "zip leaves out the history store");
+            using (var reader = new StreamReader(zip.GetEntry("Songs/a.m8s").Open()))
+                Assert(reader.ReadToEnd() == "ZIP SONG", "zipped content matches the backup");
+            Assert(zip.GetEntry("Songs/undated.m8s") != null, "undated files are zipped");
+            Assert(ZipTime(new DateTime(1601, 1, 2)).Year == 1980 && ZipTime(new DateTime(2026, 10, 10)).Year == 2026,
+                "dates a zip can't store become 1 January 1980; others are kept");
+        }
+
+        ui = new TestInteraction();
+        OperationResult incremental = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, CancellationToken.None));
+        Assert(incremental.ExitCode == 0 && Directory.GetFiles(history, "*.zip").Length == 1 &&
+            ui.Output.ToString().Contains("applies to full backups"), "--zip is skipped, with a note, for incremental backups");
     }
 
     static void TestCopyPipeline(string root)

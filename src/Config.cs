@@ -22,6 +22,7 @@ partial class M8Backup
         public bool Thorough = false;
         public bool Preview = true;
         public bool HardLinks = false;  // share history content with the backup files (NTFS)
+        public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
         public Config Clone() { return (Config)MemberwiseClone(); }
     }

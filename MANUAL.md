@@ -25,7 +25,7 @@ Run `build-gui.cmd --no-pause`, then open `M8Backup.GUI.exe`. The existing `M8Ba
 
 1. Select the M8 card/source folder, or click **Detect M8**. Leaving the source empty also attempts detection when starting a backup or restore.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
-3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**.
+3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too.
 4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
 
 An incremental run creates a full backup if this profile has no backups yet. An incomplete or failed latest backup offers Resume, New full backup, or Cancel. An unchanged incremental run needs no acceptance prompt. Full backups show overall progress without individual file progress.
@@ -61,6 +61,16 @@ Restore and check offer a history selector, including existing backups directly 
 **Full:** copy the card's user files into a new dated folder. If the date is already used, the time and fractional seconds are added to create a distinct folder.
 
 **Incremental:** add and update files in the latest backup of the current profile. Changed files keep their previous browsable copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`. Deleted source files remain in the browsable backup. A dated snapshot separately records which files actually existed during this run.
+
+### Zip copy of a full backup
+
+Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
+
+- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. The `.m8backup` history store is left out; it's only useful to this program and would double the size.
+- It's written under a temporary name and renamed when complete, so a zip that exists is never half-written.
+- The free-space check reserves room for it (up to the card's size, as WAV samples barely compress).
+- It's skipped, with a note, for incremental backups and resumes, and when any file failed to back up. If the zip itself can't be saved, the backup still counts as complete but the run ends with exit code 2.
+- The option applies to that run only; it isn't saved in `M8Backup.ini`. Deleting old backups with `KeepBackups` leaves their zip files in place.
 
 Both modes preserve empty folders. Copies are hashed with SHA-256. With `Verify=yes`, each new copy is read back and compared; a checksum mismatch retries once. Ordinary copy errors are reported and other files continue. If the source's size or modified time changes during copying, that copy fails rather than claiming a stable result.
 
@@ -271,7 +281,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 ## Command line and exit codes
 
 ```
-M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--preview] [--no-pause]
+M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 ```
 
 Examples:
@@ -279,6 +289,7 @@ Examples:
 ```
 M8Backup.exe --source E:\ --profile "Studio M8"
 M8Backup.exe --source D:\M8Card --preview
+M8Backup.exe --source E:\ --zip
 M8Backup.exe --restore --source E:\ --preview
 M8Backup.exe --check --profile "Studio M8" --no-pause
 ```

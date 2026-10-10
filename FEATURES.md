@@ -5,7 +5,7 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 ## Interfaces
 
 - **Graphical app** — `M8Backup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
-- **Command-line app** — `M8Backup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--preview`, `--no-pause`).
+- **Command-line app** — `M8Backup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
 - **Shared engine** — both apps use the same backup, restore and check code and the same `M8Backup.ini`.
 - **App icon** — a tracker-style icon embedded in both programs.
 
@@ -35,6 +35,7 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 - **Resume** — an interrupted or failed backup can be resumed into the same folder.
 - **Quarantine** — a partial or unverified copy found during resume is moved aside, not trusted.
 - **Overlapped copying** — reads the next chunk from the card while the current one is written.
+- **Zip copy** — optionally also saves a full backup as a zip next to its folder (`--zip`, or the GUI's "Also save as zip").
 
 ## Restore
 
