@@ -26,6 +26,7 @@ partial class M8Backup
         RunTest("Device profiles", () => TestDevices(dir));
         RunTest("OP-1 Field: MTP mirror", () => TestMtpMirror(dir));
         RunTest("OP-1 Field: backup of a mirrored device", () => TestOp1FieldBackup(dir));
+        RunTest("OP-XY: projects and backup", () => TestOpXy(dir));
     }
 
     // An MTP device in memory: files are path -> content, with a date per file. Counts downloads.
@@ -126,12 +127,47 @@ partial class M8Backup
         Assert(ProfileId(Path.Combine(MirrorRoot, "op1-field-L1PRC121"), "") == "op1-field-L1PRC121", "a mirrored device's history is named after it");
     }
 
+    static void TestOpXy(string dir)
+    {
+        DeviceProfile xy = Devices.OPXY;
+        Assert(Devices.Find("op-xy") == xy && xy.Mtp && xy.MtpName == "OP-XY" && Devices.OP1Field.MtpName == "OP-1",
+            "the OP-XY is its own MTP device, told apart from the OP-1 Field by name");
+        Assert(RestoreModes(xy).Length == 2, "OP-XY restores offer all files and single file only");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            OperationContext.Current.Device = xy;
+            Assert(IsSong(@"projects\user\ziiamed 1.xy") && IsSong(@"projects\workspace.xy"), "OP-XY projects are .xy files");
+            Assert(!IsSong(@"projects\user\backups\ziiamed 2.xy\0001.xy"), "the OP-XY's automatic project backups aren't listed as projects");
+            Assert(!IsSong(@"samples\user\kick.wav"), "samples aren't projects");
+            Assert(SongName(@"projects\user\ziiamed 1.xy") == "ziiamed 1", "project names leave out the projects folder");
+        }
+
+        // A mirrored OP-XY backs up like any folder, and its summary talks about projects.
+        string mirror = Rooted(Path.Combine(dir, "opxy-mirror"));
+        Put(Path.Combine(mirror, "projects", "user", "ziiamed 1.xy"), "PROJECT 1");
+        Put(Path.Combine(mirror, "projects", "user", "backups", "ziiamed 1.xy", "0000.xy"), "AUTO BACKUP");
+        Put(Path.Combine(mirror, "samples", "user", "kick.wav"), "WAVE");
+        string history = Path.Combine(dir, "opxy-history");
+        var config = new Config { BackupFolder = dir, Preview = false };
+        OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
+        string backup = ListBackups(history)[0];
+        Assert(first.ExitCode == 0 && File.Exists(Path.Combine(backup, "projects", "user", "backups", "ziiamed 1.xy", "0000.xy")),
+            "the OP-XY's automatic project backups are still backed up");
+        Assert(File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains("Projects: 1 (first backup"),
+            "the first OP-XY report counts projects");
+        Put(Path.Combine(mirror, "projects", "user", "ziiamed 2.xy"), "PROJECT 2");
+        OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
+        Assert(second.Summary.Contains("Projects: 1 new (ziiamed 2)."), "OP-XY summaries name new projects");
+    }
+
     static void TestOp1FieldBackup(string dir)
     {
         Assert(Devices.Find("op1-field") == Devices.OP1Field && Devices.OP1Field.Mtp && !Devices.M8.Mtp, "the OP-1 Field is an MTP device");
         Option[] modes = RestoreModes(Devices.OP1Field);
         Assert(modes.Length == 2, "OP-1 Field restores offer all files and single file only");
-        Assert(Devices.Names == "M8 or OP-1 Field", "messages name both supported devices");
+        Assert(Devices.Names == "M8, OP-1 Field or OP-XY", "messages name every supported device");
 
         // The engine backs up a mirror like any folder, with OP-1 wording in the report.
         string mirror = Rooted(Path.Combine(dir, "op1-engine-mirror"));

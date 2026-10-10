@@ -53,6 +53,19 @@ How it works:
 - File names from the device are checked before anything is written; a name that isn't valid on Windows is skipped with a warning.
 - The mirror holds one copy of the device's content (about 20 MB with the factory sounds; more with recorded tapes). Deleting it is safe: the next backup downloads everything again.
 
+## Teenage Engineering OP-XY
+
+The OP-XY works the same way as the [OP-1 Field](#teenage-engineering-op-1-field): it connects with MTP, is read into a local mirror (`%LOCALAPPDATA%\M8Backup\Devices\op-xy-<serial>`), gets its own history (`op-xy-<serial>`), and is never written to.
+
+1. Connect the OP-XY by USB-C, press **COM**, then **T4** to turn on MTP.
+2. Leave the source empty and start a backup. The program tells the OP-XY and the OP-1 Field apart by the name they report.
+
+What's backed up: `projects` (your projects as `.xy` files, the current `workspace.xy`, and the OP-XY's own automatic project backups under `projects\user\backups`), `samples\user` and `presets`. The OP-XY doesn't expose its factory sounds over MTP.
+
+Summaries list **projects** instead of songs: new, edited and removed `.xy` projects by name. The OP-XY's automatic project backups are backed up but not listed as projects. Restores offer all files or a single file. To restore, use a folder with `Device=op-xy`, then copy the files to the OP-XY with Explorer.
+
+If both an OP-1 Field and an OP-XY are connected, the OP-1 Field is found first; set `SourceFolder` to back up the other one's mirror, or connect one at a time.
+
 ## Separate card and folder histories
 
 New backups are stored here:
@@ -292,7 +305,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
 | `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
-| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 in USB disk mode, or an OP-1 Field in MTP mode); or name it: `m8` or `op1-field`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
+| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 in USB disk mode, or an OP-1 Field or OP-XY in MTP mode); or name it: `m8`, `op1-field` or `op-xy`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |

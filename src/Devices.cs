@@ -24,12 +24,18 @@ partial class M8Backup
         public string IconName;
         public string[] SongExtensions = new string[0];
         public string SongsFolder;         // left out of song names in summaries, e.g. "Songs"
+        // What the device calls its songs, in summaries and searches ("songs", or "projects" on the OP-XY).
+        public string SongsLabel = "songs";
+        // Folders whose files never count as songs, e.g. the OP-XY's automatic project backups.
+        public string[] NotSongFolders = new string[0];
         public string BundlesFolder;       // null when the device has no bundles
         // Lists the sample files a song uses, for "song with samples" restore; null when not supported.
         public Func<string, List<string>> ReadSamplePaths;
 
         public bool IsSong(string path)
         {
+            foreach (string folder in NotSongFolders)
+                if (path.IndexOf(folder + "\\", StringComparison.OrdinalIgnoreCase) >= 0) return false;
             foreach (string extension in SongExtensions)
                 if (string.Equals(Path.GetExtension(path), extension, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
@@ -57,8 +63,17 @@ partial class M8Backup
             Id = "op1-field", Name = "OP-1 Field", MtpVendor = "VID_2367", MtpName = "OP-1", NameWarnings = false,
             IconName = "OP1Field" };
 
+        // The Teenage Engineering OP-XY. Like the OP-1 Field it connects only over MTP (COM, then T4), as a
+        // portable device "OP-XY" with USB vendor 2367. Its projects are .xy files in projects\user; the
+        // device keeps automatic copies of them under projects\user\backups, which are backed up but not
+        // listed as projects. Samples are in samples\user; factory content isn't exposed over MTP.
+        public static readonly DeviceProfile OPXY = new DeviceProfile {
+            Id = "op-xy", Name = "OP-XY", MtpVendor = "VID_2367", MtpName = "OP-XY", NameWarnings = false,
+            SongExtensions = new[] { ".xy" }, SongsFolder = @"projects\user", SongsLabel = "projects",
+            NotSongFolders = new[] { "backups" }, IconName = "OPXY" };
+
         // Detection tries these in order. The first is also the default for a folder of unknown type.
-        public static readonly DeviceProfile[] All = { M8, OP1Field };
+        public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY };
 
         public static DeviceProfile Find(string id)
         {

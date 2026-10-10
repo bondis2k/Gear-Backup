@@ -196,7 +196,7 @@ partial class M8Backup
     {
         while (true)
         {
-            string filter = AskText("Search file name (Enter = songs, q = cancel):");
+            string filter = AskText("Search file name (Enter = " + CurrentDevice.SongsLabel + ", q = cancel):");
             if (filter == null || filter.Trim().Equals("q", StringComparison.OrdinalIgnoreCase)) return null;
             filter = filter.Trim();
             var matches = snapshot.Files.FindAll(f => (!songsOnly || IsSong(f.Relative)) &&
