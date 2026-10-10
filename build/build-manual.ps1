@@ -5,10 +5,11 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 # Use PowerShell's Markdown renderer to provide an offline manual that opens in any browser.
 $manualBody = (ConvertFrom-Markdown -LiteralPath (Join-Path $projectRoot 'MANUAL.md')).Html
-# Build a compact help-file contents list from the same headings as the manual's existing links.
-$contents = ([regex]::Matches($manualBody, '<h2 id="([^"]+)">(.+?)</h2>') | ForEach-Object {
-    '<li><a href="#' + $_.Groups[1].Value + '">' + $_.Groups[2].Value + '</a></li>'
-}) -join "`n"
+# Share the Markdown index with every HTML theme.
+$contentsSection = [regex]::Match($manualBody, '(?s)<h2 id="contents">Contents</h2>\s*(.*?)\s*(?=<h2 )')
+if (-not $contentsSection.Success) { throw 'The manual Contents section is missing.' }
+$contents = $contentsSection.Groups[1].Value
+$manualBody = $manualBody.Remove($contentsSection.Index, $contentsSection.Length)
 $modernStyles = @'
 body{font:16px/1.6 "Segoe UI",Arial,sans-serif;background:var(--desktop);color:var(--ink)}
 .help-window{background:var(--background);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px #0002;overflow:hidden}
@@ -59,16 +60,16 @@ th{background:#c0c0c0;font:bold 14px/1.5 Tahoma,Arial,sans-serif}td{background:#
 blockquote{margin:20px 0;padding:10px 18px;border:1px solid #808080;background:#fff}
 .contents{margin:0 0 24px;padding:10px 14px;border:1px solid #808080;background:#fff}
 .contents summary{cursor:pointer;color:#000080;font:bold 14px/1.5 Tahoma,Arial,sans-serif}
-.contents ul{columns:2;column-gap:28px;margin:14px 0 4px;padding-left:22px}.contents li{break-inside:avoid;margin:4px 0}
+.contents>ul{columns:2;column-gap:28px;margin:14px 0 4px;padding-left:22px}.contents ul ul{columns:1;margin:4px 0;padding-left:20px}.contents li{break-inside:avoid;margin:4px 0}
 .status-bar{display:flex;justify-content:space-between;gap:12px;margin-top:4px;padding:4px 10px;border:1px solid;border-color:#808080 #fff #fff #808080;font:12px/1.5 Tahoma,Arial,sans-serif}
 @media(max-width:700px){body{padding:8px}.help-window{box-shadow:none}main{padding:20px 16px}h1{font-size:24px}h2{font-size:20px}table{display:block;overflow:auto}.contents ul{columns:1}.menu-bar{gap:8px 16px}}
 $themeCss
 @media print{body{padding:0;background:#fff;font-size:12pt}.help-window{max-width:none;border:0;padding:0;box-shadow:none}.title-bar,.menu-bar,.contents,.status-bar{display:none}main{padding:0;border:0;background:#fff}h1,h2,h3{color:#000}h2{background:#fff;break-after:avoid}img{max-height:75vh;object-fit:contain}a,a:visited{color:#000}pre,td,th,blockquote,p code,li code,td code{background:#fff;color:#000;border-color:#aaa}}
 </style></head><body><div class="help-window">
 <header class="title-bar">Gear Backup Help — User's Manual</header>
-<nav class="menu-bar" aria-label="Manual sections"><a href="#getting-started">Getting started</a><a href="#graphical-interface">Using the GUI</a><a href="#full-and-incremental-backup">Backup</a><a href="#restore">Restore</a><a href="#all-ini-settings">Settings</a></nav>
+<nav class="menu-bar" aria-label="Manual sections"><a href="#contents">Contents</a><a href="#getting-started">Getting started</a><a href="#graphical-interface">Using the GUI</a><a href="#full-and-incremental-backup">Backup</a><a href="#restore">Restore</a><a href="#all-ini-settings">Settings</a></nav>
 <nav class="menu-bar" aria-label="Color themes"><span>Color theme:</span><a href="Manual-original.html">Original</a><a href="Manual-original-dark.html">Original (dark)</a><a href="Manual-retro.html">Retro</a></nav>
-<main><details class="contents"><summary>Contents — click to expand</summary><ul>$contents</ul></details>$themedBody</main>
+<main><details class="contents" id="contents" open><summary>Contents — click to collapse or expand</summary>$contents</details>$themedBody</main>
 <footer class="status-bar"><span>Gear Backup · Offline reference</span><a href="#gear-backup-manual">Back to top</a></footer>
 </div></body></html>
 "@
