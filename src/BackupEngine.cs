@@ -398,106 +398,20 @@ partial class GearBackup
             }
         }
 
-        // Statistics, written to both the console and a text file in the backup folder; sets the final status.
         void Report()
         {
             stopwatch.Stop();
-            double seconds = Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
-            var report = new StringWriter();
-            report.WriteLine("  ----------------------------------------");
-            report.WriteLine("  Date:          {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now);
-            report.WriteLine("  Type:          {0}", incremental ? "Incremental" : "Full");
-            report.WriteLine("  Source:        {0}", source);
-            report.WriteLine("  Destination:   {0}", dest);
-            report.WriteLine("  Files copied:  {0:N0}", copied);
-            if (incremental)
-            {
-                report.WriteLine("    New:         {0:N0}", copied - updated);
-                report.WriteLine("    Updated:     {0:N0}", updated);
-                report.WriteLine("  Unchanged:     {0:N0}", unchanged);
-            }
-            report.WriteLine("  Folders:       {0:N0}", scan.Folders.Count);
-            report.WriteLine("  Data copied:   {0}", FormatSize(copiedBytes));
-            report.WriteLine("  Time:          {0}", FormatTime(stopwatch.Elapsed));
-            report.WriteLine("  Average speed: {0}/s", FormatSize((long)(copiedBytes / seconds)));
-            report.WriteLine("  Verified:      {0}", config.Verify
-                ? "yes (each copy read back and its SHA-256 checksum compared)"
-                : "no (Verify=no in " + AppIdentity.ConfigFileName + ")");
-            report.WriteLine("  Checksums:     {0}", checksumStatus);
-            if (largest != null)
-                report.WriteLine("  Largest file:  {0} ({1})", Relative(largest), FormatSize(largest.Length));
-            report.WriteLine();
-
-            WriteChanges(report, changes, previous);
-
-            report.WriteLine("  {0,-16}{1,10}{2,14}", "Folder", "Files", "Size");
-            foreach (var pair in perFolder)
-                report.WriteLine("  {0,-16}{1,10:N0}{2,14}", pair.Key, pair.Value[0], FormatSize(pair.Value[1]));
-            report.WriteLine();
-
-            report.WriteLine("  Skipped (leftovers from macOS, Linux and Windows, e.g. .DS_Store, .Trash-1000, Thumbs.db):");
-            report.WriteLine("    {0:N0} folder(s) containing {1:N0} files, {2}", scan.SkippedFolders, scan.SkippedFolderFiles, FormatSize(scan.SkippedFolderBytes));
-            report.WriteLine("    {0:N0} file(s), {1}", scan.SkippedFiles, FormatSize(scan.SkippedFileBytes));
-            foreach (string path in scan.SkippedNamed)
-                report.WriteLine("    skipped: " + path.Substring(source.Length));
-
-            string spaceLabel = "Free space on " + CurrentDevice.Name + ":";
-            // Same column as before for the M8; longer device names still get a gap before the value.
-            report.WriteLine("  {0}{1}", spaceLabel.PadRight(Math.Max(24, spaceLabel.Length + 2)),
-                CurrentDevice.Mtp ? "not available over MTP" : DriveSpaceText(Path.GetPathRoot(source)));
-            string destRoot = Path.GetPathRoot(dest);
-            report.WriteLine("  Free space left on {0}  {1}", destRoot, FreeSpaceText(destRoot));
-            report.WriteLine();
-
-            if (nameWarnings.Count > 0)
-            {
-                report.WriteLine("  Names the {0} may not handle well ({1}):", CurrentDevice.Name, nameWarnings.Count);
-                foreach (string w in nameWarnings) report.WriteLine("    " + w);
-                report.WriteLine();
-            }
-
-            if (keptVersions.Count > 0)
-            {
-                report.WriteLine("  Old versions of updated files, kept as ({0}):", keptVersions.Count);
-                foreach (string f in keptVersions) report.WriteLine("    " + f);
-                report.WriteLine();
-            }
-            if (prunedVersions > 0)
-            {
-                report.WriteLine("  Older versions moved to the Recycle Bin (KeepOldVersions={0}): {1:N0}", config.KeepOldVersions, prunedVersions);
-                report.WriteLine();
-            }
-
-            if (failures.Count > 0)
-            {
-                report.WriteLine("  Failed files ({0}):", failures.Count);
-                foreach (string f in failures) report.WriteLine("    " + f);
-                report.WriteLine();
-            }
-            string status = failed == 0
-                ? "Backup complete."
-                : "Backup finished with " + failed + " failed file(s).";
-
-            WriteColored("  Statistics", ConsoleColor.Cyan);
-            OperationOutput.Write(report.ToString());
-
-            // An incremental run gets its own dated file so the earlier statistics are kept
-            string statsFile = Path.Combine(dest, incremental
-                ? "backup-statistics_" + started.ToString("yyyy-MM-dd_HHmmss_fffffff") + ".txt"
-                : "backup-statistics.txt");
-            try
-            {
-                File.WriteAllText(statsFile, "  " + AppIdentity.Name + " " + (incremental ? "incremental " : "") + "statistics\r\n" + report + "  " + status + "\r\n");
-                OperationOutput.WriteLine("  Statistics saved to " + statsFile);
-            }
-            catch (Exception ex)
-            {
-                WriteColored("  Could not save statistics file: " + ex.Message, ConsoleColor.Yellow);
-            }
-            OperationOutput.WriteLine();
-
+            var report = new BackupReport {
+                Source = source, Destination = dest, Previous = previous, Incremental = incremental,
+                Copied = copied, Updated = updated, Unchanged = unchanged, CopiedBytes = copiedBytes,
+                Started = started, Elapsed = stopwatch.Elapsed, Config = config, Scan = scan,
+                ChecksumStatus = checksumStatus, LargestFile = largest, Changes = changes,
+                PerFolder = perFolder, NameWarnings = nameWarnings, KeptVersions = keptVersions,
+                PrunedVersions = prunedVersions, Failures = failures, Failed = failed
+            };
+            report.Write();
             SetBackupStatus(dest, failed == 0 ? Status.Complete : Status.Failed);
-            WriteColored("  " + status, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
+            WriteColored("  " + report.StatusText, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
             OperationOutput.WriteLine();
         }
     }

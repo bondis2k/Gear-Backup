@@ -35,6 +35,11 @@ partial class GearBackup
         {
             form.Show();
             Assert(form.Text == AppIdentity.Name, "GUI window uses the shared Gear Backup identity");
+            using (var about = new AboutDialog())
+            {
+                var version = (Label)about.Controls.Find("ApplicationVersion", true)[0];
+                Assert(version.Text == "Version " + AppIdentity.Version, "About displays the shared release version");
+            }
             var sourceBox = (TextBox)form.Controls.Find("SourceFolder", true)[0];
             var backupBox = (TextBox)form.Controls.Find("BackupFolder", true)[0];
             var mode = (ComboBox)form.Controls.Find("Operation", true)[0];

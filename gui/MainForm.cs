@@ -15,7 +15,8 @@ partial class GearBackup
         // Only for full backups; not saved in the settings, so it's a per-run choice like the CLI's --zip.
         readonly CheckBox zip = new CheckBox { Text = "Also save as zip", AutoSize = true, Name = "ZipBackup" };
         readonly Button start = GuiTheme.Button("Back up", true), preview = GuiTheme.Button("Preview", false),
-            cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.Button("Settings", false), detect = GuiTheme.Button("Detect device", false);
+            cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.Button("Settings", false), detect = GuiTheme.Button("Detect device", false),
+            about = GuiTheme.Button("About", false);
         readonly RichTextBox log = new RichTextBox();
         readonly Label status = GuiTheme.Label("Ready", 17, GuiTheme.Ink), detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
@@ -50,6 +51,7 @@ partial class GearBackup
             source.Name = "SourceFolder"; backupFolder.Name = "BackupFolder"; profile.Name = "Profile";
             operation.Name = "Operation"; start.Name = "StartOperation"; preview.Name = "PreviewOperation";
             cancel.Name = "CancelOperation"; status.Name = "OperationStatus";
+            about.Name = "AboutApplication";
 
             BuildLayout();
 
@@ -65,6 +67,7 @@ partial class GearBackup
             cancel.Click += delegate { RequestCancel(); };
             detect.Click += delegate { runner.DetectSource(); };
             settings.Click += delegate { EditSettings(); };
+            about.Click += delegate { using (var dialog = new AboutDialog()) dialog.ShowDialog(this); };
             operation.SelectedIndexChanged += delegate {
                 start.Text = operation.SelectedIndex == 2 ? "Restore" : operation.SelectedIndex == 3 ? "Check" : "Back up";
                 preview.Enabled = operation.SelectedIndex != 3 && !runner.IsBusy;
@@ -101,8 +104,9 @@ partial class GearBackup
             branding.Controls.Add(title);
             branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
             header.Controls.Add(branding, 1, 0);
-            settings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            header.Controls.Add(settings, 2, 0);
+            var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
+            headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
+            header.Controls.Add(headerActions, 2, 0);
             layout.Controls.Add(header, 0, 0);
 
             inputs.Dock = DockStyle.Fill; inputs.BackColor = Color.White; inputs.Padding = new Padding(20, 14, 20, 14);
