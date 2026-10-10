@@ -65,6 +65,7 @@ partial class GearBackup
             string knownSource = detectedSource, knownPnp = detectedPnp;
             DeviceProfile knownDevice = detectedDevice;
             RunWorker(delegate(OperationContext context) {
+                context.OverallProgressOnly = choice == 0;
                 return Execute(options, choice, previewOnly, knownSource, knownPnp, knownDevice, context);
             }, previewOnly);
         }

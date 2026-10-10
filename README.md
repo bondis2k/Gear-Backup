@@ -14,12 +14,14 @@ For an installer build, run `GearBackup-Setup-<version>.exe`. It installs both i
 
 For a portable copy, run `GearBackup-Portable-<version>.exe` and select a writable folder, including a USB drive. It extracts the same executables and manual without shortcuts or an uninstall entry. Open `GearBackup.GUI.exe` from that folder. To update, close the app and extract the newer package into the same folder; existing INI settings are preserved. Backup paths remain as configured, and MTP mirrors still use the PC's Local AppData folder.
 
-For the graphical interface:
+For the graphical interface, install [PowerShell 7](https://aka.ms/powershell) to generate the offline HTML manual, then run:
 
 ```cmd
 build-gui.cmd --no-pause
 GearBackup.GUI.exe
 ```
+
+The GUI build generates `Manual.html` beside the executable, with images copied for builds in another folder. **Help** and **F1** open it in your default browser.
 
 For the command-line interface:
 

@@ -59,14 +59,20 @@ Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `Ge
 
 1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: M8 and Tracker Mini in USB drive mode, or OP-1 Field, OP-XY and X100VI over MTP. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
-3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too.
+3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too. Restore changes the source label to **Restore destination**; this is the folder or card that receives files. Check backups disables source selection because no device is needed.
 4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
 
 An incremental run creates a full backup if this profile has no backups yet. An incomplete or failed latest backup offers Resume, New full backup, or Cancel. An unchanged incremental run needs no acceptance prompt. Full backups show overall progress without individual file progress.
 
+The header names the detected device beside its picture. Editing the source clears the detected indicator until the device is detected again. Progress shows the percentage and processed size when the current stage provides a total, plus elapsed time. Backup and restore completion shows copied, unchanged, removed and failed counts; **Open backup folder** or **Open restore folder** opens the result in Explorer. Integrity checks show their check summary and an action to open the selected backup location.
+
+The change preview uses **Action**, **Path** and **Size** columns. Search paths with **Ctrl+F**, or filter additions, replacements, removals and unchanged entries. Removing a file or folder is highlighted. Filters only change which rows are displayed: **Proceed** applies the entire approved plan, including rows hidden by the current filter. An unchanged incremental backup still omits skipped files from its preview.
+
+![Gear Backup change preview with action, path and size columns, path search and action filters.](assets/manual/gui-preview.png)
+
 Restore opens dialogs for history, backup folder, saved snapshot/current files, and restore mode. All, bundle, single-file, dependent-sample, and merge/exact choices use the same rules described below. The current-files option is explicit in the snapshot selector; cancelling a dialog cancels the operation. Check backups needs no source card and lets you select a backup or all backups in a history.
 
-**Settings** saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
+**Settings** groups preferences into **Backup**, **Restore** and **Device** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
 
 ![Gear Backup Preferences dialog with verification, content comparison, preview, recovery location, retention and ejection settings.](assets/manual/gui-settings.png)
 
@@ -75,7 +81,7 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 | GUI preference | INI setting | When to use it |
 |---|---|---|
 | **Verify copied files** | `Verify=yes` | Read copied files back and check their recorded checksums. Off by default. |
-| **Compare file contents instead of size and time** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
+| **Compare file contents** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
 | **Review changes before copying** | `Preview=yes` | Review the planned actions before proceeding. On by default; unchanged incremental backups need no confirmation. |
 | **Keep recovery copies before restoring** | `Recovery=yes` | Preserve target files that will be replaced or removed. Off by default. **Recovery location** sets `RecoveryFolder`; blank uses the default location. |
 
@@ -84,6 +90,8 @@ For a first backup, select the source and backup location, leave Profile blank, 
 Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
 
 Click **About** in the header to see the installed application version. The same release version appears in the Windows executable properties and installer.
+
+Keyboard shortcuts: **Ctrl+Enter** starts the selected operation, **Ctrl+P** previews, **Ctrl+D** detects a device, **Ctrl+,** opens Settings, and **Esc** cancels an active operation or closes a dialog. **F1** or **Help** opens the offline `Manual.html` in your default browser. Use **Tab** and **Shift+Tab** to move between controls. The GUI declares DPI awareness, uses adaptive layouts, and scrolls content when the window cannot fit the screen; settings pages also scroll when space is limited.
 
 ## Teenage Engineering OP-1 Field
 
@@ -427,7 +435,7 @@ Unknown arguments and missing argument values are errors. The program remains in
 
 Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
 
-Run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
+Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. The GUI build also generates `Manual.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
 
 Both wrappers use `build\build-app.ps1` for compiler paths, framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
 
@@ -440,6 +448,8 @@ Run `pwsh -File tests\run-portable-tests.ps1` to check portable extraction, vers
 If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. `tests\HelperTests.cs` adds focused tests for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
+
+Safety tests also cover linked mirror roots, broken junctions, file symbolic links, MTP disconnection during a partial transfer, preservation of extra files after a partially failed exact restore, and malformed snapshot manifests. The file symbolic-link test needs Windows Developer Mode or symbolic-link privilege (for example, an elevated test session). Without it, that test reports `SKIP` with the reason and is excluded from the passed-test count; junction tests and other safety tests still run. A passing summary with a skip does not mean every link case was verified.
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 

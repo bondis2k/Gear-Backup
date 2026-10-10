@@ -12,7 +12,7 @@ partial class GearBackup
         ProgressBarStyle style;
         public int Value { get { return value; } set { this.value = value; Invalidate(); } }
         public ProgressBarStyle Style { get { return style; } set { style = value; Invalidate(); } }
-        public GuiProgressBar() { DoubleBuffered = true; }
+        public GuiProgressBar() { DoubleBuffered = true; AccessibleRole = AccessibleRole.ProgressBar; AccessibleName = "Operation progress"; }
         public void Advance() { if (style == ProgressBarStyle.Marquee) { offset = (offset + 16) % Math.Max(1, Width); Invalidate(); } }
         protected override void OnPaint(PaintEventArgs e)
         {

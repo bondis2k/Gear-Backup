@@ -1,4 +1,4 @@
-# Shared production build; Windows PowerShell and the built-in .NET compiler are sufficient.
+# Shared production build; GUI manual generation also requires PowerShell 7.
 param(
     [ValidateSet('CLI', 'GUI')][string]$Target = 'CLI',
     [string]$Output
@@ -21,7 +21,10 @@ foreach ($reference in @('System.Runtime.WindowsRuntime.dll', 'System.Runtime.dl
 }
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
 if ($Target -eq 'GUI') {
+    $manualShell = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if (-not $manualShell) { throw 'PowerShell 7 is required to generate the HTML manual. Install it from https://aka.ms/powershell.' }
     $arguments += @('/target:winexe', '/main:GearGui', '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll')
+    $arguments += "/win32manifest:$projectRoot\gui\app.manifest"
     foreach ($image in Get-ChildItem -LiteralPath (Join-Path $projectRoot 'assets') -Filter '*-256.png') {
         $arguments += "/resource:$($image.FullName),$($image.Name)"
     }
@@ -29,4 +32,8 @@ if ($Target -eq 'GUI') {
 } else { $arguments += @('/target:exe', '/main:GearBackup') }
 & $compilerPath $arguments $sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($Target -eq 'GUI') {
+    & $manualShell.Source -NoProfile -File (Join-Path $PSScriptRoot 'build-manual.ps1') -OutputDirectory (Split-Path $Output -Parent)
+    if ($LASTEXITCODE -ne 0) { throw 'HTML manual generation failed.' }
+}
 Write-Output "Built $Output"

@@ -23,6 +23,11 @@ partial class GearBackup
         RunTest("Helpers: zip failures", () => TestZipFailures(dir));
         RunTest("Security hardening", () => TestSecurity(dir));
         RunTest("Security: MTP mirror links", () => TestMirrorLinks(dir));
+        RunTest("Security: additional mirror link types", () => TestAdditionalMirrorLinks(dir));
+        RunTest("Security: file symbolic links in mirrors", () => TestMirrorFileSymlinks(dir));
+        RunTest("MTP disconnection preserves mirror", () => TestMtpDisconnect(dir));
+        RunTest("Exact restore preserves extras after failure", () => TestPartialExactRestore(dir));
+        RunTest("Malformed snapshot manifests", () => TestMalformedSnapshots(dir));
         RunTest("Security: atomic text temporary files", () => TestAtomicText(dir));
         RunTest("Console questions", TestConsoleQuestions);
         RunTest("Device profiles", () => TestDevices(dir));
@@ -116,6 +121,7 @@ partial class GearBackup
         public int Downloads;
         public int ShortBy;              // deliver this many bytes fewer than the size, like a broken transfer
         public Action OnDownload;        // e.g. cancel mid-download
+        public bool Disconnect;          // fail after writing only part of a temporary download
         public void Folder(string path) { Items.Add(new MtpObject { Id = path, Name = Path.GetFileName(path), RelativePath = path, IsFolder = true }); }
         public void File(string path, string text, DateTime modified)
         {
@@ -130,7 +136,14 @@ partial class GearBackup
             if (OnDownload != null) OnDownload();
             byte[] data = Content[item.Id];
             using (var output = new FileStream(to, FileMode.CreateNew))
+            {
+                if (Disconnect)
+                {
+                    output.Write(data, 0, data.Length / 2);
+                    throw new IOException("MTP device disconnected during transfer.");
+                }
                 output.Write(data, 0, Math.Max(0, data.Length - ShortBy));
+            }
             if (progress != null) progress(data.Length);
         }
     }
@@ -528,6 +541,178 @@ partial class GearBackup
         string text = null;
         OnConsole("jam\n", c => text = c.AskText("Search file name:"));
         Assert(text == "jam", "console reads free text");
+    }
+
+    static void TestAdditionalMirrorLinks(string dir)
+    {
+        string root = Folder(dir, "extra-mirror-links");
+        string outside = Folder(root, "outside");
+        string victim = Path.Combine(outside, "keep.txt");
+        Put(victim, "UNRELATED");
+        string linkedRoot = Path.Combine(root, "root-link");
+        CreateTestJunction(linkedRoot, outside);
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(new FakeMtpSource(), linkedRoot)), "a linked mirror root is rejected");
+            Assert(File.ReadAllText(victim) == "UNRELATED", "linked mirror root never deletes its target content");
+        }
+        finally { Directory.Delete(linkedRoot); }
+
+        string mirror = Folder(root, "mirror");
+        string stale = Path.Combine(mirror, "stale.txt");
+        Put(stale, "PRESERVE");
+        string missing = Folder(root, "missing-target");
+        string broken = Path.Combine(mirror, "broken-folder");
+        CreateTestJunction(broken, missing);
+        Directory.Delete(missing);
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(new FakeMtpSource(), mirror)), "a broken folder link is rejected");
+            Assert(File.Exists(stale) && !Directory.Exists(missing), "broken link rejection neither deletes stale files nor recreates its target");
+        }
+        finally { Directory.Delete(broken); }
+
+    }
+
+    static void TestMirrorFileSymlinks(string dir)
+    {
+        string root = Folder(dir, "mirror-file-symlinks");
+        string mirror = Folder(root, "mirror");
+        string outside = Folder(root, "outside");
+        string victim = Path.Combine(outside, "keep.txt");
+        Put(victim, "UNRELATED");
+        string stale = Path.Combine(mirror, "stale.txt");
+        Put(stale, "PRESERVE");
+        string fileLink = Path.Combine(mirror, "file-link.txt");
+        CreateTestFileSymlink(fileLink, victim);
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(new FakeMtpSource(), mirror)), "a file symbolic link is rejected before cleanup");
+            Assert(File.ReadAllText(victim) == "UNRELATED" && File.Exists(stale), "file link rejection preserves both the target and stale mirror files");
+        }
+        finally { File.Delete(fileLink); }
+        CreateTestFileSymlink(fileLink, Path.Combine(outside, "absent.txt"));
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(new FakeMtpSource(), mirror)), "a broken file symbolic link is rejected");
+            Assert(File.Exists(stale) && !File.Exists(Path.Combine(outside, "absent.txt")), "broken file link rejection makes no changes");
+        }
+        finally { File.Delete(fileLink); }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateSymbolicLinkW", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.U1)]
+    static extern bool CreateTestSymbolicLink(string link, string target, uint flags);
+
+    static void CreateTestFileSymlink(string link, string target)
+    {
+        bool created = CreateTestSymbolicLink(link, target, 2); // Allow unprivileged creation in Developer Mode.
+        int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        if (!created && error == 87) // Older Windows does not support this flag.
+        {
+            created = CreateTestSymbolicLink(link, target, 0);
+            error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+        }
+        if (!created && error == 1314)
+            throw new TestSkippedException("Windows requires Developer Mode or symbolic-link privilege for this test. Junction tests still run.");
+        Assert(created, "test file symbolic link created; Windows error " + error);
+        Assert((File.GetAttributes(link) & FileAttributes.ReparsePoint) != 0, "fixture is a symbolic link, not a regular file");
+    }
+
+    static void TestMtpDisconnect(string dir)
+    {
+        string mirror = Folder(dir, "disconnect-mirror");
+        var day = new DateTime(2026, 1, 1, 10, 0, 0);
+        var device = new FakeMtpSource();
+        device.File("sound.wav", "OLD SOUND", day);
+        WithUi(() => SyncMirror(device, mirror));
+        string old = Path.Combine(mirror, "sound.wav");
+        string stale = Path.Combine(mirror, "stale.wav");
+        Put(stale, "KEEP UNTIL SYNC SUCCEEDS");
+        string staleFolder = Folder(mirror, "stale-empty");
+        device.File("sound.wav", "NEW SOUND FROM DEVICE", day.AddDays(1));
+        device.Disconnect = true;
+        Throws(() => WithUi(() => SyncMirror(device, mirror)), "disconnect after a partial download aborts sync");
+        Assert(device.Downloads == 2 && File.ReadAllText(old) == "OLD SOUND" && File.GetLastWriteTime(old) == day,
+            "disconnect preserves the previous mirror contents and date");
+        Assert(File.Exists(stale) && Directory.Exists(staleFolder), "disconnect prevents stale file and folder cleanup");
+        Assert(Directory.GetFiles(mirror, ".geardownload-*", SearchOption.AllDirectories).Length == 0,
+            "disconnect removes the partial temporary download");
+        device.Disconnect = false;
+        MirrorResult result = null;
+        WithUi(() => { result = SyncMirror(device, mirror); });
+        Assert(result.Downloaded == 1 && result.Removed == 1 && File.ReadAllText(old) == "NEW SOUND FROM DEVICE" &&
+            !Directory.Exists(staleFolder), "reconnecting retries the failed file and performs cleanup only after success");
+    }
+
+    static void TestPartialExactRestore(string dir)
+    {
+        Fixture f = BackedUpCard(Folder(dir, "partial-exact-fixture"), false);
+        string target = Rooted(Folder(dir, "partial-exact-target"));
+        Put(Path.Combine(target, "Songs", "one.m8s"), "OLD ONE");
+        Put(Path.Combine(target, "Songs", "removed.m8s"), "OLD TWO");
+        Put(Path.Combine(target, "extras", "keep.txt"), "UNRELATED EXTRA");
+        string empty = Folder(target, "extra-empty");
+        var ui = new TestInteraction();
+        FileStream locked = null;
+        ui.OnProgress = p => {
+            if (p.Stage == Stage.Restoring && p.Path == @"Songs\removed.m8s")
+                locked = new FileStream(Path.Combine(target, p.Path), FileMode.Open, FileAccess.Read, FileShare.Read);
+        };
+        var copies = new List<RestoreEntry> { f.First.Files.Find(e => e.Relative == @"Songs\one.m8s"),
+            f.First.Files.Find(e => e.Relative == @"Songs\removed.m8s") };
+        OperationResult result;
+        try
+        {
+            result = new RestoreEngine().RunSelected(target, f.First, copies, 'a', null, true,
+                new Config { Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
+        }
+        finally { if (locked != null) locked.Dispose(); }
+        Assert(result.ExitCode != 0 && !result.Cancelled && result.Summary.Contains("1 failed"),
+            "exact restore reports a failed replacement after a successful copy: " + result.Summary + " " + ui.Output);
+        Assert(File.ReadAllText(Path.Combine(target, @"Songs\one.m8s")) == "AAAA" &&
+            File.ReadAllText(Path.Combine(target, @"Songs\removed.m8s")) == "OLD TWO", "partial restore keeps the completed copy and preserves the failed target");
+        Assert(File.ReadAllText(Path.Combine(target, @"extras\keep.txt")) == "UNRELATED EXTRA" && Directory.Exists(empty),
+            "partial exact restore never deletes extra files or empty folders");
+        Assert(Directory.GetFiles(target, ".gearrestore-*", SearchOption.AllDirectories).Length == 0,
+            "failed exact replacement removes the staged temporary file");
+    }
+
+    static void TestMalformedSnapshots(string dir)
+    {
+        string backup = Folder(dir, "malformed-backup");
+        string manifest = Path.Combine(backup, "input.manifest");
+        string hash = new string('a', 64);
+        string valid = "F\t" + Encode(@"Songs\one.m8s") + "\t" + hash + "\t4\t0\t0";
+        string[] invalid = {
+            "", "GEARSNAPSHOT\t99\n", AppIdentity.SnapshotHeader + "\nF",
+            AppIdentity.SnapshotHeader + "\nF\t" + Encode("one.m8s") + "\t" + hash + "\t4\t0",
+            AppIdentity.SnapshotHeader + "\nD\t%%%",
+            AppIdentity.SnapshotHeader + "\nD\t" + Encode(@"..\outside.txt"),
+            AppIdentity.SnapshotHeader + "\nD\t" + Encode(@"C:\outside.txt"),
+            AppIdentity.SnapshotHeader + "\n" + valid + "\n" + valid,
+            AppIdentity.SnapshotHeader + "\n" + valid + "\nD\t" + Encode("songs/ONE.m8s"),
+            AppIdentity.SnapshotHeader + "\nF\t" + Encode("Songs") + "\t" + hash + "\t4\t0\t0\n" + valid,
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace("\t4\t", "\t-1\t"),
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace("\t4\t", "\t999999999999999999999\t"),
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace("\t4\t", "\tnot-a-number\t"),
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace("\t0\t0", "\t-1\t0"),
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace("\t0\t0", "\t0\t3155378976000000000"),
+            AppIdentity.SnapshotHeader + "\n" + valid.Replace(hash, "bad-checksum")
+        };
+        for (int i = 0; i < invalid.Length; i++)
+        {
+            Put(manifest, invalid[i]);
+            byte[] before = File.ReadAllBytes(manifest);
+            WithUi(() => Throws(() => ReadSnapshot(backup, manifest), "malformed snapshot rejected: case " + i));
+            Assert(Convert.ToBase64String(File.ReadAllBytes(manifest)) == Convert.ToBase64String(before) &&
+                Directory.GetFileSystemEntries(backup).Length == 1, "rejecting malformed input leaves the manifest unchanged and creates no objects");
+        }
+        Put(manifest, AppIdentity.SnapshotHeader + "\nD\t" + Encode("Songs") + "\n" + valid + "\n");
+        Snapshot read = null;
+        WithUi(() => read = ReadSnapshot(backup, manifest));
+        Assert(read.Files.Count == 1 && read.Folders.Count == 1 && read.Files[0].Size == 4,
+            "valid manifest remains accepted with a final newline and zero dates");
     }
 
     static void TestMirrorLinks(string dir)

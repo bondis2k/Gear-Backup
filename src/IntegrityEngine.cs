@@ -18,7 +18,8 @@ partial class GearBackup
                     context.CheckCancellation();
                     string title, summary;
                     int code = CheckSelected(backups, out title, out summary);
-                    return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed };
+                    return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed,
+                        OutputFolder = backups.Count == 0 ? null : backups.Count == 1 ? backups[0] : Path.GetDirectoryName(backups[0]) };
                 }
                 catch (OperationCanceledException)
                 {

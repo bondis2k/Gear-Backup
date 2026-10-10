@@ -65,6 +65,11 @@ partial class GearBackup
 
     static readonly List<string> results = new List<string>();
     static int failedTests;
+    static int skippedTests;
+    sealed class TestSkippedException : Exception
+    {
+        public TestSkippedException(string reason) : base(reason) { }
+    }
 
     // Runs one test. A failure is recorded and the next test still runs. The global test state a test
     // may change (preview mode, console input) is reset afterwards so it can't leak into the next one.
@@ -76,6 +81,11 @@ partial class GearBackup
         {
             test();
             results.Add(string.Format("  ok    {0} ({1} checks)", name, assertions - before));
+        }
+        catch (TestSkippedException ex)
+        {
+            skippedTests++;
+            results.Add("  SKIP  " + name + "\n          " + ex.Message);
         }
         catch (Exception ex)
         {
@@ -103,7 +113,8 @@ partial class GearBackup
         Console.WriteLine();
         if (failedTests == 0)
         {
-            Console.WriteLine("PASS: " + results.Count + " tests, " + assertions + " assertions.");
+            Console.WriteLine("PASS: " + (results.Count - skippedTests) + " tests, " + assertions + " assertions." +
+                (skippedTests > 0 ? " " + skippedTests + " test(s) skipped; see reasons above." : ""));
             RemoveFixtures(root);
             return 0;
         }

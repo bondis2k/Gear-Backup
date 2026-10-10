@@ -7,3 +7,6 @@ dist/
 *.exe
 GearBackup.ini
 M8Backup.ini
+
+# Generated offline manual (source is MANUAL.md).
+/Manual.html
