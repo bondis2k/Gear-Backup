@@ -87,7 +87,8 @@ partial class M8Backup
 
         string pnpId;
         DeviceProfile device;
-        string source = SelectSource(config, out pnpId, out device);
+        MtpSource mtp;
+        string source = SelectSource(config, out pnpId, out device, out mtp);
         OperationContext.Current.Device = device;
         if (source == null)
         {
@@ -110,11 +111,12 @@ partial class M8Backup
             {
                 OperationOutput.WriteLine("  Last backup: " + previous);
                 OperationOutput.WriteLine();
-                char choice = Ask("What would you like to do?",
+                var menu = new List<Option> {
                     new Option('1', "Full backup to a new folder"),
-                    new Option('2', "Incremental backup into the last backup (only new and changed files)"),
-                    new Option('3', "Restore from a backup to the " + device.Name),
-                    new Option('4', "Check backups for damaged files"));
+                    new Option('2', "Incremental backup into the last backup (only new and changed files)") };
+                if (mtp == null) menu.Add(new Option('3', "Restore from a backup to the " + device.Name));
+                menu.Add(new Option('4', "Check backups for damaged files"));
+                char choice = Ask("What would you like to do?", menu.ToArray());
                 if (choice == '4')
                 {
                     OperationOutput.WriteLine();
@@ -127,16 +129,18 @@ partial class M8Backup
         else if (!restore && previous == null && config.Mode == BackupMode.Ask && HasHistory(histories))
         {
             OperationOutput.WriteLine("  No backups yet for this profile; other histories are available.");
-            char choice = Ask("What would you like to do?",
-                new Option('1', "Full backup for this profile"),
-                new Option('3', "Restore from another history"),
-                new Option('4', "Check another history"));
+            var menu = new List<Option> { new Option('1', "Full backup for this profile") };
+            if (mtp == null) menu.Add(new Option('3', "Restore from another history"));
+            menu.Add(new Option('4', "Check another history"));
+            char choice = Ask("What would you like to do?", menu.ToArray());
             if (choice == '4') return CheckHistory(ChooseHistory(histories, null));
             restore = choice == '3';
         }
         OperationOutput.WriteLine();
 
         OperationResult result;
+        if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+        if (mtp != null) source = SyncMtpSource(mtp);
         if (restore)
         {
             backupRoot = ChooseHistory(histories, backupRoot);

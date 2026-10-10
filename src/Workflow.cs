@@ -28,6 +28,9 @@ partial class M8Backup
     {
         if (requested.Length > 0) { ValidateProfile(requested); return requested; }
         string normalized = Rooted(source);
+        // A mirrored MTP device: its folder name, e.g. "op1-field-L1PRC121", identifies the device.
+        if (Within(normalized, MirrorRoot) && Rooted(normalized) != Rooted(MirrorRoot))
+            return Path.GetFileName(normalized.TrimEnd('\\'));
         if (normalized == Rooted(Path.GetPathRoot(normalized)))
         {
             try
@@ -75,18 +78,32 @@ partial class M8Backup
     }
 
     // The folder to back up or restore to: SourceFolder if set, otherwise a detected device, otherwise a
-    // path typed by the user. pnpId is set only for a detected device (needed to eject it), and device
-    // says which kind of device the source is. Null if cancelled.
-    static string SelectSource(Config config, out string pnpId, out DeviceProfile device)
+    // path typed by the user. pnpId is set only for a detected drive (needed to eject it), and device
+    // says which kind of device the source is. For an MTP device the path is its mirror and `mtp` is set:
+    // the caller must call SyncMtpSource before backing it up. Null if cancelled.
+    static string SelectSource(Config config, out string pnpId, out DeviceProfile device, out MtpSource mtp)
     {
         pnpId = null;
+        mtp = null;
         DeviceProfile detected = null;
         string source = config.SourceFolder;
         if (source.Length == 0)
         {
-            try { source = FindDevice(out detected, out pnpId); }
+            try
+            {
+                source = FindDevice(out detected, out pnpId);
+                if (source == null) mtp = FindMtpSource();
+            }
             catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); source = null; }
-            if (source == null)
+            if (mtp != null)
+            {
+                // Not read yet: the caller syncs the mirror once it knows a backup is wanted.
+                detected = mtp.Device;
+                source = mtp.Mirror;
+                Directory.CreateDirectory(source);
+                OperationOutput.WriteLine("  " + mtp.Device.Name + " found over MTP (" + mtp.Info.FriendlyName + ", serial " + mtp.Info.Serial + ").");
+            }
+            else if (source == null)
             {
                 OperationOutput.WriteLine("  No " + Devices.Names + " detected. Select an SD card in a reader or a folder instead.");
                 source = ExpandPath(AskText("Source path (Enter = cancel):"));

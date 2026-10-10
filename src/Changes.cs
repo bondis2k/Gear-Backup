@@ -62,6 +62,15 @@ partial class M8Backup
 
     static void WriteChanges(TextWriter report, Changes changes, string baseline)
     {
+        // A device without song files (e.g. the OP-1 Field) only gets file counts.
+        if (CurrentDevice.SongExtensions.Length == 0)
+        {
+            if (changes.HasBaseline)
+                report.WriteLine("  Changes since the last backup ({0}): {1:N0} new, {2:N0} changed file(s)",
+                    Path.GetFileName(baseline), changes.OtherNew, changes.OtherChanged);
+            report.WriteLine();
+            return;
+        }
         if (!changes.HasBaseline)
         {
             report.WriteLine("  Songs: {0:N0} (first backup, nothing to compare with)", changes.TotalSongs);
@@ -91,6 +100,9 @@ partial class M8Backup
     static string ShortSongSummary(Changes changes)
     {
         if (!changes.HasBaseline) return "";
+        if (CurrentDevice.SongExtensions.Length == 0)
+            return changes.OtherNew + changes.OtherChanged == 0 ? " No files changed."
+                : string.Format(" {0} new, {1} changed file(s).", changes.OtherNew, changes.OtherChanged);
         var parts = new List<string>();
         if (changes.NewSongs.Count > 0) parts.Add(changes.NewSongs.Count + " new (" + FirstNames(changes.NewSongs) + ")");
         if (changes.EditedSongs.Count > 0) parts.Add(changes.EditedSongs.Count + " edited (" + FirstNames(changes.EditedSongs) + ")");

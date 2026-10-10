@@ -9,7 +9,8 @@ partial class M8Backup
             Copying = "Copying", Hashing = "Hashing", Verifying = "Verifying", Comparing = "Comparing",
             SavingHistory = "Saving history", SavingChecksums = "Saving checksums", Zipping = "Zipping",
             ScanningBackup = "Scanning backup", CheckingBackup = "Checking backup", CheckingHistory = "Checking history",
-            PlanningRestore = "Planning restore", Restoring = "Restoring", SavingRecovery = "Saving recovery";
+            PlanningRestore = "Planning restore", Restoring = "Restoring", SavingRecovery = "Saving recovery",
+            Downloading = "Downloading";
 
         // Per-file detail. During a full backup only overall progress is shown, so front ends skip these.
         public static bool IsFileDetail(string stage)

@@ -1,6 +1,6 @@
 # M8 Backup
 
-A Windows tool with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card, a card reader, or a local copy of the card.
+A Windows tool with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card, a card reader, or a local copy of the card. It also backs up a Teenage Engineering OP-1 Field over MTP.
 
 - Full and incremental backups with dated snapshots and separate card profiles.
 - Restore all files, a folder bundle, a single file, or a song with its samples.

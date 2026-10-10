@@ -12,9 +12,10 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 ## Sources
 
 - **M8 detection** — finds the M8 in USB disk mode automatically, with a removable drive labelled `M8` as fallback.
+- **OP-1 Field** — backs up a Teenage Engineering OP-1 Field over MTP (no drive letter needed), through a local mirror that only downloads changes; read-only, restore goes to a folder.
 - **Device profiles** — everything device-specific (detection, song files, bundles, song-with-samples restore) is described per device, ready for more devices than the M8 (`Device`).
 - **Card reader or folder** — back up an SD card in a reader or any local folder (`SourceFolder`, `--source`).
-- **Manual fallback** — asks for a source path when no M8 is detected.
+- **Manual fallback** — asks for a source path when no M8 or OP-1 Field is detected.
 - **Profiles** — each card gets its own history, identified by its volume serial so it survives a new reader or drive letter.
 - **Named profiles** — choose a fixed history name with `Profile` or `--profile`.
 - **Legacy histories** — backups made before profiles existed stay available for restore and checks.
