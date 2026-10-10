@@ -4,7 +4,27 @@ Gear Backup is a Windows program with graphical and command-line interfaces for 
 
 Requires Windows 10 or 11 and the built-in .NET Framework. No installation or extra runtime is needed.
 
-Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `GearBackup.exe` before following the steps below.
+Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `GearBackup.exe` before following the steps below. If you have a setup executable, use the installation instructions below instead.
+
+## Installing Gear Backup
+
+Run `GearBackup-Setup-<version>.exe` and follow the wizard. It installs the GUI and CLI for the current Windows user without requesting administrator rights. The default installation folder is `%LOCALAPPDATA%\Programs\Gear Backup`. Keep this location or choose another folder you can write to: the application saves `GearBackup.ini` beside its executables.
+
+The Start menu's **Gear Backup** folder contains the GUI, **Gear Backup (CLI)**, an offline illustrated **Gear Backup Manual**, and the uninstaller. A desktop shortcut is optional. The final wizard page can open the GUI; choose a source and backup location before starting a backup. Installing the application does not copy files from a device.
+
+For an upgrade, close both interfaces and run the newer installer. It reuses the installation location and leaves your INI settings intact. To bring settings from a portable copy, close the app and copy its `GearBackup.ini` into the installation folder. The installer does not import settings automatically.
+
+Remove the application through Windows **Settings > Apps** or the Start menu uninstaller. Uninstall removes installed executables, documentation, and shortcuts; it keeps your generated INI settings, backups, recovery files, and local MTP mirrors. The remaining INI can be reused after reinstalling.
+
+Installer builds require Windows 10 or 11 and .NET Framework 4.6 or newer, normally included with Windows. A setup executable produced by the repository's build script is unsigned; publishing a signed installer requires a code-signing certificate.
+
+### Portable package
+
+Run `GearBackup-Portable-<version>.exe` to extract both executables and the offline illustrated manual into a writable folder. The default is a `Gear Backup` folder beside the package, but you can choose a different location or USB drive. It creates no Start menu or desktop shortcuts, uninstall entry, or uninstaller. Open `GearBackup.GUI.exe` or `GearBackup.exe` directly from that folder.
+
+The app creates `GearBackup.ini` beside the executables when it runs normally. To update the portable copy, close both interfaces and extract the new package into the same folder; existing settings and user files are left intact. You can move the whole folder to another Windows PC. Review the stored source and backup paths after moving it, since absolute paths and drive letters may differ.
+
+Portable packaging does not change the app's storage defaults: backups still default to the Windows Music folder, and MTP mirrors still use `%LOCALAPPDATA%\GearBackup\Devices` (or an existing legacy mirror location). Set **Backup location** to a folder on your portable drive if you want the backups there. Deleting the extracted application folder removes the portable app; backups, recovery folders and PC mirrors are separate unless you deliberately placed them inside it.
 
 ## Getting started
 
@@ -62,6 +82,8 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 For a first backup, select the source and backup location, leave Profile blank, choose **Full backup**, and click **Preview**. After reviewing the plan, click **Back up**. For later runs on the same card, choose **Incremental backup** to copy only additions and changes.
 
 Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
+
+Click **About** in the header to see the installed application version. The same release version appears in the Windows executable properties and installer.
 
 ## Teenage Engineering OP-1 Field
 
@@ -405,6 +427,14 @@ Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` using Windo
 
 Run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
 
+Both wrappers use `build\build-app.ps1` for compiler paths, framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
+
+For a release, update `AppIdentity.Version` in `src\AppIdentity.cs`, then run `build-installer.cmd` with PowerShell 7 and Inno Setup installed. It rebuilds both executables, reads their shared product version, and writes `dist\GearBackup-Setup-<version>.exe` and `dist\GearBackup-Portable-<version>.exe`, each with a SHA-256 file. An explicit `-Version` must match the application version. Executable metadata and the GUI's About dialog use that same value.
+
+Run `pwsh -File tests\run-installer-tests.ps1` after building to check installation, shortcuts, offline documentation, version metadata, CLI/GUI startup, upgrade and uninstall. The test refuses to run when a Gear Backup installation or its Start menu folder already exists; use a separate Windows user account in that case. It creates an isolated application folder and temporary per-user registration/shortcuts, then uninstalls it. Logs and the deliberately preserved test INI stay under `.test-runs`.
+
+Run `pwsh -File tests\run-portable-tests.ps1` to check portable extraction, version metadata, offline pictures, updates that preserve settings/user files, and CLI/GUI startup after moving the folder. It also checks that Gear Backup shortcuts and uninstall registration remain unchanged. Portable fixtures and logs stay under `.test-runs`.
+
 If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. `tests\HelperTests.cs` adds focused tests for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
@@ -418,6 +448,7 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | File | Responsibility |
 |---|---|
 | `AppIdentity.cs` | Shared product identity, storage names and compatibility with earlier settings and histories. |
+| `AssemblyInfo.cs` | Executable metadata using the shared application name and release version. |
 | `Program.cs` | CLI arguments, source selection and menu. |
 | `Session.cs` | Workflow steps shared by the CLI and GUI: history per source, check target, history lock, resume question, same-device check before ejecting. |
 | `Config.cs` | INI defaults and parsing. |
@@ -425,7 +456,8 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `PathValidation.cs` | Path normalization, containment, link rejection, and safe relative paths. |
 | `BackupTraversal.cs` | User-content traversal that skips history metadata folders. |
 | `Backup.cs` | CLI backup entry, retention, source scanning, version naming. |
-| `BackupEngine.cs` | Full/incremental execution, resume, space planning, reports. |
+| `BackupEngine.cs` | Full/incremental execution, resume, space planning and completion status. |
+| `BackupReport.cs` | Statistics formatting and report-file output; execution and completion status stay in the engine. |
 | `Snapshots.cs` | Manifests, deduplicated objects, historical selection and integrity checks. |
 | `Restore.cs` | CLI restore selection, bundles, file validation, recovery helpers. |
 | `RestoreEngine.cs` | Restore planning and execution, staged replacements, exact removal. |

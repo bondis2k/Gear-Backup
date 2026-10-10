@@ -2,6 +2,8 @@
 .test-runs/
 .test-output.txt
 tests/.build/
+.tools/
+dist/
 *.exe
 GearBackup.ini
 M8Backup.ini
