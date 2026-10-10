@@ -2,6 +2,6 @@ using System.Reflection;
 
 [assembly: AssemblyTitle(GearBackup.AppIdentity.Name)]
 [assembly: AssemblyProduct(GearBackup.AppIdentity.Name)]
-[assembly: AssemblyVersion(GearBackup.AppIdentity.Version)]
-[assembly: AssemblyFileVersion(GearBackup.AppIdentity.Version)]
+[assembly: AssemblyVersion(GearBackup.AppIdentity.BinaryVersion)]
+[assembly: AssemblyFileVersion(GearBackup.AppIdentity.BinaryVersion)]
 [assembly: AssemblyInformationalVersion(GearBackup.AppIdentity.Version)]

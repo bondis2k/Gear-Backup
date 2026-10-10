@@ -1,6 +1,6 @@
 #requires -Version 7.0
 param(
-    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?$')]
+    [ValidatePattern('^\d+\.\d+\.\d+(\.\d+)?[A-Za-z]?$')]
     [string]$Version,
     [string]$IsccPath
 )
@@ -40,9 +40,11 @@ try {
 } finally { Pop-Location }
 
 # The compiled application is the authority for the release version.
-$applicationVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $payloadPath 'GearBackup.exe')).ProductVersion
-$guiVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $payloadPath 'GearBackup.GUI.exe')).ProductVersion
-if ($applicationVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$' -or $guiVersion -ne $applicationVersion) {
+$cliMetadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $payloadPath 'GearBackup.exe'))
+$guiMetadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $payloadPath 'GearBackup.GUI.exe'))
+$applicationVersion = $cliMetadata.ProductVersion
+$binaryVersion = $cliMetadata.FileVersion
+if ($applicationVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?[A-Za-z]?$' -or $guiMetadata.ProductVersion -ne $applicationVersion -or $guiMetadata.FileVersion -ne $binaryVersion) {
     throw 'The executables must have the same valid product version.'
 }
 if ($Version -and $Version -ne $applicationVersion) {
@@ -66,7 +68,7 @@ try {
 } finally { $graphics.Dispose(); $wizardImage.Dispose(); $iconImage.Dispose() }
 
 foreach ($variant in @('Setup', 'Portable')) {
-    $compilerArguments = @("/DAppVersion=$Version", "/DPayloadDir=$payloadPath", "/DOutputPath=$outputPath")
+    $compilerArguments = @("/DAppVersion=$Version", "/DBinaryVersion=$binaryVersion", "/DPayloadDir=$payloadPath", "/DOutputPath=$outputPath")
     if ($variant -eq 'Portable') { $compilerArguments += '/DPortableBuild=1' }
     & $IsccPath $compilerArguments (Join-Path $PSScriptRoot 'GearBackup.iss')
     if ($LASTEXITCODE -ne 0) { throw "$variant installer compilation failed." }
