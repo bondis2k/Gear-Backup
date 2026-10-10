@@ -19,7 +19,7 @@ partial class GearBackup
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            g.Clear(Parent != null ? Parent.BackColor : GuiTheme.Background);
+            g.Clear(GuiTheme.ContainerBackground(Parent));
             float radius = Height / 2f;
             using (var track = GuiTheme.RoundedRectangle(new RectangleF(0, 0, Width - 1, Height - 1), radius))
             using (var brush = new SolidBrush(GuiTheme.Border))

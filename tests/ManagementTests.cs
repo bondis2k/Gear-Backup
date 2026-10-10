@@ -6,9 +6,52 @@ using System.Threading;
 
 partial class GearBackup
 {
+    static void TestBackupDestination(string root)
+    {
+        string expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
+        Assert(new Config().BackupFolder == expected, "new configurations use the user profile Backup folder");
+        Config loaded = null;
+        WithUi(() => loaded = LoadConfig(root));
+        Assert(loaded.BackupFolder == expected, "a new INI uses the user profile Backup folder");
+        Put(Path.Combine(root, AppIdentity.ConfigFileName), "BackupFolder=\n");
+        WithUi(() => loaded = LoadConfig(root));
+        Assert(loaded.BackupFolder == expected, "an empty INI backup location uses the same default");
+        string source = Folder(root, "source"); Put(Path.Combine(source, "song.txt"), "SONG");
+        var config = new Config { BackupFolder = Path.Combine(root, "missing", "backups"), SettingsDirectory = root, Preview = false };
+        PreparedSource prepared = null;
+        OperationResult result = null;
+        TestInteraction declined = WithUi(() => {
+            prepared = PrepareSource(config, new SourceChoice { Path = source });
+            result = RunPrepared(prepared, false, false);
+        }, 'n');
+        Assert(result.Cancelled && !Directory.Exists(config.BackupFolder) && !Directory.Exists(prepared.History),
+            "declining folder creation cancels without creating destination or history");
+        Assert(declined.Questions.Count == 1 && declined.Questions[0].Contains(config.BackupFolder),
+            "creation prompt identifies the selected destination");
+        TestInteraction accepted = WithUi(() => result = RunPrepared(prepared, false, false), 'y');
+        Assert(!result.Cancelled && result.ExitCode == 0 && LatestBackup(prepared.History) != null,
+            "accepting creates missing parent folders and completes the backup");
+        Assert(accepted.Questions.Count == 1, "missing destination prompts exactly once");
+        TestInteraction existing = WithUi(() => result = RunPrepared(prepared, false, true));
+        Assert(existing.Questions.Count == 0, "an existing destination does not prompt for creation");
+        config.BackupFolder = Path.Combine(root, "preview-only");
+        var preview = new TestInteraction();
+        using (new OperationContext(preview, CancellationToken.None) { PreviewOnly = true }.Activate())
+        {
+            prepared = PrepareSource(config, new SourceChoice { Path = source });
+            RunPrepared(prepared, false, false);
+        }
+        Assert(preview.Questions.Count == 0 && !Directory.Exists(config.BackupFolder), "preview neither prompts nor creates a destination");
+        Put(config.BackupFolder, "FILE");
+        WithUi(() => Throws(() => EnsureBackupFolder(config), "a file cannot be used as a backup folder"));
+        config.BackupFolder = Path.Combine(root, "settings-cancelled");
+        WithUi(() => result = SaveFujiSettings(new Dictionary<string, byte[]>(), Path.Combine(config.BackupFolder, "history"), config), 'n');
+        Assert(result.Cancelled && !Directory.Exists(config.BackupFolder), "camera settings backup also honors declined creation");
+    }
+
     static void TestProfilePreferences(string root)
     {
-        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
+        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, PointInTimeHistory = true };
         WithUi(() => {
             SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "BackupFolder", Path.Combine(root, "device-store") }, { "PointInTimeHistory", "no" }, { "KeepBackups", "3" } });
             SaveProfileSettings(global, "profile:Studio", new Dictionary<string, string> { { "KeepBackups", "5" }, { "Verify", "yes" } });
@@ -35,7 +78,7 @@ partial class GearBackup
     }
     static BackupCatalog ManagementFixture(string root, out Config config)
     {
-        config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false, Thorough = true };
+        config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false, Thorough = true, PointInTimeHistory = true };
         string source = Rooted(Path.Combine(root, "source")); Put(Path.Combine(source, "song.txt"), "AAAA");
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-test");
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);

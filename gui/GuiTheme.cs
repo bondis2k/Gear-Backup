@@ -7,21 +7,20 @@ partial class GearBackup
 {
     // The app's look: colours, fonts, and the controls that draw themselves in that style (rounded buttons
     // and cards, flat tabs, light tables). Windows and dialogs build their controls through these.
-    static class GuiTheme
+    static partial class GuiTheme
     {
-        public static readonly Color Ink = Color.FromArgb(28, 42, 51);
-        public static readonly Color Muted = Color.FromArgb(102, 117, 127);
-        public static readonly Color Accent = Color.FromArgb(0, 117, 106);
-        public static readonly Color AccentDark = Color.FromArgb(0, 94, 85);
-        public static readonly Color AccentSoft = Color.FromArgb(226, 242, 239);
-        public static readonly Color Background = Color.FromArgb(243, 245, 247);
-        public static readonly Color Surface = Color.White;
-        public static readonly Color Border = Color.FromArgb(221, 227, 232);
-        public static readonly Color Danger = Color.FromArgb(175, 69, 47);
+        public static Color Danger { get { return ThemeName == "original-dark" ? Color.FromArgb(255, 156, 139) : Color.FromArgb(175, 69, 47); } }
         public const int Radius = 8;
 
         public static Font Font(float size, FontStyle style = FontStyle.Regular) { return new Font("Segoe UI", size, style); }
         public static Font Heading(float size) { return new Font("Segoe UI Semibold", size); }
+
+        public static Color ContainerBackground(Control control)
+        {
+            for (Control parent = control; parent != null; parent = parent.Parent)
+                if (parent.BackColor.A == 255) return parent.BackColor;
+            return Background;
+        }
 
         public static Label Label(string text, float size, Color color)
         {
@@ -56,8 +55,8 @@ partial class GearBackup
             grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
             grid.GridColor = Border;
             grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle {
-                BackColor = Color.FromArgb(247, 249, 250), ForeColor = Muted, Font = Heading(9),
-                SelectionBackColor = Color.FromArgb(247, 249, 250), SelectionForeColor = Muted,
+                BackColor = Background, ForeColor = Ink, Font = Heading(9),
+                SelectionBackColor = Background, SelectionForeColor = Ink,
                 Padding = new Padding(6, 8, 6, 8), WrapMode = DataGridViewTriState.True };
             grid.DefaultCellStyle = new DataGridViewCellStyle {
                 BackColor = Surface, ForeColor = Ink, Font = Font(9.5f), Padding = new Padding(6, 6, 6, 6),
@@ -97,6 +96,21 @@ partial class GearBackup
         {
             box.Font = Font(10);
             box.ForeColor = Ink;
+            // Windows visual styles otherwise paint the selected field white in dark mode.
+            box.DrawMode = DrawMode.OwnerDrawFixed;
+            box.ItemHeight = box.Font.Height + 4;
+            box.DrawItem += delegate(object sender, DrawItemEventArgs e) {
+                bool selected = (e.State & DrawItemState.Selected) != 0;
+                Color background = ThemeName == "original-dark" ? (selected ? AccentSoft : Surface) :
+                    selected ? SystemColors.Highlight : SystemColors.Window;
+                Color text = ThemeName != "original-dark" && selected ? SystemColors.HighlightText : Ink;
+                using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
+                string value = e.Index >= 0 && e.Index < box.Items.Count ? box.GetItemText(box.Items[e.Index]) : box.Text;
+                var bounds = new Rectangle(e.Bounds.X + 3, e.Bounds.Y, Math.Max(0, e.Bounds.Width - 6), e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, value, box.Font, bounds, box.Enabled ? text : DisabledInk,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+                e.DrawFocusRectangle();
+            };
         }
 
         public static GraphicsPath RoundedRectangle(RectangleF bounds, float radius)
@@ -114,6 +128,7 @@ partial class GearBackup
 
         public static void FitToScreen(Form form)
         {
+            ApplyTo(form);
             if (GuiHeadless) return;
             Rectangle area = Screen.FromControl(form).WorkingArea;
             form.MinimumSize = new Size(Math.Min(form.MinimumSize.Width, area.Width), Math.Min(form.MinimumSize.Height, area.Height));
@@ -214,27 +229,27 @@ partial class GearBackup
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color outside = Parent != null ? Parent.BackColor : GuiTheme.Background;
+            Color outside = GuiTheme.ContainerBackground(Parent);
             using (var clear = new SolidBrush(outside)) g.FillRectangle(clear, ClientRectangle);
 
             Color fill, text, border;
             if (!Enabled)
             {
-                fill = kind == ButtonKind.Ghost ? outside : Color.FromArgb(238, 241, 243);
-                text = Color.FromArgb(160, 170, 176);
+                fill = kind == ButtonKind.Ghost ? outside : GuiTheme.DisabledSurface;
+                text = GuiTheme.DisabledInk;
                 border = kind == ButtonKind.Secondary ? GuiTheme.Border : fill;
             }
             else if (kind == ButtonKind.Primary)
             {
-                fill = pressed ? Color.FromArgb(0, 80, 72) : hover ? GuiTheme.AccentDark : GuiTheme.Accent;
-                text = Color.White;
+                fill = pressed || hover ? GuiTheme.AccentDark : GuiTheme.Accent;
+                text = GuiTheme.PrimaryInk;
                 border = fill;
             }
             else
             {
-                fill = pressed ? Color.FromArgb(205, 232, 227) : hover ? GuiTheme.AccentSoft : kind == ButtonKind.Ghost ? outside : GuiTheme.Surface;
+                fill = pressed ? GuiTheme.Background : hover ? GuiTheme.AccentSoft : kind == ButtonKind.Ghost ? outside : GuiTheme.ButtonSurface;
                 text = GuiTheme.Ink;
-                border = kind == ButtonKind.Secondary ? (hover ? Color.FromArgb(178, 214, 207) : GuiTheme.Border) : fill;
+                border = kind == ButtonKind.Secondary ? (hover ? GuiTheme.Accent : GuiTheme.Border) : fill;
             }
             var bounds = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             using (GraphicsPath shape = GuiTheme.RoundedRectangle(bounds, GuiTheme.Radius))
@@ -246,7 +261,7 @@ partial class GearBackup
             {
                 var ring = new RectangleF(2.5f, 2.5f, Width - 5.5f, Height - 5.5f);
                 using (GraphicsPath shape = GuiTheme.RoundedRectangle(ring, GuiTheme.Radius - 2))
-                using (var pen = new Pen(kind == ButtonKind.Primary ? Color.White : GuiTheme.Accent, 1.5f))
+                using (var pen = new Pen(kind == ButtonKind.Primary ? GuiTheme.PrimaryInk : GuiTheme.Accent, 1.5f))
                     g.DrawPath(pen, shape);
             }
             TextRenderer.DrawText(g, Text, Font, ClientRectangle, text,
@@ -277,7 +292,7 @@ partial class GearBackup
             Controls.Add(text);
             text.GotFocus += delegate { Invalidate(); };
             text.LostFocus += delegate { Invalidate(); };
-            text.EnabledChanged += delegate { BackColor = text.BackColor = text.Enabled ? GuiTheme.Surface : Color.FromArgb(246, 248, 249); Invalidate(); };
+            text.EnabledChanged += delegate { BackColor = text.BackColor = text.Enabled ? GuiTheme.Surface : GuiTheme.DisabledSurface; Invalidate(); };
             Click += delegate { text.Focus(); };
         }
 
@@ -285,7 +300,7 @@ partial class GearBackup
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var clear = new SolidBrush(Parent != null ? Parent.BackColor : GuiTheme.Surface)) g.FillRectangle(clear, ClientRectangle);
+            using (var clear = new SolidBrush(GuiTheme.ContainerBackground(Parent))) g.FillRectangle(clear, ClientRectangle);
             var bounds = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             using (GraphicsPath shape = GuiTheme.RoundedRectangle(bounds, GuiTheme.Radius - 2))
             {
@@ -295,7 +310,7 @@ partial class GearBackup
         }
     }
 
-    // A white card with rounded corners and a soft border, for grouping parts of a window.
+    // A paper-coloured card with rounded corners, for grouping parts of a window.
     sealed class CardPanel : Panel
     {
         public CardPanel()
@@ -309,7 +324,7 @@ partial class GearBackup
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            using (var clear = new SolidBrush(Parent != null ? Parent.BackColor : GuiTheme.Background)) g.FillRectangle(clear, ClientRectangle);
+            using (var clear = new SolidBrush(GuiTheme.ContainerBackground(Parent))) g.FillRectangle(clear, ClientRectangle);
             var bounds = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
             using (GraphicsPath shape = GuiTheme.RoundedRectangle(bounds, GuiTheme.Radius + 2))
             {

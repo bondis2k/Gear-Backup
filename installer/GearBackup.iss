@@ -68,6 +68,7 @@ Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
 Source: "{#PayloadDir}\GearBackup.GUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\GearBackup.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Manual.html"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\Manual-*.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MANUAL.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\assets\manual\*.png"; DestDir: "{app}\assets\manual"; Flags: ignoreversion

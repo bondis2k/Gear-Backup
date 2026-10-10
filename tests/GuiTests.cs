@@ -34,6 +34,8 @@ partial class GearBackup
         using (var form = CreateGui(true))
         {
             form.Show();
+            // This workflow exercises snapshot restore; normal startup leaves history off.
+            ((Config)typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form)).PointInTimeHistory = true;
             Assert(form.Text == AppIdentity.Name, "GUI window uses the shared Gear Backup identity");
             using (var about = new AboutDialog())
             {
@@ -50,9 +52,18 @@ partial class GearBackup
             var zipBox = (CheckBox)form.Controls.Find("ZipBackup", true)[0];
             var deviceImage = (PictureBox)form.Controls.Find("DeviceImage", true)[0];
             var deviceLabel = (Label)form.Controls.Find("DetectedDevice", true)[0];
+            var connectionLabel = (Label)form.Controls.Find("DeviceConnectionMode", true)[0];
             var sourceLabel = (Label)form.Controls.Find("SourceCaption", true)[0];
             var resultCounts = (Label)form.Controls.Find("CompletionCounts", true)[0];
             var openOutput = (Button)form.Controls.Find("OpenOutputFolder", true)[0];
+            var moreOptions = (Button)form.Controls.Find("ToggleBackupOptions", true)[0];
+            var optionalFields = form.Controls.Find("OptionalBackupFields", true)[0];
+            Assert(!optionalFields.Visible && !sourceBox.Visible && !backupBox.Visible && !form.Controls.Find("Profile", true)[0].Visible && !cancel.Visible,
+                "main window initially focuses on detection and backup instead of optional fields");
+            moreOptions.PerformClick();
+            Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
+            moreOptions.PerformClick();
+            Assert(!optionalFields.Visible, "optional fields can be collapsed again");
             Assert(deviceImage.Image != null && deviceImage.AccessibleName == "No device detected", "the header shows the general picture at startup");
             Icon windowIcon = form.Icon;
             ((MainForm)form).ShowDevice(Devices.OP1Field);
@@ -67,15 +78,27 @@ partial class GearBackup
             ((MainForm)form).ShowDevice(Devices.X100VI);
             Assert(deviceImage.AccessibleName == "X100VI" && deviceImage.Image != null, "a detected X100VI shows its picture");
             ((MainForm)form).ShowDevice(Devices.X100VI, FujiModeName(true));
-            Assert(deviceLabel.Text.Contains("settings mode"), "camera settings mode remains visible in the header");
+            Assert(connectionLabel.Text.Contains("settings mode"), "camera settings mode remains visible in the header");
             ((MainForm)form).ShowDevice(Devices.X100VI, FujiModeName(false));
-            Assert(deviceLabel.Text.Contains("photo-transfer mode") && !deviceLabel.Text.Contains("settings mode"),
+            Assert(connectionLabel.Text.Contains("photo-transfer mode") && !connectionLabel.Text.Contains("settings mode"),
                 "camera photo mode replaces the previously displayed settings mode");
             ((MainForm)form).ShowDevice(Devices.M8);
             Assert(deviceImage.AccessibleName == "M8", "a detected M8 shows its picture");
             ((MainForm)form).ShowDevice(null);
             Assert(deviceImage.AccessibleName == "No device detected", "no device detected brings back the general picture");
             Assert(form.Icon == windowIcon, "the window and taskbar icon never change");
+            var detectionRunner = (GuiOperationRunner)typeof(MainForm).GetField("runner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            detectionRunner.ShowDetected(new SourceChoice { Path = @"E:\", Detected = Devices.M8 });
+            Assert(sourceBox.Text == @"E:\" && connectionLabel.Text.Contains("USB drive"), "USB detection selects and identifies the drive");
+            detectionRunner.ShowDetected(new SourceChoice { Path = Path.Combine(root, "mtp-mirror"), Detected = Devices.OP1Field,
+                Mtp = new MtpSource { Device = Devices.OP1Field } });
+            Assert(sourceBox.Text == "" && connectionLabel.Text == "MTP", "MTP detection clears the previous USB source and displays its transport");
+            Assert(typeof(GuiOperationRunner).GetField("detectedDrive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(detectionRunner) == null,
+                "MTP detection also clears the previous drive selection used for ejection");
+            Assert(deviceLabel.Font.Size >= 17 && deviceLabel.ForeColor == GuiTheme.AccentDark && deviceImage.Width >= 88,
+                "the detected device has a prominent name, highlight and larger picture");
+            detectionRunner.ShowDetected(null);
+            Assert(!connectionLabel.Visible && sourceBox.Text == "", "failed detection clears stale source and connection details");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
             mode.SelectedIndex = 4;
             Assert(!sourceBox.Enabled && preview.Enabled && zipBox.Enabled && sourceLabel.Text.Contains("C1–C7"),
@@ -117,6 +140,7 @@ partial class GearBackup
             sourceBox.Text = target; mode.SelectedIndex = 2;
             Assert(sourceLabel.Text.StartsWith("Restore destination") && sourceBox.AccessibleName == "Restore destination" && sourceBox.Enabled,
                 "restore mode clearly identifies the writable destination");
+            Assert(optionalFields.Visible && sourceBox.Visible, "restore automatically exposes the destination field");
             start.PerformClick();
             DriveGui(form, state, "Complete", false);
             Assert(File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI restore wizard restores selected snapshot");
@@ -168,6 +192,7 @@ partial class GearBackup
         Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
         TestPreviewFiltering();
         TestSettingsInteraction(root);
+        TestGuiThemes(root);
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
@@ -219,10 +244,10 @@ partial class GearBackup
         {
             dialog.Show(); Application.DoEvents();
             var tabs = FindGuiControl<TabControl>(dialog);
-            Assert(tabs.TabCount == 3 && tabs.TabPages[0].Text == "Backup" && tabs.TabPages[1].Text == "Restore", "settings are grouped by operation");
+            Assert(tabs.TabCount == 4 && tabs.TabPages[0].Text == "Backup" && tabs.TabPages[1].Text == "Restore" && tabs.TabPages[3].Text == "Appearance", "settings group operations and appearance separately");
             var history = (CheckBox)dialog.Controls.Find("PointInTimeHistory", true)[0];
-            Assert(history.Checked, "settings show history enabled by default");
-            history.Checked = false;
+            Assert(!history.Checked, "settings show history disabled by default");
+            history.Checked = true;
             tabs.SelectedIndex = 1;
             var recovery = (CheckBox)dialog.Controls.Find("RecoveryCopies", true)[0];
             var path = (TextBox)dialog.Controls.Find("RecoveryLocation", true)[0];
@@ -232,10 +257,93 @@ partial class GearBackup
             recovery.Checked = false;
             string expectedPath = path.Text;
             ((Button)dialog.Controls.Find("SaveSettings", true)[0]).PerformClick();
-            Assert(!config.PointInTimeHistory, "settings save the choice to disable history");
+            Assert(config.PointInTimeHistory, "settings save the choice to enable history");
             Assert(!config.Recovery && !config.Verify && !config.Thorough && config.HardLinks && config.RecoveryFolder == expectedPath,
                 "saving grouped settings preserves default-off options, recovery location and hidden settings: " +
                 config.Recovery + ", " + config.Verify + ", " + config.Thorough + ", " + config.HardLinks + ", " + config.RecoveryFolder + " / " + expectedPath);
+        }
+    }
+
+    static void TestGuiThemes(string root)
+    {
+        string settingsPath = Path.Combine(root, "theme-settings"); Directory.CreateDirectory(settingsPath);
+        var config = new Config { BackupFolder = root, SettingsDirectory = settingsPath, SourceFolder = Path.Combine(root, "card") };
+        try
+        {
+            using (var form = new MainForm(false, config))
+            using (var table = new PreviewDialog(new OperationPlan { Label = "Theme test", Actions = new List<string> { "New: song.txt" }, Bytes = 4 }))
+            {
+                form.Show(); table.Show(form); Application.DoEvents();
+                form.ShowDevice(Devices.OPXY, "MTP");
+                Assert(form.BackColor == Color.FromArgb(0, 128, 128), "retro theme is the default desktop palette");
+                var source = (TextBox)form.Controls.Find("SourceFolder", true)[0]; string previousSource = source.Text;
+                var grid = FindGuiControl<DataGridView>(table);
+                SetGuiTheme(form, 0, true);
+                Assert(GuiTheme.ThemeName == "original" && form.BackColor == Color.FromArgb(243, 245, 247), "saving Original recolors the main window immediately");
+                Assert(grid.BackgroundColor == Color.White && grid.DefaultCellStyle.BackColor == Color.White,
+                    "open dialog tables change along with the main window: " + grid.BackgroundColor + " / " + grid.DefaultCellStyle.BackColor);
+                Assert(grid.AlternatingRowsDefaultCellStyle.BackColor == GuiTheme.Surface &&
+                    grid.ColumnHeadersDefaultCellStyle.BackColor == GuiTheme.Background &&
+                    grid.DefaultCellStyle.SelectionBackColor == GuiTheme.AccentSoft,
+                    "table headers, alternating rows and selections use the selected palette");
+                Assert(source.Text == previousSource && ((Label)form.Controls.Find("DetectedDevice", true)[0]).Text.Contains("OP-XY"),
+                    "theme changes preserve source selections and detected device information");
+                Config loaded = null; WithUi(() => loaded = LoadConfig(settingsPath));
+                Assert(loaded.Theme == "original", "selected theme persists in the shared INI");
+                SetGuiTheme(form, 1, false);
+                Assert(GuiTheme.ThemeName == "original", "cancelling a theme change leaves the app unchanged");
+                WithUi(() => loaded = LoadConfig(settingsPath));
+                Assert(loaded.Theme == "original", "cancelling does not save the new theme");
+                using (var restarted = new MainForm(false, loaded))
+                    Assert(restarted.BackColor == Color.FromArgb(243, 245, 247), "startup applies the saved Original theme");
+                SetGuiTheme(form, 2, true);
+                Assert(GuiTheme.ThemeName == "original-dark" && form.BackColor == Color.FromArgb(19, 25, 30),
+                    "saving Original dark applies the charcoal palette immediately");
+                Assert(grid.DefaultCellStyle.BackColor == GuiTheme.Surface && grid.DefaultCellStyle.ForeColor == GuiTheme.Ink &&
+                    ((ComboBox)table.Controls.Find("PreviewFilter", true)[0]).BackColor == GuiTheme.Surface,
+                    "open dialog tables and native inputs use dark surfaces and readable text");
+                WithUi(() => loaded = LoadConfig(settingsPath));
+                Assert(loaded.Theme == "original-dark", "dark theme persists in the INI");
+                using (var restarted = new MainForm(false, loaded))
+                    Assert(restarted.BackColor == Color.FromArgb(19, 25, 30), "startup restores the dark palette");
+                string themedManual = Path.Combine(settingsPath, "Manual-original-dark.html");
+                File.WriteAllText(themedManual, "test");
+                Assert(MainForm.ManualPath(settingsPath, "original-dark") == themedManual, "Help selects the matching dark manual");
+                Assert(MainForm.ManualPath(settingsPath, "original") == Path.Combine(settingsPath, "Manual.html"), "Help falls back when a themed manual is absent");
+                SetGuiTheme(form, 1, true);
+                Assert(form.BackColor == Color.FromArgb(0, 128, 128) && grid.BackgroundColor == Color.FromArgb(255, 255, 240),
+                    "switching back to Retro restores the desktop and paper colors");
+                Assert(((Label)form.Controls.Find("DetectedDevice", true)[0]).ForeColor == GuiTheme.AccentDark,
+                    "switching themes restores the detected device highlight");
+            }
+        }
+        finally { GuiTheme.ApplyTheme("retro"); }
+    }
+    static void SetGuiTheme(MainForm form, int selected, bool save)
+    {
+        Exception failure = null;
+        using (var automation = new System.Windows.Forms.Timer { Interval = 20 })
+        {
+            automation.Tick += delegate {
+                foreach (Form owned in form.OwnedForms)
+                {
+                    if (!(owned is SettingsDialog)) continue;
+                    automation.Stop();
+                    try
+                    {
+                        var tabs = FindGuiControl<TabControl>(owned); tabs.SelectedIndex = 3;
+                        var theme = (ComboBox)owned.Controls.Find("ColorTheme", true)[0];
+                        Assert(theme.Items.Count == 3, "Settings offers Original, Retro and Original dark themes");
+                        theme.SelectedIndex = selected;
+                        if (save) ((Button)owned.Controls.Find("SaveSettings", true)[0]).PerformClick();
+                        else ((Button)owned.CancelButton).PerformClick();
+                    }
+                    catch (Exception ex) { failure = ex; owned.Close(); }
+                    break;
+                }
+            };
+            automation.Start(); ((Button)form.Controls.Find("OpenSettings", true)[0]).PerformClick();
+            if (failure != null) throw failure;
         }
     }
 
@@ -311,12 +419,25 @@ partial class GearBackup
             using (var dialog = new ProfileSettingsDialog(owner, config))
             {
                 dialog.Show(); Application.DoEvents();
+                Assert(dialog.Controls.Find("ProfileCategoryButtons", true)[0].Controls.Count == 3,
+                    "profile category buttons are present before and after rebuilding scope fields");
                 var scope = (ComboBox)dialog.Controls.Find("SettingsScope", true)[0]; scope.SelectedIndex = 0;
-                var table = (DataGridView)dialog.Controls.Find("ProfilePreferences", true)[0];
-                foreach (DataGridViewRow row in table.Rows) if (Equals(row.Tag, "PointInTimeHistory")) { row.Cells[0].Value = true; row.Cells[2].Value = "no"; }
+                var inherited = (CheckBox)dialog.Controls.Find("ProfileUseDefault_PointInTimeHistory", true)[0];
+                var historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_PointInTimeHistory", true)[0];
+                Assert(inherited.Checked && !historyValue.Enabled, "profile settings clearly disable values while using defaults");
+                inherited.Checked = false; historyValue.SelectedIndex = 1;
+                Assert(historyValue.Enabled && historyValue.Text == "Off", "custom profile values use plain On and Off choices");
+                scope.SelectedIndex = 1; scope.SelectedIndex = 0;
+                historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_PointInTimeHistory", true)[0];
+                Assert(historyValue.Text == "Off", "switching devices preserves unsaved settings");
                 ((Button)dialog.Controls.Find("SaveProfilePreferences", true)[0]).PerformClick();
                 Assert(!ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory && config.PointInTimeHistory,
                     "profile GUI saves an override without changing global settings");
+                ((Button)dialog.Controls.Find("ResetProfilePreferences", true)[0]).PerformClick();
+                Assert(historyValue.Text == "On", "reset displays the inherited value in the disabled field");
+                Assert(!ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory, "reset does not change saved preferences before Save changes");
+                ((Button)dialog.Controls.Find("SaveProfilePreferences", true)[0]).PerformClick();
+                Assert(ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory, "saving a reset returns to inherited preferences");
                 CheckGuiLayout(dialog, 150, Path.Combine(output, "profiles-150.png"));
             }
             Dictionary<string, byte[]> files;
@@ -350,12 +471,24 @@ partial class GearBackup
             typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(form, config);
             form.Show(); Application.DoEvents();
             ((TextBox)form.Controls.Find("SourceFolder", true)[0]).Text = Path.Combine(root, "source");
+            ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = "";
+            var emptyLocation = (Config)typeof(MainForm).GetMethod("CaptureConfig", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Invoke(form, new object[] { false });
+            Assert(emptyLocation.BackupFolder == DefaultBackupFolder(), "an empty GUI location uses the user profile Backup folder");
             ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = config.BackupFolder;
             ((TextBox)form.Controls.Find("Profile", true)[0]).Text = "Studio";
             ((ComboBox)form.Controls.Find("Operation", true)[0]).SelectedIndex = 0;
             ((Button)form.Controls.Find("StartOperation", true)[0]).PerformClick();
             var status = (Label)form.Controls.Find("OperationStatus", true)[0];
-            DriveGui(form, status, "Complete", false);
+            bool askedToCreate = false;
+            DriveGui(form, status, "Complete", false, dialog => {
+                if (dialog is ChoiceDialog)
+                {
+                    askedToCreate = true;
+                    Assert(!Directory.Exists(profileLocation), "GUI asks before creating the profile destination");
+                }
+            });
+            Assert(askedToCreate, "GUI presents the missing-folder creation question");
             string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { BackupFolder = profileLocation }), "profiles", "Studio"));
             Assert(backup != null && File.Exists(Path.Combine(backup, "song.txt")) && !Directory.Exists(SnapshotRoot(backup)),
                 "GUI backup applies profile location and inherited device history preferences before running");
@@ -409,10 +542,53 @@ partial class GearBackup
     static void TestScaledGuiLayouts()
     {
         string output = Path.Combine(Environment.CurrentDirectory, "tests", ".build");
-        foreach (int percent in new[] { 150, 200 })
+        foreach (int percent in new[] { 100, 150, 200 })
         {
             using (var form = new MainForm(true)) CheckGuiLayout(form, percent, Path.Combine(output, "main-" + percent + ".png"));
+            using (var form = new MainForm(true))
+            {
+                form.ShowDevice(Devices.OP1Field, "MTP");
+                CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + percent + ".png"));
+            }
+            using (var form = new MainForm(true))
+            {
+                form.Show(); ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
+                CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + percent + ".png"));
+            }
             using (var form = new SettingsDialog(new Config())) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
+            using (var form = new SettingsDialog(new Config()))
+            {
+                FindGuiControl<TabControl>(form).SelectedIndex = 3;
+                CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + percent + ".png"));
+            }
+            using (var form = new MainForm(true, new Config { Theme = "original" }))
+                CheckGuiLayout(form, percent, Path.Combine(output, "main-original-" + percent + ".png"));
+            GuiTheme.ApplyTheme("retro");
+            foreach (string theme in new[] { "original", "original-dark" })
+            {
+                using (var form = new MainForm(true, new Config { Theme = theme }))
+                    CheckGuiLayout(form, percent, Path.Combine(output, "main-" + theme + "-" + percent + ".png"));
+                using (var form = new MainForm(true, new Config { Theme = theme }))
+                {
+                    form.ShowDevice(Devices.OP1Field, "MTP");
+                    CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + theme + "-" + percent + ".png"));
+                }
+                using (var form = new MainForm(true, new Config { Theme = theme }))
+                {
+                    form.Show(); ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
+                    CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + theme + "-" + percent + ".png"));
+                }
+                using (var form = new SettingsDialog(new Config { Theme = theme }))
+                    CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + theme + "-" + percent + ".png"));
+                using (var form = new SettingsDialog(new Config { Theme = theme }))
+                {
+                    FindGuiControl<TabControl>(form).SelectedIndex = 3;
+                    CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + theme + "-" + percent + ".png"));
+                }
+                using (var form = new PreviewDialog(new OperationPlan { Label = "Review changes", Actions = new List<string> { @"New: Songs\demo.m8s" }, Bytes = 4 }))
+                    CheckGuiLayout(form, percent, Path.Combine(output, "preview-" + theme + "-" + percent + ".png"));
+            }
+            GuiTheme.ApplyTheme("retro");
             using (var form = new PreviewDialog(new OperationPlan { Label = "Review changes", Actions = new List<string> { @"New: Songs\demo.m8s" }, Bytes = 4 }))
                 CheckGuiLayout(form, percent, Path.Combine(output, "preview-" + percent + ".png"));
         }
@@ -474,6 +650,7 @@ partial class GearBackup
                     CollectGuiButtons(owned, buttons);
                     Button button = buttons.Find(b => b.Text == "All files" || b.Text == "Merge");
                     if (button == null) button = buttons.Find(b => b.Text == "Proceed" || b.Text == "Close preview" || b.Text == "Continue");
+                    if (button == null) button = buttons.Find(b => b.Text == "Yes");
                     if (button == null) throw new Exception("Unexpected GUI decision: " + owned.Text);
                     button.PerformClick();
                 }

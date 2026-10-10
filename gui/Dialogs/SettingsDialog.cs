@@ -24,6 +24,14 @@ partial class GearBackup
             var backup = PreferencePage(tabs, "Backup");
             var restore = PreferencePage(tabs, "Restore");
             var device = PreferencePage(tabs, "Device");
+            var appearance = PreferencePage(tabs, "Appearance");
+            appearance.Controls.Add(GuiTheme.Label("Color theme", 10, GuiTheme.Ink));
+            var theme = new ComboBox { Name = "ColorTheme", AccessibleName = "Color theme", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top };
+            GuiTheme.StyleComboBox(theme);
+            theme.Items.AddRange(new object[] { "Original — light gray and teal", "Retro — teal, navy, gray and cream", "Original (dark) — charcoal and teal" });
+            theme.SelectedIndex = config.Theme == "original-dark" ? 2 : config.Theme == "original" ? 0 : 1;
+            appearance.Controls.Add(theme);
+            appearance.Controls.Add(Explanation("Applies when you save. Help opens the manual matching your selected theme."));
             var verify = Check("Verify copied files", "VerifyCopies", config.Verify);
             var thorough = Check("Compare file contents", "CompareContents", config.Thorough);
             var review = Check("Review changes before copying", "ReviewChanges", config.Preview);
@@ -72,6 +80,7 @@ partial class GearBackup
                     config.PointInTimeHistory = history.Checked;
                     config.KeepOldVersions = (int)versions.Value; config.MaxNameLength = (int)length.Value;
                     config.Eject = (EjectMode)eject.SelectedIndex;
+                    config.Theme = theme.SelectedIndex == 2 ? "original-dark" : theme.SelectedIndex == 0 ? "original" : "retro";
                     DialogResult = DialogResult.OK; Close();
                 }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check recovery location"); }
@@ -79,7 +88,7 @@ partial class GearBackup
         }
         static TableLayoutPanel PreferencePage(TabControl tabs, string title)
         {
-            var page = new TabPage(title) { BackColor = Color.White, AutoScroll = true, Padding = new Padding(16) };
+            var page = new TabPage(title) { BackColor = GuiTheme.Surface, AutoScroll = true, Padding = new Padding(16) };
             var content = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             page.Controls.Add(content); tabs.TabPages.Add(page); return content;

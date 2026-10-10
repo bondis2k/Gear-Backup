@@ -24,7 +24,7 @@ Run `GearBackup-Portable-<version>.exe` to extract both executables and the offl
 
 The app creates `GearBackup.ini` beside the executables when it runs normally. To update the portable copy, close both interfaces and extract the new package into the same folder; existing settings and user files are left intact. You can move the whole folder to another Windows PC. Review the stored source and backup paths after moving it, since absolute paths and drive letters may differ.
 
-Portable packaging does not change the app's storage defaults: backups still default to the Windows Music folder, and MTP mirrors still use `%LOCALAPPDATA%\GearBackup\Devices` (or an existing legacy mirror location). Set **Backup location** to a folder on your portable drive if you want the backups there. Deleting the extracted application folder removes the portable app; backups, recovery folders and PC mirrors are separate unless you deliberately placed them inside it.
+Portable packaging does not change the app's storage defaults: backups still default to `%USERPROFILE%\Backup`, and MTP mirrors still use `%LOCALAPPDATA%\GearBackup\Devices` (or an existing legacy mirror location). Set **Backup location** to a folder on your portable drive if you want the backups there. Deleting the extracted application folder removes the portable app; backups, recovery folders and PC mirrors are separate unless you deliberately placed them inside it.
 
 ## Getting started
 
@@ -53,18 +53,24 @@ Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallba
 
 Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `GearBackup.exe` command-line interface remains available separately. Both executables use `GearBackup.ini` beside them and the same backup histories and file operations.
 
-![Gear Backup main window with source, backup location, profile, operation selector, Preview and Back up buttons, status and activity log.](assets/manual/gui-main.png)
+![Gear Backup main window focused on Detect device, operation, Preview and Back up, with a destination summary and collapsed More options.](assets/manual/gui-main.png)
 
-*The main window before a backup. `E:\` and `D:\Music backups` are example paths; choose the locations on your own PC.*
+*The main window keeps the everyday backup actions visible. The destination shown is an example; the default is your own `%USERPROFILE%\Backup` folder.*
 
-1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: M8 and Tracker Mini in USB drive mode, or OP-1 Field, OP-XY and X100VI over MTP. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
-2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
-3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too. Restore changes the source label to **Restore destination**; this is the folder or card that receives files. Check backups disables source selection because no device is needed.
-4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
+1. Connect your device and click **Detect device**. The header shows its name, picture and camera mode where available. M8 and Tracker Mini use USB drive mode; OP-1 Field, OP-XY and X100VI can use MTP. Detection selects the connected device for the next backup.
+2. Choose **Full backup** for a new copy or **Incremental backup** for changes since the latest backup, then click **Back up**. The compact backup-location summary shows where backups are configured to go. Review changes when prompted. You can also click **Preview** for a plan without writing files.
+
+**More options** exposes the source folder, backup location, profile and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave Profile blank for automatic identity. An empty backup location uses `%USERPROFILE%\Backup`. Saved source/profile selections open this section at startup so they remain visible; collapsing it preserves the values.
+
+![Expanded More options showing the optional source folder, backup location, profile and zip controls.](assets/manual/gui-main-options.png)
+
+Choose **Restore files** to restore a backup. More options expands automatically and labels the source as **Restore destination**, the folder or card that receives files. **Check backups** needs no source device and disables source selection. **Cancel** appears while an operation is running.
 
 An incremental run creates a full backup if this profile has no backups yet. An incomplete or failed latest backup offers Resume, New full backup, or Cancel. An unchanged incremental run needs no acceptance prompt. Full backups show overall progress without individual file progress.
 
-The header names the detected device beside its picture. Editing the source clears the detected indicator until the device is detected again. Progress shows the percentage and processed size when the current stage provides a total, plus elapsed time. Backup and restore completion shows copied, unchanged, removed and failed counts; **Open backup folder** or **Open restore folder** opens the result in Explorer. Integrity checks show their check summary and an action to open the selected backup location.
+The header shows the detected device in a large highlighted label beside its picture, with the connection or camera mode underneath. Detecting an MTP device clears any previous USB source path and drive selection; the next backup uses the connected MTP device. Editing the source clears the detected indicator until the device is detected again. Progress shows the percentage and processed size when the current stage provides a total, plus elapsed time. Backup and restore completion shows copied, unchanged, removed and failed counts; **Open backup folder** or **Open restore folder** opens the result in Explorer. Integrity checks show their check summary and an action to open the selected backup location.
+
+![Detected OP-1 Field highlighted in the main window with its MTP connection mode.](assets/manual/gui-detected-device.png)
 
 The change preview uses **Action**, **Path** and **Size** columns. Search paths with **Ctrl+F**, or filter additions, replacements, removals and unchanged entries. Removing a file or folder is highlighted. Filters only change which rows are displayed: **Proceed** applies the entire approved plan, including rows hidden by the current filter. An unchanged incremental backup still omits skipped files from its preview.
 
@@ -72,7 +78,11 @@ The change preview uses **Action**, **Path** and **Size** columns. Search paths 
 
 Restore opens dialogs for history, backup folder, saved snapshot/current files, and restore mode. All, bundle, single-file, dependent-sample, and merge/exact choices use the same rules described below. The current-files option is explicit in the snapshot selector; cancelling a dialog cancels the operation. Check backups needs no source card and lets you select a backup or all backups in a history.
 
-**Settings** groups preferences into **Backup**, **Restore** and **Device** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
+**Settings** groups preferences into **Backup**, **Restore**, **Device** and **Appearance** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, eject and theme preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
+
+In **Settings → Appearance**, choose **Original** for the light gray and teal palette, **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette (default). **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
+
+![Appearance settings with the Original, Original (dark) and Retro color theme selector.](assets/manual/gui-appearance.png)
 
 ![Gear Backup Preferences dialog with verification, content comparison, preview, recovery location, retention and ejection settings.](assets/manual/gui-settings.png)
 
@@ -80,18 +90,19 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 
 | GUI preference | INI setting | When to use it |
 |---|---|---|
+| **Color theme** (Appearance) | `Theme=original` / `Theme=original-dark` / `Theme=retro` | Choose the original, original dark or retro app palette. Default retro. |
 | **Verify copied files** | `Verify=yes` | Read copied files back and check their recorded checksums. Off by default. |
 | **Compare file contents** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
 | **Review changes before copying** | `Preview=yes` | Review the planned actions before proceeding. On by default; unchanged incremental backups need no confirmation. |
 | **Keep recovery copies before restoring** | `Recovery=yes` | Preserve target files that will be replaced or removed. Off by default. **Recovery location** sets `RecoveryFolder`; blank uses the default location. |
 
-For a first backup, select the source and backup location, leave Profile blank, choose **Full backup**, and click **Preview**. After reviewing the plan, click **Back up**. For later runs on the same card, choose **Incremental backup** to copy only additions and changes.
+For a first backup, connect the device, click **Detect device**, choose **Full backup**, and click **Back up**. Use **Preview** first if you want to inspect the plan without copying. For later runs on the same card, choose **Incremental backup** to copy only additions and changes.
 
 Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
 
 Click **About** in the header to see the installed application version. The same release version appears in the Windows executable properties and installer.
 
-Keyboard shortcuts: **Ctrl+Enter** starts the selected operation, **Ctrl+P** previews, **Ctrl+D** detects a device, **Ctrl+,** opens Settings, and **Esc** cancels an active operation or closes a dialog. **F1** or **Help** opens the offline `Manual.html` in your default browser. Use **Tab** and **Shift+Tab** to move between controls. The GUI declares DPI awareness, uses adaptive layouts, and scrolls content when the window cannot fit the screen; settings pages also scroll when space is limited.
+Keyboard shortcuts: **Ctrl+Enter** starts the selected operation, **Ctrl+P** previews, **Ctrl+D** detects a device, **Ctrl+,** opens Settings, and **Esc** cancels an active operation or closes a dialog. **F1** or **Help** opens the matching offline themed manual in your default browser. Use **Tab** and **Shift+Tab** to move between controls. The GUI declares DPI awareness, uses adaptive layouts, and scrolls content when the window cannot fit the screen; settings pages also scroll when space is limited.
 
 ## Teenage Engineering OP-1 Field
 
@@ -173,7 +184,9 @@ New backups are stored here:
 <BackupFolder>\Gear Backups\profiles\<profile>\<date>
 ```
 
-`BackupFolder` defaults to your Windows Music folder.
+`BackupFolder` defaults to `%USERPROFILE%\Backup`.
+
+When you start a backup and the selected backup location does not exist, Gear Backup asks whether to create it. Choose **Yes** to create the folder and continue, or **No** to cancel. This also applies to device/profile destinations and X100VI settings backups. Previewing does not create folders or ask this question.
 
 With `Profile=` empty, each history's name starts with its device, so the M8's and the Tracker Mini's are easy to tell apart. A drive root then uses its Windows volume serial number, for example `m8-card-1234ABCD` or `tracker-mini-card-06FE6B87`. A folder uses an identity derived from its full path (`m8-folder-…`), and an MTP device its serial (`op-xy-XXYWV10D`).
 
@@ -258,13 +271,13 @@ Older completed snapshots remain selectable even if the latest incremental run f
 
 ## Point-in-time history
 
-Point-in-time history is enabled by default (`PointInTimeHistory=yes`). To save disk space, open **Settings → Backup** and clear **Save point-in-time history**, or set this in `GearBackup.ini`:
+Point-in-time history is off by default (`PointInTimeHistory=no`) to save disk space. To keep restorable earlier states, open **Settings → Backup** and enable **Save point-in-time history**, or set this in `GearBackup.ini`:
 
 ```ini
-PointInTimeHistory=no
+PointInTimeHistory=yes
 ```
 
-With history off, backups save the browsable files and checksum list without snapshot manifests or the extra content store. A fresh backup typically needs roughly half the space of the default backup with copied history. Incremental backups, current-file restore, verification, integrity checks and ZIP creation still work; you cannot select a point in time from runs made with history off. `HardLinks` has no effect in this mode, and free-space planning excludes history objects.
+With history off, backups save the browsable files and checksum list without snapshot manifests or the extra content store. A fresh backup typically needs roughly half the space of a backup with copied history. Incremental backups, current-file restore, verification, integrity checks and ZIP creation still work; you cannot select a point in time from runs made with history off. `HardLinks` has no effect in this mode, and free-space planning excludes history objects.
 
 Changed files still keep dated old versions, deleted source files remain in the browsable backup, and each full backup still creates a separate folder. `KeepOldVersions` and `KeepBackups` control those copies independently; optional ZIPs also use extra space. Turning history off does not delete existing snapshots or objects. For the space saving on an existing history, start a new full backup with history off and manage older backup folders separately. Turning history back on captures subsequent runs; it cannot recreate snapshots for runs made while history was off.
 
@@ -445,7 +458,9 @@ Mirrors are temporary local copies of MTP devices. Removing one means the next b
 
 ### Preferences per device and profile
 
-Open **Profiles** and choose a device's defaults or an existing profile. To add a named profile, type its name in the selector. Check **Override** for each preference you want to change; unchecked rows inherit their values. Select a backup/recovery location row and use **Browse location**, or type a path. **Save overrides** saves this scope; **Use inherited settings** removes its overrides. Global settings are unchanged.
+Open **Profiles**, choose **Settings for a device** or **Settings for one backup profile**, then select its name. Use **New profile** to create a named profile. Settings are grouped into **Backup**, **Restore**, and **Advanced** tabs. Each setting shows its default: leave **Use default** checked to inherit it, or uncheck it to enter a different value. Folder fields have their own **Browse** button, and switches show **On** and **Off**.
+
+**Save changes** saves the selected device/profile. **Reset to defaults** selects inherited values; click **Save changes** to apply the reset. Unsaved edits are preserved while switching between devices/profiles, and closing warns before discarding them. Creating a preferences profile does not run a backup or select that profile in the main window; enter its name in the main **Profile** field when backing up. Global settings are unchanged.
 
 Preference priority is **global → device → profile**. Device defaults apply after source detection; named or automatic profile preferences then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup profile. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
 
@@ -482,7 +497,8 @@ Global preferences live in `GearBackup.ini`. Optional device and profile overrid
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `BackupFolder` | empty | Windows Music folder; base for backups and default recovery location. |
+| `BackupFolder` | empty | `%USERPROFILE%\Backup`; base for backups and default recovery location. |
+| `Theme` | `retro` | Global GUI color theme: `original` (light gray and teal) `original-dark` (charcoal and teal), or `retro` (teal, navy, gray and cream). |
 | `Mode` | `ask` | `ask`, `full`, or `incremental`. |
 | `Verify` | `no` | Enable automatic SHA-256 integrity comparisons for copies, restore sources, history objects, and recovery copies. |
 | `KeepBackups` | `0` | Number of backup folders to retain per profile; 0 keeps all. |
@@ -497,7 +513,7 @@ Global preferences live in `GearBackup.ini`. Optional device and profile overrid
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
 | `HardLinks` | `no` | On NTFS, store history as hard links to the backup files instead of second copies (see Point-in-time history). |
-| `PointInTimeHistory` | `yes` | Save dated snapshots and their content store. Set `no` for files and checksums only, avoiding the second history copy. Existing snapshots are preserved; old-version and full-backup retention are independent. |
+| `PointInTimeHistory` | `no` | Files and checksums only by default, avoiding the second history copy. Set `yes` to save dated snapshots and their content store. Existing snapshots are preserved; old-version and full-backup retention are independent. |
 
 ## Command line and exit codes
 
@@ -530,7 +546,7 @@ Unknown arguments and missing argument values are errors. The program remains in
 
 Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
 
-Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. The GUI build also generates `Manual.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
+Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. The GUI build also generates `Manual.html` plus `Manual-original.html`, `Manual-original-dark.html` and `Manual-retro.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
 
 Both wrappers use `build\build-app.ps1` for compiler paths, framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
 
