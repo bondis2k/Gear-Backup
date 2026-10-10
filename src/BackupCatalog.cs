@@ -66,8 +66,11 @@ partial class GearBackup
         return files;
     }
 
-    // A fingerprint of an item's files and folders (names, sizes, times), to notice changes between the
-    // scan and the cleanup. It guards against changes; it is not an integrity checksum.
+    // A fingerprint of an item's files (names, sizes, times) and folders (names), to notice changes between
+    // the scan and the cleanup. It guards against changes; it is not an integrity checksum. Folder times
+    // are left out: Windows updates a folder's time in its parent's listing a few milliseconds late, so a
+    // scan right after a backup could disagree with a later check although nothing changed. Any change to
+    // a file shows in the file's own entry, and an added or removed folder in the folder names.
     static string StorageStamp(string path, bool folder, out long bytes)
     {
         RejectRootLinks(path);
@@ -89,9 +92,7 @@ partial class GearBackup
         }
         var sorted = new List<DirectoryInfo>(directories);
         sorted.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
-        foreach (DirectoryInfo directory in sorted)
-            stamp.Append(directory.FullName).Append('\t').Append(directory.LastWriteTimeUtc.Ticks).Append('\n');
-        if (folder) stamp.Append(new DirectoryInfo(path).LastWriteTimeUtc.Ticks);
+        foreach (DirectoryInfo directory in sorted) stamp.Append(directory.FullName).Append('\\').Append('\n');
         using (var sha = System.Security.Cryptography.SHA256.Create())
             return ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(stamp.ToString())));
     }
