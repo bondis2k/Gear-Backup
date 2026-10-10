@@ -45,10 +45,11 @@ partial class M8Backup
     {
         if (previous == null) return incremental;
         string status = BackupStatus(previous);
-        if (status != "incomplete" && status != "failed") return incremental;
+        if (!Status.Unfinished(status)) return incremental;
         OperationOutput.WriteLine("  Latest backup is " + status + ". Resume uses " +
             (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
-        char answer = AskKey("  [R]esume into it, [N]ew full backup, or [C]ancel? ", "rnc");
+        char answer = Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),
+            new Option('n', "New full backup"), new Option('c', "Cancel"));
         if (answer == 'c') return null;
         return answer == 'r';
     }

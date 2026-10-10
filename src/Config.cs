@@ -9,11 +9,11 @@ partial class M8Backup
     internal class Config
     {
         public string BackupFolder;
-        public string Mode = "ask";     // ask, full or incremental
+        public BackupMode Mode = BackupMode.Ask;
         public bool Verify = false;
         public int KeepBackups = 0;     // 0 = keep all
         public int MaxNameLength = 64;  // 0 = don't check
-        public string Eject = "no";     // no, ask or yes
+        public EjectMode Eject = EjectMode.No;
         public int KeepOldVersions = 0; // 0 = keep all
         public bool Recovery = false;
         public string RecoveryFolder = "";
@@ -133,13 +133,13 @@ partial class M8Backup
     {
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
             { "BackupFolder", config.BackupFolder }, { "SourceFolder", config.SourceFolder }, { "Profile", config.Profile },
-            { "Mode", config.Mode }, { "Verify", config.Verify ? "yes" : "no" },
+            { "Mode", config.Mode.ToString().ToLowerInvariant() }, { "Verify", config.Verify ? "yes" : "no" },
             { "Thorough", config.Thorough ? "yes" : "no" }, { "Preview", config.Preview ? "yes" : "no" },
             { "HardLinks", config.HardLinks ? "yes" : "no" },
             { "Recovery", config.Recovery ? "yes" : "no" }, { "RecoveryFolder", config.RecoveryFolder },
             { "KeepBackups", config.KeepBackups.ToString(System.Globalization.CultureInfo.InvariantCulture) },
             { "KeepOldVersions", config.KeepOldVersions.ToString(System.Globalization.CultureInfo.InvariantCulture) },
-            { "MaxNameLength", config.MaxNameLength.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "Eject", config.Eject }
+            { "MaxNameLength", config.MaxNameLength.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "Eject", config.Eject.ToString().ToLowerInvariant() }
         };
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var text = new StringBuilder();
@@ -190,7 +190,9 @@ partial class M8Backup
                 if (value.Length > 0) config.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value));
                 return;
             case "mode":
-                if (lower == "ask" || lower == "full" || lower == "incremental") config.Mode = lower;
+                if (lower == "ask") config.Mode = BackupMode.Ask;
+                else if (lower == "full") config.Mode = BackupMode.Full;
+                else if (lower == "incremental") config.Mode = BackupMode.Incremental;
                 else if (value.Length > 0) WarnSetting(key, value, "ask, full or incremental");
                 return;
             case "verify":
@@ -203,7 +205,9 @@ partial class M8Backup
                 else if (value.Length > 0) WarnSetting(key, value, "a number, 0 = keep all");
                 return;
             case "eject":
-                if (lower == "no" || lower == "ask" || lower == "yes") config.Eject = lower;
+                if (lower == "no") config.Eject = EjectMode.No;
+                else if (lower == "ask") config.Eject = EjectMode.Ask;
+                else if (lower == "yes") config.Eject = EjectMode.Yes;
                 else if (value.Length > 0) WarnSetting(key, value, "no, ask or yes");
                 return;
             case "keepoldversions":

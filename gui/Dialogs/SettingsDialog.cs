@@ -33,7 +33,7 @@ partial class M8Backup
             layout.Controls.Add(GuiTheme.Label("Zero keeps all backups/versions or disables name warnings.", 9, GuiTheme.Muted));
             var eject = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
             eject.Items.AddRange(new object[] { "Leave M8 connected", "Ask before ejecting M8", "Eject M8 after completion" });
-            eject.SelectedIndex = config.Eject == "yes" ? 2 : config.Eject == "ask" ? 1 : 0; layout.Controls.Add(eject);
+            eject.SelectedIndex = (int)config.Eject; layout.Controls.Add(eject);
             var actions = new FlowLayoutPanel { Width = 580, Height = 50, Padding = new Padding(0, 12, 0, 0) };
             var save = GuiTheme.Button("Save settings", true); var cancel = GuiTheme.Button("Cancel", false); cancel.DialogResult = DialogResult.Cancel;
             actions.Controls.Add(save); actions.Controls.Add(cancel); layout.Controls.Add(actions); AcceptButton = save; CancelButton = cancel;
@@ -43,7 +43,7 @@ partial class M8Backup
                     config.RecoveryFolder = ExpandPath(recoveryPath.Text); config.Verify = verify.Checked; config.Thorough = thorough.Checked;
                     config.Recovery = recovery.Checked; config.Preview = review.Checked; config.KeepBackups = (int)backups.Value;
                     config.KeepOldVersions = (int)versions.Value; config.MaxNameLength = (int)length.Value;
-                    config.Eject = eject.SelectedIndex == 2 ? "yes" : eject.SelectedIndex == 1 ? "ask" : "no";
+                    config.Eject = (EjectMode)eject.SelectedIndex;
                     DialogResult = DialogResult.OK; Close();
                 }
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check recovery location"); }

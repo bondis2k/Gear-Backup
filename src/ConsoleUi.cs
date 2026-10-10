@@ -1,28 +1,41 @@
 // Console questions, progress line and formatting helpers.
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 
 partial class M8Backup
 {
-    static bool AskInConsole(string question)
-    {
-        return AskKey(question, "yn") == 'y';
-    }
+    static readonly Option Yes = new Option('y', "Yes"), No = new Option('n', "No");
 
-    // Waits for one of the allowed keys (case-insensitive) and returns it in lower case.
-    static char AskKey(string question, string allowed)
+    // Asks a question with a fixed set of answers; returns the chosen option's key.
+    static char Ask(string question, params Option[] options)
     {
         OperationContext.Current.CheckCancellation();
-        char answer = OperationContext.Current.Interaction.ChooseKey(question, allowed);
+        char answer = OperationContext.Current.Interaction.Choose(question, options);
         OperationContext.Current.CheckCancellation();
         return answer;
     }
 
-    static int AskNumber(string question, int max)
+    static bool AskYesNo(string question)
+    {
+        return Ask(question, Yes, No) == 'y';
+    }
+
+    // Lets the user pick one of `items`; 1..items.Count, or 0 for noneLabel / Enter (see ChooseItem).
+    static int AskItem(string question, IList<string> items, string noneLabel = null)
     {
         OperationContext.Current.CheckCancellation();
-        int answer = OperationContext.Current.Interaction.ChooseNumber(question, max);
+        int answer = OperationContext.Current.Interaction.ChooseItem(question, items, noneLabel);
+        OperationContext.Current.CheckCancellation();
+        return answer;
+    }
+
+    // Free text such as a search or a path; null when cancelled.
+    static string AskText(string question)
+    {
+        OperationContext.Current.CheckCancellation();
+        string answer = OperationContext.Current.Interaction.AskText(question);
         OperationContext.Current.CheckCancellation();
         return answer;
     }
@@ -35,7 +48,7 @@ partial class M8Backup
         public void WriteLine(string text) { Console.WriteLine(text); }
         // Reads key by key rather than Console.ReadLine, so Ctrl+C can cancel while waiting for input.
         // Redirected input (tests, scripts) is read as plain lines.
-        public string ReadLine()
+        string ReadLine()
         {
             if (Console.IsInputRedirected || Console.In is System.IO.StringReader) return Console.ReadLine();
             var text = new StringBuilder();
@@ -71,8 +84,7 @@ partial class M8Backup
         public void ReportProgress(OperationProgress progress)
         {
             if (Console.IsOutputRedirected) return;
-            if (progress.OverallOnly && (progress.Stage == "Copying" || progress.Stage == "Hashing" || progress.Stage == "Verifying" ||
-                progress.Stage == "Comparing" || progress.Stage == "Scanning backup")) return;
+            if (progress.OverallOnly && Stage.IsFileDetail(progress.Stage)) return;
             DateTime now = DateTime.UtcNow;
             bool changed = progress.Stage != lastStage;
             bool finished = progress.TotalBytes > 0 && progress.Bytes == progress.TotalBytes;
@@ -80,7 +92,7 @@ partial class M8Backup
             if (changed) Console.WriteLine();
             lastStage = progress.Stage;
             lastProgress = now;
-            if (progress.Stage == "Backup copy")
+            if (progress.Stage == Stage.BackupCopy)
             {
                 int percent = progress.TotalBytes == 0 ? 100 : (int)(progress.Bytes * 100 / progress.TotalBytes);
                 Console.Write("\r  {0,3}%  {1}/{2} files processed      ", percent, progress.Files, progress.TotalFiles);
@@ -96,12 +108,51 @@ partial class M8Backup
             if (plan.ShowDetails || plan.PreviewOnly)
                 foreach (string line in plan.Actions) Console.WriteLine("    " + line);
             if (plan.PreviewOnly) { Console.WriteLine("  Preview only; no files changed."); return false; }
-            return !plan.ShowDetails || ChooseKey("  Proceed? (y/n) ", "yn") == 'y';
+            return !plan.ShowDetails || Choose("Proceed?", new[] { Yes, No }) == 'y';
         }
 
-        public char ChooseKey(string question, string allowed)
+        // Yes/no questions end in "(y/n)". When every label contains its key's letter, the options are shown
+        // inline ("[R]eplace them, [K]eep them or [C]ancel"); otherwise as a numbered menu ("    1) Full backup").
+        public char Choose(string question, IList<Option> options)
         {
-            Console.Write(question);
+            var keys = new StringBuilder();
+            foreach (Option option in options) keys.Append(char.ToLowerInvariant(option.Key));
+            string allowed = keys.ToString();
+            bool inline = true;
+            foreach (Option option in options)
+                if (option.Label.IndexOf(option.Key.ToString(), StringComparison.OrdinalIgnoreCase) < 0) inline = false;
+
+            if (allowed == "yn") Console.Write("  " + question + " (y/n) ");
+            else if (inline)
+            {
+                var labels = new List<string>();
+                foreach (Option option in options) labels.Add(Bracket(option));
+                Console.Write("  " + question + " " + JoinOr(labels) + "? ");
+            }
+            else
+            {
+                foreach (Option option in options) Console.WriteLine("    {0}) {1}", option.Key, option.Label);
+                Console.Write("  " + question + " (" + JoinOr(new List<string>(Array.ConvertAll(allowed.ToCharArray(), c => c.ToString()))) + ") ");
+            }
+            return ReadKeyFrom(allowed);
+        }
+
+        // "Replace them" with key 'r' -> "[R]eplace them".
+        static string Bracket(Option option)
+        {
+            int i = option.Label.IndexOf(option.Key.ToString(), StringComparison.OrdinalIgnoreCase);
+            return option.Label.Substring(0, i) + "[" + char.ToUpperInvariant(option.Label[i]) + "]" + option.Label.Substring(i + 1);
+        }
+
+        // "a, b or c"
+        static string JoinOr(List<string> items)
+        {
+            if (items.Count < 2) return string.Join("", items.ToArray());
+            return string.Join(", ", items.GetRange(0, items.Count - 1).ToArray()) + " or " + items[items.Count - 1];
+        }
+
+        char ReadKeyFrom(string allowed)
+        {
             while (true)
             {
                 char c;
@@ -117,25 +168,33 @@ partial class M8Backup
             }
         }
 
-        // Reads a number from 1 to max; returns 0 if the user just presses Enter.
-        public int ChooseNumber(string question, int max)
+        // Prints the numbered list and reads a number; Enter returns 0.
+        public int ChooseItem(string question, IList<string> items, string noneLabel)
         {
+            for (int i = 0; i < items.Count; i++) Console.WriteLine("    {0,2}) {1}", i + 1, items[i]);
+            string enter = noneLabel == null ? "Enter to cancel" : "Enter for " + noneLabel.ToLowerInvariant();
             while (true)
             {
-                Console.Write(question);
+                Console.Write("  " + question + " Number, or " + enter + ": ");
                 string line = ReadLine();
                 if (line == null || line.Trim().Length == 0) return 0;
                 int n;
-                if (int.TryParse(line.Trim(), out n) && n >= 1 && n <= max) return n;
-                Console.WriteLine("  Please enter a number from 1 to " + max + ".");
+                if (int.TryParse(line.Trim(), out n) && n >= 1 && n <= items.Count) return n;
+                Console.WriteLine("  Please enter a number from 1 to " + items.Count + ".");
             }
+        }
+
+        public string AskText(string question)
+        {
+            Console.Write("  " + question + " ");
+            return ReadLine();
         }
 
     }
 
     static void PrintProgress(long processedBytes, long totalBytes, int done, int total, long copiedBytes)
     {
-        OperationContext.Current.Progress("Backup copy", "", processedBytes, totalBytes, done, total);
+        OperationContext.Current.Progress(Stage.BackupCopy, "", processedBytes, totalBytes, done, total);
     }
 
     static string FormatSize(long bytes)

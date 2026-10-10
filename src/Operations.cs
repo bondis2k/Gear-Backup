@@ -13,14 +13,26 @@ partial class M8Backup
         void Write(string text);
         void WriteLine(string text);
         void WriteColored(string text, ConsoleColor color);
-        string ReadLine();
-        // One of the characters in `allowed`, e.g. "rkc" for Replace / Keep / Cancel.
-        char ChooseKey(string question, string allowed);
-        // 1..max from a numbered list printed just before; 0 means "none" / Enter.
-        int ChooseNumber(string question, int max);
+        // A question with a fixed set of answers; returns the chosen option's Key.
+        char Choose(string question, IList<Option> options);
+        // Picks one of `items`: 1..items.Count. Returns 0 for `noneLabel` (e.g. "Search again"), or, when
+        // noneLabel is null, for Enter in the console. Cancelling a GUI dialog cancels the operation.
+        int ChooseItem(string question, IList<string> items, string noneLabel);
+        // Free text such as a search or a path; null when cancelled.
+        string AskText(string question);
         // Shows the planned actions; true to go ahead.
         bool ReviewPlan(OperationPlan plan);
         void ReportProgress(OperationProgress progress);
+    }
+
+    // The list of actions a backup or restore is about to take, for the preview.
+    // One answer to a question: the key the console accepts, and the label both front ends show.
+    // The console brackets the key's letter in the label ("[R]eplace them"); the GUI makes a button.
+    internal sealed class Option
+    {
+        public readonly char Key;
+        public readonly string Label;
+        public Option(char key, string label) { Key = key; Label = label; }
     }
 
     // The list of actions a backup or restore is about to take, for the preview.
@@ -105,7 +117,6 @@ partial class M8Backup
         public static void WriteLine(object value) { WriteLine(value == null ? "" : value.ToString()); }
         public static void WriteLine(string text) { OperationContext.Current.Interaction.WriteLine(text); }
         public static void WriteLine(string format, params object[] values) { WriteLine(string.Format(format, values)); }
-        public static string ReadLine() { OperationContext.Current.CheckCancellation(); return OperationContext.Current.Interaction.ReadLine(); }
     }
 
 

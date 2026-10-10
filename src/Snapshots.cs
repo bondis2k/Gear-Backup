@@ -48,7 +48,7 @@ partial class M8Backup
             rows.Append("D\t").Append(Encode(folder.Substring(source.Length))).Append('\n');
         foreach (FileInfo original in scan.Files)
         {
-            OperationContext.Current.Progress("Saving history", original.FullName, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingHistory, original.FullName, 0, 0);
             string relative = original.FullName.Substring(source.Length);
             string path = SafePath(backup, relative);
             string hash;
@@ -141,9 +141,9 @@ partial class M8Backup
         files.Sort(StringComparer.OrdinalIgnoreCase);
         files.Reverse();
         if (files.Count == 0) return null;
-        OperationOutput.WriteLine("  Saved points in time:");
-        for (int i = 0; i < files.Count; i++) OperationOutput.WriteLine("    {0}) {1}", i + 1, Path.GetFileNameWithoutExtension(files[i]));
-        int pick = AskNumber("  Choose snapshot (Enter = browse current backup files): ", files.Count);
+        var names = new List<string>();
+        foreach (string file in files) names.Add(Path.GetFileNameWithoutExtension(file));
+        int pick = AskItem("Restore from which saved point in time?", names, "Current backup files (no snapshot)");
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
 
@@ -189,7 +189,7 @@ partial class M8Backup
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
         {
-            OperationContext.Current.Progress("Checking history", manifest, 0, 0);
+            OperationContext.Current.Progress(Stage.CheckingHistory, manifest, 0, 0);
             try
             {
                 Snapshot snapshot = ReadSnapshot(backup, manifest);

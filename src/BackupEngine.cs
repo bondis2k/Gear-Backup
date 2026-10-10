@@ -174,7 +174,7 @@ partial class M8Backup
             scan = new ScanResult();
             CollectFiles(source, scan);
 
-            resuming = incremental && (BackupStatus(dest) == "incomplete" || BackupStatus(dest) == "failed");
+            resuming = incremental && Status.Unfinished(BackupStatus(dest));
             states = new FileState[scan.Files.Count];
             Dictionary<string, string> oldSums = previous == null ? null : LoadChecksums(previous);
             var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -185,7 +185,7 @@ partial class M8Backup
             bool thoroughNow = config.Thorough && incremental;
             for (int i = 0; i < scan.Files.Count; i++)
             {
-                OperationContext.Current.Progress("Planning backup", scan.Files[i].FullName, 0, 0, i, scan.Files.Count);
+                OperationContext.Current.Progress(Stage.PlanningBackup, scan.Files[i].FullName, 0, 0, i, scan.Files.Count);
                 FileInfo file = scan.Files[i];
                 string relative = Relative(file);
                 string comparedHash = null;
@@ -246,7 +246,7 @@ partial class M8Backup
             OperationContext.Current.CheckCancellation();
             // Mark before the first mutation. A killed process leaves an incomplete status.
             Directory.CreateDirectory(dest);
-            SetBackupStatus(dest, "incomplete");
+            SetBackupStatus(dest, Status.Incomplete);
             foreach (string folder in scan.Folders)
                 Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
 
@@ -391,7 +391,7 @@ partial class M8Backup
                 if (!sums.TryGetValue(relative, out newHash)) continue;  // copy failed; keep the metadata result
                 if (oldSums == null || !oldSums.TryGetValue(relative, out oldHash))
                 {
-                    OperationContext.Current.Progress("Comparing", relative, 0, 0);
+                    OperationContext.Current.Progress(Stage.Comparing, relative, 0, 0);
                     oldHash = HashFile(SafePath(previous, relative));  // older backup without a checksum list
                 }
                 states[i] = newHash == oldHash ? FileState.Same : FileState.Changed;
@@ -493,7 +493,7 @@ partial class M8Backup
             }
             OperationOutput.WriteLine();
 
-            SetBackupStatus(dest, failed == 0 ? "complete" : "failed");
+            SetBackupStatus(dest, failed == 0 ? Status.Complete : Status.Failed);
             WriteColored("  " + status, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
             OperationOutput.WriteLine();
         }

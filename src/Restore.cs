@@ -11,9 +11,9 @@ partial class M8Backup
         if (backups.Count == 0) { OperationOutput.WriteLine("  No backups found."); return new OperationResult { ExitCode = 1 }; }
         var choices = new List<string>(backups);
         choices.Reverse();
-        for (int i = 0; i < choices.Count; i++)
-            OperationOutput.WriteLine("    {0}) {1} [{2}]", i + 1, Path.GetFileName(choices[i]), BackupStatus(choices[i]));
-        int pick = AskNumber("  Restore from which backup? Enter = cancel: ", choices.Count);
+        var labels = new List<string>();
+        foreach (string choice in choices) labels.Add(Path.GetFileName(choice) + " [" + BackupStatus(choice) + "]");
+        int pick = AskItem("Restore from which backup?", labels);
         if (pick == 0) return new OperationResult();
         string backup = choices[pick - 1];
         Snapshot snapshot = ChooseSnapshot(backup);
@@ -21,11 +21,12 @@ partial class M8Backup
         if (!historical)
         {
             string status = BackupStatus(backup);
-            if (status != "complete" && !AskInConsole("  Backup status is " + status + ". Browse its available files anyway? (y/n) ")) return new OperationResult();
+            if (status != Status.Complete && !AskYesNo("Backup status is " + status + ". Browse its available files anyway?")) return new OperationResult();
             snapshot = CurrentBackup(backup);
         }
         OperationOutput.WriteLine("  Selected: " + snapshot.Name);
-        char mode = AskKey("  Restore [A]ll, a [B]undle, a [S]ingle file, or a song with [D]ependent samples? ", "absd");
+        char mode = Ask("What should be restored?", new Option('a', "All files"), new Option('b', "Bundle"),
+            new Option('s', "Single file"), new Option('d', "Song with dependent samples"));
         List<RestoreEntry> items;
         string bundle = null;
         if (mode == 'a') items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
@@ -43,7 +44,7 @@ partial class M8Backup
             items = mode == 'd' ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
             if (!historical && IsOldVersion(file.Relative))
             {
-                if (AskKey("  Restore under the [O]riginal name, or keep the [D]ated name? ", "od") == 'o')
+                if (Ask("Restore this old version under which name?", new Option('o', "Original name"), new Option('d', "Dated name")) == 'o')
                 {
                     var renamed = new RestoreEntry { Relative = OriginalName(file.Relative), StoredPath = file.StoredPath,
                         Hash = file.Hash, Size = file.Size, ModifiedTicks = file.ModifiedTicks, CreatedTicks = file.CreatedTicks };
@@ -54,7 +55,8 @@ partial class M8Backup
         if (items.Count == 0) { OperationOutput.WriteLine("  No files selected."); return new OperationResult(); }
 
         // Exact restore is available only for manifests, whose file membership is authoritative.
-        bool exact = historical && mode == 'a' && AskKey("  [M]erge with the card, or [E]xact snapshot (remove extra user files)? ", "me") == 'e';
+        bool exact = historical && mode == 'a' && Ask("How should the snapshot be restored?", new Option('m', "Merge"),
+            new Option('e', "Exact snapshot (remove extra files)")) == 'e';
         return new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current);
     }
 
@@ -156,7 +158,7 @@ partial class M8Backup
         var sums = new StringBuilder();
         foreach (string relative in paths)
         {
-            OperationContext.Current.Progress("Saving recovery", relative, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingRecovery, relative, 0, 0);
             string from = SafePath(targetRoot, relative), to = SafePath(folder, relative);
             AssertTargetUnchanged(from, targetHashes[relative]);
             Directory.CreateDirectory(Path.GetDirectoryName(to));
@@ -185,16 +187,16 @@ partial class M8Backup
     {
         while (true)
         {
-            OperationOutput.Write("  Search file name (Enter = songs, q = cancel): ");
-            string filter = OperationOutput.ReadLine();
+            string filter = AskText("Search file name (Enter = songs, q = cancel):");
             if (filter == null || filter.Trim().Equals("q", StringComparison.OrdinalIgnoreCase)) return null;
             filter = filter.Trim();
             var matches = snapshot.Files.FindAll(f => (!songsOnly || IsSong(f.Relative)) &&
                 (filter.Length == 0 ? IsSong(f.Relative) : f.Relative.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0));
             matches.Sort((a, b) => string.Compare(a.Relative, b.Relative, StringComparison.OrdinalIgnoreCase));
             if (matches.Count == 0) { OperationOutput.WriteLine("  No matching files."); continue; }
-            for (int i = 0; i < matches.Count; i++) OperationOutput.WriteLine("    {0}) {1} ({2})", i + 1, matches[i].Relative, FormatSize(matches[i].Size));
-            int pick = AskNumber("  Choose file (Enter = search again): ", matches.Count);
+            var labels = new List<string>();
+            foreach (RestoreEntry match in matches) labels.Add(match.Relative + " (" + FormatSize(match.Size) + ")");
+            int pick = AskItem("Choose a file.", labels, "Search again");
             if (pick > 0) return matches[pick - 1];
         }
     }
@@ -211,8 +213,7 @@ partial class M8Backup
         var list = new List<string>(names);
         list.Sort(StringComparer.OrdinalIgnoreCase);
         if (list.Count == 0) { OperationOutput.WriteLine("  No bundles found. Create a bundle on the M8 before backing up."); return null; }
-        for (int i = 0; i < list.Count; i++) OperationOutput.WriteLine("    {0}) {1}", i + 1, list[i]);
-        int pick = AskNumber("  Choose bundle, Enter = cancel: ", list.Count);
+        int pick = AskItem("Choose a bundle.", list);
         return pick == 0 ? null : list[pick - 1];
     }
 }

@@ -57,11 +57,11 @@ partial class M8Backup
         if (ListBackups(root).Count > 0) roots.Add(root);
         roots.Sort(StringComparer.OrdinalIgnoreCase);
         if (roots.Count == 0) return preferred ?? root;
-        OperationOutput.WriteLine("  Backup histories:");
-        for (int i = 0; i < roots.Count; i++)
-            OperationOutput.WriteLine("    {0}) {1}{2}", i + 1, roots[i] == root ? "Legacy backups" : Path.GetFileName(roots[i]),
-                string.Equals(roots[i], preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : "");
-        int pick = AskNumber("  Choose history, Enter = cancel: ", roots.Count);
+        var labels = new List<string>();
+        foreach (string history in roots)
+            labels.Add((history == root ? "Legacy backups" : Path.GetFileName(history)) +
+                (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
+        int pick = AskItem("Choose a backup history.", labels);
         return pick == 0 ? null : roots[pick - 1];
     }
 
@@ -87,8 +87,7 @@ partial class M8Backup
             if (source == null)
             {
                 OperationOutput.WriteLine("  No M8 detected. Select an SD card in a reader or a folder instead.");
-                OperationOutput.Write("  Source path (Enter = cancel): ");
-                source = ExpandPath(OperationOutput.ReadLine());
+                source = ExpandPath(AskText("Source path (Enter = cancel):"));
             }
         }
         if (string.IsNullOrEmpty(source)) return null;
@@ -169,12 +168,12 @@ partial class M8Backup
         TryDelete(rollback);
     }
 
-    // "incomplete" while a backup runs (or after it was interrupted), then "complete" or "failed".
-    // Backups made before status files existed report "legacy (status unknown)".
+    // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
+    // Backups made before status files existed report Status.Legacy.
     static string BackupStatus(string folder)
     {
         string path = Path.Combine(folder, ".m8backup", "status.txt");
-        return File.Exists(path) ? File.ReadAllText(path).Trim() : "legacy (status unknown)";
+        return File.Exists(path) ? File.ReadAllText(path).Trim() : Status.Legacy;
     }
 
     static void SetBackupStatus(string folder, string status)

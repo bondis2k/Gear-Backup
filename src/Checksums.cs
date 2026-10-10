@@ -46,7 +46,7 @@ partial class M8Backup
         int count = 0;
         foreach (string path in files)
         {
-            OperationContext.Current.Progress("Saving checksums", path, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingChecksums, path, 0, 0);
             if (IsBackupMetaFile(path)) continue;
             string relative = path.Substring(folder.Length).TrimStart('\\');
             string hash;
@@ -63,41 +63,37 @@ partial class M8Backup
 
     // ---- Check backups ----
 
-    // Lets the user pick one backup (or all) and checks the files against their checksum lists.
-    static int CheckBackups(List<string> backups, out string title, out string summary)
+    // Lets the user pick one backup, or all of them (the last entry), and checks them against their
+    // checksum lists. Used by both the CLI and the GUI. Title is null if nothing was checked.
+    static OperationResult RunCheck(List<string> backups)
     {
-        title = summary = null;
         if (backups.Count == 0)
         {
             WriteColored("  No backups found to check.", ConsoleColor.Yellow);
-            return 1;
+            return new OperationResult { ExitCode = 1 };
         }
 
         WriteColored("  Check backups for damaged files", ConsoleColor.Cyan);
         var newestFirst = new List<string>(backups);
         newestFirst.Reverse();
-        int shown = Math.Min(newestFirst.Count, 20);
-        for (int i = 0; i < shown; i++)
-            OperationOutput.WriteLine("    {0,2}) {1} [{2}]", i + 1, Path.GetFileName(newestFirst[i]), BackupStatus(newestFirst[i]));
-
-        List<string> toCheck = null;
-        while (toCheck == null)
+        var labels = new List<string>();
+        foreach (string backup in newestFirst) labels.Add(Path.GetFileName(backup) + " [" + BackupStatus(backup) + "]");
+        labels.Add("All " + newestFirst.Count + " backups in this history");
+        int pick = AskItem("Check which backup?", labels);
+        if (pick == 0)
         {
-            OperationOutput.Write("  Check which backup? Number, A = all " + newestFirst.Count + " backups, Enter = cancel: ");
-            string line = (OperationOutput.ReadLine() ?? "").Trim();
-            int n;
-            if (line.Length == 0)
-            {
-                OperationOutput.WriteLine("  Check cancelled.");
-                return 0;
-            }
-            if (line.Equals("a", StringComparison.OrdinalIgnoreCase)) toCheck = newestFirst;
-            else if (int.TryParse(line, out n) && n >= 1 && n <= shown) toCheck = new List<string> { newestFirst[n - 1] };
-            else OperationOutput.WriteLine("  Please enter a number from 1 to " + shown + ", or A.");
+            OperationOutput.WriteLine("  Check cancelled.");
+            return new OperationResult();
         }
+        List<string> toCheck = pick == labels.Count ? newestFirst : new List<string> { newestFirst[pick - 1] };
         OperationOutput.WriteLine();
+        return new IntegrityEngine().Run(toCheck, OperationContext.Current);
+    }
 
-        OperationResult result = new IntegrityEngine().Run(toCheck, OperationContext.Current);
+    // Returns the exit code; title/summary are for the final notification (null if nothing was done).
+    static int CheckBackups(List<string> backups, out string title, out string summary)
+    {
+        OperationResult result = RunCheck(backups);
         title = result.Title;
         summary = result.Summary;
         return result.ExitCode;
@@ -113,7 +109,7 @@ partial class M8Backup
         if (sums == null)
         {
             WriteColored("    No checksum list: this backup was made before checksums were saved.", ConsoleColor.Yellow);
-            if (AskInConsole("    Create one now from the files as they are? (y/n) "))
+            if (AskYesNo("Create one now from the files as they are?"))
             {
                 int count = WriteChecksums(backup, null);
                 OperationOutput.WriteLine("    Checksum list created for {0:N0} files. Future checks will compare against it.", count);
@@ -162,7 +158,7 @@ partial class M8Backup
                 damaged++;
                 if (hash != null) problems.Add("damaged: " + entry.Key);
             }
-            OperationContext.Current.Progress("Checking backup", entry.Key, doneBytes, totalBytes, done, sums.Count);
+            OperationContext.Current.Progress(Stage.CheckingBackup, entry.Key, doneBytes, totalBytes, done, sums.Count);
         }
         OperationOutput.WriteLine();
 

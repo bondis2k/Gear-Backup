@@ -1,6 +1,6 @@
 // Focused tests for the helpers the backup, restore and check workflows depend on: change summaries,
 // name warnings, file classification, comparisons, path safety, checksum lists, settings, retention,
-// the resume question and the zip's failure paths. Called from RunTests in TestRunner.cs.
+// the resume question and the zip's failure paths. Each runs as a named test; see RunTests in TestRunner.cs.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,16 +12,67 @@ partial class M8Backup
     {
         string dir = Path.Combine(root, "helpers");
         Directory.CreateDirectory(dir);
-        TestClassification();
-        TestComparisons(dir);
-        TestPathSafety(dir);
-        TestChangesAndNames(dir);
-        TestChecksumLists(dir);
-        TestSettings(dir);
-        TestRetention(dir);
-        TestResumeQuestion(dir);
-        TestZipFailures(dir);
-        TestSecurity(dir);
+        RunTest("Helpers: file classification", TestClassification);
+        RunTest("Helpers: comparisons", () => TestComparisons(dir));
+        RunTest("Helpers: path safety", () => TestPathSafety(dir));
+        RunTest("Helpers: change summary and name warnings", () => TestChangesAndNames(dir));
+        RunTest("Helpers: checksum lists", () => TestChecksumLists(dir));
+        RunTest("Helpers: settings", () => TestSettings(dir));
+        RunTest("Helpers: retention", () => TestRetention(dir));
+        RunTest("Helpers: resume question", () => TestResumeQuestion(dir));
+        RunTest("Helpers: zip failures", () => TestZipFailures(dir));
+        RunTest("Security hardening", () => TestSecurity(dir));
+        RunTest("Console questions", TestConsoleQuestions);
+    }
+
+    // Runs action against the real console front end with scripted input; returns what it printed.
+    static string OnConsole(string input, Action<ConsoleInteraction> action)
+    {
+        TextWriter oldOut = Console.Out;
+        TextReader oldIn = Console.In;
+        var output = new StringWriter();
+        try
+        {
+            Console.SetOut(output);
+            Console.SetIn(new StringReader(input));
+            action(new ConsoleInteraction());
+        }
+        finally { Console.SetOut(oldOut); Console.SetIn(oldIn); }
+        return output.ToString();
+    }
+
+    static void TestConsoleQuestions()
+    {
+        char key = ' ';
+        string shown = OnConsole("x\nk\n", c => key = c.Choose("Some target files differ from the backup.", new[] {
+            new Option('r', "Replace them"), new Option('k', "Keep them (copy only missing files)"), new Option('c', "Cancel") }));
+        Assert(key == 'k', "console accepts an option's key, ignoring other input");
+        Assert(shown.Contains("Some target files differ from the backup. [R]eplace them, [K]eep them (copy only missing files) or [C]ancel?"),
+            "console shows options inline, with each key's letter bracketed");
+
+        shown = OnConsole("d\n", c => key = c.Choose("What should be restored?", new[] {
+            new Option('a', "All files"), new Option('d', "Song with dependent samples") }));
+        Assert(key == 'd' && shown.Contains("[A]ll files or Song with [D]ependent samples?"), "the bracketed letter can be inside a word");
+
+        shown = OnConsole("2\n", c => key = c.Choose("What would you like to do?", new[] {
+            new Option('1', "Full backup"), new Option('2', "Restore") }));
+        Assert(key == '2' && shown.Contains("    1) Full backup") && shown.Contains("What would you like to do? (1 or 2)"),
+            "options whose key isn't in the label are shown as a numbered menu");
+
+        shown = OnConsole("n\n", c => key = c.Choose("Move them to the Recycle Bin?", new[] { Yes, No }));
+        Assert(key == 'n' && shown.Contains("Move them to the Recycle Bin? (y/n)"), "yes/no questions end in (y/n)");
+
+        int item = -1;
+        shown = OnConsole("9\n2\n", c => item = c.ChooseItem("Choose a bundle.", new[] { "Bundles\\a", "Bundles\\b" }, null));
+        Assert(item == 2 && shown.Contains(" 1) Bundles\\a") && shown.Contains("Please enter a number from 1 to 2"),
+            "console lists the items and asks again after an invalid number");
+        Assert(shown.Contains("Number, or Enter to cancel"), "a list without a 'none' option offers Enter to cancel");
+        shown = OnConsole("\n", c => item = c.ChooseItem("Choose a file.", new[] { "a.m8s" }, "Search again"));
+        Assert(item == 0 && shown.Contains("Number, or Enter for search again"), "Enter picks the 'none' option");
+
+        string text = null;
+        OnConsole("jam\n", c => text = c.AskText("Search file name:"));
+        Assert(text == "jam", "console reads free text");
     }
 
     static void TestSecurity(string dir)
@@ -222,8 +273,8 @@ partial class M8Backup
     static void TestSettings(string dir)
     {
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
-        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = "incremental", Verify = true, KeepBackups = 4,
-            MaxNameLength = 40, Eject = "ask", KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
+        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
+            MaxNameLength = 40, Eject = EjectMode.Ask, KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
             SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, Zip = true };
         string ini = Path.Combine(dir, "roundtrip.ini");
         WithUi(() => SaveConfig(saved, ini));
@@ -248,11 +299,11 @@ partial class M8Backup
             ApplySetting(config, "Eject", "maybe");
             ApplySetting(config, "Verify", "perhaps");
         });
-        Assert(config.Mode == "ask" && config.KeepBackups == 0 && config.Eject == "no" && !config.Verify, "invalid values keep the defaults");
+        Assert(config.Mode == BackupMode.Ask && config.KeepBackups == 0 && config.Eject == EjectMode.No && !config.Verify, "invalid values keep the defaults");
         Assert(ui.Output.ToString().Contains("Mode=sometimes isn't valid") && ui.Output.ToString().Contains("KeepBackups=-1 isn't valid"),
             "invalid values are reported");
         WithUi(() => { ApplySetting(config, "VERIFY", "On"); ApplySetting(config, "eject", "YES"); ApplySetting(config, "Mode", "Full"); });
-        Assert(config.Verify && config.Eject == "yes" && config.Mode == "full", "setting names and values aren't case-sensitive");
+        Assert(config.Verify && config.Eject == EjectMode.Yes && config.Mode == BackupMode.Full, "setting names and values aren't case-sensitive");
     }
 
     static void TestRetention(string dir)
@@ -302,19 +353,19 @@ partial class M8Backup
         bool? answer = true;
         TestInteraction ui = WithUi(() => { answer = ConfirmResume(backup, true, config); });
         Assert(answer == true && ui.Questions.Count == 0, "no question when the latest backup has no unfinished status");
-        SetBackupStatus(backup, "complete");
+        SetBackupStatus(backup, Status.Complete);
         WithUi(() => { answer = ConfirmResume(backup, false, config); });
         Assert(answer == false, "a complete backup keeps the chosen mode");
-        SetBackupStatus(backup, "incomplete");
+        SetBackupStatus(backup, Status.Incomplete);
         WithUi(() => { answer = ConfirmResume(backup, false, config); }, 'r');
         Assert(answer == true, "Resume continues into the unfinished backup");
         WithUi(() => { answer = ConfirmResume(backup, true, config); }, 'n');
         Assert(answer == false, "New full backup is chosen instead of resuming");
-        SetBackupStatus(backup, "failed");
+        SetBackupStatus(backup, Status.Failed);
         WithUi(() => { answer = ConfirmResume(backup, true, config); }, 'c');
         Assert(answer == null, "Cancel returns no choice");
         Assert(ConfirmResume(null, true, config) == true, "with no backup yet, nothing is asked");
-        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == "legacy (status unknown)", "backups without a status file are legacy");
+        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Legacy, "backups without a status file are legacy");
 
         var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
         Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "M8 Backups", "card")), "a source inside the backup location is rejected");
@@ -343,18 +394,18 @@ partial class M8Backup
         var ui = new TestInteraction();
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         string backup = ListBackups(history)[0];
-        Assert(result.ExitCode == 2 && result.Summary.Contains("zip could not be saved") && BackupStatus(backup) == "complete",
+        Assert(result.ExitCode == 2 && result.Summary.Contains("zip could not be saved") && BackupStatus(backup) == Status.Complete,
             "a zip that can't be saved gives exit code 2, but the backup stays complete");
         Directory.Delete(Path.Combine(history, date + ".zip.tmp"));
 
         // Cancelling while zipping leaves no partial zip; the finished backup stays complete.
         var cts = new CancellationTokenSource();
         ui = new TestInteraction();
-        ui.OnProgress = delegate(OperationProgress p) { if (p.Stage == "Zipping") cts.Cancel(); };
+        ui.OnProgress = delegate(OperationProgress p) { if (p.Stage == Stage.Zipping) cts.Cancel(); };
         Put(Path.Combine(source, "Samples", "b.wav"), "B");
         result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, cts.Token));
         string second = ListBackups(history)[1];
-        Assert(result.Cancelled && BackupStatus(second) == "complete", "cancelling the zip leaves the finished backup complete");
+        Assert(result.Cancelled && BackupStatus(second) == Status.Complete, "cancelling the zip leaves the finished backup complete");
         Assert(Directory.GetFiles(history, "*.tmp").Length == 0 && !File.Exists(second + ".zip"), "a cancelled zip leaves nothing behind");
 
         // Without --zip, nothing is zipped.

@@ -72,7 +72,7 @@ partial class M8Backup
                     }
                     done += file.Length;
                     count++;
-                    OperationContext.Current.Progress("Zipping", name, done, total, count, fileCount);
+                    OperationContext.Current.Progress(Stage.Zipping, name, done, total, count, fileCount);
                 }
             }
             File.Move(temp, zipPath);
