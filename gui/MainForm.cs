@@ -28,6 +28,8 @@ partial class M8Backup
         {
             runner = new GuiOperationRunner(this);
             Text = "M8 Backup";
+            // The window uses the icon embedded in the exe (build-gui.cmd adds assets\M8Backup.ico).
+            try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10);
             ForeColor = GuiTheme.Ink;
             BackColor = GuiTheme.Background;
