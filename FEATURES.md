@@ -1,155 +1,140 @@
-# Gear Backup — Features
+# Gear Backup features
 
-A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and settings.
+Gear Backup is a Windows application for backing up music gear, camera content, memory cards and local folders. This document describes the capabilities implemented in the current source tree. For installation, see the [README](README.md); for instructions, see the [manual](MANUAL.md).
 
-## Supported devices
+## Available operations
 
-| Device | Connects as | Detected | Restore writes to device | Eject | Songs in summaries | Extra restore choices | Name warnings |
-|---|---|---|---|---|---|---|---|
-| Dirtywave M8 | USB drive | yes, or drive labelled `M8` | yes | yes | songs (`.m8s`) | bundle, song with samples | yes |
-| Polyend Tracker Mini | USB drive | yes, or drive labelled `TRACKER_M`; its card in a reader by `trackerConfig` | yes | yes | projects (folders with `project.mt`) | whole project folder | no |
-| Teenage Engineering OP-1 Field | MTP | yes | no, restores to a PC folder | not needed | — (file counts only) | — | no |
-| Teenage Engineering OP-XY | MTP | yes | no, restores to a PC folder | not needed | projects (`.xy`) | — | no |
-| Fujifilm X100VI | MTP for photos; PTP for settings | yes, with connection mode shown | no, restores exported files to a PC folder | not needed | photos and videos (a JPG + RAF shot counts once) | — | no |
+| Capability | Graphical app | Command-line app |
+| --- | --- | --- |
+| Full and incremental file backups | Yes | Yes |
+| Restore files and saved snapshots | Yes | Yes |
+| Check backup integrity | Yes | Yes |
+| Capture X100VI recipes and shooting settings | Yes | Yes |
+| Preview backup and restore plans | Yes | Yes |
+| Select sources, destinations and profiles | Yes | Yes, through arguments and INI settings |
+| Review backup health in a dashboard | Yes | — |
+| Inspect storage and select cleanup items | Yes | — |
+| Edit device and profile preferences | Yes | Edit the shared INI file |
+| View recipes, copy them and export readable text | Yes | — |
 
-Every feature in the sections after **Devices** works for all of them, unless marked otherwise.
-X100VI settings capture makes dated full backups only; incremental photo-mirror behavior and resume do not apply to that capture operation.
+Both apps use the same backup engine and settings. The GUI provides file and folder pickers, a responsive activity log, progress, cancellation and shortcuts to open operation results. The CLI provides an interactive menu and arguments for source, profile, restore, checks, camera capture, ZIP export and preview.
 
-## Devices
+## Supported sources
 
-### Dirtywave M8
+| Source | Connection | Device-specific behavior |
+| --- | --- | --- |
+| **Dirtywave M8** | USB disk mode or SD card reader | Song change summaries, bundle restore, song-and-samples restore, filename warnings |
+| **Polyend Tracker Mini** | USB drive mode or SD card reader | Card recognition through `trackerConfig`, project change summaries, whole-project restore |
+| **Teenage Engineering OP-1 Field** | MTP | Local mirroring of exposed device files, including synths, drums, tapes and mixdowns |
+| **Teenage Engineering OP-XY** | MTP | Local mirroring and `.xy` project summaries; automatic project backups are copied but omitted from project summaries |
+| **Fujifilm X100VI** | MTP for media; USB RAW CONV./BACKUP RESTORE mode for settings | Photo/video backup, connection-mode display, recipe and shooting-settings capture |
+| **Memory cards and local folders** | Accessible filesystem path | Manual source selection and separate backup histories |
 
-- **Detection** — finds the M8 in USB disk mode automatically, with a removable drive labelled `M8` as fallback.
-- **Songs** — summaries list new, edited and removed songs (`Songs\*.m8s`) by name.
-- **Bundles** — restores one `Bundles\<name>` folder with its project, samples and instruments.
-- **Song with samples** — restores a song plus every sample its instruments reference (firmware-6 songs).
-- **Name warnings** — flags names the M8 may not handle well: special characters, long names, leading or trailing spaces.
+Supported connected devices are detected automatically. USB-drive detection includes drive-label fallbacks for the M8 and Tracker Mini. A device type can be assigned explicitly when using a card or local copy.
 
-### Polyend Tracker Mini
+MTP transfers first refresh a local PC mirror, downloading new or changed content before backup. MTP backups restore to a local folder for manual transfer; Gear Backup does not write files back to MTP devices. OP-XY backup covers the content exposed by the device, rather than factory content that is unavailable over MTP.
 
-- **Detection** — finds the Tracker Mini in USB drive mode automatically, with a removable drive labelled `TRACKER_M` as fallback.
-- **Card in a reader** — a Tracker card in a card reader is recognised by its `trackerConfig` file, so it gets the same history and summaries.
-- **Projects** — summaries list projects by folder (`User\My Song`), including the open project in `Workspace`.
-- **Whole project folder** — restores one project with its patterns, instruments and samples.
+## File backup
 
-### Teenage Engineering OP-1 Field
+- **Full backup:** copy the source into a new dated folder.
+- **Incremental backup:** copy new and changed files into the latest backup, retaining previous copies of changed files under dated names.
+- **Comparison choices:** use size and modified time, with a two-second timestamp tolerance, or enable SHA-256 content comparison. Files without usable timestamps are compared byte by byte.
+- **Resume:** continue an incomplete or failed backup in the same folder, using the selected comparison mode. Detected suspect copies are moved aside.
+- **Folder preservation:** keep empty folders and skip common operating-system leftovers such as `.DS_Store`, `Thumbs.db` and trash folders.
+- **Space planning:** estimate required space for copies, history and optional ZIP output before copying.
+- **ZIP export:** optionally create a separate archive after a successful full backup. It contains files, empty folders, checksums and a report, with local paths hidden in the report and internal history omitted.
 
-- **MTP backup** — backs up over MTP (no drive letter needed), through a local mirror that only downloads changes.
-- **Read-only** — never writes to the device; restore goes to a folder, then copy the files over with Explorer.
+Incremental previews list actions rather than skipped files. If there are no new or changed files to copy, the normal run skips the proceed prompt. Full-backup progress suppresses individual file paths.
 
-### Teenage Engineering OP-XY
+## History and storage choices
 
-- **MTP backup** — backed up the same way as the OP-1 Field, read-only.
-- **Projects** — summaries list `.xy` projects by name; the OP-XY's own automatic project backups are backed up but not listed.
+Point-in-time history records the files and folders present during each backup, so a saved state can be selected later. Identical content is shared within a backup folder's history store.
 
-### Fujifilm X100VI
+| Storage choice | Behavior |
+| --- | --- |
+| **History enabled** | Keep restorable snapshots and their content alongside the browsable backup files. |
+| **History disabled** | Keep backup files and checksums without an additional history content store. Incremental backup, checks and current-file restore remain available. |
+| **NTFS hard-linked history** | Share content between backup files and history instead of making separate copies. Requires history to be enabled; other filesystems use copies. |
 
-- **MTP backup** — backs up the camera's `DCIM` folder over MTP, read-only, through a mirror that only downloads new photos.
-- **Photos and videos** — summaries list shots by name (JPG, RAF, HIF, MOV); a shot saved as JPG and RAF counts once.
-- **Capture dates** — files keep the time the photo was taken, which the camera reports instead of a modified date.
-- **Restore warning** — explains why photos aren't restored to the camera, and asks before restoring them onto a memory card.
-- **Connection mode** — detection identifies settings mode or photo-transfer mode in the GUI header and result, and in CLI source detection.
-- **Recipe backup** — captures all C1–C7 names and 23 raw properties per recipe in USB RAW CONV./BACKUP RESTORE mode (GUI operation or `--camera-settings`).
-- **Shooting settings** — captures readable current shooting values separately, with unavailable properties marked explicitly.
-- **Settings exports** — XML retains exact raw bytes and numeric values, with camera model, serial and firmware; each run makes a dated full backup in a separate automatic settings profile, with normal checksums, optional history and optional ZIP.
-- **Selector safety** — restores and verifies the original recipe read selector after capture or cancellation, checks that shooting values stayed unchanged, and prevents concurrent settings captures by Gear Backup.
-- **Settings scope** — recipe and shooting-settings export only; full-camera setup menus and native Fujifilm backup files are not captured, and settings are not written back to the camera.
+Turning history off preserves existing snapshots. Dated old versions, separate full backups, ZIPs and MTP mirrors have separate storage costs. Hard-linked files share content, so editing or damaging one can also affect its history copy.
 
-### All devices
+## Restore and recovery
 
-- **Device profiles** — everything device-specific is described per device, so new devices can be added (`Device` names one when it can't be detected).
-- **Device picture and name** — the GUI header shows the detected device's picture and name.
+Restore can use current backup files or a saved snapshot. Available selections include all files, a single file, an M8 bundle, an M8 firmware-6 song with its referenced samples, or a Tracker Mini project folder. Retained old versions can be restored under their original or dated names.
 
-## Interfaces
+- **Merge:** restore selected content while keeping extra target files.
+- **Exact:** remove extra target content after successful copying and a separate confirmation.
+- **Overwrite choices:** replace differing files, keep the target versions or cancel; newer target files are highlighted. Keeping differing files disables exact removal.
+- **Target checks:** recheck files before replacement or removal to detect changes since planning.
+- **Staged replacement:** write replacement files beside their destinations and use Windows file replacement with rollback handling.
+- **Optional recovery:** copy files that will be replaced or removed to a configurable PC location before any target changes begin. A recovery-copy failure stops the restore.
 
-- **Graphical app** — `GearBackup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
-- **Command-line app** — `GearBackup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--camera-settings`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
-- **Shared engine** — both apps use the same backup, restore and check code and the same `GearBackup.ini`.
-- **App icon** — a general backup icon (a memory card with a backup badge, for any device) for both programs, the window and the taskbar.
-- **Operation-specific fields** — source controls adapt to backup, restore, check and camera settings operations; unused source fields are disabled.
-- **Grouped settings** — Backup, Restore and Device tabs, with the recovery location enabled only when recovery copies are selected.
-- **Keyboard and accessibility** — keyboard shortcuts, tooltips, accessible control names, DPI awareness and layouts that adapt to smaller screens.
-- **HTML help** — Help and F1 open an illustrated offline HTML manual in the default browser; GUI builds generate it beside the executable.
+Restore progresses file by file. Completed restores remain in place if a later step fails or is cancelled. X100VI media restore recommends a PC folder and asks before restoring onto a memory card.
 
-## Sources
+## Integrity checks
 
-- **Automatic detection** — finds a connected supported device; if several are connected, the first in the table above.
-- **Card reader or folder** — back up an SD card in a reader or any local folder (`SourceFolder`, `--source`).
-- **Manual fallback** — asks for a source path when no supported device is detected.
-- **Profiles** — each card gets its own history, named after its device and volume serial (`m8-card-1A2B3C4D`) so it survives a new reader or drive letter; older histories are renamed automatically.
-- **Named profiles** — choose a fixed history name with `Profile` or `--profile`.
-- **Legacy histories** — backups made before profiles existed stay available for restore and checks.
+Every backup records SHA-256 checksums in `checksums.sha256`. **Check backups** rereads selected backups and snapshot content for missing or damaged files without needing the source device.
 
-## Backup
+Two independent options control automatic comparison:
 
-- **Full backup** — copies the whole card or device to a new dated folder.
-- **Incremental backup** — copies only new and changed files into the latest backup.
-- **Fast or thorough comparison** — detects changes by size and modified time, or by SHA-256 content (`Thorough`).
-- **Undated files** — files without a usable timestamp are compared byte by byte.
-- **Old versions kept** — a changed file's previous backup copy is renamed with its date and time instead of overwritten.
-- **Point-in-time history** — enabled by default; each backup saves a snapshot of the files and folders that can be restored later.
-- **Backup without history** — turn off **Save point-in-time history** in GUI Settings or set `PointInTimeHistory=no` to save files and checksums without the second history copy: roughly half the space for a fresh backup. Current-file restore, verification, checks and incremental backups still work. Existing snapshots are preserved; old versions, separate full backups and ZIPs have their own retention/storage costs.
-- **Content deduplication** — identical content is stored once per backup folder's history.
-- **Hard-linked history** — optionally stores history as hard links on NTFS, halving disk use (`HardLinks`); applies only while point-in-time history is enabled.
-- **Empty folders kept** — empty folders (like the M8's `Bundles`) are recreated on restore.
-- **Leftover skipping** — skips macOS, Linux and Windows junk (`.DS_Store`, `.Trash-1000`, `lost+found`, `Thumbs.db` and similar).
-- **Free-space check** — checks the backup drive has room before copying anything.
-- **Resume** — an interrupted or failed backup can be resumed into the same folder.
-- **Quarantine** — a partial or unverified copy found during resume is moved aside, not trusted.
-- **Overlapped copying** — reads the next chunk from the source while the current one is written.
-- **Zip copy** — optionally also saves a full backup as a zip next to its folder (`--zip`, or the GUI's "Also save as zip").
+| Option | Purpose |
+| --- | --- |
+| **Compare file contents** (`Thorough`) | Use SHA-256 for change detection during backup, resume and restore. |
+| **Verify copies** (`Verify`) | Read copied files back and compare checksums; also verify restore sources, history objects and recovery copies. |
 
-## Restore
+Both default to off. With size/time comparison, an edit preserving both can be missed. Recording checksums does not itself mean a backup has been verified; explicit integrity checks use them even when automatic verification is disabled.
 
-- **Restore all** — restores every file and empty folder from a backup or snapshot.
-- **Restore a single file** — search by name and restore one song or project, instrument, sample or old version.
-- **Device-specific choices** — a bundle or song with samples (M8), or a whole project folder (Tracker Mini).
-- **Pick a point in time** — restore from any saved snapshot or from the current backup files.
-- **Original or dated name** — an old version can be restored under its original name or its dated one.
-- **Merge or exact** — keep extra files on the target, or remove files that weren't in the snapshot.
-- **Differing files** — choose to replace, keep the target's versions, or cancel, with a warning for newer files.
-- **Safe replacement** — new files are written beside the old ones and swapped in, so a failure never loses the original.
-- **Change guard** — refuses to replace a target file that changed since the preview.
-- **Recovery copies** — optionally saves every file a restore will replace or remove to the PC first (`Recovery`).
-- **Damaged files refused** — a backup file whose checksum no longer matches is not restored.
+Backups record complete, incomplete or failed status. Path validation rejects linked or escaping paths, history locks prevent concurrent writes, and MTP mirror locks coordinate transfers with cleanup. Windows system DLLs are loaded from System32.
 
-## Integrity
+## X100VI settings and recipes
 
-- **Checksum list** — every backup has a `checksums.sha256` file in the standard `sha256sum` format.
-- **Check backups** — re-reads backups and their history to find damaged or missing files, without the device connected.
-- **Copy verification** — optionally reads each copy back from the disk, bypassing the cache, and compares checksums (`Verify`).
-- **Backup status** — each backup is marked `incomplete`, `complete` or `failed`.
-- **Path safety** — rejects links and paths that would escape the backup or target folder, and never treats a linked folder as a backup.
-- **Safe DLL loading** — Windows DLLs are loaded only from System32, so a planted DLL next to the exe is ignored.
-- **Private zips** — a zip's copy of the statistics hides your local folder paths and user name.
-- **History lock** — prevents two programs or windows writing the same history at once.
+The camera-settings operation captures **C1–C7 names and 23 raw properties per recipe**, plus current shooting settings, in **USB RAW CONV./BACKUP RESTORE** mode. XML exports retain raw bytes, numeric values, model, serial and firmware; unavailable properties are marked explicitly.
 
-## Previews and progress
+Each capture creates a dated full backup in a separate automatic settings profile, or a chosen named profile. Checksums, optional history and ZIP export are supported. Camera capture restores and verifies the original recipe read selector, checks that shooting values stayed unchanged, and prevents concurrent Gear Backup captures of the same camera.
 
-- **Preview** — lists planned actions and asks before copying (`Preview`).
-- **GUI preview table** — action, path and size columns with search and action filters; filtering does not change the plan that will be executed.
-- **Preview only** — `--preview` shows the plan without saving a backup or changing restore targets; camera settings preview temporarily selects recipe read banks and restores the selector.
-- **Unchanged incremental backups** — omit skipped files from the acceptance list and finish without a proceed question when no files changed.
-- **Progress** — shows scanning, copying, hashing and checking progress.
-- **Overall full-backup progress** — suppresses individual file paths during full backups; the GUI shows percentage, processed bytes and elapsed time when available.
-- **Cancel** — Cancel in the app or Ctrl+C stops safely, with no partial files left behind.
+The **X100VI recipes** viewer opens a saved backup folder or individual XML export without a connected camera. It shows readable film simulations, white balance, grain strength/size, tone values and noise reduction alongside protocol numbers and raw bytes. Selected recipes can be copied or exported as text. Unmapped values remain labelled as protocol values.
 
-## Reports and notifications
+Settings capture does not provide incremental backup or resume. It does not export full-camera setup menus or native Fujifilm backup files, and it cannot restore settings to the camera. Settings preview temporarily selects recipe read banks and restores the selector.
 
-- **Statistics** — every backup saves a report of files, sizes, speed, warnings, failures and free space.
-- **GUI completion** — shows copied, unchanged, removed and failed counts, with a button to open the output folder.
-- **Change summary** — lists new, edited and removed songs, projects or photos since the last backup (file counts for devices without them).
-- **Notifications** — the command-line app shows a Windows notification with the result.
-- **Eject** — leave a USB-drive device connected, ask, or eject it automatically, only if it's still the same device (`Eject`).
+For media, Gear Backup copies `DCIM`, preserves camera-reported capture times and reports JPG, RAF, HIF and MOV files. A JPG/RAF pair counts as one shot in summaries.
 
-## Housekeeping
+## Profiles and backup management
 
-- **Keep the last N backups** — moves older backup folders to the Recycle Bin, after asking (`KeepBackups`).
-- **Keep the last N old versions** — limits dated old versions per file, moving extras to the Recycle Bin (`KeepOldVersions`).
-- **Self-documenting settings** — `GearBackup.ini` is created with every option explained, and new options are added automatically.
+Automatic profiles separate histories by source: card volume identity, folder path or MTP device identity. A card can retain its history after a reader or drive-letter change. Named profiles provide an explicit history name.
 
-## Development
+Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited.
 
-- **Local builds** — uses the C# compiler included in Windows (`build.cmd`, `build-gui.cmd`); GUI manual generation requires PowerShell 7.
-- **Installers** — per-user setup and portable extraction packages include both interfaces and the offline manual; upgrades preserve INI settings.
-- **Automated tests** — engine and GUI regression tests, including camera capture, malformed metadata, interrupted transfers and selector restoration (`tests\run-tests.ps1`, `tests\run-gui-tests.ps1`).
+The GUI provides two management views across configured backup locations:
+
+- **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. Actions open folders, check backups and view saved recipes.
+- **Storage:** sizes for current files, known old versions, history objects, metadata, ZIPs and MTP mirrors. The unique-content total counts hard-linked content once; it measures file content rather than allocated disk space.
+
+Cleanup starts with nothing selected. Choose older backup folders, known old versions, ZIPs or mirrors, then review the plan before moving them to the Recycle Bin. The latest backup folder and individual history objects are protected. Cleanup rechecks scanned items, respects operation locks and updates checksum records after removing old versions.
+
+Retention options can limit whole backup folders or dated old versions per file, with confirmation before recycling. Snapshot contents are retained separately from browsable old versions. Recycled items occupy disk space until the Recycle Bin is emptied; removing a mirror requires downloading it again on the next backup.
+
+## Defaults and everyday controls
+
+| Setting | Default |
+| --- | --- |
+| Change previews | On |
+| Point-in-time history | On |
+| SHA-256 change comparison | Off |
+| Automatic copy verification | Off |
+| Restore recovery copies | Off |
+| NTFS hard links | Off |
+| Backup and old-version retention limits | Unlimited |
+| Automatic ejection | Off |
+| Backup location | Windows Music folder |
+
+The GUI preview table supports search and action filters without changing the execution plan. Cancel or Ctrl+C stops further work and requests cleanup; interrupted file backups can be resumed. Progress includes stages, processed bytes and elapsed time where available.
+
+Backup reports contain counts, sizes, speed, warnings, failures and free space, with device-aware change summaries. The GUI shows results and output-folder shortcuts; the CLI sends Windows result notifications. Detected USB-drive devices can be offered for safe ejection or ejected automatically after confirming they still own the selected source.
+
+Keyboard shortcuts, accessible control names, tooltips and DPI-aware layouts support GUI navigation. **Help** and **F1** open the illustrated offline HTML manual.
+
+## Distribution
+
+Per-user setup and portable extraction packages include both apps and the offline manual. Updates preserve personal INI settings. Portable extraction creates no shortcuts or uninstall entry; backup paths remain configurable and MTP mirrors still use the PC's Local AppData folder.
+
+Existing settings and histories from the previous application name remain supported. Build and automated-test instructions are in the [manual](MANUAL.md#building-and-testing).

@@ -78,6 +78,7 @@ partial class GearBackup
         readonly SortedDictionary<string, long[]> perFolder = new SortedDictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
         // Checksums for the backup's checksum list; an incremental run starts from the existing list
         Dictionary<string, string> sums;
+        HashSet<string> knownVersions;
         Changes changes;
         string checksumStatus;
 
@@ -261,6 +262,7 @@ partial class GearBackup
 
             sums = (incremental ? LoadChecksums(dest) : null) ??
                    new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            knownVersions = incremental ? KnownOldVersions(dest) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long processedBytes = 0;
             PrintProgress(0, totalBytes, 0, scan.Files.Count, 0);
 
@@ -375,6 +377,9 @@ partial class GearBackup
             // Checksum list for the whole backup folder (files without a known checksum are read and hashed)
             try
             {
+                var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (FileInfo file in scan.Files) sourceNames.Add(Relative(file));
+                SaveOldVersionRecord(dest, knownVersions, keptVersions, sourceNames);
                 OperationOutput.WriteLine("  Saving checksum list...");
                 int listed = WriteChecksums(dest, sums);
                 checksumStatus = string.Format("{0:N0} files listed in {1}", listed, ChecksumFileName);
@@ -423,6 +428,16 @@ partial class GearBackup
             };
             report.Write();
             SetBackupStatus(dest, failed == 0 ? Status.Complete : Status.Failed);
+            if (failed == 0)
+            {
+                try
+                {
+                    string successPath = Path.Combine(AppIdentity.MetadataRoot(dest), "last-success.txt"); RejectRootLinks(successPath);
+                    AtomicText(successPath, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { OperationOutput.WriteLine("  Could not save dashboard completion time: " + ex.Message); }
+            }
             WriteColored("  " + report.StatusText, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
             OperationOutput.WriteLine();
         }

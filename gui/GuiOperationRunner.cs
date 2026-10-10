@@ -78,6 +78,7 @@ partial class GearBackup
         OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp,
             DeviceProfile knownDevice, OperationContext context)
         {
+            Config globalOptions = options;
             if (choice == 4)
             {
                 OperationResult settingsResult = RunFujiSettingsBackup(options);
@@ -87,6 +88,7 @@ partial class GearBackup
             string histories = HistoriesRoot(options);
             if (choice == 3)
             {
+                if (options.Profile.Length > 0) options = ResolveProfileSettings(options, options.Device, options.Profile);
                 string history = HistoryToCheck(options);
                 if (history == null) return new OperationResult { Cancelled = true, Summary = "Check cancelled." };
                 var backups = ListBackups(history);
@@ -130,19 +132,25 @@ partial class GearBackup
             RejectRootLinks(selected);
             if (knownSource == selected) { pnp = knownPnp; if (detected == null) detected = knownDevice; }
             context.Device = DeviceFor(options, detected, selected);
+            options = ResolveSourceSettings(options, selected);
+            histories = HistoriesRoot(options);
             string root = HistoryFor(options, selected);
             OperationResult result;
             if (choice == 2 && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-            if (mtp != null) selected = SyncMtpSource(mtp);
-            if (choice == 2)
+            using (mtp == null ? null : LockHistory(MirrorRoot))
             {
-                root = ChooseHistory(histories, root);
-                if (root == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
-                if (ListBackups(root).Count == 0) throw new IOException("No backups found at this location.");
-                using (LockUnlessPreview(root)) result = RunRestore(selected, ListBackups(root), options);
-                result.Cancelled |= context.Cancellation.IsCancellationRequested;
+                if (mtp != null) selected = SyncMtpSource(mtp);
+                if (choice == 2)
+                {
+                    root = ChooseHistory(histories, root);
+                    if (root == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
+                    options = ResolveProfileSettings(globalOptions, context.Device.Id, Path.GetFileName(root));
+                    if (ListBackups(root).Count == 0) throw new IOException("No backups found at this location.");
+                    using (LockUnlessPreview(root)) result = RunRestore(selected, ListBackups(root), options);
+                    result.Cancelled |= context.Cancellation.IsCancellationRequested;
+                }
+                else result = BackupWithLock(selected, root, choice == 1, options);
             }
-            else result = BackupWithLock(selected, root, choice == 1, options);
             if (!previewOnly && !result.Cancelled && result.ExitCode == 0 && result.Title != null && pnp != null && options.Eject != EjectMode.No)
             {
                 string changed = ConfirmSameDevice(selected, pnp);

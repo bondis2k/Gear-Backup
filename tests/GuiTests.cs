@@ -169,6 +169,7 @@ partial class GearBackup
         TestPreviewFiltering();
         TestSettingsInteraction(root);
         TestGuiProgress();
+        TestManagementGui(Path.Combine(root, "management-tools"));
         TestScaledGuiLayouts();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
@@ -252,6 +253,88 @@ partial class GearBackup
             Assert(text.Contains("50%") && text.Contains("5 B / 10 B") && text.Contains("Elapsed"), "overall progress includes percentage, byte counts and elapsed time");
             Assert(!((Label)form.Controls.Find("OperationDetail", true)[0]).Text.Contains("private-file.wav"), "full backup progress does not expose individual paths");
             form.CompleteOperation(new OperationResult { Summary = "Done", Counts = new OperationCounts { Copied = 1 } }, false);
+            form.Close();
+        }
+    }
+
+    static void TestManagementGui(string root)
+    {
+        Config config; BackupCatalog catalog = ManagementFixture(root, out config);
+        string output = Path.Combine(Environment.CurrentDirectory, "tests", ".build");
+        using (var owner = new MainForm(true))
+        {
+            owner.Show(); Application.DoEvents();
+            foreach (string name in new[] { "OpenDashboard", "OpenStorage", "OpenProfiles", "OpenRecipes" })
+                Assert(owner.Controls.Find(name, true).Length == 1, "main window exposes " + name);
+            using (var dashboard = new CatalogDialog(owner, config, false, catalog))
+            {
+                dashboard.Show(); Application.DoEvents();
+                var table = (DataGridView)dashboard.Controls.Find("DashboardTable", true)[0];
+                Assert(table.Rows.Count == 1 && Convert.ToString(table.Rows[0].Cells[2].Value) == Status.Complete,
+                    "dashboard groups backups by profile and shows the latest status");
+                CheckGuiLayout(dashboard, 150, Path.Combine(output, "dashboard-150.png"));
+            }
+            using (var storage = new CatalogDialog(owner, config, true, catalog))
+            {
+                storage.Show(); Application.DoEvents();
+                var table = (DataGridView)storage.Controls.Find("CleanupItems", true)[0];
+                Assert(storage.SelectedCleanup().Count == 0, "storage cleanup starts with no selected items");
+                table.Rows[0].Cells[0].Value = true;
+                Assert(storage.SelectedCleanup().Count == 1, "cleanup selection selects only checked items");
+                CheckGuiLayout(storage, 150, Path.Combine(output, "storage-150.png"));
+            }
+            using (var dialog = new ProfileSettingsDialog(owner, config))
+            {
+                dialog.Show(); Application.DoEvents();
+                var scope = (ComboBox)dialog.Controls.Find("SettingsScope", true)[0]; scope.SelectedIndex = 0;
+                var table = (DataGridView)dialog.Controls.Find("ProfilePreferences", true)[0];
+                foreach (DataGridViewRow row in table.Rows) if (Equals(row.Tag, "PointInTimeHistory")) { row.Cells[0].Value = true; row.Cells[2].Value = "no"; }
+                ((Button)dialog.Controls.Find("SaveProfilePreferences", true)[0]).PerformClick();
+                Assert(!ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory && config.PointInTimeHistory,
+                    "profile GUI saves an override without changing global settings");
+                CheckGuiLayout(dialog, 150, Path.Combine(output, "profiles-150.png"));
+            }
+            Dictionary<string, byte[]> files;
+            using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) files = CaptureFujiSettings(new FakeFujiSettings());
+            string folder = Path.Combine(root, "recipes"); Directory.CreateDirectory(folder);
+            foreach (var file in files) File.WriteAllBytes(Path.Combine(folder, file.Key), file.Value);
+            using (var viewer = new RecipeViewerDialog(owner, folder))
+            {
+                viewer.Show(); Application.DoEvents();
+                var picker = (ComboBox)viewer.Controls.Find("RecipeSelection", true)[0];
+                var table = (DataGridView)viewer.Controls.Find("RecipeValues", true)[0];
+                Assert(picker.Items.Count == 8 && table.Rows.Count == 23, "recipe viewer loads C1–C7 and shooting settings");
+                Assert(Convert.ToString(table.Rows[4].Cells[1].Value) == "PROVIA / Standard", "recipe viewer displays film names");
+                picker.SelectedIndex = 1;
+                Assert(Convert.ToString(table.Rows[4].Cells[1].Value) == "Velvia / Vivid", "recipe selection updates readable values");
+                CheckGuiLayout(viewer, 150, Path.Combine(output, "recipes-150.png"));
+            }
+            using (var dashboard = new CatalogDialog(owner, config, false, catalog)) CheckGuiLayout(dashboard, 200, Path.Combine(output, "dashboard-200.png"));
+            using (var storage = new CatalogDialog(owner, config, true, catalog)) CheckGuiLayout(storage, 200, Path.Combine(output, "storage-200.png"));
+            using (var dialog = new ProfileSettingsDialog(owner, config)) CheckGuiLayout(dialog, 200, Path.Combine(output, "profiles-200.png"));
+            using (var viewer = new RecipeViewerDialog(owner, folder)) CheckGuiLayout(viewer, 200, Path.Combine(output, "recipes-200.png"));
+            owner.Close();
+        }
+        string deviceLocation = Path.Combine(root, "device-location"), profileLocation = Path.Combine(root, "profile-location");
+        WithUi(() => {
+            SaveProfileSettings(config, "device:m8", new Dictionary<string, string> { { "BackupFolder", deviceLocation }, { "PointInTimeHistory", "no" }, { "Preview", "no" } });
+            SaveProfileSettings(config, "profile:Studio", new Dictionary<string, string> { { "BackupFolder", profileLocation } });
+        });
+        using (var form = new MainForm(true))
+        {
+            typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(form, config);
+            form.Show(); Application.DoEvents();
+            ((TextBox)form.Controls.Find("SourceFolder", true)[0]).Text = Path.Combine(root, "source");
+            ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = config.BackupFolder;
+            ((TextBox)form.Controls.Find("Profile", true)[0]).Text = "Studio";
+            ((ComboBox)form.Controls.Find("Operation", true)[0]).SelectedIndex = 0;
+            ((Button)form.Controls.Find("StartOperation", true)[0]).PerformClick();
+            var status = (Label)form.Controls.Find("OperationStatus", true)[0];
+            DriveGui(form, status, "Complete", false);
+            string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { BackupFolder = profileLocation }), "profiles", "Studio"));
+            Assert(backup != null && File.Exists(Path.Combine(backup, "song.txt")) && !Directory.Exists(SnapshotRoot(backup)),
+                "GUI backup applies profile location and inherited device history preferences before running");
+            Assert(!Directory.Exists(deviceLocation), "profile destination takes priority over the device destination");
             form.Close();
         }
     }

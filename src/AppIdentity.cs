@@ -10,6 +10,7 @@ partial class GearBackup
         public const string Version = "1.0.1";
         public const string DirectoryName = "GearBackup";
         public const string ConfigFileName = DirectoryName + ".ini";
+        public const string ProfileConfigFileName = DirectoryName + ".Profiles.ini";
         public const string BackupsFolderName = "Gear Backups";
         public const string RecoveryFolderName = "Gear Recovery";
         public const string MetadataFolderName = ".gearbackup";

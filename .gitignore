@@ -6,6 +6,8 @@ tests/.build/
 dist/
 *.exe
 GearBackup.ini
+GearBackup.Profiles.ini
+/.history.lock
 M8Backup.ini
 
 # Generated offline manual (source is MANUAL.md).

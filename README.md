@@ -1,54 +1,106 @@
 # Gear Backup
 
-A Windows tool with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card, a card reader, or a local copy of the card. It also backs up the Polyend Tracker Mini, and over MTP the Teenage Engineering OP-1 Field and OP-XY and the Fujifilm X100VI camera.
+Back up your music gear, camera and local folders on Windows. Gear Backup provides a graphical app and a command-line app with the same backup, restore and integrity-check engine.
 
-- Full and incremental backups with optional dated snapshots and separate card profiles. Disable point-in-time history in Settings or set `PointInTimeHistory=no` to avoid the second content copy.
-- Restore all files, a folder bundle, a single file, or a song with its samples.
-- Preview changes, check backup integrity, and optionally keep recovery copies.
-- X100VI C1–C7 recipe and shooting-settings snapshots in USB RAW CONV./BACKUP RESTORE mode (GUI operation or `--camera-settings`). This is a separate XML export; camera settings restore and full-camera settings export are not supported.
+Make full or incremental backups, review changes before copying, and restore the files you need. Optional point-in-time history lets you return to an earlier state; turn it off when you prefer a smaller backup of the current files.
 
-## Build and run
+[User manual](MANUAL.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
 
-Requires Windows 10 or 11 and the built-in .NET Framework.
+## Supported devices
 
-For an installer build, run `GearBackup-Setup-<version>.exe`. It installs both interfaces for the current Windows user and adds Start menu shortcuts, an offline illustrated manual, and an uninstaller. The desktop shortcut is optional. The default location is `%LOCALAPPDATA%\Programs\Gear Backup`; settings remain writable beside the executables. Upgrades and uninstall preserve `GearBackup.ini`, backups, and recovery files.
+| Device or source | What you can back up | Connection |
+| --- | --- | --- |
+| Dirtywave M8 | Songs, samples, instruments and bundles | USB drive mode or SD card reader |
+| Polyend Tracker Mini | Projects, patterns, instruments and samples | USB drive mode or SD card reader |
+| Teenage Engineering OP-1 Field | Synths, drums, tapes and mixdowns | MTP |
+| Teenage Engineering OP-XY | Projects and other device files | MTP |
+| Fujifilm X100VI | Photos and videos; C1–C7 recipes and current shooting settings | MTP for media; USB RAW CONV./BACKUP RESTORE mode for settings |
+| Local folders and memory cards | Files and folders | Any accessible filesystem path |
 
-For a portable copy, run `GearBackup-Portable-<version>.exe` and select a writable folder, including a USB drive. It extracts the same executables and manual without shortcuts or an uninstall entry. Open `GearBackup.GUI.exe` from that folder. To update, close the app and extract the newer package into the same folder; existing INI settings are preserved. Backup paths remain as configured, and MTP mirrors still use the PC's Local AppData folder.
+MTP devices are read through a local PC mirror. Their backups restore to a PC folder for manual transfer. X100VI settings are saved as XML exports: full-camera settings export and restoring settings to the camera are not supported.
 
-For the graphical interface, install [PowerShell 7](https://aka.ms/powershell) to generate the offline HTML manual, then run:
+## What it offers
 
-```cmd
-build-gui.cmd --no-pause
-GearBackup.GUI.exe
-```
+- **Flexible backups:** full and incremental copies, separate source profiles, optional ZIP archives, and resumable interrupted backups.
+- **History when you need it:** dated snapshots, retained file versions and optional NTFS hard links. Disable point-in-time history to avoid its additional content copy.
+- **Selective restore:** restore everything, a folder or a single file, with device-specific choices for M8 bundles, songs with their samples, and Tracker Mini projects.
+- **Checks and control:** change previews, backup integrity checks, optional SHA-256 change comparison, optional copy verification and recovery copies before restore.
+- **Backup management:** a dashboard showing backup health and age, a storage breakdown, and previewed cleanup to the Recycle Bin.
+- **Device preferences:** save different backup locations, history and retention choices for each device or profile.
+- **Readable X100VI recipes:** browse saved recipes offline, see film simulation names and setting values, and copy or export them as text.
 
-The GUI build generates `Manual.html` beside the executable, with images copied for builds in another folder. **Help** and **F1** open it in your default browser.
+## Install and get started
 
-For the command-line interface:
+Requires **Windows 10 or 11** with **.NET Framework 4.6 or newer**, normally included with Windows.
 
-```cmd
-build.cmd --no-pause
-GearBackup.exe
-```
+Download a package from [GitHub Releases](https://github.com/bondis2k/Gear-Backup/releases):
 
-You can also specify the card or folder:
+- **Setup:** `GearBackup-Setup-<version>.exe` installs both apps for your Windows user, with Start menu shortcuts and an uninstaller.
+- **Portable:** `GearBackup-Portable-<version>.exe` extracts both apps into a writable folder of your choice, including a USB drive.
+
+Both packages include the illustrated offline manual and preserve existing INI settings when updated. Portable backups use the configured backup location; MTP mirrors are stored in the PC's Local AppData folder.
+
+1. Open `GearBackup.GUI.exe` and connect your device, insert its card, or choose a source folder.
+2. Use **Detect device** or select the source, then set your backup location in **Settings**. Backups default to the Windows Music folder.
+3. Choose a full or incremental backup, review the preview, and start copying.
+4. Use **Dashboard** to review your backups, **Storage** to manage space, or the restore operation to recover files.
+
+For X100VI recipes, select the camera-settings operation while the camera is in **USB RAW CONV./BACKUP RESTORE** mode. Open **X100VI recipes** to view a saved settings backup.
+
+**Help** or **F1** opens the offline HTML manual in your browser. The [repository manual](MANUAL.md) explains connection modes, restore choices and troubleshooting.
+
+## Command line
+
+Run `GearBackup.exe` for the interactive menu, or specify an operation and source:
 
 ```cmd
 GearBackup.exe --source E:\
+GearBackup.exe --source D:\MyGear --profile "Studio" --preview
+GearBackup.exe --restore --source E:\
+GearBackup.exe --check
+GearBackup.exe --camera-settings
 ```
 
-Configure backup locations and options in `GearBackup.ini`. SHA-256 comparison (`Thorough`), automatic integrity verification (`Verify`), and recovery copies (`Recovery`) default to `no`. Change previews default to `yes`; incremental backups with no file changes skip the proceed prompt.
+Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the [command-line reference](MANUAL.md#command-line-and-exit-codes) for all arguments and exit codes.
 
-Existing settings and backup histories from the previous app name remain usable; see the manual's upgrade notes. New backups use `Gear Backups` and `.gearbackup` metadata.
+## Settings and storage
 
-Executable builds are ignored by Git; build from source locally. See [MANUAL.md](MANUAL.md) for all settings, restore options, and command-line arguments.
+Global preferences are stored in `GearBackup.ini` beside the executables. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
 
-To create an installer, install [PowerShell 7](https://aka.ms/powershell) and [Inno Setup 6.3+ or 7](https://jrsoftware.org/isdl.php), then run:
+Change previews and point-in-time history are enabled by default. SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
+
+To reduce storage, disable **Save point-in-time history** in Settings or set `PointInTimeHistory=no`. This avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
+
+See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, retention, recovery locations and other options.
+
+## Build from source
+
+The build scripts use Windows' .NET Framework C# compiler; no .NET SDK or NuGet packages are needed. Install **PowerShell 7** to build the GUI and generate its HTML manual.
+
+From the repository folder:
+
+```cmd
+build.cmd --no-pause
+build-gui.cmd --no-pause
+```
+
+These produce `GearBackup.exe`, `GearBackup.GUI.exe` and `Manual.html`. Generated executables and personal settings are excluded from Git.
+
+To build both installer packages, also install **Inno Setup 6.3 or newer**, then run:
 
 ```cmd
 build-installer.cmd
 ```
 
-This rebuilds both executables and generates `dist\GearBackup-Setup-<version>.exe` and `dist\GearBackup-Portable-<version>.exe`, each with a SHA-256 checksum file. The release version is defined once in `src\AppIdentity.cs`; executable metadata, the GUI's **About** dialog, and both packages all use it. An optional `-Version` must match that version. For a compiler in a custom location, add `-IsccPath "C:\Tools\Inno Setup\ISCC.exe"`. The compiler and generated files are not committed. The packages are unsigned unless you arrange code signing separately.
+The packages and their SHA-256 checksum files are written to `dist`. See the [build documentation](MANUAL.md#building-and-testing) for compiler options and packaging details.
 
-Long operations report progress. Use Cancel in the GUI or Ctrl+C in the CLI; interrupted backups can be resumed. Both interfaces use the same backup, restore, and integrity-check engines and INI settings.
+## Tests
+
+Run the core and Windows Forms integration suites from the repository folder:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
+```
+
+The suites use isolated temporary fixtures and hidden GUI windows. They cover backup, restore, history, integrity, profiles, storage management and recipe parsing without writing to connected devices. Hardware behavior still needs testing with the relevant device.
