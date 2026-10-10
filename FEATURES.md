@@ -42,6 +42,7 @@ MTP transfers first refresh a local PC mirror, downloading new or changed conten
 - **Resume:** continue an incomplete or failed backup in the same folder, using the selected comparison mode. Detected suspect copies are moved aside.
 - **Folder preservation:** keep empty folders and skip common operating-system leftovers such as `.DS_Store`, `Thumbs.db` and trash folders.
 - **Space planning:** estimate required space for copies, history and optional ZIP output before copying.
+- **Path-length check:** stop before copying, with the offending path named, when a backup or restore would create a path over Windows' 260-character limit.
 - **ZIP export:** optionally create a separate archive after a successful full backup. It contains files, empty folders, checksums and a report, with local paths hidden in the report and internal history omitted.
 
 Incremental previews list actions rather than skipped files. If there are no new or changed files to copy, the normal run skips the proceed prompt. Full-backup progress suppresses individual file paths.

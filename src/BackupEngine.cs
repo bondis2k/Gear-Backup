@@ -97,6 +97,12 @@ partial class GearBackup
             ChooseDestination();
             stopwatch.Start();
             Plan();
+            if (pathProblem != null)
+            {
+                WriteColored("  " + pathProblem, ConsoleColor.Red);
+                summary = pathProblem;
+                return 1;
+            }
             if (!CheckSpace()) return 1;
             if (!Approve()) return 0;
             CopyFiles();
@@ -118,6 +124,26 @@ partial class GearBackup
         }
 
         bool zipFailed;
+        string pathProblem;
+
+        // Every path this run will create must fit Windows' limits: the copies, their folders, dated old
+        // versions of changed files (up to 21 characters longer), history objects and the statistics file.
+        string CheckPathLengths()
+        {
+            var check = new PathLengthCheck();
+            string root = dest.TrimEnd('\\') + "\\";
+            foreach (FileInfo file in scan.Files)
+            {
+                string target = root + Relative(file);
+                bool mayKeepOldVersion = incremental && target.Length <= PathLengthCheck.MaxFile && File.Exists(target);
+                check.File(target, mayKeepOldVersion ? 21 : 0);
+            }
+            foreach (string folder in scan.Folders) check.Folder(root + folder.Substring(source.Length));
+            if (config.PointInTimeHistory)
+                check.File(Path.Combine(AppIdentity.MetadataRoot(dest), "objects", new string('0', 64)), ".tmp".Length);
+            check.File(root + "backup-statistics_" + started.ToString("yyyy-MM-dd_HHmmss_fffffff") + ".txt");
+            return check.Problem("Choose a shorter backup location (for example D:\\Backups), or shorten folder names on the source.");
+        }
         public string OutputFolder { get { return dest; } }
         public OperationCounts ResultCounts { get { return new OperationCounts { Copied = copied, Unchanged = unchanged,
             Removed = prunedVersions, Failed = failed + (zipFailed ? 1 : 0) }; } }
@@ -179,6 +205,8 @@ partial class GearBackup
         {
             scan = new ScanResult();
             CollectFiles(source, scan);
+            pathProblem = CheckPathLengths();
+            if (pathProblem != null) return;
 
             resuming = incremental && Status.Unfinished(BackupStatus(dest));
             states = new FileState[scan.Files.Count];

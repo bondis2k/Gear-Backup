@@ -27,6 +27,10 @@ partial class GearBackup
         public DeviceProfile Device;
         public MtpDeviceInfo Info;
         public string Mirror;
+        // Opens the device for reading; null means the real device (tests supply a fake).
+        public Func<IMtpSource> Open;
+        // The X100VI's connection mode when already known from detection, so it isn't asked again.
+        public bool? SettingsMode;
     }
 
     static string MirrorRoot
@@ -69,11 +73,17 @@ partial class GearBackup
     // Brings the device's mirror up to date and returns its path, ready to be backed up.
     static string SyncMtpSource(MtpSource mtp)
     {
-        if (mtp.Device == Devices.X100VI && FujiSettingsMode(mtp.Info))
+        if (mtp.Device == Devices.X100VI && (mtp.SettingsMode ?? FujiSettingsMode(mtp.Info)))
             throw new IOException("The X100VI is in settings mode. Choose Back up X100VI settings (CLI: --camera-settings), or select USB card reader on the camera to back up photos.");
         OperationOutput.WriteLine("  Reading the " + mtp.Device.Name + " over MTP into " + mtp.Mirror);
         MirrorResult result;
-        using (var device = new MtpDevice(mtp.Info.InterfacePath)) result = SyncMirror(device, mtp.Mirror);
+        IMtpSource device = mtp.Open != null ? mtp.Open() : new MtpDevice(mtp.Info.InterfacePath);
+        try { result = SyncMirror(device, mtp.Mirror); }
+        finally
+        {
+            var disposable = device as IDisposable;
+            if (disposable != null) disposable.Dispose();
+        }
         OperationOutput.WriteLine("  {0:N0} file(s) downloaded ({1}), {2:N0} unchanged, {3:N0} removed from the mirror.",
             result.Downloaded, FormatSize(result.Bytes), result.Unchanged, result.Removed);
         foreach (string name in result.Skipped)

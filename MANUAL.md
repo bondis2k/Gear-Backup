@@ -213,6 +213,8 @@ The program skips computer-generated leftovers:
 
 Linked files and folders (Windows reparse points) are rejected. An unreadable source folder fails the scan; it is not silently treated as empty. The source and backup folder must not contain one another.
 
+Windows limits a file path to 259 characters and a folder path to 247. Before copying, a backup checks every path it will create, including dated old versions and history objects; a restore checks every file and its temporary copy on the target. If one would be too long, the operation stops before changing anything and names the path. Choose a shorter backup location (for example `D:\Backups`) or restore destination, or shorten folder names on the source.
+
 ### Fast or thorough comparison
 
 ```ini
@@ -539,6 +541,8 @@ If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause G
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. Tests are grouped by area: `BackupTests.cs`, `RestoreTests.cs`, `DeviceTests.cs` (device profiles, MTP mirrors and each device), `SecurityTests.cs` (links, temporary files, malformed manifests), `FujiSettingsTests.cs`, `ManagementTests.cs`, and `HelperTests.cs` for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. `TestRunner.cs` holds the runner and shared fixtures; the test scripts compile every file in `tests`. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
 
 Safety tests also cover linked mirror roots, broken junctions, file symbolic links, MTP disconnection during a partial transfer, preservation of extra files after a partially failed exact restore, and malformed snapshot manifests. The file symbolic-link test needs Windows Developer Mode or symbolic-link privilege (for example, an elevated test session). Without it, that test reports `SKIP` with the reason and is excluded from the passed-test count; junction tests and other safety tests still run. A passing summary with a skip does not mean every link case was verified.
+
+Both suites also run automatically on GitHub for every pull request and every push to `main` (`.github\workflows\tests.yml`), on a Windows runner; a failed run keeps its test folders as a downloadable artifact for a week.
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 

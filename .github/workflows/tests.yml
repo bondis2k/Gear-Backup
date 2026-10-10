@@ -1,0 +1,34 @@
+# Runs the core and GUI test suites on Windows for every pull request and every push to main.
+# The suites use isolated fixtures under .test-runs; a failed run keeps them and uploads them.
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Core tests
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
+
+      - name: GUI tests
+        if: success() || failure()
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
+
+      - name: Keep fixtures of failed tests
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-test-fixtures
+          path: .test-runs
+          if-no-files-found: ignore
+          retention-days: 7

@@ -43,6 +43,7 @@ partial class GearBackup
         {
             found.CameraSettingsMode = FujiSettingsMode(mtp.Info);
             found.CameraMode = FujiModeName(found.CameraSettingsMode);
+            mtp.SettingsMode = found.CameraSettingsMode;
         }
         return found;
     }
@@ -61,12 +62,13 @@ partial class GearBackup
     }
 
     // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
-    // device's mirror is synced first, under the mirror lock that storage cleanup also takes.
+    // device's mirror is synced first, under the lock of the folder holding the mirrors (MirrorRoot),
+    // which storage cleanup also takes before recycling a mirror.
     static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
     {
         MtpSource mtp = prepared.Source.Mtp;
         if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-        using (mtp == null ? null : LockHistory(MirrorRoot))
+        using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
         {
             string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
             if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
