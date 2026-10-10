@@ -41,7 +41,8 @@ Download a package from [GitHub Releases](https://github.com/bondis2k/Gear-Backu
 Both packages include the illustrated offline manual and preserve existing INI settings when updated. Portable backups use the configured backup location; MTP mirrors are stored in the PC's Local AppData folder.
 
 1. Open `GearBackup.GUI.exe` and connect your device, insert its card, or choose a source folder.
-2. Use **Detect device** or select the source, then set your backup location in **Settings**. Backups default to the Windows Music folder.
+2. Click **Detect device**, choose **Full backup** or **Incremental backup**, then **Back up**. Backups default to `%USERPROFILE%\Backup`. Use **More options** to choose a source folder, change the destination, set an optional profile or add a zip copy.
+   If the destination folder is missing, starting a backup asks whether to create it; choosing No cancels.
 3. Choose a full or incremental backup, review the preview, and start copying.
 4. Use **Dashboard** to review your backups, **Storage** to manage space, or the restore operation to recover files.
 
@@ -67,9 +68,11 @@ Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the
 
 Global preferences are stored in `GearBackup.ini` beside the executables. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
 
-Change previews and point-in-time history are enabled by default. SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
+Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Retro is the default.
 
-To reduce storage, disable **Save point-in-time history** in Settings or set `PointInTimeHistory=no`. This avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
+Change previews are enabled by default. Point-in-time history (`PointInTimeHistory`), SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
+
+The default `PointInTimeHistory=no` avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Enable **Save point-in-time history** in Settings or set `PointInTimeHistory=yes` if you want to restore earlier states. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
 
 See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, retention, recovery locations and other options.
 
@@ -84,7 +87,7 @@ build.cmd --no-pause
 build-gui.cmd --no-pause
 ```
 
-These produce `GearBackup.exe`, `GearBackup.GUI.exe` and `Manual.html`. Generated executables and personal settings are excluded from Git.
+These produce `GearBackup.exe`, `GearBackup.GUI.exe` and four offline manuals (`Manual.html`, `Manual-original.html`, `Manual-original-dark.html`, `Manual-retro.html`). Generated executables and personal settings are excluded from Git.
 
 To build both installer packages, also install **Inno Setup 6.3 or newer**, then run:
 

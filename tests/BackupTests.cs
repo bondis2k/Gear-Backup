@@ -42,7 +42,7 @@ partial class GearBackup
     static void TestFullAndIncremental(string root)
     {
         string source = Rooted(Path.Combine(root, "card")), history = Path.Combine(root, "history");
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
         string title, summary;
         Put(Path.Combine(source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(source, "Songs", "removed.m8s"), "REMOVED");
@@ -336,13 +336,13 @@ partial class GearBackup
 
     static void TestWithoutHistory(string root)
     {
-        Assert(new Config().PointInTimeHistory, "point-in-time history is enabled by default");
+        Assert(!new Config().PointInTimeHistory, "point-in-time history is disabled by default");
         string source = Rooted(Path.Combine(root, "source"));
         Put(Path.Combine(source, "song.txt"), "FIRST");
         Put(Path.Combine(source, "unchanged.txt"), "SAME");
         Directory.CreateDirectory(Path.Combine(source, "empty"));
         string history = Path.Combine(root, "history");
-        var config = new Config { PointInTimeHistory = false, HardLinks = true, Verify = true, Thorough = true, Preview = false };
+        var config = new Config { HardLinks = true, Verify = true, Thorough = true, Preview = false };
         var ui = new TestInteraction();
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         string backup = ListBackups(history)[0];
@@ -410,7 +410,7 @@ partial class GearBackup
         DateTime songTime = File.GetLastWriteTimeUtc(song);
         string history = Path.Combine(root, "opt-history");
         Assert(!new Config().HardLinks, "hard-linked history is opt-in");
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, HardLinks = true };
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, HardLinks = true, PointInTimeHistory = true };
         var ui = new TestInteraction();
         OperationResult first = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         Assert(first.ExitCode == 0, "optimization fixture backup succeeds");
@@ -490,7 +490,7 @@ partial class GearBackup
         Put(Path.Combine(source, "Songs", "one.m8s"), "HEADLESS");
         Put(Path.Combine(source, "Songs", "two.m8s"), "HEADLESS");
         string history = Path.Combine(root, "engine-history");
-        var config = new Config { BackupFolder = root, Preview = true };
+        var config = new Config { BackupFolder = root, Preview = true, PointInTimeHistory = true };
         var ui = new TestInteraction();
         bool delayed = false;
         ui.OnProgress = delegate(OperationProgress p) {
@@ -537,7 +537,7 @@ partial class GearBackup
         Directory.CreateDirectory(cancelSource);
         File.WriteAllBytes(large.FullName, new byte[2 * 1024 * 1024]);
         string cancelHistory = Path.Combine(root, "cancel-history");
-        config = new Config { BackupFolder = root, Preview = false };
+        config = new Config { BackupFolder = root, Preview = false, PointInTimeHistory = true };
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
@@ -628,7 +628,7 @@ partial class GearBackup
         string source = Rooted(Folder(root, "src"));
         string relative = Path.Combine(new string('s', 40), new string('f', 30) + ".wav");
         Put(Path.Combine(source, relative), "LONG");
-        var config = new Config { BackupFolder = root, Preview = false };
+        var config = new Config { BackupFolder = root, Preview = false, PointInTimeHistory = true };
 
         // A history deep enough that the copy would be over 259 characters, while the folder itself fits.
         string deep = Path.Combine(root, new string('h', Math.Max(1, 185 - root.Length)));

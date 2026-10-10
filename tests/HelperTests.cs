@@ -83,7 +83,7 @@ partial class GearBackup
         Directory.Move(Path.Combine(backup, AppIdentity.MetadataFolderName), Path.Combine(backup, AppIdentity.Legacy.MetadataFolderName));
         foreach (string manifest in Directory.GetFiles(SnapshotRoot(backup), "*.manifest"))
             File.WriteAllText(manifest, File.ReadAllText(manifest).Replace(AppIdentity.SnapshotHeader, AppIdentity.Legacy.SnapshotHeader));
-        var config = new Config { BackupFolder = root, Profile = "studio", Preview = false, Thorough = true, Verify = true };
+        var config = new Config { BackupFolder = root, Profile = "studio", Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
         Assert(HistoriesRoot(config) == oldRoot && HistoryFor(config, f.Source) == history, "an existing history is reused in place");
         Assert(BackupStatus(backup) == Status.Complete && LatestSnapshot(backup).Files.Count == f.First.Files.Count,
             "old status files, manifests and objects remain readable");
@@ -309,7 +309,7 @@ partial class GearBackup
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
         var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
             MaxNameLength = 40, Eject = EjectMode.Ask, KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
-            SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, PointInTimeHistory = false, Zip = true };
+            SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, PointInTimeHistory = false, Theme = "original", Zip = true };
         string ini = Path.Combine(dir, "roundtrip.ini");
         WithUi(() => SaveConfig(saved, ini));
         var loaded = new Config();
@@ -332,8 +332,10 @@ partial class GearBackup
             ApplySetting(config, "KeepBackups", "-1");
             ApplySetting(config, "Eject", "maybe");
             ApplySetting(config, "Verify", "perhaps");
+            ApplySetting(config, "Theme", "neon");
         });
         Assert(config.Mode == BackupMode.Ask && config.KeepBackups == 0 && config.Eject == EjectMode.No && !config.Verify, "invalid values keep the defaults");
+        Assert(config.Theme == "retro", "an invalid theme retains the default palette");
         Assert(ui.Output.ToString().Contains("Mode=sometimes isn't valid") && ui.Output.ToString().Contains("KeepBackups=-1 isn't valid"),
             "invalid values are reported");
         WithUi(() => { ApplySetting(config, "VERIFY", "On"); ApplySetting(config, "eject", "YES"); ApplySetting(config, "Mode", "Full"); });

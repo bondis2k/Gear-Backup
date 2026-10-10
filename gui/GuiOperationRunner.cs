@@ -39,13 +39,14 @@ partial class GearBackup
             });
         }
 
-        // Detection shows the device in the header; a drive also fills in the source.
-        void ShowDetected(SourceChoice found)
+        // Drives populate the source; MTP uses detection at backup time, never a previous drive path.
+        internal void ShowDetected(SourceChoice found)
         {
-            if (found != null && found.Mtp == null) detectedDrive = found;
+            detectedDrive = found != null && found.Mtp == null ? found : null;
             form.OnUi(delegate {
-                if (found != null && found.Mtp == null) form.SetDetectedSource(found.Path);
-                form.ShowDevice(found == null ? null : found.Detected, found == null ? null : found.CameraMode);
+                form.SetDetectedSource(found != null && found.Mtp == null ? found.Path : "");
+                string connection = found == null ? null : found.CameraMode ?? (found.Mtp != null ? "MTP" : "USB drive · " + found.Path);
+                form.ShowDevice(found == null ? null : found.Detected, connection);
                 if (found != null && found.CameraSettingsMode) form.SelectCameraSettings();
                 return true;
             });

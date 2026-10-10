@@ -11,7 +11,7 @@ partial class GearBackup
 {
     internal class Config
     {
-        public string BackupFolder;
+        public string BackupFolder = DefaultBackupFolder();
         public BackupMode Mode = BackupMode.Ask;
         public bool Verify = false;
         public int KeepBackups = 0;     // 0 = keep all
@@ -25,8 +25,9 @@ partial class GearBackup
         public bool Thorough = false;
         public bool Preview = true;
         public bool HardLinks = false;  // share history content with the backup files (NTFS)
-        public bool PointInTimeHistory = true; // save snapshots and their content store
+        public bool PointInTimeHistory = false; // opt in to snapshots and their content store
         public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
+        public string Theme = "retro"; // global GUI colour palette
         public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
         public Config Clone() { return (Config)MemberwiseClone(); }
@@ -89,16 +90,19 @@ partial class GearBackup
     // In the order explanations are added to a new GearBackup.ini; preferences are listed in the same order.
     static readonly Setting[] Settings =
     {
+        Choice("Theme", null, new[] { "original", "retro", "original-dark" }, c => c.Theme, (c, v) => c.Theme = v,
+            "; Theme: GUI colour palette. original = light gray and teal; retro = teal, navy, gray and cream (default).\r\n" +
+            "; original-dark = charcoal and teal. Help opens the matching offline manual.\r\n"),
         new Setting { Key = "BackupFolder", Label = "Backup location", Location = true,
             Get = c => c.BackupFolder,
             Set = (c, value) => { c.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value)); return null; },
             Doc = "; BackupFolder: where backups go. Each backup is saved to\r\n" +
                   ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
-                  "; Leave it empty to use your Music folder. Environment variables work,\r\n" +
+                  "; Leave it empty to use %USERPROFILE%\\Backup. Environment variables work,\r\n" +
                   "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" },
         YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
-            "; PointInTimeHistory: yes = save restorable snapshots and a history content store (default).\r\n" +
-            "; no = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
+            "; PointInTimeHistory: yes = save restorable snapshots and a history content store.\r\n" +
+            "; no (default) = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
             "; Old file versions and separate full backups are still kept according to their retention settings.\r\n" +
             "; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\n"),
         YesNo("HardLinks", "Hard-linked history", c => c.HardLinks, (c, v) => c.HardLinks = v,
@@ -180,6 +184,11 @@ partial class GearBackup
         return setting.Doc + setting.Key + "=" + setting.Get(new Config { BackupFolder = "" }) + "\r\n";
     }
 
+    static string DefaultBackupFolder()
+    {
+        return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
+    }
+
     // Reads GearBackup.ini next to the exe. Settings missing from it are appended with their default and
     // explanation, so the file always documents every option. A --preview run doesn't write the file.
     static Config LoadConfig()
@@ -189,7 +198,7 @@ partial class GearBackup
 
     static Config LoadConfig(string directory)
     {
-        var config = new Config { BackupFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), SettingsDirectory = directory };
+        var config = new Config { SettingsDirectory = directory };
         string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
         string legacyFile = Path.Combine(directory, AppIdentity.Legacy.ConfigFileName);
         try
@@ -251,7 +260,7 @@ partial class GearBackup
     // Preserve comments and unrelated keys when the GUI saves shared preferences.
     static void SaveConfig(Config config)
     {
-        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppIdentity.ConfigFileName);
+        string path = Path.Combine(config.SettingsDirectory ?? AppDomain.CurrentDomain.BaseDirectory, AppIdentity.ConfigFileName);
         SaveConfig(config, path);
     }
 

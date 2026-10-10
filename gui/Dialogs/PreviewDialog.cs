@@ -10,7 +10,7 @@ partial class GearBackup
         readonly ComboBox filter = new ComboBox { Name = "PreviewFilter", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill, AccessibleName = "Filter changes" };
         readonly DataGridView grid = new DataGridView { Name = "PreviewChanges", Dock = DockStyle.Fill, ReadOnly = true,
             AllowUserToAddRows = false, AllowUserToDeleteRows = false, RowHeadersVisible = false, MultiSelect = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect, BackgroundColor = Color.White, BorderStyle = BorderStyle.None,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect, BackgroundColor = GuiTheme.Surface, BorderStyle = BorderStyle.None,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, AccessibleName = "Planned changes" };
         readonly Label count = GuiTheme.Label("", 9, GuiTheme.Muted);
         readonly OperationPlan plan;
@@ -59,7 +59,7 @@ partial class GearBackup
                 long size;
                 string displaySize = plan.FileSizes != null && plan.FileSizes.TryGetValue(path, out size) ? FormatSize(size) : "—";
                 int row = grid.Rows.Add(action, path, displaySize);
-                if (category == 3) grid.Rows[row].Cells[0].Style.ForeColor = Color.FromArgb(175, 69, 47);
+                if (category == 3) grid.Rows[row].Cells[0].Style.ForeColor = GuiTheme.Danger;
             }
             count.Text = grid.Rows.Count + " of " + plan.Actions.Count + " actions shown. " +
                 (plan.PreviewOnly ? "No files will change." : "Proceed applies the entire plan, including hidden rows.");

@@ -67,6 +67,7 @@ partial class GearBackup
     {
         MtpSource mtp = prepared.Source.Mtp;
         if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+        if (!restore && !EnsureBackupFolder(prepared.Config)) return BackupFolderCancelled();
         using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
         {
             string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
@@ -81,6 +82,26 @@ partial class GearBackup
             result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
             return result;
         }
+    }
+
+    static OperationResult BackupFolderCancelled()
+    {
+        return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
+    }
+
+    // Ask before the history lock or MTP sync creates anything for a backup. A preview stays read-only.
+    static bool EnsureBackupFolder(Config config)
+    {
+        string folder = Path.GetFullPath(config.BackupFolder);
+        RejectRootLinks(folder);
+        if (Directory.Exists(folder)) return true;
+        if (File.Exists(folder)) throw new IOException("The backup location is a file, not a folder: " + folder);
+        if (PreviewOnly) return true;
+        if (!AskYesNo("The backup folder does not exist:\n" + folder + "\n\nCreate it and continue with the backup?")) return false;
+        OperationContext.Current.CheckCancellation();
+        RejectRootLinks(folder);
+        Directory.CreateDirectory(folder);
+        return true;
     }
 
     static string HistoriesRoot(Config config)

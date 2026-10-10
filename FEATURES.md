@@ -109,6 +109,8 @@ Restore and check history selection covers all configured backup locations, with
 
 Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
 
+The profile editor separates device settings from backup profiles, groups options into Backup, Restore and Advanced tabs, and shows each setting's default. Uncheck **Use default** to customize a value; **New profile**, **Save changes** and **Reset to defaults** provide explicit actions.
+
 The GUI provides two management views across configured backup locations:
 
 - **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. Actions open folders, check backups and view saved recipes.
@@ -120,23 +122,31 @@ Retention options can limit whole backup folders or dated old versions per file,
 
 ## Defaults and everyday controls
 
+Backups default to `%USERPROFILE%\Backup`. Starting a backup asks before creating a missing destination, including device/profile overrides and X100VI settings backups. Choosing No cancels; previews do not create the folder.
+
 | Setting | Default |
 | --- | --- |
 | Change previews | On |
-| Point-in-time history | On |
+| Point-in-time history | Off |
 | SHA-256 change comparison | Off |
 | Automatic copy verification | Off |
 | Restore recovery copies | Off |
 | NTFS hard links | Off |
 | Backup and old-version retention limits | Unlimited |
 | Automatic ejection | Off |
-| Backup location | Windows Music folder |
+| Backup location | `%USERPROFILE%\Backup` |
 
 The GUI preview table supports search and action filters without changing the execution plan. Cancel or Ctrl+C stops further work and requests cleanup; interrupted file backups can be resumed. Progress includes stages, processed bytes and elapsed time where available.
 
 Backup reports contain counts, sizes, speed, warnings, failures and free space, with device-aware change summaries. The GUI shows results and output-folder shortcuts; the CLI sends Windows result notifications. Detected USB-drive devices can be offered for safe ejection or ejected automatically after confirming they still own the selected source.
 
 Keyboard shortcuts, accessible control names, tooltips and DPI-aware layouts support GUI navigation. **Help** and **F1** open the illustrated offline HTML manual.
+
+The main window focuses on **Detect device**, the operation choice and **Back up**, with a compact destination summary. **More options** holds the source folder, backup location, optional profile and zip choice. Restore automatically reveals its destination; Cancel appears while work runs.
+
+Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
+
+**Settings → Appearance** offers **Original** (light gray and teal), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream; default). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual.
 
 ## Distribution
 

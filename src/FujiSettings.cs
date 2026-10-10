@@ -214,6 +214,13 @@ partial class GearBackup
         cameras.RemoveAll(info => !string.Equals(info.FriendlyName, "X100VI", StringComparison.OrdinalIgnoreCase));
         if (cameras.Count != 1) throw new IOException("Connect one X100VI in USB RAW CONV./BACKUP RESTORE mode. Close other camera applications and try again.");
         OperationContext.Current.Device = Devices.X100VI;
+        // Settings use a separate history (Studio-settings) with the named profile's preferences.
+        string automatic = Path.GetFileName(MirrorFolder(Devices.X100VI, cameras[0])).Replace("x100vi-", "x100vi-settings-");
+        string profileName = config.Profile.Length > 0 ? SettingsProfileName(config.Profile) : automatic;
+        ValidateProfile(profileName);
+        config = ResolveProfileSettings(config, Devices.X100VI.Id, config.Profile.Length > 0 ? config.Profile : profileName);
+        string history = Path.Combine(HistoriesRoot(config), "profiles", profileName);
+        if (!EnsureBackupFolder(config)) return BackupFolderCancelled();
         OperationOutput.WriteLine("  Capturing X100VI C1–C7 recipes and current shooting settings.");
         OperationOutput.WriteLine("  This is a settings snapshot, not a full-camera or X Acquire backup.");
         Dictionary<string, byte[]> files;
@@ -230,19 +237,12 @@ partial class GearBackup
             finally { mutex.ReleaseMutex(); }
         }
         OperationContext.Current.CheckCancellation();
-        // Settings get their own history, never the photo history: a named profile "Studio" saves them as
-        // "Studio-settings" (using Studio's preferences), so the next photo backup can't continue into a
-        // settings-only folder.
-        string automatic = Path.GetFileName(MirrorFolder(Devices.X100VI, cameras[0])).Replace("x100vi-", "x100vi-settings-");
-        string profileName = config.Profile.Length > 0 ? SettingsProfileName(config.Profile) : automatic;
-        ValidateProfile(profileName);
-        config = ResolveProfileSettings(config, Devices.X100VI.Id, config.Profile.Length > 0 ? config.Profile : profileName);
-        string history = Path.Combine(HistoriesRoot(config), "profiles", profileName);
         return SaveFujiSettings(files, history, config);
     }
 
     static OperationResult SaveFujiSettings(Dictionary<string, byte[]> files, string history, Config config)
     {
+        if (!EnsureBackupFolder(config)) return BackupFolderCancelled();
         string staging = Path.Combine(Path.GetTempPath(), "GearBackup-camera-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(staging);
         try

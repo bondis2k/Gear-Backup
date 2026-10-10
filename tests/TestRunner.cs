@@ -148,6 +148,7 @@ partial class GearBackup
         RunTest("Fast catalog scan", () => TestCatalogShortcuts(Folder(root, "catalog-shortcuts")));
         RunTest("Readable X100VI recipes", () => TestRecipeReading(Folder(root, "recipe-reading")));
         RunTest("Shared source flow", () => TestSharedFlow(Folder(root, "shared-flow")));
+        RunTest("Backup destination defaults and creation", () => TestBackupDestination(Folder(root, "destination")));
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
         RunTest("Zip", () => TestZip(Folder(root, "zip")));
         RunTest("Paths over Windows' length limit", () => TestLongPaths(Folder(root, "long-paths")));
@@ -181,7 +182,7 @@ partial class GearBackup
     static Fixture BackedUpCard(string root, bool edited)
     {
         var f = new Fixture { Root = root, Source = Rooted(Path.Combine(root, "card")), History = Path.Combine(root, "history") };
-        f.Config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
+        f.Config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
         Put(Path.Combine(f.Source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(f.Source, "Songs", "removed.m8s"), "REMOVED");
         Put(Path.Combine(f.Source, "Songs", "dated_2026-01-01_120000.m8s"), "REAL DATED SONG");

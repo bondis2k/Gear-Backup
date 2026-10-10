@@ -12,3 +12,6 @@ M8Backup.ini
 
 # Generated offline manual (source is MANUAL.md).
 /Manual.html
+/Manual-original.html
+/Manual-original-dark.html
+/Manual-retro.html

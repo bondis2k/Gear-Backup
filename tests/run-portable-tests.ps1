@@ -45,7 +45,7 @@ function Extract([string]$logName) {
 }
 Extract 'extract.log'
 $packageVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($PortablePath).ProductVersion.Trim()
-foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe', 'Manual.html', 'MANUAL.md', 'README.md')) {
+foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe', 'Manual.html', 'Manual-original.html', 'Manual-original-dark.html', 'Manual-retro.html', 'MANUAL.md', 'README.md')) {
     Assert (Test-Path -LiteralPath (Join-Path $applicationPath $file)) "Missing portable file: $file"
 }
 foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe')) {
