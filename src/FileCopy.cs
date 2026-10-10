@@ -155,4 +155,15 @@ partial class M8Backup
         try { return FormatSize(new DriveInfo(root).AvailableFreeSpace); }
         catch (Exception) { return "unknown"; }
     }
+
+    // "1.2 GB of 7.4 GB"; DriveInfo rejects network paths (\\server\share), which give "unknown".
+    static string DriveSpaceText(string root)
+    {
+        try
+        {
+            var drive = new DriveInfo(root);
+            return FormatSize(drive.AvailableFreeSpace) + " of " + FormatSize(drive.TotalSize);
+        }
+        catch (Exception) { return "unknown"; }
+    }
 }
