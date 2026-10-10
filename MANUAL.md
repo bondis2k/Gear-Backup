@@ -1,6 +1,6 @@
 # M8 Backup — Manual
 
-M8 Backup is a Windows console program for backing up and restoring a Dirtywave M8 SD card. It also works with a card in a reader or a folder containing a copy of a card. It makes full or incremental backups, keeps dated snapshots, verifies copies, and restores all files, a bundle, a single file, or a song with its samples.
+M8 Backup is a Windows program with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card. It also works with a card in a reader or a folder containing a copy of a card. It makes full or incremental backups, keeps dated snapshots, verifies copies, and restores all files, a bundle, a single file, or a song with its samples.
 
 Requires Windows 10 or 11 and the built-in .NET Framework. No installation or extra runtime is needed.
 
@@ -18,6 +18,23 @@ The settings file is `M8Backup.ini` beside the executable. Missing options are a
 If no M8 is detected, enter a drive or folder path, such as `E:\` or `D:\M8Card`. Press Enter to cancel. You can also set `SourceFolder` or pass `--source`.
 
 Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallback to a removable drive labelled M8. Drives selected manually are not automatically ejected.
+
+## Graphical interface
+
+Run `build-gui.cmd --no-pause`, then open `M8Backup.GUI.exe`. The existing `M8Backup.exe` command-line interface remains available separately. Both executables use `M8Backup.ini` beside them and the same backup histories and file operations.
+
+1. Select the M8 card/source folder, or click **Detect M8**. Leaving the source empty also attempts detection when starting a backup or restore.
+2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
+3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**.
+4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
+
+An incremental run creates a full backup if this profile has no backups yet. An incomplete or failed latest backup offers Resume, New full backup, or Cancel. An unchanged incremental run needs no acceptance prompt. Full backups show overall progress without individual file progress.
+
+Restore opens dialogs for history, backup folder, saved snapshot/current files, and restore mode. All, bundle, single-file, dependent-sample, and merge/exact choices use the same rules described below. The current-files option is explicit in the snapshot selector; cancelling a dialog cancels the operation. Check backups needs no source card and lets you select a backup or all backups in a history.
+
+**Settings** saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
+
+Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
 
 ## Separate card and folder histories
 
@@ -224,7 +241,7 @@ The backup statistics duration includes scanning, planning, copying, snapshot cr
 
 Every backup writes statistics with copied/unchanged files, song changes, skipped leftovers, data volume, speed, warnings, failures, and free space. Incremental reports use distinct timestamps so successive reports are retained.
 
-Windows notifications summarize backup, restore, or check results. `Eject=no` leaves the M8 connected, `Eject=ask` asks in a notification/console, and `Eject=yes` requests safe removal. Automatic ejection only applies to a device identified through the M8 USB detection path.
+The CLI uses Windows notifications to summarize backup, restore, or check results; the GUI shows results in its window. `Eject=no` leaves the M8 connected, `Eject=ask` asks in a notification/console or GUI dialog, and `Eject=yes` requests safe removal. Automatic ejection only applies to a device identified through the M8 USB detection path.
 
 ## All INI settings
 
@@ -271,11 +288,15 @@ Unknown arguments and missing argument values are errors. The program remains in
 
 Run `build.cmd --no-pause` to build `M8Backup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
 
+Run `build-gui.cmd --no-pause` to build `M8Backup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. To build under another name while the GUI is running, use `build-gui.cmd --no-pause M8Backup.GUI.updated.exe`.
+
 If `M8Backup.exe` is running and Windows locks it, use `build.cmd --no-pause M8Backup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. They create isolated fixtures under `.test-runs`, use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. They do not write to a connected M8 or test hardware ejection.
 
-The source uses a partial `M8Backup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the current CLI frontend. A future GUI can provide its own adapter and call the same engines on a worker thread. Each synchronous operation activates its context on that thread; callbacks should marshal to the GUI thread as needed. The CLI holds the history lock around mutations, and another frontend must do the same.
+Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
+
+The source uses a partial `M8Backup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the CLI frontend, and `GuiInteraction` supplies Windows Forms dialogs, marshals decisions to the UI thread, and batches progress/log updates. Each synchronous operation activates its context on its worker thread. Both frontends hold the history lock around mutations.
 
 Backup file traversal skips metadata folders before descending into them, so normal browsing, checksum-list writing, and retention do not scan history objects as user files.
 
@@ -283,14 +304,16 @@ Backup file traversal skips metadata folders before descending into them, so nor
 |---|---|
 | `Program.cs` | Arguments, source/profile selection, menu, history locking. |
 | `Config.cs` | INI defaults and parsing. |
-| `Workflow.cs` | Path validation, profiles, previews, status, atomic metadata writes. |
+| `Workflow.cs` | Profiles, previews, status, atomic metadata writes. |
+| `PathValidation.cs` | Path normalization, containment, link rejection, and safe relative paths. |
+| `BackupTraversal.cs` | User-content traversal that skips history metadata folders. |
 | `Backup.cs` | CLI backup entry, retention, source scanning, version naming. |
 | `BackupEngine.cs` | Full/incremental execution, resume, space planning, reports. |
 | `Snapshots.cs` | Manifests, deduplicated objects, historical selection and integrity checks. |
 | `Restore.cs` | CLI restore selection, bundles, file validation, recovery helpers. |
 | `RestoreEngine.cs` | Restore planning and execution, staged replacements, exact removal. |
 | `IntegrityEngine.cs` | Integrity-check execution and result handling. |
-| `Operations.cs` | Frontend interface, plans, progress/results, cancellation context, backup traversal. |
+| `Operations.cs` | Frontend interface, plans, progress/results, cancellation context, output adapter. |
 | `Dependencies.cs` | Bounded firmware-6 sample-reference extraction. |
 | `Checksums.cs` | Browsable-file checksum lists and check menu. |
 | `FileCopy.cs` | Copying/hashing, verification, free-space checks. |
@@ -298,3 +321,10 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `M8Device.cs` | Windows M8 detection and safe ejection. |
 | `Notifications.cs` | Windows notifications. |
 | `ConsoleUi.cs` | Console prompts and formatting. |
+| `gui\GuiProgram.cs` | Windows Forms startup and preview rendering. |
+| `gui\MainForm.cs` | Window layout, UI events, display updates, and settings capture. |
+| `gui\GuiOperationRunner.cs` | Background-worker lifetime, cancellation, operation coordination, history locks, detection/ejection. |
+| `gui\GuiInteraction.cs` | Adapts engine decisions and progress to GUI dialogs and display callbacks. |
+| `gui\GuiTheme.cs` | Shared colors and control styling. |
+| `gui\GuiProgressBar.cs` | Custom progress rendering. |
+| `gui\Dialogs\` | Shared dialog frame, selection, preview, choices, search, settings, and folder picker. |
