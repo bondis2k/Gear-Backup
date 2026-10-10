@@ -99,6 +99,7 @@ partial class GearBackup
     // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
     static Snapshot ReadSnapshot(string backup, string manifest)
     {
+        CheckRecordSize(manifest, ListRecordLimit, "Snapshot manifest");
         string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
         if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
             throw new IOException("Unsupported snapshot format.");

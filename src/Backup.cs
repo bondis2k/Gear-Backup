@@ -50,15 +50,18 @@ partial class GearBackup
     }
 
     // Keeps at most `keep` old versions of each file in the backup; the oldest extra ones go to the
-    // Recycle Bin after asking. Files that also exist on the M8 under that name are never touched
-    // (e.g. a dated version that was restored to the M8). Returns how many were moved.
-    static int PruneOldVersions(string backup, int keep, HashSet<string> onM8)
+    // Recycle Bin after asking. Only versions the program recorded keeping (`known`, relative names) are
+    // considered, so a file of the user's own with a date in its name is never offered. Files that also
+    // exist on the M8 under that name are never touched (e.g. a dated version that was restored to the M8).
+    // Returns how many were moved.
+    static int PruneOldVersions(string backup, int keep, HashSet<string> onM8, HashSet<string> known)
     {
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (string path in BackupFiles(backup))
         {
-            if (IsBackupMetaFile(path) || !IsOldVersion(path)) continue;
-            if (onM8.Contains(path.Substring(backup.Length).TrimStart('\\'))) continue;
+            string relative = path.Substring(backup.Length).TrimStart('\\');
+            if (IsBackupMetaFile(path) || !IsOldVersion(path) || !known.Contains(relative)) continue;
+            if (onM8.Contains(relative)) continue;
             string original = OriginalName(path);
             List<string> list;
             if (!groups.TryGetValue(original, out list)) groups[original] = list = new List<string>();

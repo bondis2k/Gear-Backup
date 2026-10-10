@@ -263,12 +263,23 @@ partial class GearBackup
         TryDelete(rollback);
     }
 
+    // Size limits for the records the program reads back from a backup: far above what it writes, so
+    // a damaged or planted file is reported instead of being read whole into memory.
+    const long SmallRecordLimit = 4 * 1024, ListRecordLimit = 128L * 1024 * 1024;
+
+    static void CheckRecordSize(string path, long limit, string what)
+    {
+        if (new FileInfo(path).Length > limit) throw new IOException(what + " is too large: " + path);
+    }
+
     // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
     // Backups made before status files existed report Status.Legacy.
     static string BackupStatus(string folder)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt");
-        return File.Exists(path) ? File.ReadAllText(path).Trim() : Status.Legacy;
+        if (!File.Exists(path)) return Status.Legacy;
+        CheckRecordSize(path, SmallRecordLimit, "Backup status record");
+        return File.ReadAllText(path).Trim();
     }
 
     static void SetBackupStatus(string folder, string status)

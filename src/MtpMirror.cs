@@ -111,6 +111,7 @@ partial class GearBackup
         List<MtpObject> items = source.ListAll();
 
         var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cleanFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var downloads = new List<KeyValuePair<MtpObject, string>>();
         long total = 0;
         foreach (MtpObject item in items)
@@ -119,7 +120,7 @@ partial class GearBackup
             try { path = SafePath(mirror, item.RelativePath); }
             catch (IOException) { result.Skipped.Add(item.RelativePath); continue; }
             onDevice.Add(item.RelativePath);
-            RejectRootLinks(path);
+            RejectLinksBelow(mirror, path, cleanFolders);
             if (item.IsFolder) { Directory.CreateDirectory(path); continue; }
             var existing = new FileInfo(path);
             if (existing.Exists && existing.Length == item.Size && item.Modified != DateTime.MinValue &&
@@ -183,6 +184,24 @@ partial class GearBackup
         return result;
     }
 
+    // Rejects path, or a folder between it and the mirror (checked on its own at the start of a sync), if
+    // it is a link. Folders found clean are remembered in `clean` for the rest of this sync, so listing
+    // thousands of photos doesn't check the same folders, up to the drive root, again for each one.
+    // Downloads still check the whole path right before writing.
+    static void RejectLinksBelow(string mirror, string path, HashSet<string> clean)
+    {
+        string root = Rooted(mirror), current = Path.GetFullPath(path).TrimEnd('\\');
+        while (current.Length >= root.Length && !clean.Contains(current))
+        {
+            bool isFolder = Directory.Exists(current);
+            if ((isFolder || File.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Linked paths are not supported: " + current);
+            if (isFolder) clean.Add(current);
+            current = Path.GetDirectoryName(current);
+            if (current == null) break;
+        }
+    }
+
     // Enumerate one level at a time, checking each entry before descending. These checks deliberately
     // bypass the per-operation folder cache so cleanup also detects links added since the first scan.
     static void ReadMirrorTree(string mirror, List<string> files, List<string> folders)
@@ -200,7 +219,6 @@ partial class GearBackup
                 FileAttributes attributes = File.GetAttributes(entry);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                     throw new IOException("Linked paths are not supported: " + entry);
-                RejectRootLinks(entry);
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
                     folders.Add(entry);

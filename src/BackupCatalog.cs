@@ -292,6 +292,7 @@ partial class GearBackup
         if (File.Exists(successPath))
         {
             RejectRootLinks(successPath);
+            CheckRecordSize(successPath, SmallRecordLimit, "Last successful backup record");
             DateTime date;
             if (!DateTime.TryParseExact(File.ReadAllText(successPath).Trim(), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out date))
                 throw new IOException("Invalid last successful backup record.");
@@ -328,6 +329,7 @@ partial class GearBackup
         string path = Path.Combine(AppIdentity.MetadataRoot(row.Path), "last-check.txt");
         if (!File.Exists(path)) { row.CheckResult = "Never checked"; return; }
         RejectRootLinks(path);
+        CheckRecordSize(path, SmallRecordLimit, "Integrity check record");
         string[] lines = File.ReadAllLines(path);
         DateTime checkedUtc;
         if (lines.Length != 2 || !DateTime.TryParseExact(lines[0], "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out checkedUtc))
@@ -380,26 +382,36 @@ partial class GearBackup
                     throw new IOException("Storage changed since the preview. Refresh before cleanup: " + item.Path);
             }
             int removed = 0;
-            foreach (StorageItem item in items)
+            // Recycled old versions by backup, whose checksum lists are rewritten once at the end.
+            var recycledVersions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            bool finished = false;
+            try
             {
-                OperationContext.Current.CheckCancellation();
-                long currentBytes;
-                if (StorageStamp(item.Path, item.Folder, out currentBytes) != item.Stamp)
-                    throw new IOException("Storage changed before recycling. Refresh before cleanup: " + item.Path);
-                if (recycle != null) recycle(item);
-                else if (item.Folder) Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(item.Path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                else Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.Path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                removed++;
-                // A recycled old version leaves the backup's checksum list.
-                if (item.Kind == StorageKind.OldVersion && Directory.Exists(item.Backup))
+                foreach (StorageItem item in items)
                 {
-                    Dictionary<string, string> sums = LoadChecksums(item.Backup);
-                    if (sums == null) continue;
-                    sums.Remove(item.Path.Substring(Rooted(item.Backup).Length));
-                    WriteChecksums(item.Backup, sums);
+                    OperationContext.Current.CheckCancellation();
+                    long currentBytes;
+                    if (StorageStamp(item.Path, item.Folder, out currentBytes) != item.Stamp)
+                        throw new IOException("Storage changed before recycling. Refresh before cleanup: " + item.Path);
+                    if (recycle != null) recycle(item);
+                    else if (item.Folder) Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(item.Path,
+                        Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    else Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.Path,
+                        Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
+                    removed++;
+                    if (item.Kind != StorageKind.OldVersion) continue;
+                    List<string> names;
+                    if (!recycledVersions.TryGetValue(item.Backup, out names)) recycledVersions[item.Backup] = names = new List<string>();
+                    names.Add(item.Path.Substring(Rooted(item.Backup).Length));
                 }
+                finished = true;
+            }
+            finally
+            {
+                // Also after a failure or Cancel part-way, so the lists never name a recycled version.
+                // An error here only replaces the outcome when the cleanup itself succeeded.
+                try { RemoveChecksumEntries(recycledVersions); }
+                catch (Exception) { if (finished) throw; }
             }
             return removed;
         }
@@ -407,5 +419,22 @@ partial class GearBackup
         {
             for (int i = locks.Count - 1; i >= 0; i--) locks[i].Dispose();
         }
+    }
+
+    // Takes recycled old versions out of their backups' checksum lists, one rewrite per backup. Runs
+    // without cancellation: a Cancel pressed during cleanup must not leave a list naming recycled files.
+    static void RemoveChecksumEntries(Dictionary<string, List<string>> recycled)
+    {
+        if (recycled.Count == 0) return;
+        OperationContext current = OperationContext.Current;
+        using (new OperationContext(current.Interaction, System.Threading.CancellationToken.None) { Device = current.Device }.Activate())
+            foreach (var backup in recycled)
+            {
+                if (!Directory.Exists(backup.Key)) continue;
+                Dictionary<string, string> sums = LoadChecksums(backup.Key);
+                if (sums == null) continue;
+                foreach (string name in backup.Value) sums.Remove(name);
+                WriteChecksums(backup.Key, sums);
+            }
     }
 }

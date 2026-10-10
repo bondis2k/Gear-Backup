@@ -141,6 +141,15 @@ partial class GearBackup
         public DateTime Modified;   // local time; DateTime.MinValue when the device doesn't say
     }
 
+    // An OLE date from a device; DateTime.MinValue ("no date") for a value that isn't a valid date,
+    // so one odd file doesn't stop the whole listing.
+    static DateTime OleDate(double value)
+    {
+        if (double.IsNaN(value) || value < -657435.0 || value > 2958465.99999999) return DateTime.MinValue;
+        try { return DateTime.FromOADate(value); }
+        catch (ArgumentException) { return DateTime.MinValue; }
+    }
+
     // A connected MTP device, found by its USB vendor ID.
     internal sealed class MtpDeviceInfo
     {
@@ -206,24 +215,33 @@ partial class GearBackup
         public List<MtpObject> ListAll()
         {
             var all = new List<MtpObject>();
+            var seen = new HashSet<string>(StringComparer.Ordinal) { DeviceObjectId };
             List<string> storages = Children(DeviceObjectId);
             foreach (string storage in storages)
             {
+                if (!seen.Add(storage)) continue;
                 string prefix = storages.Count == 1 ? "" : Read(storage, "").Name;
-                Walk(storage, prefix, all);
+                Walk(storage, prefix, all, seen, 0);
             }
             return all;
         }
 
-        void Walk(string parentId, string parentPath, List<MtpObject> into)
+        // Deeper than any real device's folders; also stops a device whose listing never ends.
+        const int MaxDepth = 64;
+
+        // `seen` holds every object already listed, and a repeat is skipped: a faulty device that lists a
+        // folder inside itself would otherwise be walked until the program runs out of stack.
+        void Walk(string parentId, string parentPath, List<MtpObject> into, HashSet<string> seen, int depth)
         {
+            if (depth > MaxDepth) throw new IOException("The device's folders are nested too deeply to read.");
             foreach (string id in Children(parentId))
             {
                 OperationContext.Current.CheckCancellation();
+                if (!seen.Add(id)) continue;
                 MtpObject item = Read(id, parentPath);
                 into.Add(item);
                 OperationContext.Current.Progress(Stage.Scanning, item.RelativePath, 0, 0, into.Count);
-                if (item.IsFolder) Walk(id, item.RelativePath, into);
+                if (item.IsFolder) Walk(id, item.RelativePath, into, seen, depth + 1);
             }
         }
 
@@ -281,12 +299,18 @@ partial class GearBackup
                 for (int i = 0; i < 32; i++) Marshal.WriteByte(variant, i, 0);
                 try { values.GetValue(ref key, variant); } catch (COMException) { return DateTime.MinValue; }
                 DateTime result = Marshal.ReadInt16(variant) == 7
-                    ? DateTime.FromOADate(BitConverter.Int64BitsToDouble(Marshal.ReadInt64(variant, 8)))
+                    ? OleDate(BitConverter.Int64BitsToDouble(Marshal.ReadInt64(variant, 8)))
                     : DateTime.MinValue;
                 PropVariantClear(variant);
                 return result;
             }
             finally { Marshal.FreeCoTaskMem(variant); }
+        }
+
+        // The device's reading of the buffer size it works best with, kept between 256 KB and 4 MB.
+        internal static int DownloadBufferSize(uint optimal)
+        {
+            return (int)Math.Min(Math.Max(optimal, 256u * 1024), 4u * 1024 * 1024);
         }
 
         // Copies a file's content from the device into `to` (which must not exist yet).
@@ -298,7 +322,7 @@ partial class GearBackup
             resources.GetStream(item.Id, ref key, StgmRead, ref bufferSize, out stream);
             try
             {
-                var buffer = new byte[Math.Max(bufferSize, 256u * 1024)];
+                var buffer = new byte[DownloadBufferSize(bufferSize)];
                 IntPtr readCount = Marshal.AllocCoTaskMem(4);
                 try
                 {

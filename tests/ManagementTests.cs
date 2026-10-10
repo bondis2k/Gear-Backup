@@ -91,6 +91,45 @@ partial class GearBackup
         Put(Path.Combine(root, "mirrors", "x100vi-test", "photo.raf"), "PHOTO");
         return ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
     }
+    // Several old versions recycled from one backup leave its checksum list in one rewrite, and a
+    // cleanup that fails part-way still takes out what it already recycled.
+    static void TestCleanupChecksums(string root)
+    {
+        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false };
+        string source = Rooted(Path.Combine(root, "source")), song = Path.Combine(source, "song.txt");
+        string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-test");
+        var context = new OperationContext(new TestInteraction(), CancellationToken.None);
+        Put(song, "A");
+        new BackupEngine().Run(source, history, null, false, config, context);
+        string backup = LatestBackup(history);
+        foreach (string content in new[] { "BB", "CCC", "DDDD" })
+        {
+            Put(song, content);
+            new BackupEngine().Run(source, history, backup, true, config, context);
+        }
+        BackupCatalog catalog = ScanBackupCatalog(config, Path.Combine(root, "no-mirrors"));
+        List<StorageItem> versions = catalog.Cleanup.FindAll(i => i.Kind == StorageKind.OldVersion);
+        Assert(versions.Count == 3, "three kept versions are offered for cleanup");
+        int recycled = 0;
+        WithUi(() => Throws(() => CleanupStorage(catalog, versions, item => {
+            if (++recycled == 2) throw new IOException("Recycle Bin refused the file");
+            File.Delete(item.Path);
+        }), "a recycling failure stops the cleanup"));
+        Dictionary<string, string> sums = LoadChecksums(backup);
+        string first = versions[0].Path.Substring(Rooted(backup).Length), second = versions[1].Path.Substring(Rooted(backup).Length);
+        Assert(!File.Exists(versions[0].Path) && !sums.ContainsKey(first), "a failed cleanup still removes what it recycled from the checksum list");
+        Assert(sums.ContainsKey(second) && sums.ContainsKey("song.txt"), "entries for files still there are kept");
+
+        catalog = ScanBackupCatalog(config, Path.Combine(root, "no-mirrors"));
+        versions = catalog.Cleanup.FindAll(i => i.Kind == StorageKind.OldVersion);
+        WithUi(() => CleanupStorage(catalog, versions, item => File.Delete(item.Path)));
+        sums = LoadChecksums(backup);
+        Assert(versions.Count == 2 && sums.Count == 1 && sums.ContainsKey("song.txt"), "recycling several versions of one backup updates its checksum list");
+        int ok = 0, damaged = 0, missing = 0, uncheckedFiles = 0;
+        WithUi(() => CheckBackup(backup, ref ok, ref damaged, ref missing, ref uncheckedFiles));
+        Assert(ok == 1 && damaged == 0 && missing == 0, "the backup checks clean after cleanup");
+    }
+
     static void TestBackupManagement(string root)
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);

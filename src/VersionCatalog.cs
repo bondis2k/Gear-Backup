@@ -59,6 +59,7 @@ partial class GearBackup
     // the format is still checked, so a damaged manifest is reported rather than half-read.
     static List<string> SnapshotFileNames(string manifest)
     {
+        CheckRecordSize(manifest, ListRecordLimit, "Snapshot manifest");
         string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
         if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
             throw new IOException("Unsupported snapshot format.");

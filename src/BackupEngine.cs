@@ -402,7 +402,9 @@ partial class GearBackup
             {
                 var onM8 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (FileInfo f in scan.Files) onM8.Add(Relative(f));
-                prunedVersions = PruneOldVersions(dest, config.KeepOldVersions, onM8);
+                var known = new HashSet<string>(knownVersions, StringComparer.OrdinalIgnoreCase);
+                known.UnionWith(keptVersions);
+                prunedVersions = PruneOldVersions(dest, config.KeepOldVersions, onM8, known);
             }
 
             // Checksum list for the whole backup folder (files without a known checksum are read and hashed)
