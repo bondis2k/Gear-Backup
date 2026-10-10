@@ -68,7 +68,7 @@ partial class M8Backup
         public void ReportProgress(OperationProgress progress)
         {
             if (Console.IsOutputRedirected) return;
-            if (progress.OverallOnly && (progress.Stage == "Copying" || progress.Stage == "Hashing" ||
+            if (progress.OverallOnly && (progress.Stage == "Copying" || progress.Stage == "Hashing" || progress.Stage == "Verifying" ||
                 progress.Stage == "Comparing" || progress.Stage == "Scanning backup")) return;
             DateTime now = DateTime.UtcNow;
             bool changed = progress.Stage != lastStage;
