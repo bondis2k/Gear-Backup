@@ -29,9 +29,10 @@ partial class M8Backup
         List<RestoreEntry> items;
         string bundle = null;
         if (mode == 'a') items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
-        else if (mode == 'b')
+        else if (mode == 'b' || mode == 'p')
         {
-            bundle = PickBundle(snapshot);
+            // A bundle or a song folder: everything under one folder, restored like a bundle.
+            bundle = mode == 'b' ? PickBundle(snapshot) : PickSongFolder(snapshot);
             if (bundle == null) return new OperationResult();
             items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase) &&
                 (historical || !IsOldVersion(f.Relative)));
@@ -75,6 +76,7 @@ partial class M8Backup
     {
         var modes = new List<Option> { new Option('a', "All files") };
         if (device.BundlesFolder != null) modes.Add(new Option('b', "Bundle"));
+        if (device.SongIsFolder) modes.Add(new Option('p', "Whole " + Singular(device.SongsLabel) + " folder"));
         modes.Add(new Option('s', "Single file"));
         if (device.ReadSamplePaths != null) modes.Add(new Option('d', "Song with dependent samples"));
         return modes.ToArray();
@@ -208,6 +210,25 @@ partial class M8Backup
             int pick = AskItem("Choose a file.", labels, "Search again");
             if (pick > 0) return matches[pick - 1];
         }
+    }
+
+    // Lists the song folders (folders holding a song file, e.g. a Tracker project) and lets the user pick one.
+    static string PickSongFolder(Snapshot snapshot)
+    {
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (RestoreEntry file in snapshot.Files)
+            if (IsSong(file.Relative) && !IsOldVersion(file.Relative)) folders.Add(Path.GetDirectoryName(file.Relative));
+        var list = new List<string>(folders);
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        if (list.Count == 0) { OperationOutput.WriteLine("  No " + CurrentDevice.SongsLabel + " found in this backup."); return null; }
+        int pick = AskItem("Choose a " + Singular(CurrentDevice.SongsLabel) + ".", list);
+        return pick == 0 ? null : list[pick - 1];
+    }
+
+    // "projects" -> "project"
+    static string Singular(string label)
+    {
+        return label.EndsWith("s") ? label.Substring(0, label.Length - 1) : label;
     }
 
     // Lists the bundles (folders under Bundles\ that contain files) and lets the user pick one.

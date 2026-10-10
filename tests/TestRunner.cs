@@ -203,6 +203,13 @@ partial class M8Backup
         Throws(() => ValidateProfile("CON"), "reserved profile rejected");
         Assert(ProfileId(source, "studio") == "studio", "explicit profile");
         Assert(ProfileId(source, "") != ProfileId(Path.Combine(root, "second-card"), ""), "folders have separate profiles");
+        string systemDrive = Path.GetPathRoot(Environment.SystemDirectory);
+        using (var volume = new System.Management.ManagementObject("Win32_LogicalDisk.DeviceID='" + systemDrive.Substring(0, 2) + "'"))
+        {
+            volume.Get();
+            Assert(ProfileId(systemDrive, "") == "card-" + volume["VolumeSerialNumber"],
+                "a drive's history is named after its serial number, the same as WMI reports it");
+        }
         Throws(() => SafePath(root, "..\\escape.txt"), "traversal rejected");
         Throws(() => SafePath(root, "C:\\escape.txt"), "absolute manifest path rejected");
     }
@@ -587,7 +594,13 @@ partial class M8Backup
             Options.Add(options);
             return Keys.Count > 0 ? Keys.Dequeue() : options[0].Key;
         }
-        public int ChooseItem(string question, IList<string> items, string noneLabel) { throw new Exception("Engine unexpectedly asked to pick from: " + question); }
+        // Scripted answers for picks from a list (0 = none); without it, a pick is a test failure.
+        public Func<string, IList<string>, int> OnChooseItem;
+        public int ChooseItem(string question, IList<string> items, string noneLabel)
+        {
+            if (OnChooseItem != null) return OnChooseItem(question, items);
+            throw new Exception("Engine unexpectedly asked to pick from: " + question);
+        }
         public bool ReviewPlan(OperationPlan plan) { Plans++; return !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
         {

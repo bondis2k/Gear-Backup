@@ -17,10 +17,12 @@ partial class M8Backup
         return CurrentDevice.IsSong(path);
     }
 
-    // "Songs\Live\Jam.m8s" -> "Live\Jam" (the device's songs folder is left out)
+    // "Songs\Live\Jam.m8s" -> "Live\Jam" (the device's songs folder is left out). Where each song is a
+    // folder: "Projects\User\Jam\project.mt" -> "User\Jam".
     static string SongName(string relative)
     {
-        string name = Path.Combine(Path.GetDirectoryName(relative), Path.GetFileNameWithoutExtension(relative));
+        string name = CurrentDevice.SongIsFolder ? Path.GetDirectoryName(relative)
+            : Path.Combine(Path.GetDirectoryName(relative), Path.GetFileNameWithoutExtension(relative));
         string folder = CurrentDevice.SongsFolder == null ? null : CurrentDevice.SongsFolder + "\\";
         return folder != null && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ? name.Substring(folder.Length) : name;
     }

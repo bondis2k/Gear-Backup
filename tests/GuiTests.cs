@@ -51,6 +51,8 @@ partial class M8Backup
             Assert(deviceImage.AccessibleName == "OP-1 Field", "a device without a picture keeps what's shown");
             ((MainForm)form).ShowDevice(Devices.OPXY);
             Assert(deviceImage.AccessibleName == "OP-XY" && deviceImage.Image != null, "a detected OP-XY shows its picture");
+            ((MainForm)form).ShowDevice(Devices.TrackerMini);
+            Assert(deviceImage.AccessibleName == "Tracker Mini" && deviceImage.Image != null, "a detected Tracker Mini shows its picture");
             ((MainForm)form).ShowDevice(Devices.M8);
             Assert(deviceImage.AccessibleName == "M8", "a detected M8 shows its picture");
             ((MainForm)form).ShowDevice(null);
