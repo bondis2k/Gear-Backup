@@ -21,6 +21,63 @@ partial class M8Backup
         TestRetention(dir);
         TestResumeQuestion(dir);
         TestZipFailures(dir);
+        TestSecurity(dir);
+    }
+
+    static void TestSecurity(string dir)
+    {
+        // 1. A cfgmgr32.dll planted next to the program must not be loaded. The fake is garbage, so
+        //    loading it would throw; with DLLs taken from System32 only, the bogus device is just "not found".
+        string planted = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cfgmgr32.dll");
+        File.WriteAllText(planted, "not a real DLL");
+        string error;
+        try { error = EjectDrive(@"USB\VID_0000&PID_0000\NOT-A-REAL-DEVICE"); }
+        finally { File.Delete(planted); }
+        Assert(error == "the M8 device was not found.", "a DLL planted next to the program is ignored; System32's is used");
+
+        // 2. A link named like a backup is never listed, so KeepBackups can't offer it for deletion.
+        string history = Path.Combine(dir, "link-history");
+        Directory.CreateDirectory(Path.Combine(history, "2026-10-02"));
+        string elsewhere = Path.Combine(dir, "link-elsewhere");
+        Put(Path.Combine(elsewhere, "keep.txt"), "must survive");
+        var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+            "/c mklink /J \"" + Path.Combine(history, "2026-10-01") + "\" \"" + elsewhere + "\"")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
+        mklink.WaitForExit();
+        Assert(Directory.Exists(Path.Combine(history, "2026-10-01")), "test junction created");
+        List<string> backups = ListBackups(history);
+        Assert(backups.Count == 1 && Path.GetFileName(backups[0]) == "2026-10-02", "a link named like a backup isn't treated as one");
+        TestInteraction ui = WithUi(() => PruneBackups(history, 1, backups[0]), 'n');
+        Assert(ui.Questions.Count == 0 && File.Exists(Path.Combine(elsewhere, "keep.txt")), "KeepBackups never offers a linked folder");
+        Directory.Delete(Path.Combine(history, "2026-10-01"));  // removes only the junction
+
+        // 3. A huge file posing as a song is refused before being read into memory.
+        string huge = Path.Combine(dir, "huge.m8s");
+        using (var stream = new FileStream(huge, FileMode.Create)) stream.SetLength(MaxSongSize + 1);
+        string refusal = null;
+        try { SamplePaths(huge); } catch (IOException ex) { refusal = ex.Message; }
+        Assert(refusal != null && refusal.Contains("too large"), "an oversized song file is refused by size, before reading it");
+        File.Delete(huge);
+
+        // 4. The zip's copy of the statistics hides local paths; the backup's own copy keeps them.
+        string source = Rooted(Path.Combine(dir, "redact-card"));
+        Put(Path.Combine(source, "Songs", "a.m8s"), "A");
+        string zipHistory = Path.Combine(dir, "redact-history");
+        new BackupEngine().Run(source, zipHistory, null, false, new Config { BackupFolder = dir, Preview = false, Zip = true },
+            new OperationContext(new TestInteraction(), CancellationToken.None));
+        string backup = ListBackups(zipHistory)[0];
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        string zipped;
+        using (var zip = new System.IO.Compression.ZipArchive(File.OpenRead(backup + ".zip"), System.IO.Compression.ZipArchiveMode.Read))
+        using (var reader = new StreamReader(zip.GetEntry("backup-statistics.txt").Open()))
+            zipped = reader.ReadToEnd();
+        Assert(zipped.Contains("<this backup>") && zipped.IndexOf(backup, StringComparison.OrdinalIgnoreCase) < 0,
+            "the zip's statistics hide the backup folder's path");
+        Assert(!source.StartsWith(profile, StringComparison.OrdinalIgnoreCase) ||
+            (zipped.Contains("%USERPROFILE%") && zipped.IndexOf(profile, StringComparison.OrdinalIgnoreCase) < 0),
+            "the zip's statistics hide the user profile path");
+        Assert(File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains(backup),
+            "the backup's own statistics keep full paths");
     }
 
     // Runs action with a scripted front end and returns it, so tests can read its output and questions.

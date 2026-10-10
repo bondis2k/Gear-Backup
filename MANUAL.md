@@ -66,7 +66,7 @@ Restore and check offer a history selector, including existing backups directly 
 
 Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
 
-- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. The `.m8backup` history store is left out; it's only useful to this program and would double the size.
+- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. Because a zip is made to be shared, its copy of the statistics hides where things are on this PC: the backup folder appears as `<this backup>` and your user folder (`C:\Users\<name>`) as `%USERPROFILE%`. The statistics file in the backup folder keeps the full paths. The `.m8backup` history store is left out; it's only useful to this program and would double the size.
 - It's written under a temporary name and renamed when complete, so a zip that exists is never half-written.
 - The free-space check reserves room for it (up to the card's size, as WAV samples barely compress).
 - It's skipped, with a note, for incremental backups and resumes, and when any file failed to back up. If the zip itself can't be saved, the backup still counts as complete but the run ends with exit code 2.
@@ -166,7 +166,7 @@ Historical manifests distinguish real dated filenames from generated old version
 
 ### Song dependencies
 
-Dependency extraction supports the known **firmware-6 `.m8s` layout**. It reads all sampler slots, including unused slots, and restores referenced samples at their original card paths. Songs already contain their instrument data; separate instrument preset exports are not dependencies of a song.
+Dependency extraction supports the known **firmware-6 `.m8s` layout**. Files over 16 MB are refused without being read, since a real song is about 100 KB. It reads all sampler slots, including unused slots, and restores referenced samples at their original card paths. Songs already contain their instrument data; separate instrument preset exports are not dependencies of a song.
 
 Missing samples in the selected backup/snapshot are listed and cancel dependency restore. Unsupported firmware, malformed paths, or unknown instrument types are refused. Use a bundle or full restore for those files. Nothing in the song is rewritten, and this feature does not create or relocate bundles.
 
@@ -232,6 +232,8 @@ When an incremental backup has no new or changed files to copy, it skips the Pro
 Run `M8Backup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder. With `HardLinks=yes`, an object that is the same file on disk as a backup file already checked in that run isn't read a second time.
 
 Missing or damaged objects and malformed manifests are reported. Backups without a checksum list offer to create one from their current contents; that establishes a future baseline, not proof that those files were originally undamaged.
+
+Folders in a history that are links (junctions) are never treated as backups, so they're never used for an incremental backup, offered for restore or checks, or offered for deletion by `KeepBackups`. The program loads the Windows DLLs it calls only from System32, so a DLL with the same name placed next to the exe is ignored.
 
 Checksum files use the standard `sha256sum` format with forward slashes. Checksum and manifest paths are validated to prevent paths escaping the selected backup/target. The files are integrity baselines, not signed authenticity records.
 

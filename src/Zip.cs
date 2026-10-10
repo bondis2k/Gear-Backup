@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
 
 partial class M8Backup
 {
@@ -56,7 +58,9 @@ partial class M8Backup
                     // Fastest: most of a card is WAV samples, which barely compress at any level.
                     ZipArchiveEntry item = zip.CreateEntry(name, CompressionLevel.Fastest);
                     item.LastWriteTime = ZipTime(file.LastWriteTime);
-                    using (Stream from = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
+                    using (Stream from = IsStatisticsFile(file.FullName)
+                        ? new MemoryStream(Encoding.UTF8.GetBytes(RedactPaths(File.ReadAllText(file.FullName), backup)))
+                        : (Stream)new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
                     using (Stream to = item.Open())
                     {
                         int read;
@@ -79,6 +83,18 @@ partial class M8Backup
             TryDelete(temp);
             throw;
         }
+    }
+
+    // A zip is made to be shared, so its copy of the statistics hides where things are on this PC:
+    // the backup folder becomes "<this backup>" and the user profile (C:\Users\<name>) "%USERPROFILE%".
+    // The statistics file in the backup folder itself keeps the full paths.
+    static string RedactPaths(string text, string backup)
+    {
+        text = Regex.Replace(text, Regex.Escape(backup.TrimEnd('\\')), "<this backup>", RegexOptions.IgnoreCase);
+        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\');
+        if (profile.Length > 3)
+            text = Regex.Replace(text, Regex.Escape(profile), "%USERPROFILE%", RegexOptions.IgnoreCase);
+        return text;
     }
 
     // Zip files can only store dates from 1980 to 2107; undated M8 files (1601) get 1 January 1980.
