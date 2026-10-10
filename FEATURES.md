@@ -58,7 +58,9 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 - **Check backups** — re-reads backups and their history to find damaged or missing files, without the M8 connected.
 - **Copy verification** — optionally reads each copy back from the disk, bypassing the cache, and compares checksums (`Verify`).
 - **Backup status** — each backup is marked `incomplete`, `complete` or `failed`.
-- **Path safety** — rejects links and paths that would escape the backup or target folder.
+- **Path safety** — rejects links and paths that would escape the backup or target folder, and never treats a linked folder as a backup.
+- **Safe DLL loading** — Windows DLLs are loaded only from System32, so a planted DLL next to the exe is ignored.
+- **Private zips** — a zip's copy of the statistics hides your local folder paths and user name.
 - **History lock** — prevents two programs or windows writing the same history at once.
 
 ## Previews and progress

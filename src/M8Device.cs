@@ -6,6 +6,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
+// Windows looks for a DLL in the program's own folder first. cfgmgr32.dll isn't one of the "known DLLs"
+// Windows always takes from System32, so without this a cfgmgr32.dll planted next to the exe (e.g. in
+// Downloads) would be loaded. This makes every DllImport in the program load from System32 only.
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 partial class M8Backup
 {
     // The M8 shows up as a USB disk with vendor "M8" (USB\VID_16C0&PID_0630).

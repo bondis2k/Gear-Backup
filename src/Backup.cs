@@ -120,6 +120,9 @@ partial class M8Backup
         if (!Directory.Exists(backupRoot)) return backups;
         foreach (string dir in Directory.GetDirectories(backupRoot))
         {
+            // A link (junction) is never a backup: it could point anywhere, and KeepBackups would
+            // otherwise offer it for deletion. Every other operation rejects links too.
+            if ((File.GetAttributes(dir) & FileAttributes.ReparsePoint) != 0) continue;
             string name = Path.GetFileName(dir);
             DateTime date;
             if (name.Length >= 10 && DateTime.TryParseExact(name.Substring(0, 10), "yyyy-MM-dd",

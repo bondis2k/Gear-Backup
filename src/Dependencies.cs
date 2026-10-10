@@ -8,8 +8,13 @@ partial class M8Backup
     // Read-only dependency extraction, bounded to the known firmware-6 song layout.
     // Layout references: github.com/jhw/pym8 m8/api/{instrument.py,instruments/sampler.py}
     // and github.com/Twinside/m8-file-parser src/version.rs. No project bytes are rewritten.
+    // Real firmware-6 songs are about 100 KB; anything far larger isn't a song and isn't read into memory.
+    const long MaxSongSize = 16L << 20;
+
     static List<string> SamplePaths(string song)
     {
+        if (new FileInfo(song).Length > MaxSongSize)
+            throw new IOException("This file is too large to be an M8 song. Use bundle or full restore.");
         byte[] data = File.ReadAllBytes(song);
         const int start = 80446, stride = 215, count = 128, pathOffset = 87, pathSize = 128;
         if (data.Length < start + stride * count || Encoding.ASCII.GetString(data, 0, 9) != "M8VERSION" || (data[11] & 15) != 6)
