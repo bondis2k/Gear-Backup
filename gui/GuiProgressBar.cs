@@ -4,6 +4,8 @@ using System.Windows.Forms;
 
 partial class M8Backup
 {
+    // A flat progress bar in the theme's accent colour (the standard WinForms bar ignores colours under
+    // visual styles). Marquee mode is animated by MainForm's display timer calling Advance.
     sealed class GuiProgressBar : Control
     {
         int value, offset;

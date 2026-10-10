@@ -67,6 +67,8 @@ partial class M8Backup
         return result.ExitCode;
     }
 
+    // Throws if the backup copy is missing, has the wrong size, or (with verify) a different checksum
+    // than when it was backed up.
     static void ValidateEntry(RestoreEntry item, bool verify = true)
     {
         if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
@@ -80,6 +82,8 @@ partial class M8Backup
         return EntryMatchesTarget(item, target, thorough, null);
     }
 
+    // Whether the file on the target already equals the backup's, so restoring it can be skipped.
+    // plannedFingerprint lets a checksum taken during planning be reused instead of reading the file again.
     static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough, string plannedFingerprint)
     {
         var info = new FileInfo(target);
@@ -95,6 +99,8 @@ partial class M8Backup
         return Math.Abs(info.LastWriteTimeUtc.Ticks - item.ModifiedTicks) <= TimeSpan.FromSeconds(2).Ticks;
     }
 
+    // A short description of a target file's state, to notice if it changes between the preview and the
+    // copy: "sha:<checksum>" or "meta:<size>:<modified ticks>". Null if the file doesn't exist.
     static string Fingerprint(string path, bool checksum)
     {
         var info = new FileInfo(path);
@@ -102,6 +108,8 @@ partial class M8Backup
         return checksum ? "sha:" + HashFile(path) : "meta:" + info.Length + ":" + info.LastWriteTimeUtc.Ticks;
     }
 
+    // Space needed on the target: new files, growth of replaced files, and room for the largest replaced
+    // file, because each replacement briefly exists twice (new copy written before the old one goes).
     static long RestoreSpaceNeeded(string targetRoot, List<RestoreEntry> copies)
     {
         long needed = 0, largest = 0;
@@ -125,6 +133,9 @@ partial class M8Backup
         if (current != expected) throw new IOException("Target changed since the preview: " + target);
     }
 
+    // Recovery=yes: copies every target file the restore will replace or remove to a dated folder on the
+    // PC first. Returns that folder, or null when there's nothing to save. Any failure here stops the
+    // restore before the target is touched.
     static string SaveRecovery(string targetRoot, List<RestoreEntry> copies, List<string> removals,
         Dictionary<string, string> targetHashes, Config config)
     {
@@ -169,6 +180,7 @@ partial class M8Backup
         summary = result.Summary;
     }
 
+    // Search-and-pick for a single file; Enter lists songs. Null when cancelled.
     static RestoreEntry PickEntry(Snapshot snapshot, bool songsOnly)
     {
         while (true)
@@ -187,6 +199,7 @@ partial class M8Backup
         }
     }
 
+    // Lists the bundles (folders under Bundles\ that contain files) and lets the user pick one.
     static string PickBundle(Snapshot snapshot)
     {
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -40,10 +40,14 @@ partial class M8Backup
             var preview = (Button)form.Controls.Find("PreviewOperation", true)[0];
             var cancel = (Button)form.Controls.Find("CancelOperation", true)[0];
             var state = (Label)form.Controls.Find("OperationStatus", true)[0];
+            var zipBox = (CheckBox)form.Controls.Find("ZipBackup", true)[0];
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
             mode.SelectedIndex = 3;
             Assert(start.Text == "Check" && !preview.Enabled, "GUI check mode disables copy preview");
+            Assert(!zipBox.Enabled, "zip option is only available for full backups");
             mode.SelectedIndex = 0;
+            Assert(zipBox.Enabled, "zip option is available for a full backup");
+            zipBox.Checked = true;
             preview.PerformClick();
             Assert(cancel.Enabled && !sourceBox.Enabled, "GUI disables editable inputs while worker runs");
             DriveGui(form, state, "Preview complete", false);
@@ -54,6 +58,8 @@ partial class M8Backup
             string history = Path.Combine(backupBox.Text, "M8 Backups", "profiles", ProfileId(Rooted(source), ""));
             string backup = ListBackups(history)[0];
             Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI full backup executes shared engine");
+            Assert(File.Exists(backup + ".zip"), "GUI full backup with the zip option saves a zip");
+            zipBox.Checked = false;
             mode.SelectedIndex = 1;
             start.PerformClick();
             DriveGui(form, state, "Complete", false);

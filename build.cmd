@@ -9,7 +9,7 @@ rem Optional second argument lets a build finish while the usual exe is running.
 if not "%~2"=="" set OUT=%~2
 
 "%FW%\csc.exe" /nologo /out:"%OUT%" /win32icon:assets\M8Backup.ico ^
-  /r:System.Management.dll /r:Microsoft.VisualBasic.dll ^
+  /r:System.Management.dll /r:Microsoft.VisualBasic.dll /r:System.IO.Compression.dll ^
   /r:"%WINMD%\Windows.Data.winmd" /r:"%WINMD%\Windows.UI.winmd" /r:"%WINMD%\Windows.Foundation.winmd" ^
   /r:"%FW%\System.Runtime.WindowsRuntime.dll" /r:"%FW%\System.Runtime.dll" ^
   /r:"%FW%\System.Runtime.InteropServices.WindowsRuntime.dll" ^

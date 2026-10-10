@@ -33,6 +33,8 @@ partial class M8Backup
         DateTime lastProgress;
         public void Write(string text) { Console.Write(text); }
         public void WriteLine(string text) { Console.WriteLine(text); }
+        // Reads key by key rather than Console.ReadLine, so Ctrl+C can cancel while waiting for input.
+        // Redirected input (tests, scripts) is read as plain lines.
         public string ReadLine()
         {
             if (Console.IsInputRedirected || Console.In is System.IO.StringReader) return Console.ReadLine();
@@ -65,6 +67,7 @@ partial class M8Backup
             Console.WriteLine(text);
             Console.ResetColor();
         }
+        // Rewrites one status line in place, at most every 150 ms unless the stage changes or a file finishes.
         public void ReportProgress(OperationProgress progress)
         {
             if (Console.IsOutputRedirected) return;

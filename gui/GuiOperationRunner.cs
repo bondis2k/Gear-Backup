@@ -18,6 +18,8 @@ partial class M8Backup
         public bool CancellationRequested { get { return cancellation != null && cancellation.IsCancellationRequested; } }
         public void Cancel() { if (cancellation != null) cancellation.Cancel(); }
 
+        // Runs one operation on a background thread with its own context and cancellation, then reports the
+        // result back on the UI thread.
         void RunWorker(Func<OperationContext, OperationResult> action, bool previewOnly)
         {
             cancellation = new CancellationTokenSource();
@@ -51,6 +53,7 @@ partial class M8Backup
             }, previewOnly);
         }
 
+        // choice is the operation list's index: 0 full backup, 1 incremental, 2 restore, 3 check.
         OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp, OperationContext context)
         {
             string histories = HistoriesRoot(options);

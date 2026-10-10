@@ -11,12 +11,16 @@ partial class M8Backup
         Config config;
         readonly TextBox source = new TextBox(), backupFolder = new TextBox(), profile = new TextBox();
         readonly ComboBox operation = new ComboBox();
+        // Only for full backups; not saved in the settings, so it's a per-run choice like the CLI's --zip.
+        readonly CheckBox zip = new CheckBox { Text = "Also save as zip", AutoSize = true, Name = "ZipBackup" };
         readonly Button start = GuiTheme.Button("Back up", true), preview = GuiTheme.Button("Preview", false),
             cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.Button("Settings", false), detect = GuiTheme.Button("Detect M8", false);
         readonly RichTextBox log = new RichTextBox();
         readonly Label status = GuiTheme.Label("Ready", 17, GuiTheme.Ink), detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
         readonly Panel inputs = new Panel();
+        // Worker threads add log text and progress here; the display timer moves them into the window every
+        // 150 ms, so a fast copy doesn't flood the UI thread with updates.
         readonly object queueLock = new object();
         readonly StringBuilder pendingLog = new StringBuilder();
         OperationProgress pendingProgress;
@@ -58,7 +62,9 @@ partial class M8Backup
             operation.SelectedIndexChanged += delegate {
                 start.Text = operation.SelectedIndex == 2 ? "Restore" : operation.SelectedIndex == 3 ? "Check" : "Back up";
                 preview.Enabled = operation.SelectedIndex != 3 && !runner.IsBusy;
+                zip.Enabled = operation.SelectedIndex == 0 && !runner.IsBusy;
             };
+            // Closing while an operation runs cancels it first; CompleteOperation closes the window once it stops.
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
                 if (runner.IsBusy) { e.Cancel = true; closeAfterCancel = true; RequestCancel(); }
             };
@@ -106,13 +112,16 @@ partial class M8Backup
             profile.Dock = DockStyle.Fill; fields.Controls.Add(profile, 0, 5); fields.SetColumnSpan(profile, 3);
             inputs.Controls.Add(fields); layout.Controls.Add(inputs, 0, 1);
 
-            var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(0, 14, 0, 14), Margin = Padding.Empty };
+            var actions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 14, 0, 14), Margin = Padding.Empty };
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            for (int i = 0; i < 3; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            for (int i = 0; i < 4; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
+            // The index is the operation number GuiOperationRunner.Execute uses: 0 full, 1 incremental, 2 restore, 3 check.
             operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups" });
             operation.SelectedIndex = 0; operation.Margin = new Padding(0, 4, 24, 0);
-            actions.Controls.Add(operation, 0, 0); actions.Controls.Add(preview, 1, 0); actions.Controls.Add(start, 2, 0); actions.Controls.Add(cancel, 3, 0);
+            zip.Margin = new Padding(0, 8, 20, 0); zip.ForeColor = GuiTheme.Ink;
+            actions.Controls.Add(operation, 0, 0); actions.Controls.Add(zip, 1, 0);
+            actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0); actions.Controls.Add(cancel, 4, 0);
             cancel.Enabled = false; layout.Controls.Add(actions, 0, 2);
 
             var state = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty };
@@ -141,6 +150,8 @@ partial class M8Backup
             browse.Click += delegate { BrowseFolder(this, text, destination); };
         }
 
+        // Runs action on the UI thread and waits for its result; used by worker threads to show dialogs.
+        // Invoke wraps exceptions, so the original one (e.g. a cancellation) is rethrown unwrapped.
         public T OnUi<T>(Func<T> action)
         {
             if (IsDisposed) throw new OperationCanceledException();
@@ -151,6 +162,7 @@ partial class M8Backup
                 throw;
             }
         }
+        // Called from worker threads; keeps at most the last 200,000 characters waiting to be shown.
         public void AppendActivity(string text)
         {
             lock (queueLock)
@@ -196,6 +208,7 @@ partial class M8Backup
                 ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) : ExpandPath(backupFolder.Text);
             copy.SourceFolder = ExpandPath(source.Text);
             copy.Profile = profile.Text.Trim();
+            copy.Zip = zip.Checked && operation.SelectedIndex == 0;
             if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
             return copy;
         }
@@ -203,6 +216,7 @@ partial class M8Backup
         {
             inputs.Enabled = !busy; operation.Enabled = !busy; start.Enabled = !busy; settings.Enabled = !busy;
             preview.Enabled = !busy && operation.SelectedIndex != 3; cancel.Enabled = busy;
+            zip.Enabled = !busy && operation.SelectedIndex == 0;
             if (busy) { status.ForeColor = GuiTheme.Ink; status.Text = "Preparing"; detail.Text = "You can cancel at any time."; progress.Style = ProgressBarStyle.Marquee; }
             else { progress.Style = ProgressBarStyle.Continuous; }
         }

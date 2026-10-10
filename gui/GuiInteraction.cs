@@ -8,6 +8,8 @@ partial class M8Backup
     sealed class GuiInteraction : IOperationInteraction
     {
         readonly MainForm form;
+        // The engines print numbered lists ("  3) 2026-10-09") before asking for a number, as in the console.
+        // WriteLine remembers those lines so ChooseNumber can show them as a list to pick from.
         readonly Dictionary<int, string> numbered = new Dictionary<int, string>();
         public GuiInteraction(MainForm owner) { form = owner; }
         public void Write(string text) { form.AppendActivity(text); }
@@ -19,6 +21,7 @@ partial class M8Backup
         }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
         public void ReportProgress(OperationProgress progress) { form.UpdateProgress(progress); }
+        // The engines only ask for free text when searching for a file to restore. Cancel returns "q".
         public string ReadLine()
         {
             return form.OnUi(delegate {
@@ -40,6 +43,7 @@ partial class M8Backup
         {
             var choices = new List<string>();
             for (int i = 1; i <= max; i++) choices.Add(numbered.ContainsKey(i) ? numbered[i] : i.ToString());
+            // The snapshot question accepts Enter for "current backup files"; offer that as an extra choice.
             bool allowCurrentFiles = question.IndexOf("browse current backup files", StringComparison.OrdinalIgnoreCase) >= 0;
             if (allowCurrentFiles) choices.Add("Current backup files (browse without a snapshot)");
             numbered.Clear();

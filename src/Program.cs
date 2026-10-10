@@ -3,7 +3,7 @@
 // or restores a backup (or a single file) to the M8. Settings are in M8Backup.ini next to the exe.
 // Afterwards it offers to eject the M8 via a Windows notification.
 //
-// Usage: M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--preview] [--no-pause]
+// Usage: M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 // Build: build.cmd
 using System;
 using System.Collections.Generic;
@@ -76,10 +76,12 @@ partial class M8Backup
                 if (++i >= args.Length) throw new ArgumentException("Missing value for " + key);
                 ApplySetting(config, key == "--source" ? "SourceFolder" : "Profile", args[i]);
             }
+            else if (args[i] == "--zip") config.Zip = true;
             else if (args[i] != "--restore" && args[i] != "--check" && args[i] != "--preview" && args[i] != "--no-pause")
                 throw new ArgumentException("Unknown argument: " + args[i]);
         }
         if (restore && check) throw new ArgumentException("Choose --restore or --check, not both.");
+        if (config.Zip && (restore || check)) throw new ArgumentException("--zip applies to backups, not to --restore or --check.");
         string histories = HistoriesRoot(config);
         if (check) return CheckHistory(HistoryToCheck(config));
 

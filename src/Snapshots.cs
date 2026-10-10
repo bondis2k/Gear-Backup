@@ -7,11 +7,14 @@ using System.Text.RegularExpressions;
 
 partial class M8Backup
 {
+    // One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
+    // the size, times and checksum it had when backed up. Hash is null for older backups without one.
     internal class RestoreEntry
     {
         public string Relative, StoredPath, Hash;
         public long Size, ModifiedTicks, CreatedTicks;
     }
+    // The files and folders of one point in time, from a manifest or from the current backup files.
     internal class Snapshot
     {
         public string Name;
@@ -20,6 +23,8 @@ partial class M8Backup
     }
 
     static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
+    // Paths are stored Base64-encoded in manifests, so tabs or other odd characters in a name can't
+    // break the tab-separated format.
     static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
     static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
     static string SnapshotRoot(string backup) { return Path.Combine(backup, ".m8backup", "snapshots"); }
@@ -30,6 +35,11 @@ partial class M8Backup
     }
 
     // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
+    // Manifest format (.m8backup\snapshots\<time>.manifest), one entry per line, tab-separated:
+    //   M8SNAPSHOT  1                                        header and format version
+    //   D  <path>                                            a folder (kept even when empty)
+    //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
+    // The file's content is stored once in .m8backup\objects\<sha256>.
     static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
     {
         var rows = new StringBuilder("M8SNAPSHOT\t1\n");
@@ -80,6 +90,8 @@ partial class M8Backup
         OperationOutput.WriteLine("  Point-in-time snapshot saved: " + Path.GetFileNameWithoutExtension(name));
     }
 
+    // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
+    // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
     static Snapshot ReadSnapshot(string backup, string manifest)
     {
         string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
@@ -120,6 +132,7 @@ partial class M8Backup
         return result;
     }
 
+    // Lets the user pick a saved point in time, newest first. Null means "use the current backup files".
     static Snapshot ChooseSnapshot(string backup)
     {
         string root = SnapshotRoot(backup);
@@ -134,6 +147,8 @@ partial class M8Backup
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
 
+    // The backup folder's files as they are now, as a snapshot. Checksums come from checksums.sha256
+    // where available.
     static Snapshot CurrentBackup(string backup)
     {
         var result = new Snapshot { Name = "current backup files" };
@@ -165,6 +180,7 @@ partial class M8Backup
         return id != null && verifiedLinks.TryGetValue(id, out hash) && hash == item.Hash;
     }
 
+    // Checks every history object referenced by any manifest in this backup; each object once.
     static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
                                Dictionary<string, string> verifiedLinks = null)
     {

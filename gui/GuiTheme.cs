@@ -3,6 +3,7 @@ using System.Windows.Forms;
 
 partial class M8Backup
 {
+    // Colours and control factories for the window's flat look.
     static class GuiTheme
     {
         public static readonly Color Ink = Color.FromArgb(29, 45, 54);
