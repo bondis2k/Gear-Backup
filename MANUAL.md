@@ -6,6 +6,43 @@ Requires Windows 10 or 11 and the built-in .NET Framework. No installation or ex
 
 Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `GearBackup.exe` before following the steps below. If you have a setup executable, use the installation instructions below instead.
 
+## Contents
+
+- [Installing Gear Backup](#installing-gear-backup)
+  - [Portable package](#portable-package)
+- [Getting started](#getting-started)
+  - [Upgrading from the previous name](#upgrading-from-the-previous-name)
+- [Graphical interface](#graphical-interface)
+- [Teenage Engineering OP-1 Field](#teenage-engineering-op-1-field)
+- [Teenage Engineering OP-XY](#teenage-engineering-op-xy)
+- [Polyend Tracker Mini](#polyend-tracker-mini)
+- [Fujifilm X100VI](#fujifilm-x100vi)
+  - [Recipes and shooting settings](#recipes-and-shooting-settings)
+- [Separate card and folder histories](#separate-card-and-folder-histories)
+- [Full and incremental backup](#full-and-incremental-backup)
+  - [Zip copy of a full backup](#zip-copy-of-a-full-backup)
+  - [Fast or thorough comparison](#fast-or-thorough-comparison)
+  - [Completion status and resume](#completion-status-and-resume)
+- [Point-in-time history](#point-in-time-history)
+- [Restore](#restore)
+  - [Restore modes](#restore-modes)
+  - [Song dependencies](#song-dependencies)
+  - [Merge versus exact snapshot](#merge-versus-exact-snapshot)
+  - [Overwrites and copy safety](#overwrites-and-copy-safety)
+  - [Optional recovery copies](#optional-recovery-copies)
+- [Preview](#preview)
+- [Checking backups](#checking-backups)
+- [Progress and cancellation](#progress-and-cancellation)
+- [Retention, statistics, and notifications](#retention-statistics-and-notifications)
+- [Dashboard, storage and profile tools](#dashboard-storage-and-profile-tools)
+  - [Backup dashboard](#backup-dashboard)
+  - [Storage manager and cleanup](#storage-manager-and-cleanup)
+  - [Preferences per device and profile](#preferences-per-device-and-profile)
+  - [Readable X100VI recipes](#readable-x100vi-recipes)
+- [All INI settings](#all-ini-settings)
+- [Command line and exit codes](#command-line-and-exit-codes)
+- [Building and testing](#building-and-testing)
+
 ## Installing Gear Backup
 
 Run `GearBackup-Setup-<version>.exe` and follow the wizard. It installs the GUI and CLI for the current Windows user without requesting administrator rights. The default installation folder is `%LOCALAPPDATA%\Programs\Gear Backup`. Keep this location or choose another installation folder. User settings are saved separately in `%APPDATA%\GearBackup`.
