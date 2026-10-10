@@ -415,7 +415,64 @@ Every backup writes statistics with copied/unchanged files, song changes, skippe
 
 The CLI uses Windows notifications to summarize backup, restore, or check results; the GUI shows results in its window. `Eject=no` leaves the M8 connected, `Eject=ask` asks in a notification/console or GUI dialog, and `Eject=yes` requests safe removal. Automatic ejection only applies to a device identified through the M8 USB detection path.
 
+## Dashboard, storage and profile tools
+
+The GUI's **Dashboard**, **Storage**, **Profiles**, and **X100VI recipes** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
+
+### Backup dashboard
+
+**Dashboard** groups backups by profile across the current backup location and every location specified in device/profile overrides. It shows the last successful backup time, the latest folder's completion status, its last integrity check and result, and total stored logical size. **Overdue** means the last successful backup is more than seven days old. Failed or incomplete backups and failed integrity checks are marked for attention.
+
+Select a row to **Check latest backup**, **Open folder**, or **View recipes** for a settings backup. Use **Refresh** after operations in other windows or applications. Dashboard scanning runs in the background; closing the window cancels it. Unavailable locations or linked content are reported rather than followed, so a scan with warnings may not include all stored data.
+
+New successful backups record their completion time separately, preserving the last success if a later incremental run fails. Completed integrity checks save a small result record beside backup metadata; cancellation does not overwrite the unfinished backup's record. Checks from before this feature appear as **Never checked** until run again. Creating a checksum baseline for an older backup is marked **Incomplete check**, since there was no prior checksum list to verify its current files against. A check older than a subsequent backup run is labelled **previous state**, since it does not verify that newer state. For older complete backups without a completion record, the status file's timestamp is used.
+
+### Storage manager and cleanup
+
+**Storage → Space usage** lists current files, known old versions, history objects and metadata per backup, plus ZIP archives and local MTP mirrors. The **unique stored file content** total counts hard-linked files only once. This is file content size, not allocated disk usage: cluster sizes, compression, sparse-file allocation and the Recycle Bin are excluded. Per-category sizes and cleanup preview sizes are logical; hard-linked categories may share content.
+
+In **Cleanup**, check the items you want removed, then click **Preview cleanup**. Review the complete file/folder list and select **Proceed** to move those items to the Recycle Bin. Nothing is selected by default. Available items are older whole backup folders, known dated old versions, ZIP archives and MTP mirrors. The latest backup folder and individual snapshot objects/manifests are protected. Deleting an older whole backup removes its snapshots as well.
+
+Cleanup rejects links, checks that items have not changed since the scan and locks the affected histories. Old-version cleanup updates checksum records and leaves snapshot objects intact. Known-version records distinguish retained versions from ordinary source files whose names happen to contain timestamps. Older backups with snapshot manifests can identify versions from source membership; older backups without either form of evidence do not offer individual version cleanup. They can still be managed as whole older backup folders.
+
+Mirrors are temporary local copies of MTP devices. Removing one means the next backup must download its contents again; the camera or device is never changed. Mirror cleanup and MTP backup share a lock to prevent cleanup during download or copying. **Recycling does not free space until the Recycle Bin is emptied.** Cleanup does not empty it automatically. If items changed or another process is using them, refresh and retry after that operation ends.
+
+### Preferences per device and profile
+
+Open **Profiles** and choose a device's defaults or an existing profile. To add a named profile, type its name in the selector. Check **Override** for each preference you want to change; unchecked rows inherit their values. Select a backup/recovery location row and use **Browse location**, or type a path. **Save overrides** saves this scope; **Use inherited settings** removes its overrides. Global settings are unchanged.
+
+Preference priority is **global → device → profile**. Device defaults apply after source detection; named or automatic profile preferences then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup profile. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
+
+The optional `GearBackup.Profiles.ini` beside the executables can also be edited directly:
+
+```ini
+[device:m8]
+BackupFolder=D:\Gear
+PointInTimeHistory=yes
+KeepBackups=3
+
+[device:x100vi]
+BackupFolder=E:\Photos
+PointInTimeHistory=no
+
+[profile:Studio]
+Verify=yes
+KeepOldVersions=2
+```
+
+Device IDs are `m8`, `tracker-mini`, `op1-field`, `op-xy` and `x100vi`. Profile sections use the same names shown in the dashboard or main profile field, including automatic names. Supported override keys are `BackupFolder`, `PointInTimeHistory`, `HardLinks`, `Verify`, `Thorough`, `Preview`, `KeepBackups`, `KeepOldVersions`, `Recovery`, `RecoveryFolder`, `MaxNameLength` and `Eject`. Omitted keys inherit. The GUI validates values before saving. Both INI files are personal settings and stay intact through installer upgrades/uninstall.
+
+Changing a location does not move existing backups. Dashboard and Storage discover the current location and locations still listed in overrides; browse an older location manually if it is no longer configured. A named-profile integrity check searches configured locations and asks when the same profile exists in several places.
+
+### Readable X100VI recipes
+
+Open **X100VI recipes**, then **Open backup folder** to load C1–C7 and current shooting settings, or **Open XML** for one saved export. The selector shows each slot and recipe name. The table translates known protocol values into film simulation names, white-balance modes, grain strength/size, dynamic range, tone/color/detail dials and high-ISO noise reduction. Protocol numbers and exact raw bytes remain visible alongside the readable values.
+
+Use **Copy recipe** to copy readable text to the clipboard or **Export text** to save it. Unknown encodings appear as **Protocol value**, and unsupported or default values are explicit. Some non-recipe fields remain numeric. The viewer validates the export format and consistency of raw/numeric values, rejects external XML entities, and never edits exports or writes to the camera. It reads Gear Backup XML exports; native Fujifilm backup formats are not supported. Display encodings follow the [documented Fujifilm recipe protocol](https://github.com/ILFforever/fujifilm-ptp-recipes/blob/main/docs/properties.md), with color-space labels cross-checked against [libgphoto2](https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/config.c).
+
 ## All INI settings
+
+Global preferences live in `GearBackup.ini`. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -485,6 +542,8 @@ Safety tests also cover linked mirror roots, broken junctions, file symbolic lin
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 
+`tests\ManagementTests.cs` covers device/profile inheritance, destination discovery, storage accounting, dashboard records, cleanup locks and stale scans, protection of ordinary dated filenames, and safe recipe parsing/decoding. GUI tests also exercise the four tool windows at 150% and 200% scaling and run a backup with profile-specific destinations and inherited device preferences. Cleanup tests use isolated fixture files and a replacement recycling callback; they do not recycle personal backups.
+
 The source uses a partial `GearBackup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the CLI frontend, and `GuiInteraction` supplies Windows Forms dialogs, marshals decisions to the UI thread, and batches progress/log updates. Each synchronous operation activates its context on its worker thread. Both frontends hold the history lock around mutations.
 
 Backup file traversal skips metadata folders before descending into them, so normal browsing, checksum-list writing, and retention do not scan history objects as user files.
@@ -496,6 +555,10 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `Program.cs` | CLI arguments, source selection and menu. |
 | `FujiPtp.cs` | Windows PTP settings reads and restricted recipe read-bank selection. |
 | `FujiSettings.cs` | X100VI capability validation, capture, selector restoration, XML export and settings backup workflow. |
+| `FujiRecipes.cs` | Safe export parsing and readable recipe values/text. |
+| `BackupCatalog.cs` | Dashboard metadata, storage accounting and guarded cleanup. |
+| `VersionCatalog.cs` | Known retained versions, protecting ordinary dated source filenames. |
+| `ProfileSettings.cs` | Device/profile overrides, inheritance and location discovery. |
 | `Session.cs` | Workflow steps shared by the CLI and GUI: history per source, check target, history lock, resume question, same-device check before ejecting. |
 | `Config.cs` | INI defaults and parsing. |
 | `Workflow.cs` | Profiles, previews, status, atomic metadata writes. |

@@ -104,6 +104,9 @@ partial class GearBackup
             return 0;
         }
         WriteColored("  Source: " + source + " (" + device.Name + ")", ConsoleColor.Green);
+        Config globalConfig = config;
+        config = ResolveSourceSettings(config, source);
+        histories = HistoriesRoot(config);
         string backupRoot = HistoryFor(config, source);
         OperationOutput.WriteLine("  Profile: " + Path.GetFileName(backupRoot));
         string previous = LatestBackup(backupRoot);
@@ -148,14 +151,18 @@ partial class GearBackup
 
         OperationResult result;
         if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-        if (mtp != null) source = SyncMtpSource(mtp);
-        if (restore)
+        using (mtp == null ? null : LockHistory(MirrorRoot))
         {
-            backupRoot = ChooseHistory(histories, backupRoot);
-            if (backupRoot == null) return 0;
-            using (LockUnlessPreview(backupRoot)) result = RunRestore(source, ListBackups(backupRoot), config);
+            if (mtp != null) source = SyncMtpSource(mtp);
+            if (restore)
+            {
+                backupRoot = ChooseHistory(histories, backupRoot);
+                if (backupRoot == null) return 0;
+                config = ResolveProfileSettings(globalConfig, device.Id, Path.GetFileName(backupRoot));
+                using (LockUnlessPreview(backupRoot)) result = RunRestore(source, ListBackups(backupRoot), config);
+            }
+            else result = BackupWithLock(source, backupRoot, incremental, config);
         }
-        else result = BackupWithLock(source, backupRoot, incremental, config);
 
         if (result.Title != null && !PreviewOnly)
         {

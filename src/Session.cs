@@ -24,7 +24,16 @@ partial class GearBackup
     static string HistoryToCheck(Config config)
     {
         string histories = HistoriesRoot(config);
-        return config.Profile.Length > 0 ? Path.Combine(histories, "profiles", config.Profile) : ChooseHistory(histories, null);
+        if (config.Profile.Length == 0) return ChooseHistory(histories, null);
+        var found = new List<string>();
+        foreach (string location in ConfiguredBackupLocations(config))
+        {
+            string path = Path.Combine(HistoriesRoot(new Config { BackupFolder = location }), "profiles", config.Profile);
+            if (Directory.Exists(path) && !found.Exists(p => Rooted(p) == Rooted(path))) { RejectRootLinks(path); found.Add(path); }
+        }
+        if (found.Count == 1) return found[0];
+        if (found.Count > 1) { int pick = AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
+        return Path.Combine(histories, "profiles", config.Profile);
     }
 
     // Locks a history against a second writer; a preview changes nothing, so it takes no lock.

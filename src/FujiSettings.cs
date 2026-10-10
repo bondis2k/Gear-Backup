@@ -233,6 +233,7 @@ partial class GearBackup
         string automatic = Path.GetFileName(MirrorFolder(Devices.X100VI, cameras[0])).Replace("x100vi-", "x100vi-settings-");
         string profileName = config.Profile.Length > 0 ? config.Profile : automatic;
         ValidateProfile(profileName);
+        config = ResolveProfileSettings(config, Devices.X100VI.Id, profileName);
         string history = Path.Combine(HistoriesRoot(config), "profiles", profileName);
         return SaveFujiSettings(files, history, config);
     }

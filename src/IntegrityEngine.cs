@@ -5,7 +5,7 @@ using System.IO;
 partial class GearBackup
 {
     // "Check backups": verifies backup files against checksums.sha256 and history objects against their
-    // manifests. Reads only; never changes a backup (apart from offering to create a missing checksum list).
+    // manifests. Records completed check results for the dashboard.
     internal sealed class IntegrityEngine
     {
         public OperationResult Run(List<string> backups, OperationContext context)
@@ -35,8 +35,13 @@ partial class GearBackup
             {
                 OperationContext.Current.CheckCancellation();
                 var verifiedLinks = new Dictionary<string, string>();
+                bool hadChecksums = File.Exists(Path.Combine(backup, ChecksumFileName));
+                int beforeOk = ok, beforeDamaged = damaged, beforeMissing = missing, beforeUnchecked = unchecked_;
                 CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_, verifiedLinks);
                 CheckSnapshots(backup, ref ok, ref damaged, ref missing, verifiedLinks);
+                try { if (!PreviewOnly) SaveCheckRecord(backup, ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, Math.Max(unchecked_ - beforeUnchecked, hadChecksums ? 0 : 1)); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { OperationOutput.WriteLine("  Could not save check result: " + ex.Message); }
             }
 
             summary = string.Format("{0:N0} file(s) OK", ok);

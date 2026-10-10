@@ -21,6 +21,8 @@ partial class GearBackup
         readonly Label sourceCaption = GuiTheme.Label("", 9, GuiTheme.Muted), deviceName = GuiTheme.Label("No device detected", 10, GuiTheme.Muted),
             metrics = GuiTheme.Label("", 9, GuiTheme.Muted), counts = GuiTheme.Label("", 10, GuiTheme.Ink);
         readonly Button openFolder = GuiTheme.Button("Open backup folder", false);
+        readonly Button dashboard = GuiTheme.Button("Dashboard", false), storage = GuiTheme.Button("Storage", false),
+            profiles = GuiTheme.Button("Profiles", false), recipes = GuiTheme.Button("X100VI recipes", false);
         Button sourceBrowse;
         string outputFolder;
         readonly System.Diagnostics.Stopwatch elapsed = new System.Diagnostics.Stopwatch();
@@ -87,6 +89,9 @@ partial class GearBackup
             operation.SelectedIndexChanged += delegate { RefreshOperationControls(); };
             source.TextChanged += delegate { ShowDevice(null); };
             openFolder.Click += delegate { OpenOutputFolder(); };
+            dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles"; recipes.Name = "OpenRecipes";
+            dashboard.Click += delegate { OpenTool(0); }; storage.Click += delegate { OpenTool(1); };
+            profiles.Click += delegate { OpenTool(2); }; recipes.Click += delegate { OpenTool(3); };
             RefreshOperationControls();
             hints.SetToolTip(start, "Start the selected operation (Ctrl+Enter)");
             hints.SetToolTip(preview, "Preview without changing backup or restore files (Ctrl+P)");
@@ -169,12 +174,14 @@ partial class GearBackup
             progress.Dock = DockStyle.Top; progress.Height = 6; progress.Margin = Padding.Empty; state.Controls.Add(progress, 0, 4);
             layout.Controls.Add(state, 0, 3);
 
-            var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(16), RowCount = 2 };
-            activity.RowStyles.Add(new RowStyle(SizeType.Absolute, 27)); activity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            activity.Margin = Padding.Empty; activity.Controls.Add(GuiTheme.Label("ACTIVITY", 9, GuiTheme.Muted), 0, 0);
+            var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(16), RowCount = 3 };
+            activity.RowStyles.Add(new RowStyle(SizeType.AutoSize)); activity.RowStyles.Add(new RowStyle(SizeType.Absolute, 27)); activity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 12) };
+            tools.Controls.Add(dashboard); tools.Controls.Add(storage); tools.Controls.Add(profiles); tools.Controls.Add(recipes); activity.Controls.Add(tools, 0, 0);
+            activity.Margin = Padding.Empty; activity.Controls.Add(GuiTheme.Label("ACTIVITY", 9, GuiTheme.Muted), 0, 1);
             log.Dock = DockStyle.Fill; log.BorderStyle = BorderStyle.None; log.ReadOnly = true;
             log.BackColor = Color.White; log.ForeColor = GuiTheme.Ink; log.Font = new Font("Consolas", 9);
-            log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 1); layout.Controls.Add(activity, 0, 4);
+            log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 2); layout.Controls.Add(activity, 0, 4);
 
         }
 
@@ -316,6 +323,7 @@ partial class GearBackup
             preview.Enabled = !busy && operation.SelectedIndex != 3; cancel.Enabled = busy;
             zip.Enabled = !busy && (operation.SelectedIndex == 0 || operation.SelectedIndex == 4);
             openFolder.Enabled = !busy;
+            dashboard.Enabled = storage.Enabled = profiles.Enabled = recipes.Enabled = !busy;
             if (busy) { status.ForeColor = GuiTheme.Ink; status.Text = "Preparing"; detail.Text = "You can cancel at any time."; progress.Style = ProgressBarStyle.Marquee; }
             else { progress.Style = ProgressBarStyle.Continuous; }
             if (!busy) RefreshOperationControls();
@@ -402,6 +410,18 @@ partial class GearBackup
                 config = next; status.Text = "Settings saved"; detail.Text = "Saved to " + AppIdentity.ConfigFileName + " for both interfaces.";
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        }
+        void OpenTool(int choice)
+        {
+            try
+            {
+                Config options = CaptureConfig();
+                using (Form dialog = choice < 2 ? (Form)new CatalogDialog(this, options, choice == 1) : choice == 2 ?
+                    (Form)new ProfileSettingsDialog(this, options) : new RecipeViewerDialog(this,
+                        outputFolder != null && File.Exists(Path.Combine(outputFolder, "C1.xml")) ? outputFolder : null))
+                    dialog.ShowDialog(this);
+            }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not open tool", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }
     }
 

@@ -143,6 +143,9 @@ partial class GearBackup
         RunTest("Engine operations", () => TestEngineOperations(Folder(root, "engine")));
         RunTest("Optimizations", () => TestOptimizations(Folder(root, "optimizations")));
         RunTest("Backup without point-in-time history", () => TestWithoutHistory(Folder(root, "without-history")));
+        RunTest("Device and profile preferences", () => TestProfilePreferences(Folder(root, "profile-preferences")));
+        RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
+        RunTest("Readable X100VI recipes", () => TestRecipeReading(Folder(root, "recipe-reading")));
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
         RunTest("Zip", () => TestZip(Folder(root, "zip")));
         TestHelpers(root);

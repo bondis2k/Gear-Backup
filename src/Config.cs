@@ -27,6 +27,7 @@ partial class GearBackup
         public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
         public Config Clone() { return (Config)MemberwiseClone(); }
+        internal string SettingsDirectory { get; set; }
     }
 
     // Each setting with the explanation written into GearBackup.ini when it's missing from the file.
@@ -97,7 +98,7 @@ partial class GearBackup
 
     static Config LoadConfig(string directory)
     {
-        var config = new Config { BackupFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) };
+        var config = new Config { BackupFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic), SettingsDirectory = directory };
         string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
         string legacyFile = Path.Combine(directory, AppIdentity.Legacy.ConfigFileName);
         try
