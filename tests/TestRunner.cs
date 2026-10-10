@@ -375,6 +375,7 @@ partial class M8Backup
         TestOptimizations(root);
         TestCopyPipeline(root);
         TestZip(root);
+        TestHelpers(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions.");
         RemoveFixtures(root);
@@ -390,7 +391,14 @@ partial class M8Backup
         public void WriteLine(string text) { Output.AppendLine(text); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
         public string ReadLine() { throw new Exception("Engine unexpectedly requested console-style input"); }
-        public char ChooseKey(string question, string allowed) { return allowed[0]; }
+        // Scripted answers for questions, in order; once used up, the first allowed key is chosen.
+        public readonly Queue<char> Keys = new Queue<char>();
+        public readonly List<string> Questions = new List<string>();
+        public char ChooseKey(string question, string allowed)
+        {
+            Questions.Add(question);
+            return Keys.Count > 0 ? Keys.Dequeue() : allowed[0];
+        }
         public int ChooseNumber(string question, int max) { throw new Exception("Engine unexpectedly requested backup selection"); }
         public bool ReviewPlan(OperationPlan plan) { Plans++; return !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
