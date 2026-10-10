@@ -21,6 +21,7 @@ partial class M8Backup
         public string Profile = "";
         public bool Thorough = false;
         public bool Preview = true;
+        public bool HardLinks = false;  // share history content with the backup files (NTFS)
     }
 
     // Each setting with the explanation written into M8Backup.ini when it's missing from the file.
@@ -32,6 +33,7 @@ partial class M8Backup
         new[] { "Profile", "\r\n; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\nProfile=\r\n" },
         new[] { "Thorough", "\r\n; Thorough: yes = compare file contents with SHA-256 during backup/restore,\r\n; no = compare size and modified time. Applies to resume too. Default no.\r\nThorough=no\r\n" },
         new[] { "Preview", "\r\n; Preview: show the file plan and ask before backups/restores. --preview only shows the plan.\r\nPreview=yes\r\n" },
+        new[] { "HardLinks", "\r\n; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n; no = keep separate copies (default). Other file systems always use copies.\r\nHardLinks=no\r\n" },
         new[] { "BackupFolder",
             "; BackupFolder: where backups go. Each backup is saved to\r\n" +
             ";   <BackupFolder>\\M8 Backups\\profiles\\<profile>\\<date>\r\n" +
@@ -128,6 +130,7 @@ partial class M8Backup
             { "BackupFolder", config.BackupFolder }, { "SourceFolder", config.SourceFolder }, { "Profile", config.Profile },
             { "Mode", config.Mode }, { "Verify", config.Verify ? "yes" : "no" },
             { "Thorough", config.Thorough ? "yes" : "no" }, { "Preview", config.Preview ? "yes" : "no" },
+            { "HardLinks", config.HardLinks ? "yes" : "no" },
             { "Recovery", config.Recovery ? "yes" : "no" }, { "RecoveryFolder", config.RecoveryFolder },
             { "KeepBackups", config.KeepBackups.ToString(System.Globalization.CultureInfo.InvariantCulture) },
             { "KeepOldVersions", config.KeepOldVersions.ToString(System.Globalization.CultureInfo.InvariantCulture) },
@@ -162,12 +165,14 @@ partial class M8Backup
             case "recovery":
             case "thorough":
             case "preview":
+            case "hardlinks":
                 bool enabled;
                 if (lower == "yes" || lower == "true" || lower == "1" || lower == "on") enabled = true;
                 else if (lower == "no" || lower == "false" || lower == "0" || lower == "off") enabled = false;
                 else { WarnSetting(key, value, "yes or no"); return; }
                 if (key.Equals("recovery", StringComparison.OrdinalIgnoreCase)) config.Recovery = enabled;
                 else if (key.Equals("thorough", StringComparison.OrdinalIgnoreCase)) config.Thorough = enabled;
+                else if (key.Equals("hardlinks", StringComparison.OrdinalIgnoreCase)) config.HardLinks = enabled;
                 else config.Preview = enabled;
                 return;
             case "recoveryfolder": config.RecoveryFolder = ExpandPath(value); return;

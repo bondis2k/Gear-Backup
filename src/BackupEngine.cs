@@ -78,6 +78,11 @@ partial class M8Backup
             var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long totalBytes = 0, neededBytes = 0;
             long historyBytes = 0;
+            // HardLinks=yes on NTFS: the history store shares the backup files' content instead of copying it.
+            bool linkedHistory = config.HardLinks && SupportsHardLinks(backupRoot);
+            // A full backup copies everything anyway, so with Thorough=yes its content comparison (only used
+            // for the change summary) waits for the checksums computed while copying: the card is read once.
+            bool thoroughNow = config.Thorough && incremental;
             for (int i = 0; i < scan.Files.Count; i++)
             {
                 OperationContext.Current.Progress("Planning backup", scan.Files[i].FullName, 0, 0, i, scan.Files.Count);
@@ -85,7 +90,7 @@ partial class M8Backup
                 string comparedHash = null;
                 states[i] = previous == null
                     ? FileState.New
-                    : CompareContent(file, SafePath(previous, file.FullName.Substring(source.Length)), config.Thorough, out comparedHash);
+                    : CompareContent(file, SafePath(previous, file.FullName.Substring(source.Length)), thoroughNow, out comparedHash);
                 totalBytes += file.Length;
                 if (!incremental || states[i] != FileState.Same) neededBytes += file.Length;
                 string relative = file.FullName.Substring(source.Length);
@@ -96,16 +101,19 @@ partial class M8Backup
                 string hash = comparedHash;
                 if (hash == null && !resuming && incremental && states[i] == FileState.Same && oldSums != null)
                     oldSums.TryGetValue(relative, out hash);
+                if (linkedHistory) continue;
                 if (hash == null) historyBytes += file.Length;
                 else if (!File.Exists(ObjectPath(dest, hash)) && pendingObjects.Add(hash)) historyBytes += file.Length;
             }
-            Changes changes = FindChanges(scan, source, states, previous);
 
             List<string> nameWarnings = CheckNames(scan, source, config.MaxNameLength);
             if (nameWarnings.Count > 0)
                 WriteColored("  " + nameWarnings.Count + " name(s) the M8 may not handle well (listed in the statistics).", ConsoleColor.Yellow);
 
-            OperationOutput.WriteLine("  History store needs up to {0} additional space (identical content is shared).", FormatSize(historyBytes));
+            if (linkedHistory)
+                OperationOutput.WriteLine("  History store shares the backup files through hard links; no extra space needed.");
+            else
+                OperationOutput.WriteLine("  History store needs up to {0} additional space (identical content is shared).", FormatSize(historyBytes));
             string spaceError = CheckFreeSpace(backupRoot, neededBytes + historyBytes);
             if (spaceError != null)
             {
@@ -217,6 +225,10 @@ partial class M8Backup
             OperationOutput.WriteLine();
             OperationOutput.WriteLine();
 
+            if (config.Thorough && !incremental && previous != null)
+                RefineByChecksums(scan, source, states, sums, previous);
+            Changes changes = FindChanges(scan, source, states, previous);
+
             int prunedVersions = 0;
             try
             {
@@ -226,7 +238,7 @@ partial class M8Backup
                     string rel = f.FullName.Substring(source.Length);
                     if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
                 }
-                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify);
+                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory);
             }
             catch (Exception ex)
             {
@@ -366,6 +378,27 @@ partial class M8Backup
             if (failed > 0) summary += " " + failed + " file(s) failed.";
             summary += ShortSongSummary(changes);
             return failed == 0 ? 0 : 2;
+        }
+
+        // Full backup with Thorough=yes: compare content using the checksums from copying and the previous
+        // backup's checksum list, instead of hashing the card and the previous backup before copying.
+        static void RefineByChecksums(ScanResult scan, string source, FileState[] states,
+                                      Dictionary<string, string> sums, string previous)
+        {
+            Dictionary<string, string> oldSums = LoadChecksums(previous);
+            for (int i = 0; i < scan.Files.Count; i++)
+            {
+                if (states[i] == FileState.New) continue;
+                string relative = scan.Files[i].FullName.Substring(source.Length);
+                string newHash, oldHash;
+                if (!sums.TryGetValue(relative, out newHash)) continue;  // copy failed; keep the metadata result
+                if (oldSums == null || !oldSums.TryGetValue(relative, out oldHash))
+                {
+                    OperationContext.Current.Progress("Comparing", relative, 0, 0);
+                    oldHash = HashFile(SafePath(previous, relative));  // older backup without a checksum list
+                }
+                states[i] = newHash == oldHash ? FileState.Same : FileState.Changed;
+            }
         }
     }
 

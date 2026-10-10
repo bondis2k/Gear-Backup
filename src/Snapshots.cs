@@ -30,7 +30,7 @@ partial class M8Backup
     }
 
     // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
-    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify)
+    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
     {
         var rows = new StringBuilder("M8SNAPSHOT\t1\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -57,8 +57,12 @@ partial class M8Backup
                 TryDelete(temp);
                 try
                 {
-                    string copiedHash = CopyFile(new FileInfo(path), temp, verify);
-                    if (verify && copiedHash != hash)
+                    // HardLinks=yes: a hard link stores the content once (NTFS); otherwise, or where linking
+                    // fails, a copy. The program never edits backup files in place, so linked content stays as recorded.
+                    string storedHash = hardLinks && TryHardLink(path, temp)
+                        ? (verify ? HashFile(temp) : hash)
+                        : CopyFile(new FileInfo(path), temp, verify);
+                    if (verify && storedHash != hash)
                         throw new IOException("Backup checksum differs for " + relative);
                     File.Move(temp, obj);
                     checkedObjects.Add(hash);

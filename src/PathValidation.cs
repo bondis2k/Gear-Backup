@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 partial class M8Backup
@@ -21,7 +22,7 @@ partial class M8Backup
     // Never allow manifest/checksum entries to escape the selected backup or target.
     static string SafePath(string root, string relative)
     {
-        RejectRootLinks(root);
+        RejectRootLinksOnce(root);
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
             throw new IOException("Invalid relative path: " + relative);
         foreach (string part in relative.Replace('/', '\\').Split('\\'))
@@ -47,16 +48,30 @@ partial class M8Backup
 
     static void RejectLinks(string root, string path)
     {
+        HashSet<string> verified = OperationContext.Current.VerifiedFolders;
         string current = path;
         while (Within(current, root))
         {
-            if ((File.Exists(current) || Directory.Exists(current)) &&
+            bool isFolder = Directory.Exists(current);
+            if (isFolder && verified.Contains(Rooted(current))) break;
+            if ((isFolder || File.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked paths are not supported: " + current);
+            if (isFolder) verified.Add(Rooted(current));
             if (Rooted(current) == Rooted(root)) break;
             current = Path.GetDirectoryName(current.TrimEnd('\\'));
             if (current == null) break;
         }
+    }
+
+    // RejectRootLinks, skipped when this operation already checked the same folder.
+    static void RejectRootLinksOnce(string path)
+    {
+        HashSet<string> verified = OperationContext.Current.VerifiedFolders;
+        string key = Rooted(path);
+        if (verified.Contains(key)) return;
+        RejectRootLinks(path);
+        verified.Add(key);
     }
 
     static void RejectRootLinks(string path)

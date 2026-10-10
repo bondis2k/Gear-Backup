@@ -1,6 +1,7 @@
 // Comparing files, copying with checksum verification, and free-space checks.
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
 partial class M8Backup
@@ -83,6 +84,24 @@ partial class M8Backup
             if (attempt == 2)
                 throw new IOException("the copy didn't match the original twice; check the USB cable and SD card");
         }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
+
+    // Creates `link` as a second name for `existing`. False where hard links aren't supported
+    // (FAT, exFAT, most network shares) or fail for any other reason; callers then copy instead.
+    static bool TryHardLink(string existing, string link)
+    {
+        try { return CreateHardLink(link, existing, IntPtr.Zero); }
+        catch (Exception) { return false; }
+    }
+
+    // NTFS supports hard links; the history store then needs no extra space for file content.
+    static bool SupportsHardLinks(string path)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))).DriveFormat == "NTFS"; }
+        catch (Exception) { return false; }
     }
 
     static void TryDelete(string path)

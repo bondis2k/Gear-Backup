@@ -90,6 +90,8 @@ Thorough=yes
 
 Thorough mode compares content hashes. Identical contents can be skipped even when timestamps differ. The setting applies to backups, restores, and resume. With the default `Thorough=no`, those operations compare size and modified time, which can miss changes preserving both.
 
+A full backup copies every file anyway, so with `Thorough=yes` it doesn't hash the card beforehand: the content comparison for the change summary uses the checksums calculated while copying and the previous backup's `checksums.sha256`. The card is read once. Incremental backups and resume still hash both sides before copying, which also repairs a damaged copy in the backup.
+
 Automatic SHA-256 integrity comparison is independently controlled by `Verify=no` (the default). Set `Verify=yes` to check copied files, restore sources, snapshot objects, and recovery copies. Hashes are still generated for integrity records and history object identities when comparison is off. Selecting **Check backups** explicitly runs checksum checks regardless of either setting.
 
 ### Completion status and resume
@@ -120,6 +122,8 @@ Every successful backup run saves a dated manifest under:
 The manifest records file membership, hashes, sizes, timestamps, and empty folders. File contents are retained separately in `.m8backup\objects`, keyed by SHA-256. Identical contents share an object within that backup folder, so successive snapshots only need additional objects for new contents. This protects earlier snapshots when browsable files are renamed, updated, or pruned.
 
 **Storage:** the first snapshot adds a separate history copy of each unique file's contents, alongside the normal browsable backup. Plan for up to roughly twice the card's data for a first full backup. Objects are shared within one backup folder, not between separate full backups. The free-space check includes missing history objects.
+
+**Hard links (optional):** with `HardLinks=yes` and a backup folder on NTFS, history objects are hard links to the browsable backup files instead of copies: no extra space and no extra copying. The trade-off is that both names then refer to one copy on disk, so editing a backup file by hand, a tool rewriting it, or disk damage also changes the history; a check still detects it. The program itself never edits backup files in place. On FAT, exFAT and most network shares, or if linking fails, copies are used. The default is `HardLinks=no`.
 
 Space planning reuses hashes already available from thorough comparison or existing checksum records. For contents whose hashes are not yet known, it reserves their full size without reading them just to estimate space. This estimate can exceed the eventual requirement when identical contents share an object. Copying still generates SHA-256 identities, and optional read-back verification still runs when enabled. A shared existing history object is verified once per backup run.
 
@@ -177,7 +181,7 @@ Replacement also uses a transient `.m8rollback-*.tmp` copy of the original on th
 
 The working-space estimate includes added files, growth of replacements, and staging space. With recovery on the same volume, it also reserves space for all recovery copies before starting.
 
-The target is checked again before replacement/removal. With both settings off, this guard uses size and modified time; with either setting on, it uses SHA-256. Detected changes stop replacement. This is not a transaction across the entire card: already completed file restores remain if a later file fails. Keep the card idle until completion.
+The target is checked again before replacement/removal. With `Thorough=no` this guard uses size and modified time; with `Thorough=yes` it uses SHA-256. `Verify` does not change this guard; it controls checksum checks of the backup files and copies. Detected changes stop replacement. This is not a transaction across the entire card: already completed file restores remain if a later file fails. Keep the card idle until completion.
 
 ### Optional recovery copies
 
@@ -260,6 +264,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
+| `HardLinks` | `no` | On NTFS, store history as hard links to the backup files instead of second copies (see Point-in-time history). |
 
 ## Command line and exit codes
 

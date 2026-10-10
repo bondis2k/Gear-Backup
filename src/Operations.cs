@@ -54,6 +54,9 @@ partial class M8Backup
         public readonly CancellationToken Cancellation;
         public bool PreviewOnly;
         public bool OverallProgressOnly;
+        // Folders already found not to be links during this operation, so path checks
+        // don't repeat the same file-system lookups for every file.
+        public readonly HashSet<string> VerifiedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         public OperationContext(IOperationInteraction interaction, CancellationToken cancellation)
         {
             if (interaction == null) throw new ArgumentNullException("interaction");
