@@ -621,4 +621,41 @@ partial class GearBackup
         Assert(OperationContext.Current == context || OperationContext.Current.Interaction is ConsoleInteraction,
             "engine restores calling context after completion and cancellation");
     }
+
+    // Paths over Windows' limits are found before anything is copied, with a message saying what to do.
+    static void TestLongPaths(string root)
+    {
+        string source = Rooted(Folder(root, "src"));
+        string relative = Path.Combine(new string('s', 40), new string('f', 30) + ".wav");
+        Put(Path.Combine(source, relative), "LONG");
+        var config = new Config { BackupFolder = root, Preview = false };
+
+        // A history deep enough that the copy would be over 259 characters, while the folder itself fits.
+        string deep = Path.Combine(root, new string('h', Math.Max(1, 185 - root.Length)));
+        OperationResult result = new BackupEngine().Run(source, deep, null, false, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 1 && result.Summary != null && result.Summary.Contains("over Windows' limit of 260") &&
+            result.Summary.Contains("shorter backup location"), "a backup with too-long paths stops with a clear message: " + result.Summary);
+        Assert(ListBackups(deep).Count == 0, "nothing is copied when a path would be too long");
+
+        string history = Path.Combine(root, "history");
+        result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0, "the same source backs up to a shorter location");
+
+        // A restore target whose files would be too long is refused before anything is written.
+        string backup = ListBackups(history)[0];
+        Snapshot snapshot = LatestSnapshot(backup);
+        string target = Rooted(Path.Combine(root, new string('t', Math.Max(1, 200 - root.Length))));
+        Directory.CreateDirectory(target);
+        result = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 1 && result.Summary.Contains("shorter path") && Directory.GetFileSystemEntries(target).Length == 0,
+            "a restore with too-long paths is refused and writes nothing: " + result.Summary);
+
+        var check = new PathLengthCheck();
+        check.File(new string('a', 259));
+        check.Folder(new string('b', 247) + "\\");
+        Assert(check.Problem("") == null, "paths exactly at the limits are allowed");
+        check.File(new string('c', 250), 21);
+        Assert(check.Problem("Advice.").Contains("271 characters") && check.Problem("Advice.").EndsWith("Advice."), "room for dated old versions is counted");
+    }
 }

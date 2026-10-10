@@ -150,6 +150,7 @@ partial class GearBackup
         RunTest("Shared source flow", () => TestSharedFlow(Folder(root, "shared-flow")));
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
         RunTest("Zip", () => TestZip(Folder(root, "zip")));
+        RunTest("Paths over Windows' length limit", () => TestLongPaths(Folder(root, "long-paths")));
         TestHelpers(root);
         return Summarize(root);
     }

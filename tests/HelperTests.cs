@@ -35,6 +35,7 @@ partial class GearBackup
         RunTest("OP-1 Field: backup of a mirrored device", () => TestOp1FieldBackup(dir));
         RunTest("OP-XY: projects and backup", () => TestOpXy(dir));
         RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
+        RunTest("MTP devices through the shared flow", () => TestMtpSharedFlow(Folder(dir, "mtp-flow")));
         RunTest("History names per device", () => TestProfileNames(dir));
         RunTest("X100VI: photos", () => TestX100VI(dir));
         RunTest("X100VI: settings capture and selector safety", () => TestFujiSettings(Folder(dir, "fuji-settings")));

@@ -415,4 +415,52 @@ partial class GearBackup
         Assert(result.Downloaded == 1 && result.Removed == 1 && File.ReadAllText(old) == "NEW SOUND FROM DEVICE" &&
             !Directory.Exists(staleFolder), "reconnecting retries the failed file and performs cleanup only after success");
     }
+
+    // An MTP device going through the same detect -> prepare -> run steps as a real one, with a fake
+    // device: its mirror is synced, backed up, and only downloads changes the next time.
+    static void TestMtpSharedFlow(string dir)
+    {
+        var day = new DateTime(2026, 1, 1, 10, 0, 0);
+        var device = new FakeMtpSource();
+        device.File(@"synth\pad.aif", "PAD", day);
+        device.File(@"tapes\track1.aif", "TAPE", day);
+        int opened = 0;
+        string mirrors = Folder(dir, "mirrors");
+        var mtp = new MtpSource { Device = Devices.OP1Field, Mirror = Path.Combine(mirrors, "op1-field-TEST"),
+            Info = new MtpDeviceInfo { InstanceId = @"USB\VID_2367&PID_0102\TEST", FriendlyName = "OP-1" },
+            Open = () => { opened++; return device; } };
+        Directory.CreateDirectory(mtp.Mirror);
+        var global = new Config { BackupFolder = Folder(dir, "backups"), SettingsDirectory = dir, Preview = false };
+        var choice = new SourceChoice { Path = mtp.Mirror, Detected = Devices.OP1Field, Mtp = mtp };
+        PreparedSource prepared = null;
+        OperationResult first = null, second = null;
+        WithUi(() => {
+            prepared = PrepareSource(global, choice);
+            first = RunPrepared(prepared, false, false);
+        });
+        string backup = ListBackups(prepared.History)[0];
+        Assert(first.ExitCode == 0 && opened == 1 && device.Downloads == 2 && prepared.Device == Devices.OP1Field &&
+            File.ReadAllText(Path.Combine(backup, @"synth\pad.aif")) == "PAD", "a prepared MTP source is synced and backed up");
+        device.File(@"tapes\track2.aif", "NEW TAPE", day);
+        WithUi(() => second = RunPrepared(PrepareSource(global, choice), false, true));
+        Assert(second.ExitCode == 0 && device.Downloads == 3 && File.ReadAllText(Path.Combine(backup, @"tapes\track2.aif")) == "NEW TAPE",
+            "the next backup downloads only what changed");
+
+        Throws(() => WithUi(() => RunPrepared(PrepareSource(global, choice), true, false)), "restoring onto an MTP device is refused");
+        using (LockHistory(mirrors))
+            Throws(() => WithUi(() => RunPrepared(PrepareSource(global, choice), false, true)), "the mirror isn't synced while storage cleanup holds its lock");
+        Assert(opened == 2, "a refused run never opens the device");
+
+        // The X100VI's mode from detection is reused: in settings mode, photos aren't read at all.
+        var camera = new MtpSource { Device = Devices.X100VI, Mirror = Path.Combine(mirrors, "x100vi-TEST"), SettingsMode = true,
+            Info = new MtpDeviceInfo { InstanceId = @"USB\VID_04CB&PID_0305\TEST", FriendlyName = "X100VI" },
+            Open = () => { opened++; return device; } };
+        Directory.CreateDirectory(camera.Mirror);
+        bool refused = false;
+        WithUi(() => {
+            try { RunPrepared(PrepareSource(global, new SourceChoice { Path = camera.Mirror, Detected = Devices.X100VI, Mtp = camera }), false, false); }
+            catch (IOException ex) { refused = ex.Message.Contains("settings mode"); }
+        });
+        Assert(refused && opened == 2, "a camera in settings mode is refused for photos without opening it again");
+    }
 }

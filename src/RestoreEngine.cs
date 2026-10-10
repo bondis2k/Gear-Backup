@@ -80,6 +80,27 @@ partial class GearBackup
             var plan = new List<string>();
             var targetHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            // Every restored file, its staging and rollback copies beside it (".gearrollback-<32>.tmp"),
+            // and its folders must fit Windows' path limits; check before touching the target.
+            var lengths = new PathLengthCheck();
+            string root = m8.TrimEnd('\\') + "\\";
+            foreach (RestoreEntry item in items)
+            {
+                // Plain string work: Path methods themselves refuse paths over the limit.
+                string target = root + item.Relative;
+                lengths.File(target);
+                lengths.File(target.Substring(0, target.LastIndexOf('\\')) + "\\.gearrollback-" + new string('0', 32) + ".tmp");
+            }
+            foreach (string folder in snapshot.Folders)
+                if (mode == RestoreMode.All || (bundle != null && (folder.Equals(bundle, StringComparison.OrdinalIgnoreCase) ||
+                    folder.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase))))
+                    lengths.Folder(root + folder);
+            string pathProblem = lengths.Problem("Restore to a folder with a shorter path, for example D:\\Restore.");
+            if (pathProblem != null)
+            {
+                WriteColored("  " + pathProblem, ConsoleColor.Red);
+                return new OperationResult { ExitCode = 1, Summary = pathProblem };
+            }
             int differing = 0, identical = 0, newer = 0;
             long bytes = 0, missingBytes = 0;
             foreach (RestoreEntry item in items)
