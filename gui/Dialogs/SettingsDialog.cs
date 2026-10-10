@@ -9,34 +9,56 @@ partial class GearBackup
         public SettingsDialog(Config config)
         {
             Text = "Settings · " + AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
-            StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false; FormBorderStyle = FormBorderStyle.FixedDialog;
-            MinimizeBox = false; MaximizeBox = false; ClientSize = new Size(640, 520); AutoScaleMode = AutoScaleMode.Dpi;
+            StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false;
+            MinimizeBox = false; MaximizeBox = false; ClientSize = new Size(680, 570); MinimumSize = new Size(580, 450);
+            AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;
-            var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            Controls.Add(layout); layout.Controls.Add(GuiTheme.Label("Preferences", 20, GuiTheme.Ink));
-            layout.Controls.Add(GuiTheme.Label("Saved settings are shared with the command-line program.", 10, GuiTheme.Muted));
-            var verify = new CheckBox { Text = "Verify copied files", Checked = config.Verify, AutoSize = true };
-            var thorough = new CheckBox { Text = "Compare file contents instead of size and time", Checked = config.Thorough, AutoSize = true };
-            var review = new CheckBox { Text = "Review changes before copying", Checked = config.Preview, AutoSize = true };
-            var recovery = new CheckBox { Text = "Keep recovery copies before restoring", Checked = config.Recovery, AutoSize = true };
-            layout.Controls.Add(verify); layout.Controls.Add(thorough); layout.Controls.Add(review); layout.Controls.Add(recovery);
-            layout.Controls.Add(GuiTheme.Label("Recovery location  ·  blank uses the default", 9, GuiTheme.Muted));
-            var recoveryRow = new FlowLayoutPanel { Width = 580, Height = 38 };
-            var recoveryPath = new TextBox { Text = config.RecoveryFolder, Width = 450 };
-            var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(100, 28); browse.Padding = Padding.Empty;
-            browse.Click += delegate { BrowseFolder(this, recoveryPath, true); };
-            recoveryRow.Controls.Add(recoveryPath); recoveryRow.Controls.Add(browse); layout.Controls.Add(recoveryRow);
-            var retention = new FlowLayoutPanel { Width = 580, Height = 62 };
+            Shown += delegate { GuiTheme.FitToScreen(this); };
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), RowCount = 3, ColumnCount = 1 };
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Controls.Add(layout);
+            layout.Controls.Add(Explanation("Preferences are shared with the command-line program."), 0, 0);
+            var tabs = new TabControl { Dock = DockStyle.Fill, AccessibleName = "Preference categories" };
+            layout.Controls.Add(tabs, 0, 1);
+            var backup = PreferencePage(tabs, "Backup");
+            var restore = PreferencePage(tabs, "Restore");
+            var device = PreferencePage(tabs, "Device");
+            var verify = Check("Verify copied files", "VerifyCopies", config.Verify);
+            var thorough = Check("Compare file contents", "CompareContents", config.Thorough);
+            var review = Check("Review changes before copying", "ReviewChanges", config.Preview);
+            backup.Controls.Add(verify);
+            backup.Controls.Add(Explanation("Reads copied files back during backups and restores, checking SHA-256 integrity. Adds time; off by default."));
+            backup.Controls.Add(thorough);
+            backup.Controls.Add(Explanation("Uses SHA-256 to detect content changes even when size and date match. Adds reading time; off by default."));
+            backup.Controls.Add(review);
+            var retention = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
             var backups = NumberField(retention, "Backups to keep", config.KeepBackups);
             var versions = NumberField(retention, "Old versions to keep", config.KeepOldVersions);
-            var length = NumberField(retention, "Name warning length", config.MaxNameLength); layout.Controls.Add(retention);
-            layout.Controls.Add(GuiTheme.Label("Zero keeps all backups/versions or disables name warnings.", 9, GuiTheme.Muted));
-            var eject = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
+            backup.Controls.Add(retention); backup.Controls.Add(Explanation("Zero keeps all backups or versions."));
+            var recovery = Check("Keep recovery copies before restoring", "RecoveryCopies", config.Recovery);
+            restore.Controls.Add(recovery);
+            restore.Controls.Add(Explanation("Saves files that will be overwritten or removed. Off by default."));
+            restore.Controls.Add(GuiTheme.Label("Recovery location · blank uses the default", 9, GuiTheme.Muted));
+            var recoveryRow = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2 };
+            recoveryRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); recoveryRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var recoveryPath = new TextBox { Name = "RecoveryLocation", Text = config.RecoveryFolder, Dock = DockStyle.Fill, AccessibleName = "Recovery location" };
+            var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(100, 28); browse.Padding = Padding.Empty;
+            browse.AccessibleName = "Browse recovery location";
+            browse.Click += delegate { BrowseFolder(this, recoveryPath, true); };
+            recoveryRow.Controls.Add(recoveryPath, 0, 0); recoveryRow.Controls.Add(browse, 1, 0); restore.Controls.Add(recoveryRow);
+            recoveryRow.Enabled = recovery.Checked;
+            recovery.CheckedChanged += delegate { recoveryRow.Enabled = recovery.Checked; };
+            var warnings = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
+            var length = NumberField(warnings, "Name warning length", config.MaxNameLength); device.Controls.Add(warnings);
+            device.Controls.Add(Explanation("Zero disables name-length warnings."));
+            device.Controls.Add(GuiTheme.Label("After a successful operation", 9, GuiTheme.Muted));
+            var eject = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, AccessibleName = "Device ejection preference" };
             eject.Items.AddRange(new object[] { "Leave the device connected", "Ask before ejecting the device", "Eject the device after completion" });
-            eject.SelectedIndex = (int)config.Eject; layout.Controls.Add(eject);
-            var actions = new FlowLayoutPanel { Width = 580, Height = 50, Padding = new Padding(0, 12, 0, 0) };
-            var save = GuiTheme.Button("Save settings", true); var cancel = GuiTheme.Button("Cancel", false); cancel.DialogResult = DialogResult.Cancel;
-            actions.Controls.Add(save); actions.Controls.Add(cancel); layout.Controls.Add(actions); AcceptButton = save; CancelButton = cancel;
+            eject.SelectedIndex = (int)config.Eject; device.Controls.Add(eject);
+            var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 14, 0, 0) };
+            var save = GuiTheme.Button("Save settings", true); save.Name = "SaveSettings";
+            var cancel = GuiTheme.Button("Cancel", false); cancel.DialogResult = DialogResult.Cancel;
+            actions.Controls.Add(save); actions.Controls.Add(cancel); layout.Controls.Add(actions, 0, 2); AcceptButton = save; CancelButton = cancel;
             save.Click += delegate {
                 try
                 {
@@ -49,11 +71,27 @@ partial class GearBackup
                 catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check recovery location"); }
             };
         }
+        static TableLayoutPanel PreferencePage(TabControl tabs, string title)
+        {
+            var page = new TabPage(title) { BackColor = Color.White, AutoScroll = true, Padding = new Padding(16) };
+            var content = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            page.Controls.Add(content); tabs.TabPages.Add(page); return content;
+        }
+        static CheckBox Check(string text, string name, bool value)
+        {
+            return new CheckBox { Text = text, Name = name, AccessibleName = text, Checked = value, AutoSize = true, Margin = new Padding(0, 8, 0, 6) };
+        }
+        static Label Explanation(string text)
+        {
+            var label = GuiTheme.Label(text, 9, GuiTheme.Muted); label.MaximumSize = new Size(520, 0); return label;
+        }
         static NumericUpDown NumberField(FlowLayoutPanel parent, string label, int value)
         {
-            var column = new FlowLayoutPanel { Width = 183, Height = 62, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+            var column = new FlowLayoutPanel { Width = 220, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
             column.Controls.Add(GuiTheme.Label(label, 9, GuiTheme.Muted));
-            var number = new NumericUpDown { Minimum = 0, Maximum = int.MaxValue, Value = value, Width = 164 };
+            var number = new NumericUpDown { Minimum = 0, Maximum = int.MaxValue, Value = value, Width = 185, AccessibleName = label };
             column.Controls.Add(number); parent.Controls.Add(column); return number;
         }
-    }}
+    }
+}

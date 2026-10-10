@@ -26,7 +26,11 @@ partial class GearBackup
     // Paths are stored Base64-encoded in manifests, so tabs or other odd characters in a name can't
     // break the tab-separated format.
     static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
-    static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+    static string Decode(string value)
+    {
+        try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
+        catch (FormatException ex) { throw new IOException("Invalid encoded snapshot path.", ex); }
+    }
     static string SnapshotRoot(string backup) { return Path.Combine(AppIdentity.MetadataRoot(backup), "snapshots"); }
     static string ObjectPath(string backup, string hash)
     {
@@ -109,10 +113,11 @@ partial class GearBackup
             if (parts[0] == "D" && parts.Length == 2) result.Folders.Add(relative);
             else if (parts[0] == "F" && parts.Length == 6)
             {
-                long size = long.Parse(parts[3], CultureInfo.InvariantCulture);
-                long modified = long.Parse(parts[4], CultureInfo.InvariantCulture);
-                long created = long.Parse(parts[5], CultureInfo.InvariantCulture);
-                if (size < 0 || modified < 0 || modified > DateTime.MaxValue.Ticks || created < 0 || created > DateTime.MaxValue.Ticks)
+                long size, modified, created;
+                if (!long.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out size) ||
+                    !long.TryParse(parts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out modified) ||
+                    !long.TryParse(parts[5], NumberStyles.Integer, CultureInfo.InvariantCulture, out created) ||
+                    size < 0 || modified < 0 || modified > DateTime.MaxValue.Ticks || created < 0 || created > DateTime.MaxValue.Ticks)
                     throw new IOException("Invalid snapshot metadata.");
                 result.Files.Add(new RestoreEntry { Relative = relative, Hash = parts[2], Size = size,
                     ModifiedTicks = modified, CreatedTicks = created, StoredPath = ObjectPath(backup, parts[2]) });

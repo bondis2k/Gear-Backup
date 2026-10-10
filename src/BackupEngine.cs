@@ -33,8 +33,10 @@ partial class GearBackup
                     if (incremental && (previous == null || !Directory.Exists(previous)))
                         throw new IOException("An incremental backup needs an existing backup folder.");
                     string title, summary;
-                    int code = new BackupRun(source, backupRoot, previous, incremental, config).Execute(out title, out summary);
-                    return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed };
+                    var run = new BackupRun(source, backupRoot, previous, incremental, config);
+                    int code = run.Execute(out title, out summary);
+                    return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed,
+                        Counts = title == null ? null : run.ResultCounts, OutputFolder = title == null ? null : run.OutputFolder };
                 }
                 catch (OperationCanceledException)
                 {
@@ -115,6 +117,9 @@ partial class GearBackup
         }
 
         bool zipFailed;
+        public string OutputFolder { get { return dest; } }
+        public OperationCounts ResultCounts { get { return new OperationCounts { Copied = copied, Unchanged = unchanged,
+            Removed = prunedVersions, Failed = failed + (zipFailed ? 1 : 0) }; } }
 
         // --zip: after a successful full backup, also save it as a zip next to its folder.
         // Returns the zip's path, or null when none was made.
@@ -236,7 +241,9 @@ partial class GearBackup
             }
             // Time spent waiting for a decision is not backup work.
             stopwatch.Stop();
-            bool approved = ShowPlan(resuming ? "Resume backup" : "Backup preview", plan, neededBytes, config);
+            var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (FileInfo file in scan.Files) sizes[Relative(file)] = file.Length;
+            bool approved = ShowPlan(resuming ? "Resume backup" : "Backup preview", plan, neededBytes, config, sizes);
             stopwatch.Start();
             return approved;
         }

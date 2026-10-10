@@ -175,11 +175,11 @@ partial class GearBackup
     }
 
     // True when the operation should go ahead: approved, and not just a --preview.
-    static bool ShowPlan(string label, List<string> lines, long bytes, Config config)
+    static bool ShowPlan(string label, List<string> lines, long bytes, Config config, Dictionary<string, long> fileSizes = null)
     {
         OperationContext.Current.CheckCancellation();
         bool approved = OperationContext.Current.Interaction.ReviewPlan(new OperationPlan {
-            Label = label, Actions = lines, Bytes = bytes, ShowDetails = config.Preview, PreviewOnly = PreviewOnly });
+            Label = label, Actions = lines, Bytes = bytes, FileSizes = fileSizes, ShowDetails = config.Preview, PreviewOnly = PreviewOnly });
         OperationContext.Current.CheckCancellation();
         return approved && !PreviewOnly;
     }

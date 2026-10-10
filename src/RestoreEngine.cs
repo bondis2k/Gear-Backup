@@ -79,10 +79,12 @@ partial class GearBackup
             var toCopy = new List<RestoreEntry>();
             var plan = new List<string>();
             var targetHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var sizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             int differing = 0, identical = 0, newer = 0;
             long bytes = 0, missingBytes = 0;
             foreach (RestoreEntry item in items)
             {
+                sizes[item.Relative] = item.Size;
                 OperationContext.Current.Progress(Stage.PlanningRestore, item.Relative, 0, 0);
                 string target = SafePath(m8, item.Relative);
                 CheckParents(m8, target);
@@ -120,6 +122,7 @@ partial class GearBackup
             }
             foreach (string relative in removals)
             {
+                sizes[relative] = new FileInfo(SafePath(m8, relative)).Length;
                 targetHashes[relative] = Fingerprint(SafePath(m8, relative), config.Thorough);
                 plan.Add("REMOVE extra file: " + relative);
             }
@@ -153,9 +156,11 @@ partial class GearBackup
             }
             else OperationOutput.WriteLine("  Recovery copies: disabled (Recovery=no).");
             OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
-            if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config)) return new OperationResult();
+            if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config, sizes)) return new OperationResult();
             if (exact && !AskYesNo("Remove " + removals.Count + " extra file(s) from the selected target?")) return new OperationResult();
-            return new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
+            OperationResult result = new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
+            if (result.Counts != null) result.Counts.Unchanged = identical;
+            return result;
         }
 
         OperationResult ExecuteCore(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
@@ -224,6 +229,7 @@ partial class GearBackup
             if (recovery != null) summary += " Recovery: " + recovery;
             OperationOutput.WriteLine("  " + summary);
             return new OperationResult { ExitCode = failed == 0 ? 0 : 2, Summary = summary,
+                OutputFolder = targetRoot, Counts = new OperationCounts { Copied = copied, Removed = removed, Failed = failed },
                 Title = AppIdentity.Name + (failed == 0 ? " restore complete" : " restore finished with errors") };
         }
     }

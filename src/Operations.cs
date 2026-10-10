@@ -40,6 +40,7 @@ partial class GearBackup
     {
         public string Label;
         public List<string> Actions;
+        public Dictionary<string, long> FileSizes;
         public long Bytes;
         // ShowDetails: Preview=yes, list every action and ask. PreviewOnly: --preview, show and stop.
         public bool ShowDetails, PreviewOnly;
@@ -58,8 +59,15 @@ partial class GearBackup
     {
         public int ExitCode;
         public string Title, Summary;
+        public string OutputFolder;
+        public OperationCounts Counts;
         public bool Cancelled;
         public TimeSpan Elapsed;
+    }
+
+    internal sealed class OperationCounts
+    {
+        public int Copied, Unchanged, Removed, Failed;
     }
 
     // Everything an operation needs from its caller: the front end, the cancellation token and per-run
