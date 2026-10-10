@@ -56,6 +56,7 @@ partial class GearBackup
         string otherHistory = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
         Directory.CreateDirectory(Path.Combine(globalHistory, "2026-01-01"));
         Directory.CreateDirectory(Path.Combine(otherHistory, "2026-01-01"));
+        int before;
         Assert(AvailableHistories(config).Count == 2, "overlapping override locations are deduplicated without losing same-name profiles");
         var ui = new TestInteraction { OnChooseItem = (q, items) => {
             Assert(items.Count == 2 && items[0] != items[1], "same-name histories have distinguishable location labels");
@@ -69,11 +70,21 @@ partial class GearBackup
             Assert(ChooseHistory(config, globalHistory) == null, "cancelling the cross-location picker changes nothing");
             Config named = config.Clone(); named.Profile = "Studio";
             Assert(HistoryToCheck(named) == null, "duplicate named profiles still allow cancellation of location selection");
+            before = AvailableHistories(config).Count;
+            Directory.CreateDirectory(Path.Combine(HistoriesRoot(config), "profiles", "Later", "2026-02-01"));
+            Assert(AvailableHistories(config).Count == before, "an operation looks through its backup locations only once");
+            AvailableHistories(config).Clear();
+            Assert(AvailableHistories(config).Count == before, "callers can't change the remembered histories");
         }
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            Assert(AvailableHistories(config).Count == before + 1, "the next operation sees new histories");
         Directory.Delete(Path.Combine(globalHistory, "2026-01-01"));
-        Assert(HasHistory(config), "CLI discovers histories outside an empty global location");
-        Config only = config.Clone(); only.Profile = "Studio";
-        Assert(HistoryToCheck(only) == otherHistory, "a named profile with one populated location is selected directly");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            Assert(HasHistory(config), "CLI discovers histories outside an empty global location");
+            Config only = config.Clone(); only.Profile = "Studio";
+            Assert(HistoryToCheck(only) == otherHistory, "a named profile with one populated location is selected directly");
+        }
     }
 
     static void TestRestoreDevicePreferences(string root)
@@ -119,6 +130,18 @@ partial class GearBackup
         Directory.CreateDirectory(automatic);
         Assert(BackupDevice(automatic) == Devices.TrackerMini, "old automatic histories infer their device without a new record");
         Put(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), "unknown-device");
-        Throws(() => BackupDevice(backup), "invalid recorded device types are refused");
+        Assert(BackupDevice(backup) == null, "a device this version doesn't know counts as no record");
+        Put(Path.Combine(AppIdentity.MetadataRoot(automatic), "device.txt"), "unknown-device");
+        Assert(BackupDevice(automatic) == Devices.TrackerMini, "an unknown recorded device falls back to the history's name");
+        ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
+        ui.Keys.Enqueue(RestoreMode.All); ui.Keys.Enqueue('r');
+        using (new OperationContext(ui, CancellationToken.None).Activate())
+        {
+            PreparedSource prepared = PrepareSource(global, new SourceChoice { Path = target });
+            Put(Path.Combine(backup, relative), "PROJECT");
+            Assert(RunPrepared(prepared, true, false).ExitCode == 0, "a backup recording an unknown device can still be restored");
+        }
+        Put(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), new string('x', 200));
+        Throws(() => BackupDevice(backup), "an oversized device record is refused");
     }
 }

@@ -80,7 +80,7 @@ partial class GearBackup
         [ThreadStatic] static OperationContext fallback;
         public static OperationContext Current
         {
-            get { return current ?? (fallback ?? (fallback = new OperationContext(new ConsoleInteraction(), CancellationToken.None))); }
+            get { return current ?? (fallback ?? (fallback = new OperationContext(new ConsoleInteraction(), CancellationToken.None) { Fallback = true })); }
         }
         public readonly IOperationInteraction Interaction;
         public readonly CancellationToken Cancellation;
@@ -91,6 +91,11 @@ partial class GearBackup
         // Folders already found not to be links during this operation, so path checks
         // don't repeat the same file-system lookups for every file.
         public readonly HashSet<string> VerifiedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // The console context made on first use, which lives as long as its thread.
+        internal bool Fallback;
+        // Histories found in each set of backup locations, so an unreachable location (a disconnected
+        // network drive) delays an operation once. Not used by the fallback, whose answers would go stale.
+        internal readonly Dictionary<string, List<string>> HistoryCache = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         public OperationContext(IOperationInteraction interaction, CancellationToken cancellation)
         {
             if (interaction == null) throw new ArgumentNullException("interaction");
