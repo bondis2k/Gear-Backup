@@ -7,7 +7,7 @@ partial class GearBackup
     {
         public const string Name = "Gear Backup";
         // Change this one value for a release; both executables and Setup use it.
-        public const string Version = "1.0.0";
+        public const string Version = "1.0.1";
         public const string DirectoryName = "GearBackup";
         public const string ConfigFileName = DirectoryName + ".ini";
         public const string BackupsFolderName = "Gear Backups";

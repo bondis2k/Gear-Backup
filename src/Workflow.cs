@@ -197,11 +197,23 @@ partial class GearBackup
     static void AtomicText(string path, string contents)
     {
         OperationContext.Current.CheckCancellation();
-        Directory.CreateDirectory(Path.GetDirectoryName(path));
-        string temp = path + ".tmp";
-        File.WriteAllText(temp, contents, new UTF8Encoding(false));
-        if (File.Exists(path)) ReplaceSafely(temp, path);
-        else File.Move(temp, path);
+        string folder = Path.GetDirectoryName(path);
+        Directory.CreateDirectory(folder);
+        string temp = Path.Combine(folder, ".geartext-" + Guid.NewGuid().ToString("N") + ".tmp");
+        bool created = false;
+        try
+        {
+            // CreateNew refuses an existing file or link; never truncate a planted temporary file.
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                created = true;
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) writer.Write(contents);
+            }
+            OperationContext.Current.CheckCancellation();
+            if (File.Exists(path)) ReplaceSafely(temp, path);
+            else File.Move(temp, path);
+        }
+        finally { if (created) TryDelete(temp); }
     }
 
     static void ReplaceSafely(string staged, string target)

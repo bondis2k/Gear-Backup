@@ -351,6 +351,8 @@ Missing or damaged objects and malformed manifests are reported. Backups without
 
 Folders in a history that are links (junctions) are never treated as backups, so they're never used for an incremental backup, offered for restore or checks, or offered for deletion by `KeepBackups`. The program loads the Windows DLLs it calls only from System32, so a DLL with the same name placed next to the exe is ignored.
 
+MTP mirror sync refuses linked files or folders, including stale junctions that are no longer on the device. It checks the mirror before syncing and again before cleanup. If a linked-path error appears, remove the link from the PC mirror and retry. Settings and backup metadata are written through unique, exclusively created temporary files; a pre-existing `<filename>.tmp` is never used or overwritten.
+
 Checksum files use the standard `sha256sum` format with forward slashes. Checksum and manifest paths are validated to prevent paths escaping the selected backup/target. The files are integrity baselines, not signed authenticity records.
 
 ## Progress and cancellation

@@ -22,6 +22,8 @@ partial class GearBackup
         RunTest("Helpers: resume question", () => TestResumeQuestion(dir));
         RunTest("Helpers: zip failures", () => TestZipFailures(dir));
         RunTest("Security hardening", () => TestSecurity(dir));
+        RunTest("Security: MTP mirror links", () => TestMirrorLinks(dir));
+        RunTest("Security: atomic text temporary files", () => TestAtomicText(dir));
         RunTest("Console questions", TestConsoleQuestions);
         RunTest("Device profiles", () => TestDevices(dir));
         RunTest("OP-1 Field: MTP mirror", () => TestMtpMirror(dir));
@@ -58,7 +60,18 @@ partial class GearBackup
         string oldRoot = Path.Combine(root, AppIdentity.Legacy.BackupsFolderName);
         string history = Path.Combine(oldRoot, "profiles", "studio");
         Directory.CreateDirectory(Path.GetDirectoryName(history));
-        Directory.Move(f.History, history);
+        // Windows scanners can briefly hold freshly written fixture files open. Allow a bounded
+        // retry for access/sharing errors; persistent locks still fail the compatibility test.
+        for (int attempt = 0; ; attempt++)
+        {
+            try { Directory.Move(f.History, history); break; }
+            catch (IOException ex)
+            {
+                int error = ex.HResult & 0xffff;
+                if (attempt >= 20 || (error != 5 && error != 32)) throw;
+                Thread.Sleep(100);
+            }
+        }
         string backup = ListBackups(history)[0];
         Directory.Move(Path.Combine(backup, AppIdentity.MetadataFolderName), Path.Combine(backup, AppIdentity.Legacy.MetadataFolderName));
         foreach (string manifest in Directory.GetFiles(SnapshotRoot(backup), "*.manifest"))
@@ -515,6 +528,84 @@ partial class GearBackup
         string text = null;
         OnConsole("jam\n", c => text = c.AskText("Search file name:"));
         Assert(text == "jam", "console reads free text");
+    }
+
+    static void TestMirrorLinks(string dir)
+    {
+        string mirror = Folder(dir, "linked-mirror");
+        string outside = Folder(dir, "mirror-victim");
+        string victim = Path.Combine(outside, "keep.txt");
+        Put(victim, "UNRELATED");
+        string stale = Path.Combine(mirror, "stale.txt");
+        Put(stale, "KEEP UNTIL VALIDATED");
+        string link = Path.Combine(Folder(mirror, "nested"), "linked");
+        var device = new FakeMtpSource();
+        device.File("new.txt", "NEW", DateTime.Now);
+        CreateTestJunction(link, outside);
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(device, mirror)), "a stale nested junction aborts mirror sync");
+            Assert(File.ReadAllText(victim) == "UNRELATED" && File.Exists(stale) && device.Downloads == 0,
+                "mirror links are rejected before downloads or deletions, preserving outside files");
+        }
+        finally { Directory.Delete(link); }
+
+        // Simulate a link planted after the initial scan; cleanup must check again without cached paths.
+        device.OnDownload = () => CreateTestJunction(link, outside);
+        try
+        {
+            Throws(() => WithUi(() => SyncMirror(device, mirror)), "cleanup rejects a link added during download");
+            Assert(File.ReadAllText(victim) == "UNRELATED" && File.Exists(stale),
+                "cleanup validates the whole tree before removing stale files");
+        }
+        finally { device.OnDownload = null; if (Directory.Exists(link)) Directory.Delete(link); }
+        MirrorResult result = null;
+        WithUi(() => { result = SyncMirror(device, mirror); });
+        Assert(result.Removed == 1 && !File.Exists(stale) && File.Exists(Path.Combine(mirror, "new.txt")),
+            "ordinary mirror cleanup still works after removing the link");
+    }
+
+    static void CreateTestJunction(string link, string target)
+    {
+        using (var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+            "/c mklink /J \"" + link + "\" \"" + target + "\"")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true }))
+        {
+            process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            Assert(process.ExitCode == 0 && Directory.Exists(link), "test junction created");
+        }
+    }
+
+    static void TestAtomicText(string dir)
+    {
+        string folder = Folder(dir, "atomic-text");
+        string victim = Path.Combine(dir, "atomic-victim.txt");
+        Put(victim, "UNRELATED");
+        string target = Path.Combine(folder, "status.txt");
+        Assert(TryHardLink(victim, target + ".tmp"), "planted temporary hard link created");
+        WithUi(() => AtomicText(target, "complete\n"));
+        Assert(File.ReadAllText(victim) == "UNRELATED" && File.ReadAllText(target + ".tmp") == "UNRELATED",
+            "atomic text ignores a planted predictable temporary hard link");
+        Assert(File.ReadAllText(target) == "complete\n" && File.ReadAllBytes(target)[0] == (byte)'c',
+            "new text files preserve content and UTF-8 without a BOM");
+        File.Delete(target);
+        Assert(TryHardLink(victim, target), "existing target hard link created");
+        WithUi(() => AtomicText(target, "updated"));
+        Assert(File.ReadAllText(target) == "updated" && File.ReadAllText(victim) == "UNRELATED",
+            "replacement changes the target name without truncating its hard-linked original");
+        using (var locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
+            Throws(() => WithUi(() => AtomicText(target, "FAILED")), "locked atomic replacement fails");
+        Assert(File.ReadAllText(target) == "updated" && Directory.GetFiles(folder, ".geartext-*").Length == 0,
+            "failed text replacement keeps the original and cleans its unique temporary file");
+        var cts = new CancellationTokenSource();
+        cts.Cancel();
+        bool cancelled = false;
+        using (new OperationContext(new TestInteraction(), cts.Token).Activate())
+            try { AtomicText(target, "CANCELLED"); } catch (OperationCanceledException) { cancelled = true; }
+        Assert(cancelled, "cancelled text write is refused");
+        Assert(File.ReadAllText(target) == "updated" && Directory.GetFiles(folder, ".geartext-*").Length == 0,
+            "cancellation leaves the text and temporary folder unchanged");
     }
 
     static void TestSecurity(string dir)
