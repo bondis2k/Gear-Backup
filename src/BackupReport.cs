@@ -29,6 +29,7 @@ partial class GearBackup
             report.WriteLine("  ----------------------------------------");
             report.WriteLine("  Date:          {0:yyyy-MM-dd HH:mm:ss}", DateTime.Now);
             report.WriteLine("  Type:          {0}", Incremental ? "Incremental" : "Full");
+            report.WriteLine("  History:       {0}", Config.PointInTimeHistory ? "point-in-time snapshots" : "off (backup files and checksums only)");
             report.WriteLine("  Source:        {0}", Source);
             report.WriteLine("  Destination:   {0}", Destination);
             report.WriteLine("  Files copied:  {0:N0}", Copied);

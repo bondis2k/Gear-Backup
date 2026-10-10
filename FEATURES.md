@@ -51,7 +51,7 @@ X100VI settings capture makes dated full backups only; incremental photo-mirror 
 - **Connection mode** — detection identifies settings mode or photo-transfer mode in the GUI header and result, and in CLI source detection.
 - **Recipe backup** — captures all C1–C7 names and 23 raw properties per recipe in USB RAW CONV./BACKUP RESTORE mode (GUI operation or `--camera-settings`).
 - **Shooting settings** — captures readable current shooting values separately, with unavailable properties marked explicitly.
-- **Settings exports** — XML retains exact raw bytes and numeric values, with camera model, serial and firmware; each run makes a dated full backup in a separate automatic settings profile, with normal checksums, history and optional ZIP.
+- **Settings exports** — XML retains exact raw bytes and numeric values, with camera model, serial and firmware; each run makes a dated full backup in a separate automatic settings profile, with normal checksums, optional history and optional ZIP.
 - **Selector safety** — restores and verifies the original recipe read selector after capture or cancellation, checks that shooting values stayed unchanged, and prevents concurrent settings captures by Gear Backup.
 - **Settings scope** — recipe and shooting-settings export only; full-camera setup menus and native Fujifilm backup files are not captured, and settings are not written back to the camera.
 
@@ -87,9 +87,10 @@ X100VI settings capture makes dated full backups only; incremental photo-mirror 
 - **Fast or thorough comparison** — detects changes by size and modified time, or by SHA-256 content (`Thorough`).
 - **Undated files** — files without a usable timestamp are compared byte by byte.
 - **Old versions kept** — a changed file's previous backup copy is renamed with its date and time instead of overwritten.
-- **Point-in-time history** — every backup saves a snapshot of the files and folders that can be restored later.
+- **Point-in-time history** — enabled by default; each backup saves a snapshot of the files and folders that can be restored later.
+- **Backup without history** — turn off **Save point-in-time history** in GUI Settings or set `PointInTimeHistory=no` to save files and checksums without the second history copy: roughly half the space for a fresh backup. Current-file restore, verification, checks and incremental backups still work. Existing snapshots are preserved; old versions, separate full backups and ZIPs have their own retention/storage costs.
 - **Content deduplication** — identical content is stored once per backup folder's history.
-- **Hard-linked history** — optionally stores history as hard links on NTFS, halving disk use (`HardLinks`).
+- **Hard-linked history** — optionally stores history as hard links on NTFS, halving disk use (`HardLinks`); applies only while point-in-time history is enabled.
 - **Empty folders kept** — empty folders (like the M8's `Bundles`) are recreated on restore.
 - **Leftover skipping** — skips macOS, Linux and Windows junk (`.DS_Store`, `.Trash-1000`, `lost+found`, `Thumbs.db` and similar).
 - **Free-space check** — checks the backup drive has room before copying anything.

@@ -218,6 +218,9 @@ partial class GearBackup
             dialog.Show(); Application.DoEvents();
             var tabs = FindGuiControl<TabControl>(dialog);
             Assert(tabs.TabCount == 3 && tabs.TabPages[0].Text == "Backup" && tabs.TabPages[1].Text == "Restore", "settings are grouped by operation");
+            var history = (CheckBox)dialog.Controls.Find("PointInTimeHistory", true)[0];
+            Assert(history.Checked, "settings show history enabled by default");
+            history.Checked = false;
             tabs.SelectedIndex = 1;
             var recovery = (CheckBox)dialog.Controls.Find("RecoveryCopies", true)[0];
             var path = (TextBox)dialog.Controls.Find("RecoveryLocation", true)[0];
@@ -227,6 +230,7 @@ partial class GearBackup
             recovery.Checked = false;
             string expectedPath = path.Text;
             ((Button)dialog.Controls.Find("SaveSettings", true)[0]).PerformClick();
+            Assert(!config.PointInTimeHistory, "settings save the choice to disable history");
             Assert(!config.Recovery && !config.Verify && !config.Thorough && config.HardLinks && config.RecoveryFolder == expectedPath,
                 "saving grouped settings preserves default-off options, recovery location and hidden settings: " +
                 config.Recovery + ", " + config.Verify + ", " + config.Thorough + ", " + config.HardLinks + ", " + config.RecoveryFolder + " / " + expectedPath);
