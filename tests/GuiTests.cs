@@ -540,6 +540,19 @@ partial class GearBackup
             using (var storage = new CatalogDialog(owner, config, true, catalog)) CheckGuiLayout(storage, 200, Path.Combine(output, "storage-200.png"));
             using (var dialog = new ProfileSettingsDialog(owner, config)) CheckGuiLayout(dialog, 200, Path.Combine(output, "profiles-200.png"));
             using (var viewer = new RecipeViewerDialog(owner, folder)) CheckGuiLayout(viewer, 200, Path.Combine(output, "recipes-200.png"));
+
+            // A damaged device record or a linked history doesn't stop the Profiles window opening.
+            string profilesRoot = Path.Combine(HistoriesRoot(config), "profiles");
+            string damaged = AppIdentity.MetadataRoot(Path.Combine(profilesRoot, "Damaged", "2026-03-01"));
+            Directory.CreateDirectory(damaged);
+            File.WriteAllText(Path.Combine(damaged, "device.txt"), new string('x', 200));
+            string elsewhere = Path.Combine(root, "linked-history");
+            Directory.CreateDirectory(Path.Combine(elsewhere, "2026-03-01"));
+            CreateTestJunction(Path.Combine(profilesRoot, "Linked"), elsewhere);
+            string failure = null;
+            try { using (var dialog = new ProfileSettingsDialog(owner, config)) { dialog.Show(); Application.DoEvents(); } }
+            catch (Exception ex) { failure = ex.Message; }
+            Assert(failure == null, "the Profiles window opens despite a damaged device record and a linked history: " + failure);
             owner.Close();
         }
         string deviceLocation = Path.Combine(root, "device-location"), profileLocation = Path.Combine(root, "profile-location");

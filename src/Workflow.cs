@@ -95,13 +95,24 @@ partial class GearBackup
         return ChooseHistoryList(roots, preferred, preferred ?? root);
     }
 
+    // The histories with backups in every configured location. Looked up once per operation; callers
+    // get their own copy of the list.
     static List<string> AvailableHistories(Config config)
     {
-        var roots = new List<string>();
-        foreach (string location in ConfiguredBackupLocations(config))
-            CollectHistories(HistoriesRoot(new Config { BackupFolder = location }), roots);
-        roots.Sort(StringComparer.OrdinalIgnoreCase);
-        return roots;
+        List<string> locations = ConfiguredBackupLocations(config);
+        OperationContext context = OperationContext.Current;
+        Dictionary<string, List<string>> cache = context.Fallback ? null : context.HistoryCache;
+        string key = string.Join("|", locations.ConvertAll(location => Rooted(location)).ToArray());
+        List<string> roots;
+        if (cache == null || !cache.TryGetValue(key, out roots))
+        {
+            roots = new List<string>();
+            foreach (string location in locations)
+                CollectHistories(HistoriesRoot(new Config { BackupFolder = location }), roots);
+            roots.Sort(StringComparer.OrdinalIgnoreCase);
+            if (cache != null) cache[key] = roots;
+        }
+        return new List<string>(roots);
     }
 
     static void CollectHistories(string root, List<string> roots)

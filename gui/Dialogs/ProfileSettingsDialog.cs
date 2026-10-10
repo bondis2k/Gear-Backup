@@ -60,12 +60,15 @@ partial class GearBackup
             {
                 string directory = Path.Combine(HistoriesRoot(new Config { BackupFolder = location }), "profiles");
                 if (!Directory.Exists(directory)) continue;
-                RejectRootLinks(directory);
+                try { RejectRootLinks(directory); }
+                catch (IOException) { continue; }
                 foreach (string history in Directory.GetDirectories(directory))
                 {
                     AddProfile(Path.GetFileName(history));
-                    string backup = LatestBackup(history);
-                    DeviceProfile device = backup == null ? null : BackupDevice(backup);
+                    // A history that can't be read (linked, damaged record) just has no known device.
+                    DeviceProfile device = null;
+                    try { string backup = LatestBackup(history); if (backup != null) device = BackupDevice(backup); }
+                    catch (Exception ex) { if (!(ex is IOException || ex is UnauthorizedAccessException)) throw; }
                     if (device != null)
                     {
                         string name = Path.GetFileName(history);
