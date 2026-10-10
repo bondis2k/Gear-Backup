@@ -301,8 +301,7 @@ partial class M8Backup
             foreach (string path in scan.SkippedNamed)
                 report.WriteLine("    skipped: " + path.Substring(source.Length));
 
-            var m8Drive = new DriveInfo(Path.GetPathRoot(source));
-            report.WriteLine("  Free space on M8:       {0} of {1}", FormatSize(m8Drive.AvailableFreeSpace), FormatSize(m8Drive.TotalSize));
+            report.WriteLine("  Free space on M8:       {0}", DriveSpaceText(Path.GetPathRoot(source)));
             string destRoot = Path.GetPathRoot(dest);
             report.WriteLine("  Free space left on {0}  {1}", destRoot, FreeSpaceText(destRoot));
             report.WriteLine();

@@ -165,21 +165,20 @@ partial class M8Backup
         FileStream historyLock = PreviewOnly ? null : LockHistory(backupRoot);
         using (historyLock)
         {
-            string title, summary;
-            int result = restore
-                ? Restore(source, backups, config, out title, out summary)
-                : Backup(source, backupRoot, previous, incremental, config, out title, out summary);
-            if (title != null && !PreviewOnly)
+            OperationResult result = restore
+                ? RunRestore(source, backups, config)
+                : RunBackup(source, backupRoot, previous, incremental, config);
+            if (result.Title != null && !PreviewOnly)
             {
-                if (OperationContext.Current.Cancellation.IsCancellationRequested || title.EndsWith(" cancelled", StringComparison.Ordinal))
+                if (result.Cancelled || OperationContext.Current.Cancellation.IsCancellationRequested)
                 {
-                    Console.WriteLine("  " + summary);
-                    ShowToast(title, summary, false);
+                    Console.WriteLine("  " + result.Summary);
+                    ShowToast(result.Title, result.Summary, false);
                 }
-                else if (pnpId != null) Finish(pnpId, title, summary, config.Eject);
-                else ShowToast(title, summary, false);
+                else if (pnpId != null) Finish(pnpId, result.Title, result.Summary, config.Eject);
+                else ShowToast(result.Title, result.Summary, false);
             }
-            return result;
+            return result.ExitCode;
         }
     }
 

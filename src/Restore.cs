@@ -5,23 +5,23 @@ using System.Text;
 
 partial class M8Backup
 {
-    static int Restore(string m8, List<string> backups, Config config, out string title, out string summary)
+    // The full result, including whether the restore was cancelled. Title is null if nothing was done.
+    static OperationResult RunRestore(string m8, List<string> backups, Config config)
     {
-        title = summary = null;
-        if (backups.Count == 0) { OperationOutput.WriteLine("  No backups found."); return 1; }
+        if (backups.Count == 0) { OperationOutput.WriteLine("  No backups found."); return new OperationResult { ExitCode = 1 }; }
         var choices = new List<string>(backups);
         choices.Reverse();
         for (int i = 0; i < choices.Count; i++)
             OperationOutput.WriteLine("    {0}) {1} [{2}]", i + 1, Path.GetFileName(choices[i]), BackupStatus(choices[i]));
         int pick = AskNumber("  Restore from which backup? Enter = cancel: ", choices.Count);
-        if (pick == 0) return 0;
+        if (pick == 0) return new OperationResult();
         string backup = choices[pick - 1];
         Snapshot snapshot = ChooseSnapshot(backup);
         bool historical = snapshot != null;
         if (!historical)
         {
             string status = BackupStatus(backup);
-            if (status != "complete" && !AskInConsole("  Backup status is " + status + ". Browse its available files anyway? (y/n) ")) return 0;
+            if (status != "complete" && !AskInConsole("  Backup status is " + status + ". Browse its available files anyway? (y/n) ")) return new OperationResult();
             snapshot = CurrentBackup(backup);
         }
         OperationOutput.WriteLine("  Selected: " + snapshot.Name);
@@ -32,14 +32,14 @@ partial class M8Backup
         else if (mode == 'b')
         {
             bundle = PickBundle(snapshot);
-            if (bundle == null) return 0;
+            if (bundle == null) return new OperationResult();
             items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase) &&
                 (historical || !IsOldVersion(f.Relative)));
         }
         else
         {
             RestoreEntry file = PickEntry(snapshot, mode == 'd');
-            if (file == null) return 0;
+            if (file == null) return new OperationResult();
             items = mode == 'd' ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
             if (!historical && IsOldVersion(file.Relative))
             {
@@ -51,11 +51,17 @@ partial class M8Backup
                 }
             }
         }
-        if (items.Count == 0) { OperationOutput.WriteLine("  No files selected."); return 0; }
+        if (items.Count == 0) { OperationOutput.WriteLine("  No files selected."); return new OperationResult(); }
 
         // Exact restore is available only for manifests, whose file membership is authoritative.
         bool exact = historical && mode == 'a' && AskKey("  [M]erge with the card, or [E]xact snapshot (remove extra user files)? ", "me") == 'e';
-        OperationResult result = new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current);
+        return new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current);
+    }
+
+    // Returns the exit code; title/summary are for the final notification (null if nothing was done).
+    static int Restore(string m8, List<string> backups, Config config, out string title, out string summary)
+    {
+        OperationResult result = RunRestore(m8, backups, config);
         title = result.Title;
         summary = result.Summary;
         return result.ExitCode;

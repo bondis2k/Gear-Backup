@@ -347,6 +347,8 @@ partial class M8Backup
         Assert(FilesEqual(blockA, blockB), "byte comparison spans multiple buffers");
         blockBytes[131076] = 1; File.WriteAllBytes(blockB, blockBytes);
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
+        Assert(DriveSpaceText(@"\\server\share") == "unknown", "statistics free-space text tolerates network sources");
+        Assert(DriveSpaceText(Path.GetPathRoot(root)).Contains(" of "), "statistics free-space text shows free and total size");
         TestEngineOperations(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions. Fixtures: " + root);

@@ -17,10 +17,10 @@ partial class M8Backup
                     context.CheckCancellation();
                     targetRoot = Rooted(targetRoot);
                     RejectRootLinks(targetRoot);
-                    string title, summary;
-                    int code = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config, out title, out summary);
-                    return new OperationResult { ExitCode = code, Title = title, Summary = summary,
-                        Cancelled = context.Cancellation.IsCancellationRequested, Elapsed = timer.Elapsed };
+                    OperationResult result = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config);
+                    result.Cancelled |= context.Cancellation.IsCancellationRequested;
+                    result.Elapsed = timer.Elapsed;
+                    return result;
                 }
                 catch (OperationCanceledException)
                 {
@@ -41,10 +41,9 @@ partial class M8Backup
                     context.CheckCancellation();
                     targetRoot = Rooted(targetRoot);
                     RejectRootLinks(targetRoot);
-                    string title, summary;
-                    ExecuteCore(targetRoot, copies, removals, folders, extraFolders, targetHashes, config, out title, out summary);
-                    return new OperationResult { ExitCode = title == "M8 restore complete" ? 0 : 2,
-                        Title = title, Summary = summary, Elapsed = timer.Elapsed };
+                    OperationResult result = ExecuteCore(targetRoot, copies, removals, folders, extraFolders, targetHashes, config);
+                    result.Elapsed = timer.Elapsed;
+                    return result;
                 }
                 catch (OperationCanceledException)
                 {
@@ -54,10 +53,10 @@ partial class M8Backup
             }
         }
 
-        int PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, char mode, string bundle, bool exact,
-            Config config, out string title, out string summary)
+        // Returns a result with no title when the user cancels at a prompt (nothing was changed).
+        OperationResult PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, char mode, string bundle, bool exact,
+            Config config)
         {
-            title = summary = null;
             var removals = new List<string>();
             var extraFolders = new List<string>();
             if (exact)
@@ -103,7 +102,7 @@ partial class M8Backup
             if (differing > 0 && !PreviewOnly)
             {
                 char answer = AskKey("  [R]eplace differing files, [K]eep them (missing files only), or [C]ancel? ", "rkc");
-                if (answer == 'c') return 0;
+                if (answer == 'c') return new OperationResult();
                 if (answer == 'k')
                 {
                     if (exact) { OperationOutput.WriteLine("  Keeping differing files also disables exact removal."); exact = false; removals.Clear(); extraFolders.Clear(); }
@@ -147,16 +146,13 @@ partial class M8Backup
             }
             else OperationOutput.WriteLine("  Recovery copies: disabled (Recovery=no).");
             OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
-            if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config)) return 0;
-            if (exact && !AskInConsole("  Confirm removal of " + removals.Count + " extra file(s) from the selected target? (y/n) ")) return 0;
-            OperationResult result = new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
-            title = result.Title;
-            summary = result.Summary;
-            return result.ExitCode;
+            if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config)) return new OperationResult();
+            if (exact && !AskInConsole("  Confirm removal of " + removals.Count + " extra file(s) from the selected target? (y/n) ")) return new OperationResult();
+            return new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
         }
 
-        void ExecuteCore(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
-            List<string> extraFolders, Dictionary<string, string> targetHashes, Config config, out string title, out string summary)
+        OperationResult ExecuteCore(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
+            List<string> extraFolders, Dictionary<string, string> targetHashes, Config config)
         {
             // No target mutation until every recovery copy has succeeded.
             string recovery = SaveRecovery(targetRoot, copies, removals, targetHashes, config);
@@ -216,10 +212,11 @@ partial class M8Backup
                     if (Directory.Exists(folder) && Directory.GetFileSystemEntries(folder).Length == 0) Directory.Delete(folder);
                 }
             }
-            title = failed == 0 ? "M8 restore complete" : "M8 restore finished with errors";
-            summary = string.Format("{0} file(s) restored, {1} removed, {2} failed.", copied, removed, failed);
+            string summary = string.Format("{0} file(s) restored, {1} removed, {2} failed.", copied, removed, failed);
             if (recovery != null) summary += " Recovery: " + recovery;
             OperationOutput.WriteLine("  " + summary);
+            return new OperationResult { ExitCode = failed == 0 ? 0 : 2, Summary = summary,
+                Title = failed == 0 ? "M8 restore complete" : "M8 restore finished with errors" };
         }
     }
 

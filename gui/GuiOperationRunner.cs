@@ -94,9 +94,8 @@ partial class M8Backup
                 root = ChooseHistory(histories, root);
                 if (root == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
                 if (ListBackups(root).Count == 0) throw new IOException("No backups found at this location.");
-                string title, summary; int code;
-                using (previewOnly ? null : LockHistory(root)) code = Restore(selected, ListBackups(root), options, out title, out summary);
-                result = new OperationResult { ExitCode = code, Title = title, Summary = summary, Cancelled = context.Cancellation.IsCancellationRequested || (title != null && title.EndsWith(" cancelled")) };
+                using (previewOnly ? null : LockHistory(root)) result = RunRestore(selected, ListBackups(root), options);
+                result.Cancelled |= context.Cancellation.IsCancellationRequested;
             }
             else
             {
