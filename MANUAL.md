@@ -8,7 +8,11 @@ Executable builds are ignored by Git. If you downloaded or cloned the repository
 
 ## Getting started
 
-1. Connect the M8 by USB and enable USB drive mode. Save your song first and leave the M8 idle while copying.
+![Device connection guide: M8 and Tracker Mini use a USB drive or card reader; OP-1 Field, OP-XY and X100VI use an MTP mirror on the PC before backup.](assets/manual/device-connections.png)
+
+The drive-based devices are copied directly. MTP devices first refresh a local PC mirror, which then becomes the backup source. A local folder can also be selected as the source. Each device or card normally gets its own history; see [separate card and folder histories](#separate-card-and-folder-histories).
+
+1. Connect your device using the mode described in its section below, or insert its card in a reader. For an M8, enable USB drive mode. Save any open project first and leave the device idle while copying.
 2. Double-click `GearBackup.exe`.
 3. Review the selected source and profile. If a backup exists, choose full backup, incremental backup, restore, or check. With no backup in the current profile, the program prepares a full backup.
 4. Review the file preview and press Y to proceed.
@@ -29,7 +33,11 @@ Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallba
 
 Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `GearBackup.exe` command-line interface remains available separately. Both executables use `GearBackup.ini` beside them and the same backup histories and file operations.
 
-1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: an M8 in USB disk mode, or an [OP-1 Field](#teenage-engineering-op-1-field) in MTP mode. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
+![Gear Backup main window with source, backup location, profile, operation selector, Preview and Back up buttons, status and activity log.](assets/manual/gui-main.png)
+
+*The main window before a backup. `E:\` and `D:\Music backups` are example paths; choose the locations on your own PC.*
+
+1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: M8 and Tracker Mini in USB drive mode, or OP-1 Field, OP-XY and X100VI over MTP. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
 3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too.
 4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
@@ -39,6 +47,19 @@ An incremental run creates a full backup if this profile has no backups yet. An 
 Restore opens dialogs for history, backup folder, saved snapshot/current files, and restore mode. All, bundle, single-file, dependent-sample, and merge/exact choices use the same rules described below. The current-files option is explicit in the snapshot selector; cancelling a dialog cancels the operation. Check backups needs no source card and lets you select a backup or all backups in a history.
 
 **Settings** saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
+
+![Gear Backup Preferences dialog with verification, content comparison, preview, recovery location, retention and ejection settings.](assets/manual/gui-settings.png)
+
+*Settings with the default preferences. Save settings to use the same preferences in the GUI and CLI.*
+
+| GUI preference | INI setting | When to use it |
+|---|---|---|
+| **Verify copied files** | `Verify=yes` | Read copied files back and check their recorded checksums. Off by default. |
+| **Compare file contents instead of size and time** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
+| **Review changes before copying** | `Preview=yes` | Review the planned actions before proceeding. On by default; unchanged incremental backups need no confirmation. |
+| **Keep recovery copies before restoring** | `Recovery=yes` | Preserve target files that will be replaced or removed. Off by default. **Recovery location** sets `RecoveryFolder`; blank uses the default location. |
+
+For a first backup, select the source and backup location, leave Profile blank, choose **Full backup**, and click **Preview**. After reviewing the plan, click **Back up**. For later runs on the same card, choose **Incremental backup** to copy only additions and changes.
 
 Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
 
@@ -187,6 +208,12 @@ Older completed snapshots remain selectable even if the latest incremental run f
 
 ## Point-in-time history
 
+![Backup history example: the first snapshot contains Jam version 1 and Kick; after editing Jam and deleting Kick, the second snapshot contains only Jam version 2, while Kick remains in the browsable backup.](assets/manual/backup-history.png)
+
+*The illustration shows one full backup followed by an incremental run in the same backup folder. A new full backup creates a separate dated folder instead.*
+
+Choose a saved snapshot when you want the files that existed at a particular backup time. Browsing current backup files also exposes retained files that have since been deleted from the source, plus dated old versions of changed files. In the example, restoring snapshot 1 brings back the original song and sample; snapshot 2 selects only the edited song. Whether extra files already on the target are retained depends on [merge versus exact snapshot](#merge-versus-exact-snapshot).
+
 Every successful backup run saves a dated manifest under:
 
 ```
@@ -236,6 +263,10 @@ Missing samples in the selected backup/snapshot are listed and cancel dependency
 The implementation follows the format information in [pym8](https://github.com/jhw/pym8) and [m8-file-parser](https://github.com/Twinside/m8-file-parser). The M8's own Bundle command gathers a project, samples, and instruments, as described in the [Dirtywave operation manual](https://dirtywave.com/pages/resources-downloads).
 
 ### Merge versus exact snapshot
+
+![Restore comparison: a snapshot has Jam version 1, while the target has Jam version 2 and Extra.wav. Merge restores Jam version 1 and keeps Extra.wav; exact restores Jam version 1 and removes Extra.wav after successful copying.](assets/manual/restore-modes.png)
+
+*Two alternative results for the same restore. The example assumes you choose to replace the changed song.*
 
 When restoring all files from a dated snapshot, choose:
 
