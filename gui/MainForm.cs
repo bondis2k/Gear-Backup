@@ -188,12 +188,12 @@ partial class M8Backup
 
         Config CaptureConfig()
         {
-            var copy = new Config { BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
-                    ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) : ExpandPath(backupFolder.Text),
-                SourceFolder = ExpandPath(source.Text), Profile = profile.Text.Trim(), Mode = config.Mode,
-                Verify = config.Verify, Thorough = config.Thorough, Recovery = config.Recovery,
-                RecoveryFolder = config.RecoveryFolder, Preview = config.Preview, Eject = config.Eject,
-                KeepBackups = config.KeepBackups, KeepOldVersions = config.KeepOldVersions, MaxNameLength = config.MaxNameLength };
+            // Start from every saved setting, so settings without a field in this window are kept.
+            Config copy = config.Clone();
+            copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
+                ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) : ExpandPath(backupFolder.Text);
+            copy.SourceFolder = ExpandPath(source.Text);
+            copy.Profile = profile.Text.Trim();
             if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
             return copy;
         }

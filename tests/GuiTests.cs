@@ -86,14 +86,16 @@ partial class M8Backup
         }
         string ini = Path.Combine(root, "shared-settings.ini");
         Put(ini, "; keep this comment\nVerify=no\nCustomOption=unchanged\nVerify=no\n");
-        var saved = new Config { BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio" };
+        var saved = new Config { BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio", HardLinks = true };
         SaveConfig(saved, ini);
         string text = File.ReadAllText(ini);
         Assert(text.Contains("; keep this comment") && text.Contains("CustomOption=unchanged"), "GUI settings save preserves comments and unrelated keys");
         Assert(text.Contains("Verify=yes") && !text.Contains("Verify=no") && text.Contains("Recovery=no") && text.Contains("Thorough=no"),
             "shared settings save updates duplicates and keeps checksum/recovery defaults optional");
         Assert(text.Contains("Profile=Studio") && text.Contains("SourceFolder="), "settings save includes paths and profile");
-        Console.WriteLine("PASS: " + assertions + " GUI assertions. Fixtures: " + root);
+        Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
+        Console.WriteLine("PASS: " + assertions + " GUI assertions.");
+        RemoveFixtures(root);
     }
 
     static void DriveGui(Form form, Label state, string expected, bool dismiss)

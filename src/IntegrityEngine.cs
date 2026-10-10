@@ -31,8 +31,9 @@ partial class M8Backup
             foreach (string backup in toCheck)
             {
                 OperationContext.Current.CheckCancellation();
-                CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_);
-                CheckSnapshots(backup, ref ok, ref damaged, ref missing);
+                var verifiedLinks = new Dictionary<string, string>();
+                CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_, verifiedLinks);
+                CheckSnapshots(backup, ref ok, ref damaged, ref missing, verifiedLinks);
             }
 
             summary = string.Format("{0:N0} file(s) OK", ok);

@@ -30,7 +30,7 @@ partial class M8Backup
     }
 
     // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
-    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify)
+    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
     {
         var rows = new StringBuilder("M8SNAPSHOT\t1\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -57,8 +57,12 @@ partial class M8Backup
                 TryDelete(temp);
                 try
                 {
-                    string copiedHash = CopyFile(new FileInfo(path), temp, verify);
-                    if (verify && copiedHash != hash)
+                    // HardLinks=yes: a hard link stores the content once (NTFS); otherwise, or where linking
+                    // fails, a copy. The program never edits backup files in place, so linked content stays as recorded.
+                    string storedHash = hardLinks && TryHardLink(path, temp)
+                        ? (verify ? HashFile(temp) : hash)
+                        : CopyFile(new FileInfo(path), temp, verify);
+                    if (verify && storedHash != hash)
                         throw new IOException("Backup checksum differs for " + relative);
                     File.Move(temp, obj);
                     checkedObjects.Add(hash);
@@ -153,7 +157,16 @@ partial class M8Backup
         return result;
     }
 
-    static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing)
+    // HardLinks=yes: the object is the same file on disk as a backup file just checked with this checksum.
+    static bool AlreadyVerified(RestoreEntry item, Dictionary<string, string> verifiedLinks)
+    {
+        if (verifiedLinks == null || verifiedLinks.Count == 0) return false;
+        string id = SharedFileId(item.StoredPath), hash;
+        return id != null && verifiedLinks.TryGetValue(id, out hash) && hash == item.Hash;
+    }
+
+    static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
+                               Dictionary<string, string> verifiedLinks = null)
     {
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return;
@@ -168,6 +181,7 @@ partial class M8Backup
                 {
                     if (!checkedObjects.Add(item.Hash)) continue;
                     if (!File.Exists(item.StoredPath)) { missing++; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
+                    else if (AlreadyVerified(item, verifiedLinks)) ok++;
                     else
                     {
                         try { ValidateEntry(item); ok++; }

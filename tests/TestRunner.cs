@@ -21,6 +21,17 @@ partial class M8Backup
         assertions++;
         if (!condition) throw new Exception("ASSERTION FAILED: " + message);
     }
+    // Fixtures are kept after a failure (the exception skips this) or when M8_KEEP_TEST_FIXTURES=1.
+    static void RemoveFixtures(string root)
+    {
+        if (Environment.GetEnvironmentVariable("M8_KEEP_TEST_FIXTURES") == "1")
+        {
+            Console.WriteLine("Fixtures kept: " + root);
+            return;
+        }
+        try { Directory.Delete(root, true); }
+        catch (Exception ex) { Console.WriteLine("Could not remove fixtures " + root + ": " + ex.Message); }
+    }
     static void Throws(Action action, string message)
     {
         bool threw = false;
@@ -349,9 +360,21 @@ partial class M8Backup
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
         Assert(DriveSpaceText(@"\\server\share") == "unknown", "statistics free-space text tolerates network sources");
         Assert(DriveSpaceText(Path.GetPathRoot(root)).Contains(" of "), "statistics free-space text shows free and total size");
+        var original = new Config();
+        foreach (var field in typeof(Config).GetFields())
+        {
+            if (field.FieldType == typeof(bool)) field.SetValue(original, !(bool)field.GetValue(original));
+            else if (field.FieldType == typeof(int)) field.SetValue(original, 7);
+            else if (field.FieldType == typeof(string)) field.SetValue(original, "x");
+        }
+        Config cloned = original.Clone();
+        Assert(Array.TrueForAll(typeof(Config).GetFields(), f => Equals(f.GetValue(cloned), f.GetValue(original))),
+            "settings copy keeps every setting, including ones the GUI window doesn't show");
         TestEngineOperations(root);
+        TestOptimizations(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
-        Console.WriteLine("PASS: " + assertions + " assertions. Fixtures: " + root);
+        Console.WriteLine("PASS: " + assertions + " assertions.");
+        RemoveFixtures(root);
     }
 
     sealed class TestInteraction : IOperationInteraction
@@ -372,6 +395,89 @@ partial class M8Backup
             Progress.Add(progress);
             if (OnProgress != null) OnProgress(progress);
         }
+    }
+
+    static void TestOptimizations(string root)
+    {
+        // History objects are hard links to the backup files on NTFS: one copy of the content on disk.
+        string source = Rooted(Path.Combine(root, "opt-source"));
+        string song = Path.Combine(source, "Songs", "same-size.m8s");
+        Put(song, "AAAA");
+        DateTime songTime = File.GetLastWriteTimeUtc(song);
+        string history = Path.Combine(root, "opt-history");
+        Assert(!new Config().HardLinks, "hard-linked history is opt-in");
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, HardLinks = true };
+        var ui = new TestInteraction();
+        OperationResult first = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
+        Assert(first.ExitCode == 0, "optimization fixture backup succeeds");
+        string backup = ListBackups(history)[0];
+        string treeFile = Path.Combine(backup, "Songs", "same-size.m8s");
+        string objectFile = LatestSnapshot(backup).Files[0].StoredPath;
+        if (SupportsHardLinks(root))
+        {
+            Assert(ui.Output.ToString().Contains("no extra space needed"), "NTFS history needs no extra space");
+            File.AppendAllText(Path.Combine(root, "opt-probe.txt"), "");
+            string probe = Path.Combine(root, "opt-probe.txt"), probeLink = Path.Combine(root, "opt-probe-link.txt");
+            Assert(TryHardLink(probe, probeLink), "hard link created");
+            File.WriteAllText(probe, "SHARED");
+            Assert(File.ReadAllText(probeLink) == "SHARED", "hard link shares content");
+            Assert(File.ReadAllText(objectFile) == "AAAA" && File.ReadAllText(treeFile) == "AAAA", "history object holds backed-up content");
+            File.WriteAllText(treeFile, "AAAZ");
+            Assert(File.ReadAllText(objectFile) == "AAAZ", "HardLinks=yes shares one copy between backup file and history");
+            File.WriteAllText(treeFile, "AAAA");
+
+            // A check reads hard-linked content once: the history object isn't hashed a second time.
+            var checkUi = new TestInteraction();
+            var verifiedLinks = new Dictionary<string, string>();
+            int linkOk = 0, linkDamaged = 0, linkMissing = 0, linkUnchecked = 0;
+            using (new OperationContext(checkUi, CancellationToken.None).Activate())
+            {
+                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
+                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
+            }
+            Assert(linkDamaged == 0 && linkMissing == 0 && linkOk == 2, "hard-linked backup checks OK");
+            Assert(!checkUi.Progress.Exists(p => p.Stage == "Hashing" && p.Path == objectFile), "check skips re-reading hard-linked history");
+            File.WriteAllText(treeFile, "AAAX");
+            linkOk = 0; verifiedLinks.Clear();
+            using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            {
+                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
+                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
+            }
+            Assert(linkDamaged == 2, "damage to hard-linked content is reported for the backup file and its history");
+            File.WriteAllText(treeFile, "AAAA");
+        }
+
+        // Full backup with Thorough=yes: no hashing before copying, and a same-size, same-time
+        // content edit is still reported, using the checksums from copying.
+        Put(song, "BBBB");
+        File.SetLastWriteTimeUtc(song, songTime);
+        ui = new TestInteraction();
+        var hashedBeforeCopy = new List<string>();
+        bool copying = false;
+        ui.OnProgress = delegate(OperationProgress p) {
+            if (p.Stage == "Copying") copying = true;
+            if (!copying && p.Stage == "Hashing") hashedBeforeCopy.Add(p.Path);
+        };
+        OperationResult second = new BackupEngine().Run(source, history, backup, false, config, new OperationContext(ui, CancellationToken.None));
+        Assert(second.ExitCode == 0 && hashedBeforeCopy.Count == 0, "thorough full backup reads the card once");
+        Assert(second.Summary.Contains("1 edited (same-size)"), "thorough full backup reports content-only edits");
+
+        // Link checks are remembered only within one operation: a folder replaced by a junction
+        // later is rejected by the next operation.
+        string linkRoot = Path.Combine(root, "opt-links");
+        Directory.CreateDirectory(Path.Combine(linkRoot, "sub"));
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            SafePath(linkRoot, "sub\\file.txt");
+        Directory.Delete(Path.Combine(linkRoot, "sub"));
+        Directory.CreateDirectory(Path.Combine(root, "opt-elsewhere"));
+        var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
+            "/c mklink /J \"" + Path.Combine(linkRoot, "sub") + "\" \"" + Path.Combine(root, "opt-elsewhere") + "\"")
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
+        mklink.WaitForExit();
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            Throws(() => SafePath(linkRoot, "sub\\file.txt"), "junction created after an earlier operation is rejected");
+        Directory.Delete(Path.Combine(linkRoot, "sub"));  // removes only the junction
     }
 
     static void TestEngineOperations(string root)

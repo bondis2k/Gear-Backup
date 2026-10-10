@@ -103,7 +103,10 @@ partial class M8Backup
         return result.ExitCode;
     }
 
-    static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_)
+    // verifiedLinks (optional) collects the hard-linked files found OK, so CheckSnapshots can skip
+    // reading the same content again.
+    static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_,
+                            Dictionary<string, string> verifiedLinks = null)
     {
         OperationOutput.WriteLine("  " + Path.GetFileName(backup));
         Dictionary<string, string> sums = LoadChecksums(backup);
@@ -148,7 +151,12 @@ partial class M8Backup
             try { hash = HashFile(path); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { hash = null; problems.Add("unreadable: " + entry.Key + " (" + ex.Message + ")"); }
-            if (hash == entry.Value) ok++;
+            if (hash == entry.Value)
+            {
+                ok++;
+                string id = verifiedLinks == null ? null : SharedFileId(path);
+                if (id != null) verifiedLinks[id] = hash;
+            }
             else
             {
                 damaged++;

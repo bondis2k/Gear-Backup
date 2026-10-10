@@ -53,10 +53,10 @@ partial class M8Backup
 
         OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp, OperationContext context)
         {
-            string histories = Path.Combine(options.BackupFolder, "M8 Backups");
+            string histories = HistoriesRoot(options);
             if (choice == 3)
             {
-                string history = options.Profile.Length > 0 ? Path.Combine(histories, "profiles", options.Profile) : ChooseHistory(histories, null);
+                string history = HistoryToCheck(options);
                 if (history == null) return new OperationResult { Cancelled = true, Summary = "Check cancelled." };
                 var backups = ListBackups(history);
                 if (backups.Count == 0) throw new IOException("No backups found at this location.");
@@ -85,51 +85,22 @@ partial class M8Backup
             selected = Rooted(selected);
             if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);
             RejectRootLinks(selected);
-            if (Within(histories, selected) || Within(selected, histories)) throw new IOException("Source and backup location must not contain one another.");
             if (knownSource == selected) pnp = knownPnp;
-            string root = Path.Combine(histories, "profiles", ProfileId(selected, options.Profile));
+            string root = HistoryFor(options, selected);
             OperationResult result;
             if (choice == 2)
             {
                 root = ChooseHistory(histories, root);
                 if (root == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
                 if (ListBackups(root).Count == 0) throw new IOException("No backups found at this location.");
-                using (previewOnly ? null : LockHistory(root)) result = RunRestore(selected, ListBackups(root), options);
+                using (LockUnlessPreview(root)) result = RunRestore(selected, ListBackups(root), options);
                 result.Cancelled |= context.Cancellation.IsCancellationRequested;
             }
-            else
-            {
-                // Read the latest state while holding the same history lock as the CLI.
-                using (previewOnly ? null : LockHistory(root))
-                {
-                    var backups = ListBackups(root);
-                    string previous = backups.Count == 0 ? null : backups[backups.Count - 1];
-                    bool incremental = choice == 1 && previous != null;
-                    if (choice == 1 && previous == null) OperationOutput.WriteLine("First backup for this profile: creating a full backup.");
-                    if (previous != null && (BackupStatus(previous) == "incomplete" || BackupStatus(previous) == "failed"))
-                    {
-                        char answer = AskKey("The latest backup is " + BackupStatus(previous) + ". [R]esume, [N]ew full backup, or [C]ancel?", "rnc");
-                        if (answer == 'c') return new OperationResult { Cancelled = true, Summary = "Backup cancelled." };
-                        incremental = answer == 'r';
-                    }
-                    result = new BackupEngine().Run(selected, root, previous, incremental, options, context);
-                }
-            }
+            else result = BackupWithLock(selected, root, choice == 1, options);
             if (!previewOnly && !result.Cancelled && result.ExitCode == 0 && result.Title != null && pnp != null && options.Eject != "no")
             {
-                // The window can stay open while devices move to another drive letter.
-                // Never eject a cached device unless it still owns this source.
-                try
-                {
-                    string currentPnp;
-                    string currentSource = FindM8Drive(out currentPnp);
-                    if (currentSource == null || Rooted(currentSource) != selected || currentPnp != pnp)
-                    {
-                        OperationOutput.WriteLine("The detected device changed. It has been left connected.");
-                        return result;
-                    }
-                }
-                catch (Exception ex) { OperationOutput.WriteLine("Could not confirm the device for ejection: " + ex.Message); return result; }
+                string changed = ConfirmSameDevice(selected, pnp);
+                if (changed != null) { OperationOutput.WriteLine(changed); return result; }
                 context.CheckCancellation();
                 bool eject = options.Eject == "yes" || AskInConsole("Safely eject the M8 now? (y/n)");
                 if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? "M8 safely ejected." : "Could not eject: " + error); }

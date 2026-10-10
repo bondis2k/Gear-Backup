@@ -85,7 +85,9 @@ partial class M8Backup
                 if (Directory.Exists(target)) throw new IOException("A folder blocks the file: " + item.Relative);
                 // Preflight every selected backup file, including ones that appear unchanged on the card.
                 ValidateEntry(item, config.Verify);
-                string actual = Fingerprint(target, config.Verify || config.Thorough);
+                // Content hashes only when comparing by content; detecting a change since the
+                // preview needs only size and modified time.
+                string actual = Fingerprint(target, config.Thorough);
                 targetHashes[item.Relative] = actual;
                 if (EntryMatchesTarget(item, target, config.Thorough, actual)) { identical++; plan.Add("Skip unchanged: " + item.Relative); continue; }
                 if (actual != null)
@@ -113,7 +115,7 @@ partial class M8Backup
             }
             foreach (string relative in removals)
             {
-                targetHashes[relative] = Fingerprint(SafePath(m8, relative), config.Verify || config.Thorough);
+                targetHashes[relative] = Fingerprint(SafePath(m8, relative), config.Thorough);
                 plan.Add("REMOVE extra file: " + relative);
             }
             foreach (string folder in extraFolders) plan.Add("Remove folder if empty: " + folder);
@@ -169,7 +171,8 @@ partial class M8Backup
                 string temp = Path.Combine(Path.GetDirectoryName(target), ".m8restore-" + Guid.NewGuid().ToString("N") + ".tmp");
                 try
                 {
-                    ValidateEntry(item, config.Verify);
+                    // Planning already checked the content; the copy's checksum is compared below.
+                    ValidateEntry(item, false);
                     Directory.CreateDirectory(Path.GetDirectoryName(target));
                     string hash = CopyFile(new FileInfo(item.StoredPath), temp, config.Verify);
                     if (config.Verify && item.Hash != null && hash != item.Hash) throw new IOException("Backup checksum changed during restore.");
