@@ -27,39 +27,51 @@ partial class M8Backup
         return folder != null && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ? name.Substring(folder.Length) : name;
     }
 
+    // Songs are counted by name, so files that share one (a photo's JPG and RAF, "DSCF0689") are one song.
     static Changes FindChanges(ScanResult scan, string source, FileState[] states, string baseline)
     {
         var changes = new Changes { HasBaseline = baseline != null };
-        var onM8 = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var newSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var editedSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < scan.Files.Count; i++)
         {
             string relative = scan.Files[i].FullName.Substring(source.Length);
-            onM8.Add(relative);
             bool song = IsSong(relative);
-            if (song) changes.TotalSongs++;
+            if (song) onDevice.Add(SongName(relative));
             if (states[i] == FileState.New)
             {
-                if (song) changes.NewSongs.Add(SongName(relative)); else changes.OtherNew++;
+                if (song) newSongs.Add(SongName(relative)); else changes.OtherNew++;
             }
             else if (states[i] == FileState.Changed)
             {
-                if (song) changes.EditedSongs.Add(SongName(relative)); else changes.OtherChanged++;
+                if (song) editedSongs.Add(SongName(relative)); else changes.OtherChanged++;
             }
         }
+        editedSongs.ExceptWith(newSongs);
+        changes.TotalSongs = onDevice.Count;
 
+        var removedSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (baseline != null)
         {
-            foreach (string path in Directory.GetFiles(baseline, "*.m8s", SearchOption.AllDirectories))
+            foreach (string path in Directory.GetFiles(baseline, "*", SearchOption.AllDirectories))
             {
                 string relative = path.Substring(baseline.Length).TrimStart('\\');
-                if (IsSong(relative) && !IsOldVersion(relative) && !onM8.Contains(relative))
-                    changes.RemovedSongs.Add(SongName(relative));
+                if (IsSong(relative) && !IsOldVersion(relative) && !onDevice.Contains(SongName(relative)))
+                    removedSongs.Add(SongName(relative));
             }
         }
-        changes.NewSongs.Sort(StringComparer.OrdinalIgnoreCase);
-        changes.EditedSongs.Sort(StringComparer.OrdinalIgnoreCase);
-        changes.RemovedSongs.Sort(StringComparer.OrdinalIgnoreCase);
+        changes.NewSongs = Sorted(newSongs);
+        changes.EditedSongs = Sorted(editedSongs);
+        changes.RemovedSongs = Sorted(removedSongs);
         return changes;
+    }
+
+    static List<string> Sorted(HashSet<string> names)
+    {
+        var list = new List<string>(names);
+        list.Sort(StringComparer.OrdinalIgnoreCase);
+        return list;
     }
 
     static void WriteChanges(TextWriter report, Changes changes, string baseline)

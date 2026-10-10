@@ -77,6 +77,19 @@ Each project is a folder, `Projects\<group>\<name>`, holding `project.mt` with t
 
 If a backup reports many files as *The device is not ready*, the Tracker has stopped answering in USB drive mode: leave USB mode on the Tracker (or unplug it), reconnect, and run the backup again; it continues with what's missing.
 
+## Fujifilm X100VI
+
+The X100VI connects over MTP like the [OP-1 Field](#teenage-engineering-op-1-field): its card has no drive letter, so it is read into a local mirror (`%LOCALAPPDATA%\M8Backup\Devices\x100vi-<serial>`), backed up from there into its own history (`x100vi-<serial>`), and never written to.
+
+1. Turn the camera on and connect it by USB-C, with **Connection setting → USB setting** set to **USB card reader** (not webcam, tethered shooting or RAW conversion). Despite the name, Windows sees the camera as a portable device, not a drive.
+2. Leave the source empty and start a backup.
+
+What's backed up: everything in `DCIM`, photos as JPG, RAF (raw) and HIF (HEIF), and videos as MOV. The camera reports when each photo was taken, which the backup keeps as the file's date.
+
+Summaries list **photos and videos** by name (`100_FUJI\DSCF0689`); a shot saved as both JPG and RAF counts once. You can delete photos on the camera after a backup: they stay in the backup, listed as no longer on the X100VI. Restores offer all files or a single file, to a folder on your PC: browse to a folder in the app (or set `SourceFolder`) and restore. With the camera connected, restore isn't offered and explains why: photos rarely need to go back on a camera. Restoring an X100VI backup onto a memory card (for example the camera's card in a card reader) asks you to confirm first.
+
+The mirror keeps a copy of the camera's card on the PC, so incremental backups only download new photos; it takes as much space as the photos on the camera.
+
 ## Separate card and folder histories
 
 New backups are stored here:
@@ -319,7 +332,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
 | `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
-| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field or OP-XY in MTP mode); or name it: `m8`, `op1-field`, `op-xy` or `tracker-mini`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
+| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP); or name it: `m8`, `op1-field`, `op-xy`, `tracker-mini` or `x100vi`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
