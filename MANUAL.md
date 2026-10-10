@@ -8,11 +8,13 @@ Executable builds are ignored by Git. If you downloaded or cloned the repository
 
 ## Installing Gear Backup
 
-Run `GearBackup-Setup-<version>.exe` and follow the wizard. It installs the GUI and CLI for the current Windows user without requesting administrator rights. The default installation folder is `%LOCALAPPDATA%\Programs\Gear Backup`. Keep this location or choose another folder you can write to: the application saves `GearBackup.ini` beside its executables.
+Run `GearBackup-Setup-<version>.exe` and follow the wizard. It installs the GUI and CLI for the current Windows user without requesting administrator rights. The default installation folder is `%LOCALAPPDATA%\Programs\Gear Backup`. Keep this location or choose another installation folder. User settings are saved separately in `%APPDATA%\GearBackup`.
 
 The Start menu's **Gear Backup** folder contains the GUI, **Gear Backup (CLI)**, an offline illustrated **Gear Backup Manual**, and the uninstaller. A desktop shortcut is optional. The final wizard page can open the GUI; choose a source and backup location before starting a backup. Installing the application does not copy files from a device.
 
-For an upgrade, close both interfaces and run the newer installer. It reuses the installation location and leaves your INI settings intact. To bring settings from a portable copy, close the app and copy its `GearBackup.ini` into the installation folder. The installer does not import settings automatically.
+The optional **Add CLI to PATH** checkbox is unchecked by default. Select it to add the installation folder to your Windows user's PATH, then open a new terminal to run `GearBackup.exe` from any folder. Upgrades remember the checkbox choice. Clearing it during an upgrade or uninstalling removes the entry added by the installer; an entry you already had is preserved. The portable package does not change PATH.
+
+For an upgrade, close both interfaces and run the newer installer. It reuses the installation location and leaves your INI settings intact. Installed settings live in `%APPDATA%\GearBackup\GearBackup.ini` and `%APPDATA%\GearBackup\GearBackup.Profiles.ini`. On the first normal launch, existing INI files beside the installed executables are copied there if the destination files are missing; newer AppData settings take priority, and the original files remain untouched. Preview runs read previous settings without creating or migrating files. To bring settings from a portable copy, close the app and copy both INI files into `%APPDATA%\GearBackup`.
 
 Remove the application through Windows **Settings > Apps** or the Start menu uninstaller. Uninstall removes installed executables, documentation, and shortcuts; it keeps your generated INI settings, backups, recovery files, and local MTP mirrors. The remaining INI can be reused after reinstalling.
 
@@ -37,7 +39,7 @@ The drive-based devices are copied directly. MTP devices first refresh a local P
 3. Review the selected source and profile. If a backup exists, choose full backup, incremental backup, restore, or check. With no backup in the current profile, the program prepares a full backup.
 4. Review the file preview and press Y to proceed.
 
-The settings file is `GearBackup.ini` beside the executable. Missing options are added with their defaults and explanations on an ordinary run. A `--preview` run does not write settings or backups.
+The settings file is `GearBackup.ini` in `%APPDATA%\GearBackup` for an installed copy, or beside the executable for portable copies and local builds. Missing options are added with their defaults and explanations on an ordinary run. A `--preview` run does not write settings or backups.
 
 ### Upgrading from the previous name
 
@@ -80,7 +82,7 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 
 **Settings** groups preferences into **Backup**, **Restore**, **Device** and **Appearance** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, eject and theme preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
 
-In **Settings → Appearance**, choose **Original** for the light gray and teal palette, **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette (default). **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
+In **Settings → Appearance**, choose **Original** for the light gray and teal palette, **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette (default). **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. On Windows 11, title bars, title text and borders match the selected palette, including Review changes and other dialogs. Original (dark) uses the matching charcoal title bar; supported earlier Windows versions use the standard dark title bar. App dialogs use the Gear Backup icon. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
 
 ![Appearance settings with the Original, Original (dark) and Retro color theme selector.](assets/manual/gui-appearance.png)
 
@@ -464,7 +466,7 @@ Open **Profiles**, choose **Settings for a device** or **Settings for one backup
 
 Preference priority is **global → device → profile**. Device defaults apply after source detection; named or automatic profile preferences then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup profile. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
 
-The optional `GearBackup.Profiles.ini` beside the executables can also be edited directly:
+The optional `GearBackup.Profiles.ini` in the settings folder can also be edited directly:
 
 ```ini
 [device:m8]
@@ -493,7 +495,7 @@ Use **Copy recipe** to copy readable text to the clipboard or **Export text** to
 
 ## All INI settings
 
-Global preferences live in `GearBackup.ini`. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them.
+Global preferences live in `GearBackup.ini`: installed copies use `%APPDATA%\GearBackup`, while portable copies and local builds use the executable folder. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -554,9 +556,11 @@ For a release, update `AppIdentity.Version` in `src\AppIdentity.cs`, then run `b
 
 Run `pwsh -File tests\run-installer-tests.ps1` after building to check installation, shortcuts, offline documentation, version metadata, CLI/GUI startup, upgrade and uninstall. The test refuses to run when a Gear Backup installation or its Start menu folder already exists; use a separate Windows user account in that case. It creates an isolated application folder and temporary per-user registration/shortcuts, then uninstalls it. Logs and the deliberately preserved test INI stay under `.test-runs`.
 
+Run `pwsh -File tests\run-cli-path-tests.ps1` to test the installer's PATH routines against an isolated temporary registry key. It checks duplicate detection, upgrades, relocation, deselection and uninstall cleanup without changing your actual PATH.
+
 Run `pwsh -File tests\run-portable-tests.ps1` to check portable extraction, version metadata, offline pictures, updates that preserve settings/user files, and CLI/GUI startup after moving the folder. It also checks that Gear Backup shortcuts and uninstall registration remain unchanged. Portable fixtures and logs stay under `.test-runs`.
 
-If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
+If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. Local builds use the same INI beside the executable. Close the running program before replacing the usual executable.
 
 Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. Tests are grouped by area: `BackupTests.cs`, `RestoreTests.cs`, `DeviceTests.cs` (device profiles, MTP mirrors and each device), `SecurityTests.cs` (links, temporary files, malformed manifests), `FujiSettingsTests.cs`, `ManagementTests.cs`, and `HelperTests.cs` for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. `TestRunner.cs` holds the runner and shared fixtures; the test scripts compile every file in `tests`. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
 

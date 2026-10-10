@@ -286,20 +286,28 @@ partial class GearBackup
         }
         void CreateProfile()
         {
-            using (var dialog = new Form { Text = "New backup profile", StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(430, 170),
-                Font = Font, BackColor = GuiTheme.Background, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false })
+            using (var dialog = CreateProfilePrompt())
             {
-                var label = GuiTheme.Label("Name this backup profile", 10, GuiTheme.Ink); label.Location = new Point(20, 20);
-                var name = new TextBox { Name = "NewProfileName", Location = new Point(20, 50), Width = 390 };
-                var add = GuiTheme.Button("Create profile", true); add.Location = new Point(250, 100);
-                var cancel = GuiTheme.Button("Cancel", false); cancel.Location = new Point(120, 100); cancel.DialogResult = DialogResult.Cancel;
-                add.Click += delegate { try { ValidateProfile(name.Text.Trim()); dialog.DialogResult = DialogResult.OK; } catch (Exception ex) { MessageBox.Show(dialog, ex.Message, "Choose a profile name"); } };
-                dialog.Controls.AddRange(new Control[] { label, name, add, cancel }); dialog.AcceptButton = add; dialog.CancelButton = cancel;
+                var name = (TextBox)dialog.Controls.Find("NewProfileName", true)[0];
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 RememberDraft(); AddProfile(name.Text.Trim());
                 if (kind.SelectedIndex != 1) kind.SelectedIndex = 1; else PopulateScopes();
                 for (int i = 0; i < scope.Items.Count; i++) if (((ScopeChoice)scope.Items[i]).Label.Equals(name.Text.Trim(), StringComparison.OrdinalIgnoreCase)) scope.SelectedIndex = i;
             }
+        }
+        internal Form CreateProfilePrompt()
+        {
+            var dialog = new Form { Text = "New backup profile", StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(430, 170),
+                Font = Font, BackColor = GuiTheme.Background, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false };
+            if (GuiHeadless) dialog.Opacity = 0;
+            var label = GuiTheme.Label("Name this backup profile", 10, GuiTheme.Ink); label.Location = new Point(20, 20);
+            var name = new TextBox { Name = "NewProfileName", Location = new Point(20, 50), Width = 390 };
+            var add = GuiTheme.Button("Create profile", true); add.Location = new Point(250, 100);
+            var cancel = GuiTheme.Button("Cancel", false); cancel.Location = new Point(120, 100); cancel.DialogResult = DialogResult.Cancel;
+            add.Click += delegate { try { ValidateProfile(name.Text.Trim()); dialog.DialogResult = DialogResult.OK; } catch (Exception ex) { MessageBox.Show(dialog, ex.Message, "Choose a profile name"); } };
+            dialog.Controls.AddRange(new Control[] { label, name, add, cancel }); dialog.AcceptButton = add; dialog.CancelButton = cancel;
+            GuiTheme.ApplyTo(dialog);
+            return dialog;
         }
     }
 }

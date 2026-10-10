@@ -87,10 +87,14 @@ partial class GearBackup
         }
         static void Recolor(Control control, Palette old)
         {
+            var window = control as Form;
+            if (window != null) StyleWindow(window);
             // Standard input controls use Windows' field colours; FieldPanel inputs use ours.
             if (!(control is ComboBox) && !(control is NumericUpDown) && (!(control is TextBox) || control.Parent is FieldPanel))
                 control.BackColor = BackgroundColor(control.BackColor, old);
             control.ForeColor = ForegroundColor(control.ForeColor, old);
+            // Checkboxes can inherit Windows' black ControlText rather than a palette colour.
+            if (control is CheckBox || control is RadioButton) control.ForeColor = Ink;
             if (control is ComboBox || control is NumericUpDown || control is ListBox || control is TextBox)
             {
                 control.BackColor = palette == dark || control.Parent is FieldPanel ? Surface : SystemColors.Window;

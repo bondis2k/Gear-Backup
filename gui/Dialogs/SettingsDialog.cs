@@ -8,9 +8,10 @@ partial class GearBackup
     {
         public SettingsDialog(Config config)
         {
-            Text = "Settings · " + AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
+            Text = "Settings · " + AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background; ForeColor = GuiTheme.Ink;
             StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false;
             MinimizeBox = false; MaximizeBox = false; ClientSize = new Size(680, 570); MinimumSize = new Size(580, 450);
+            GuiTheme.StyleWindow(this);
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;
             Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -95,7 +96,7 @@ partial class GearBackup
         }
         static CheckBox Check(string text, string name, bool value)
         {
-            return new CheckBox { Text = text, Name = name, AccessibleName = text, Checked = value, AutoSize = true, Margin = new Padding(0, 8, 0, 6) };
+            return new CheckBox { Text = text, Name = name, AccessibleName = text, Checked = value, AutoSize = true, ForeColor = GuiTheme.Ink, Margin = new Padding(0, 8, 0, 6) };
         }
         static Label Explanation(string text)
         {

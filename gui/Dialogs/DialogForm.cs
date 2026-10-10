@@ -12,6 +12,7 @@ partial class GearBackup
         protected DialogForm(string heading)
         {
             Text = AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
+            GuiTheme.StyleWindow(this);
             StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false; MinimizeBox = false; MaximizeBox = false;
             ClientSize = new Size(700, 430); MinimumSize = new Size(560, 300); AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;

@@ -35,7 +35,7 @@ Requires **Windows 10 or 11** with **.NET Framework 4.6 or newer**, normally inc
 
 Download a package from [GitHub Releases](https://github.com/bondis2k/Gear-Backup/releases):
 
-- **Setup:** `GearBackup-Setup-<version>.exe` installs both apps for your Windows user, with Start menu shortcuts and an uninstaller.
+- **Setup:** `GearBackup-Setup-<version>.exe` installs both apps for your Windows user, with Start menu shortcuts and an uninstaller. Select **Add CLI to PATH** (unchecked by default) to run `GearBackup.exe` from any folder in a newly opened terminal.
 - **Portable:** `GearBackup-Portable-<version>.exe` extracts both apps into a writable folder of your choice, including a USB drive.
 
 Both packages include the illustrated offline manual and preserve existing INI settings when updated. Portable backups use the configured backup location; MTP mirrors are stored in the PC's Local AppData folder.
@@ -66,7 +66,7 @@ Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the
 
 ## Settings and storage
 
-Global preferences are stored in `GearBackup.ini` beside the executables. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
+Installed copies store settings in `%APPDATA%\GearBackup`; portable copies and local builds store them beside the executables. Existing installed INI files are copied to AppData on first normal launch without overwriting newer files, and the originals are retained. Global preferences are stored in `GearBackup.ini`. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
 
 Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Retro is the default.
 

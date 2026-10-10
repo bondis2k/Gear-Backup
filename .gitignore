@@ -6,6 +6,7 @@ tests/.build/
 dist/
 *.exe
 GearBackup.ini
+GearBackup.installed
 GearBackup.Profiles.ini
 /.history.lock
 M8Backup.ini

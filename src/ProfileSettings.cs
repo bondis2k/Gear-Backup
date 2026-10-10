@@ -1,5 +1,5 @@
 // Device and profile preferences: overrides of the global settings, kept in GearBackup.Profiles.ini
-// beside the exe. A separate file keeps them out of GearBackup.ini, and installers never touch either.
+// in the shared settings folder. A separate file keeps them out of GearBackup.ini, and installers never touch either.
 // Priority: global settings, then the device's preferences ([device:m8]), then the profile's
 // ([profile:Studio]). Which settings can be overridden is in the Settings table (those with a Label).
 using System;
@@ -11,7 +11,7 @@ partial class GearBackup
 {
     static string ProfileSettingsPath(Config config)
     {
-        return Path.Combine(config.SettingsDirectory ?? AppDomain.CurrentDomain.BaseDirectory, AppIdentity.ProfileConfigFileName);
+        return Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), AppIdentity.ProfileConfigFileName);
     }
 
     // The preference with this key, or null when it isn't one that can be overridden.
@@ -37,7 +37,7 @@ partial class GearBackup
     static Dictionary<string, Dictionary<string, string>> ReadProfileSettings(Config config)
     {
         var sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
-        string path = ProfileSettingsPath(config);
+        string path = SettingsReadPath(config, AppIdentity.ProfileConfigFileName);
         if (!File.Exists(path)) return sections;
         RejectRootLinks(path);
         if (new FileInfo(path).Length > 1024 * 1024) throw new IOException("Profile settings file is too large.");

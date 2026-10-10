@@ -25,6 +25,7 @@ if ($Target -eq 'GUI') {
     if (-not $manualShell) { throw 'PowerShell 7 is required to generate the HTML manual. Install it from https://aka.ms/powershell.' }
     $arguments += @('/target:winexe', '/main:GearGui', '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll')
     $arguments += "/win32manifest:$projectRoot\gui\app.manifest"
+    $arguments += "/resource:$projectRoot\assets\Backup.ico,Backup.ico"
     foreach ($image in Get-ChildItem -LiteralPath (Join-Path $projectRoot 'assets') -Filter '*-256.png') {
         $arguments += "/resource:$($image.FullName),$($image.Name)"
     }
