@@ -5,15 +5,22 @@ using System.Windows.Forms;
 partial class GearBackup
 {
     // The GUI's front end: questions become dialogs, output goes to the activity log, and progress to the
-    // status area. Dialogs are shown on the UI thread; the operation itself runs on a worker thread.
+    // main window's status area, or to `progress` for work started from a tool window, so that work never
+    // shows up as a main-window operation. Dialogs are shown on the UI thread; the operation itself runs
+    // on a worker thread.
     sealed class GuiInteraction : IOperationInteraction
     {
         readonly MainForm form;
-        public GuiInteraction(MainForm owner) { form = owner; }
+        readonly Action<OperationProgress> progress;
+        public GuiInteraction(MainForm owner, Action<OperationProgress> progress = null) { form = owner; this.progress = progress; }
         public void Write(string text) { form.AppendActivity(text); }
         public void WriteLine(string text) { form.AppendActivity(text + Environment.NewLine); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
-        public void ReportProgress(OperationProgress progress) { form.UpdateProgress(progress); }
+        public void ReportProgress(OperationProgress value)
+        {
+            if (progress != null) progress(value);
+            else form.UpdateProgress(value);
+        }
 
         // One button per option. Closing the dialog cancels the operation.
         public char Choose(string question, IList<Option> options)

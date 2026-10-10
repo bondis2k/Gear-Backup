@@ -90,7 +90,7 @@ Backups record complete, incomplete or failed status. Path validation rejects li
 
 The camera-settings operation captures **C1–C7 names and 23 raw properties per recipe**, plus current shooting settings, in **USB RAW CONV./BACKUP RESTORE** mode. XML exports retain raw bytes, numeric values, model, serial and firmware; unavailable properties are marked explicitly.
 
-Each capture creates a dated full backup in a separate automatic settings profile, or a chosen named profile. Checksums, optional history and ZIP export are supported. Camera capture restores and verifies the original recipe read selector, checks that shooting values stayed unchanged, and prevents concurrent Gear Backup captures of the same camera.
+Each capture creates a dated full backup in its own history, never the photo history: `x100vi-settings-<serial>` automatically, or `<profile>-settings` for a named profile, using that profile's preferences. Checksums, optional history and ZIP export are supported. Camera capture restores and verifies the original recipe read selector, checks that shooting values stayed unchanged, and prevents concurrent Gear Backup captures of the same camera.
 
 The **X100VI recipes** viewer opens a saved backup folder or individual XML export without a connected camera. It shows readable film simulations, white balance, grain strength/size, tone values and noise reduction alongside protocol numbers and raw bytes. Selected recipes can be copied or exported as text. Unmapped values remain labelled as protocol values.
 
@@ -102,7 +102,7 @@ For media, Gear Backup copies `DCIM`, preserves camera-reported capture times an
 
 Automatic profiles separate histories by source: card volume identity, folder path or MTP device identity. A card can retain its history after a reader or drive-letter change. Named profiles provide an explicit history name.
 
-Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited.
+Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
 
 The GUI provides two management views across configured backup locations:
 

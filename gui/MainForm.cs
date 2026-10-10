@@ -78,7 +78,7 @@ partial class GearBackup
             ShowDevice(null);
             source.Text = designPreview ? @"E:\" : config.SourceFolder;
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
-            operation.SelectedIndex = config.Mode == BackupMode.Incremental ? 1 : 0;
+            operation.SelectedIndex = (int)(config.Mode == BackupMode.Incremental ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup);
             start.Click += delegate { StartOperation(false); };
             preview.Click += delegate { StartOperation(true); };
             cancel.Click += delegate { RequestCancel(); };
@@ -156,7 +156,7 @@ partial class GearBackup
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < 4; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
-            // The index is the operation number GuiOperationRunner.Execute uses: 0 full, 1 incremental, 2 restore, 3 check.
+            // In the order of GuiOperation: the selected index is the operation.
             operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups", "Back up X100VI settings" });
             operation.SelectedIndex = 0; operation.Margin = new Padding(0, 4, 24, 0);
             zip.Margin = new Padding(0, 8, 20, 0); zip.ForeColor = GuiTheme.Ink;
@@ -193,8 +193,8 @@ partial class GearBackup
             fields.Controls.Add(browse, 1, row + 1);
             if (destination) fields.SetColumnSpan(text, 1);
             browse.AccessibleName = destination ? "Browse backup location" : "Browse source folder";
-            browse.Click += delegate { BrowseFolder(this, text, destination || operation.SelectedIndex == 2,
-                destination ? "Choose the backup location" : operation.SelectedIndex == 2 ? "Choose the restore destination" : "Choose the card or source folder"); };
+            browse.Click += delegate { BrowseFolder(this, text, destination || Selected == GuiOperation.Restore,
+                destination ? "Choose the backup location" : Selected == GuiOperation.Restore ? "Choose the restore destination" : "Choose the card or source folder"); };
             return browse;
         }
 
@@ -255,15 +255,15 @@ partial class GearBackup
             Config copy = config.Clone();
             copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
                 ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) : ExpandPath(backupFolder.Text);
-            copy.SourceFolder = forOperation && (operation.SelectedIndex == 3 || operation.SelectedIndex == 4) ? "" : ExpandPath(source.Text);
+            copy.SourceFolder = forOperation && (Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings) ? "" : ExpandPath(source.Text);
             copy.Profile = profile.Text.Trim();
-            copy.Zip = zip.Checked && (operation.SelectedIndex == 0 || operation.SelectedIndex == 4);
+            copy.Zip = zip.Checked && ZipApplies;
             if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
             return copy;
         }
         void RefreshOperationControls()
         {
-            bool checking = operation.SelectedIndex == 3, restoring = operation.SelectedIndex == 2, cameraSettings = operation.SelectedIndex == 4;
+            bool checking = Selected == GuiOperation.Check, restoring = Selected == GuiOperation.Restore, cameraSettings = Selected == GuiOperation.CameraSettings;
             sourceCaption.Text = cameraSettings ? "X100VI · USB RAW CONV./BACKUP RESTORE · C1–C7 and shooting settings" :
                 checking ? "Source not needed · select backups from the backup location" :
                 restoring ? "Restore destination · folder or connected card" : "Source folder · leave blank to detect a device";
@@ -272,9 +272,12 @@ partial class GearBackup
             source.Enabled = sourceBrowse.Enabled = detect.Enabled = !checking && !cameraSettings && !runner.IsBusy;
             start.Text = restoring ? "Restore" : checking ? "Check" : "Back up";
             preview.Enabled = !checking && !runner.IsBusy;
-            zip.Enabled = (operation.SelectedIndex == 0 || cameraSettings) && !runner.IsBusy;
+            zip.Enabled = ZipApplies && !runner.IsBusy;
         }
-        public void SelectCameraSettings() { operation.SelectedIndex = 4; }
+        public void SelectCameraSettings() { operation.SelectedIndex = (int)GuiOperation.CameraSettings; }
+        GuiOperation Selected { get { return (GuiOperation)operation.SelectedIndex; } }
+        // A zip is made of a full backup, including a camera-settings snapshot.
+        bool ZipApplies { get { return Selected == GuiOperation.FullBackup || Selected == GuiOperation.CameraSettings; } }
         void RefreshProgressMetrics()
         {
             if (!elapsed.IsRunning) return;
@@ -320,8 +323,8 @@ partial class GearBackup
         void SetBusy(bool busy)
         {
             inputs.Enabled = !busy; operation.Enabled = !busy; start.Enabled = !busy; settings.Enabled = !busy;
-            preview.Enabled = !busy && operation.SelectedIndex != 3; cancel.Enabled = busy;
-            zip.Enabled = !busy && (operation.SelectedIndex == 0 || operation.SelectedIndex == 4);
+            preview.Enabled = !busy && Selected != GuiOperation.Check; cancel.Enabled = busy;
+            zip.Enabled = !busy && ZipApplies;
             openFolder.Enabled = !busy;
             dashboard.Enabled = storage.Enabled = profiles.Enabled = recipes.Enabled = !busy;
             if (busy) { status.ForeColor = GuiTheme.Ink; status.Text = "Preparing"; detail.Text = "You can cancel at any time."; progress.Style = ProgressBarStyle.Marquee; }
@@ -339,7 +342,7 @@ partial class GearBackup
             Config options;
             try { options = CaptureConfig(true); }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
-            runner.Run(options, operation.SelectedIndex, previewOnly);
+            runner.Run(options, Selected, previewOnly);
         }
 
         public void SetDetectedSource(string found) { source.Text = found; }
@@ -391,7 +394,7 @@ partial class GearBackup
                 result.Counts.Copied, result.Counts.Unchanged, result.Counts.Removed, result.Counts.Failed);
             counts.Visible = result.Counts != null;
             outputFolder = previewOnly ? null : result.OutputFolder;
-            openFolder.Text = operation.SelectedIndex == 2 ? "Open restore folder" : "Open backup folder";
+            openFolder.Text = Selected == GuiOperation.Restore ? "Open restore folder" : "Open backup folder";
             openFolder.Visible = !string.IsNullOrEmpty(outputFolder) && Directory.Exists(outputFolder);
             metrics.Text = "Elapsed " + FormatTime(result.Elapsed > TimeSpan.Zero ? result.Elapsed : elapsed.Elapsed);
             metrics.Visible = true;

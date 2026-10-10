@@ -56,8 +56,14 @@ partial class GearBackup
         Assert(old.FilesBytes == 6 && old.VersionsBytes == 4 && old.ObjectsBytes == 10, "storage separates current files, old versions and snapshot contents");
         Assert(catalog.ZipBytes == 3 && catalog.MirrorBytes == 5 && catalog.UniqueBytes > 0, "storage includes ZIP archives and local MTP mirrors");
         Assert(latest.CompletedUtc != null && latest.CheckResult == "Never checked", "dashboard distinguishes successful backups from unperformed checks");
-        Assert(!catalog.Cleanup.Exists(i => i.Kind == "Older backup" && i.Path == latest.Path), "latest backup is excluded from cleanup");
+        Assert(!catalog.Cleanup.Exists(i => i.Kind == StorageKind.OlderBackup && i.Path == latest.Path), "latest backup is excluded from cleanup");
         Assert(!catalog.Cleanup.Exists(i => i.Path.IndexOf("\\objects\\", StringComparison.OrdinalIgnoreCase) >= 0), "history objects cannot be removed individually");
+        foreach (StorageItem item in catalog.Cleanup)
+        {
+            long bytes;
+            Assert(StorageStamp(item.Path, item.Folder, out bytes) == item.Stamp && bytes == item.Bytes,
+                "a stamp built from the scan's own listing matches a fresh one: " + item.Kind);
+        }
         new IntegrityEngine().Run(new List<string> { latest.Path }, new OperationContext(new TestInteraction(), CancellationToken.None));
         catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); latest = catalog.Backups.Find(b => b.Latest);
         Assert(latest.CheckedUtc != null && latest.CheckResult == "OK", "completed checks persist their time and result");
@@ -68,21 +74,21 @@ partial class GearBackup
         DateTime success = catalog.Backups.Find(b => b.Latest).CompletedUtc.Value;
         WithUi(() => SetBackupStatus(latest.Path, Status.Failed));
         Assert(ScanBackupCatalog(config, Path.Combine(root, "mirrors")).Backups.Find(b => b.Latest).CompletedUtc == success, "failed incremental runs preserve the last successful backup time");
-        StorageItem version = catalog.Cleanup.Find(i => i.Kind == "Old version"); int recycled = 0;
+        StorageItem version = catalog.Cleanup.Find(i => i.Kind == StorageKind.OldVersion); int recycled = 0;
         WithUi(() => {
             using (LockHistory(version.History)) Throws(() => CleanupStorage(catalog, new List<StorageItem> { version }, i => recycled++), "cleanup refuses a busy history");
             Put(version.Path, "CHANGED AFTER PREVIEW");
             Throws(() => CleanupStorage(catalog, new List<StorageItem> { version }, i => recycled++), "cleanup refuses items changed after the scan");
         });
         Assert(recycled == 0, "validation failures recycle nothing");
-        catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); version = catalog.Cleanup.Find(i => i.Kind == "Old version");
+        catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); version = catalog.Cleanup.Find(i => i.Kind == StorageKind.OldVersion);
         WithUi(() => CleanupStorage(catalog, new List<StorageItem> { version }, i => File.Delete(i.Path)));
         Assert(!File.Exists(version.Path) && !LoadChecksums(version.Backup).ContainsKey(Path.GetFileName(version.Path)), "old-version cleanup removes obsolete checksum entries");
         int ok = 0, damaged = 0, missing = 0, uncheckedFiles = 0;
         WithUi(() => { CheckBackup(old.Path, ref ok, ref damaged, ref missing, ref uncheckedFiles); CheckSnapshots(old.Path, ref ok, ref damaged, ref missing); });
         Assert(damaged == 0 && missing == 0, "old-version cleanup preserves snapshot contents and backup integrity");
         catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
-        StorageItem olderFolder = catalog.Cleanup.Find(i => i.Kind == "Older backup");
+        StorageItem olderFolder = catalog.Cleanup.Find(i => i.Kind == StorageKind.OlderBackup);
         int folders = 0;
         WithUi(() => CleanupStorage(catalog, new List<StorageItem> { olderFolder, olderFolder }, i => folders++));
         Assert(folders == 1, "duplicate cleanup selections recycle an item only once");
@@ -107,8 +113,8 @@ partial class GearBackup
         new BackupEngine().Run(safeSource, safeHistory, safeBackup, true, noHistory, new OperationContext(new TestInteraction(), CancellationToken.None));
         BackupCatalog safeCatalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
         Assert(!safeCatalog.Cleanup.Exists(i => i.Path == Path.Combine(safeBackup, "legitimate_2026-10-01_120000.txt")) &&
-            safeCatalog.Cleanup.Exists(i => i.Kind == "Old version" && i.Backup == safeBackup), "ordinary dated source filenames are protected while history-free retained versions can be cleaned up");
-        StorageItem safeVersion = safeCatalog.Cleanup.Find(i => i.Kind == "Old version" && i.Backup == safeBackup);
+            safeCatalog.Cleanup.Exists(i => i.Kind == StorageKind.OldVersion && i.Backup == safeBackup), "ordinary dated source filenames are protected while history-free retained versions can be cleaned up");
+        StorageItem safeVersion = safeCatalog.Cleanup.Find(i => i.Kind == StorageKind.OldVersion && i.Backup == safeBackup);
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
             Throws(() => CleanupStorage(safeCatalog, new List<StorageItem> { safeVersion }, i => recycled++), "preview-only mode cannot execute cleanup");
         if (SupportsHardLinks(root))
@@ -119,6 +125,50 @@ partial class GearBackup
             Assert(linked.UniqueBytes < linked.TotalBytes, "hard-linked backup and history contents are counted once");
         }
     }
+    // Detection, preferences, history and the run itself are shared by the CLI and GUI.
+    static void TestSharedFlow(string root)
+    {
+        string card = Rooted(Path.Combine(root, "tracker-card"));
+        Put(Path.Combine(card, "trackerConfig"), "EEPROM");
+        Put(Path.Combine(card, "Projects", "User", "Jam", "project.mt"), "JAM");
+        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        WithUi(() => SaveProfileSettings(global, "device:tracker-mini", new Dictionary<string, string> { { "BackupFolder", Path.Combine(root, "tracker-store") } }));
+        PreparedSource prepared = null;
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            prepared = PrepareSource(global, new SourceChoice { Path = card });
+            Assert(prepared.Device == Devices.TrackerMini && OperationContext.Current.Device == Devices.TrackerMini && prepared.Path == card,
+                "preparing a source recognises its device and makes it current");
+            Assert(prepared.Config.BackupFolder == Path.Combine(root, "tracker-store") && prepared.History.StartsWith(Path.Combine(root, "tracker-store")) &&
+                Path.GetFileName(prepared.History).StartsWith("tracker-mini-folder-"), "the device's preferences choose where its history goes");
+            Assert(RunPrepared(prepared, false, false).ExitCode == 0 && ListBackups(prepared.History).Count == 1, "a prepared source backs up");
+            Throws(() => PrepareSource(global, new SourceChoice { Path = Path.Combine(root, "missing") }), "a missing source folder is refused");
+            Throws(() => RunPrepared(new PreparedSource { Source = new SourceChoice { Mtp = new MtpSource { Device = Devices.X100VI } } }, true, false),
+                "restoring onto an MTP device is refused before anything runs");
+        }
+
+        // Restore through the same steps: pick the history and backup, current files, all files.
+        string target = Rooted(Path.Combine(root, "restore-target"));
+        Directory.CreateDirectory(target);
+        var ui = new TestInteraction();
+        ui.OnChooseItem = (question, items) => question.StartsWith("Restore from which saved point") ? 0 : 1;
+        ui.Keys.Enqueue(RestoreMode.All);
+        using (new OperationContext(ui, CancellationToken.None).Activate())
+        {
+            PreparedSource restoreTo = PrepareSource(global, new SourceChoice { Path = target, Detected = Devices.TrackerMini });
+            restoreTo.History = prepared.History; restoreTo.Histories = prepared.Histories;
+            OperationResult restored = RunPrepared(restoreTo, true, false);
+            Assert(restored.ExitCode == 0 && File.ReadAllText(Path.Combine(target, @"Projects\User\Jam\project.mt")) == "JAM", "a prepared target restores");
+        }
+
+        // Settings backups never share a named profile's photo history.
+        Assert(SettingsProfileName("Studio") == "Studio-settings" && SettingsProfileName("Studio-settings") == "Studio-settings",
+            "a named profile's settings go to <profile>-settings");
+        string longName = SettingsProfileName(new string('a', 64));
+        Assert(longName.Length == 64 && longName.EndsWith("-settings"), "long profile names are shortened to fit");
+        ValidateProfile(longName);
+    }
+
     static void TestRecipeReading(string root)
     {
         Dictionary<string, byte[]> files;

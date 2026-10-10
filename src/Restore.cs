@@ -28,20 +28,20 @@ partial class GearBackup
         char mode = Ask("What should be restored?", RestoreModes(CurrentDevice));
         List<RestoreEntry> items;
         string bundle = null;
-        if (mode == 'a') items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
-        else if (mode == 'b' || mode == 'p')
+        if (mode == RestoreMode.All) items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
+        else if (mode == RestoreMode.Bundle || mode == RestoreMode.ProjectFolder)
         {
             // A bundle or a song folder: everything under one folder, restored like a bundle.
-            bundle = mode == 'b' ? PickBundle(snapshot) : PickSongFolder(snapshot);
+            bundle = mode == RestoreMode.Bundle ? PickBundle(snapshot) : PickSongFolder(snapshot);
             if (bundle == null) return new OperationResult();
             items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase) &&
                 (historical || !IsOldVersion(f.Relative)));
         }
         else
         {
-            RestoreEntry file = PickEntry(snapshot, mode == 'd');
+            RestoreEntry file = PickEntry(snapshot, mode == RestoreMode.SongWithSamples);
             if (file == null) return new OperationResult();
-            items = mode == 'd' ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
+            items = mode == RestoreMode.SongWithSamples ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
             if (!historical && IsOldVersion(file.Relative))
             {
                 if (Ask("Restore this old version under which name?", new Option('o', "Original name"), new Option('d', "Dated name")) == 'o')
@@ -57,7 +57,7 @@ partial class GearBackup
         if (!ConfirmRestoreTarget(backup, m8)) return new OperationResult { Cancelled = true };
 
         // Exact restore is available only for manifests, whose file membership is authoritative.
-        bool exact = historical && mode == 'a' && Ask("How should the snapshot be restored?", new Option('m', "Merge"),
+        bool exact = historical && mode == RestoreMode.All && Ask("How should the snapshot be restored?", new Option('m', "Merge"),
             new Option('e', "Exact snapshot (remove extra files)")) == 'e';
         return new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current);
     }
@@ -86,11 +86,11 @@ partial class GearBackup
     // The restore choices a device supports: bundles and song-with-samples only where it has them.
     static Option[] RestoreModes(DeviceProfile device)
     {
-        var modes = new List<Option> { new Option('a', "All files") };
-        if (device.BundlesFolder != null) modes.Add(new Option('b', "Bundle"));
-        if (device.SongIsFolder) modes.Add(new Option('p', "Whole " + Singular(device.SongsLabel) + " folder"));
-        modes.Add(new Option('s', "Single file"));
-        if (device.ReadSamplePaths != null) modes.Add(new Option('d', "Song with dependent samples"));
+        var modes = new List<Option> { new Option(RestoreMode.All, "All files") };
+        if (device.BundlesFolder != null) modes.Add(new Option(RestoreMode.Bundle, "Bundle"));
+        if (device.SongIsFolder) modes.Add(new Option(RestoreMode.ProjectFolder, "Whole " + Singular(device.SongsLabel) + " folder"));
+        modes.Add(new Option(RestoreMode.SingleFile, "Single file"));
+        if (device.ReadSamplePaths != null) modes.Add(new Option(RestoreMode.SongWithSamples, "Song with dependent samples"));
         return modes.ToArray();
     }
 
