@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
+// Entry point of M8Backup.GUI.exe.
 class M8Gui
 {
     [STAThread]
@@ -9,6 +10,7 @@ class M8Gui
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        // Design aid: renders the main window or the settings dialog to a PNG without showing it.
         if (args.Length == 2 && (args[0] == "--render-preview" || args[0] == "--render-settings"))
         {
             M8Backup.GuiHeadless = true;
@@ -36,6 +38,7 @@ partial class M8Backup
 {
     internal static Form CreateGui(bool designPreview) { return new MainForm(designPreview); }
     internal static Form CreateSettingsPreview() { return new SettingsDialog(new Config()); }
+    // True while rendering previews: windows and dialogs stay invisible.
     internal static bool GuiHeadless;
 
 }

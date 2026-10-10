@@ -3,6 +3,8 @@ using System.Windows.Forms;
 
 partial class M8Backup
 {
+    // One button per allowed key of a console-style question. The same key can mean different things in
+    // different questions (r = Resume or Replace), so labels depend on the full set of keys.
     sealed class ChoiceDialog : DialogForm
     {
         public char Key;

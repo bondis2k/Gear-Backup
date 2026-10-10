@@ -13,6 +13,7 @@ partial class M8Backup
         get { return OperationContext.Current.PreviewOnly; }
         set { OperationContext.Current.PreviewOnly = value; }
     }
+    // Profile names become folder names, so they're limited to safe characters.
     static void ValidateProfile(string name)
     {
         if (!Regex.IsMatch(name, @"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$") || name.EndsWith(" ") ||
@@ -20,6 +21,9 @@ partial class M8Backup
             throw new ArgumentException("Profile must be 1-64 letters, digits, spaces, - or _, and not a Windows reserved name.");
     }
 
+    // The history folder name for a source. A whole drive is identified by its volume serial number
+    // ("card-1A2B3C4D"), so the same SD card keeps its history in another reader or drive letter. A
+    // folder gets a short hash of its full path. A named Profile setting overrides both.
     static string ProfileId(string source, string requested)
     {
         if (requested.Length > 0) { ValidateProfile(requested); return requested; }
@@ -41,6 +45,8 @@ partial class M8Backup
             return "folder-" + ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant()))).Substring(0, 16);
     }
 
+    // Lets the user pick one of the histories that has backups: each profile, plus backups made before
+    // profiles existed ("Legacy backups", directly under M8 Backups). Null when cancelled.
     static string ChooseHistory(string root, string preferred)
     {
         var roots = new List<string>();
@@ -68,6 +74,8 @@ partial class M8Backup
         return false;
     }
 
+    // The folder to back up or restore to: SourceFolder if set, otherwise the detected M8, otherwise a
+    // path typed by the user. pnpId is set only for a detected M8 (needed to eject it). Null if cancelled.
     static string SelectSource(Config config, out string pnpId)
     {
         pnpId = null;
@@ -96,6 +104,8 @@ partial class M8Backup
         return CompareContent(file, target, thorough, out sourceHash);
     }
 
+    // Thorough: compare SHA-256 of both files (sourceHash returns the source's, to reuse). Otherwise
+    // size and modified time, as Compare does.
     static FileState CompareContent(FileInfo file, string target, bool thorough, out string sourceHash)
     {
         sourceHash = null;
@@ -107,6 +117,7 @@ partial class M8Backup
         return sourceHash == HashFile(target) ? FileState.Same : FileState.Changed;
     }
 
+    // True when the operation should go ahead: approved, and not just a --preview.
     static bool ShowPlan(string label, List<string> lines, long bytes, Config config)
     {
         OperationContext.Current.CheckCancellation();
@@ -116,6 +127,7 @@ partial class M8Backup
         return approved && !PreviewOnly;
     }
 
+    // root\name, or root\name_2, name_3, ... if that folder already exists.
     static string UniqueFolder(string root, string name)
     {
         string path = Path.Combine(root, name);
@@ -123,6 +135,8 @@ partial class M8Backup
         return path;
     }
 
+    // Writes a text file so readers see either the old or the new contents, never half a file:
+    // the text goes to a temporary file that then replaces the original.
     static void AtomicText(string path, string contents)
     {
         OperationContext.Current.CheckCancellation();
@@ -155,6 +169,8 @@ partial class M8Backup
         TryDelete(rollback);
     }
 
+    // "incomplete" while a backup runs (or after it was interrupted), then "complete" or "failed".
+    // Backups made before status files existed report "legacy (status unknown)".
     static string BackupStatus(string folder)
     {
         string path = Path.Combine(folder, ".m8backup", "status.txt");
@@ -166,6 +182,8 @@ partial class M8Backup
         AtomicText(Path.Combine(folder, ".m8backup", "status.txt"), status + "\n");
     }
 
+    // Holds .history.lock open without sharing, so a second program or window can't write to the same
+    // history at the same time. Windows releases it when the stream is disposed or the process ends.
     static FileStream LockHistory(string root)
     {
         RejectRootLinks(root);

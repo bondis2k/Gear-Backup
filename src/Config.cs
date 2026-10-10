@@ -85,6 +85,8 @@ partial class M8Backup
 
     // Reads M8Backup.ini next to the exe. Settings missing from the file (or the whole file) are
     // added with their defaults and explanations, so the file always shows every option.
+    // Reads M8Backup.ini next to the exe. Settings missing from it are appended with their default and
+    // explanation, so the file always documents every option. A --preview run doesn't write the file.
     static Config LoadConfig()
     {
         var config = new Config { BackupFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) };
@@ -158,6 +160,7 @@ partial class M8Backup
         AtomicText(path, text.ToString());
     }
 
+    // Applies one key=value. An invalid value prints a warning and keeps the default.
     static void ApplySetting(Config config, string key, string value)
     {
         string lower = value.ToLowerInvariant();

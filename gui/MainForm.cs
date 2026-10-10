@@ -17,6 +17,8 @@ partial class M8Backup
         readonly Label status = GuiTheme.Label("Ready", 17, GuiTheme.Ink), detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
         readonly Panel inputs = new Panel();
+        // Worker threads add log text and progress here; the display timer moves them into the window every
+        // 150 ms, so a fast copy doesn't flood the UI thread with updates.
         readonly object queueLock = new object();
         readonly StringBuilder pendingLog = new StringBuilder();
         OperationProgress pendingProgress;
@@ -59,6 +61,7 @@ partial class M8Backup
                 start.Text = operation.SelectedIndex == 2 ? "Restore" : operation.SelectedIndex == 3 ? "Check" : "Back up";
                 preview.Enabled = operation.SelectedIndex != 3 && !runner.IsBusy;
             };
+            // Closing while an operation runs cancels it first; CompleteOperation closes the window once it stops.
             FormClosing += delegate(object sender, FormClosingEventArgs e) {
                 if (runner.IsBusy) { e.Cancel = true; closeAfterCancel = true; RequestCancel(); }
             };
@@ -110,6 +113,7 @@ partial class M8Backup
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < 3; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
+            // The index is the operation number GuiOperationRunner.Execute uses: 0 full, 1 incremental, 2 restore, 3 check.
             operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups" });
             operation.SelectedIndex = 0; operation.Margin = new Padding(0, 4, 24, 0);
             actions.Controls.Add(operation, 0, 0); actions.Controls.Add(preview, 1, 0); actions.Controls.Add(start, 2, 0); actions.Controls.Add(cancel, 3, 0);
@@ -141,6 +145,8 @@ partial class M8Backup
             browse.Click += delegate { BrowseFolder(this, text, destination); };
         }
 
+        // Runs action on the UI thread and waits for its result; used by worker threads to show dialogs.
+        // Invoke wraps exceptions, so the original one (e.g. a cancellation) is rethrown unwrapped.
         public T OnUi<T>(Func<T> action)
         {
             if (IsDisposed) throw new OperationCanceledException();
@@ -151,6 +157,7 @@ partial class M8Backup
                 throw;
             }
         }
+        // Called from worker threads; keeps at most the last 200,000 characters waiting to be shown.
         public void AppendActivity(string text)
         {
             lock (queueLock)

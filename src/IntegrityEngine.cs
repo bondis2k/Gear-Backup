@@ -4,6 +4,8 @@ using System.IO;
 
 partial class M8Backup
 {
+    // "Check backups": verifies backup files against checksums.sha256 and history objects against their
+    // manifests. Reads only; never changes a backup (apart from offering to create a missing checksum list).
     internal sealed class IntegrityEngine
     {
         public OperationResult Run(List<string> backups, OperationContext context)

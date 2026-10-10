@@ -4,6 +4,8 @@ using System.IO;
 
 partial class M8Backup
 {
+    // A restore runs in two halves: RunSelected plans it (compares with the target, asks about differing
+    // files, shows the preview), then Run carries out the approved plan.
     internal sealed class RestoreEngine
     {
         public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, char mode,
@@ -72,6 +74,8 @@ partial class M8Backup
                     if (!wantedFolders.Contains(folder.Substring(m8.Length))) extraFolders.Add(folder.Substring(m8.Length));
             }
 
+            // targetHashes remembers each target file's fingerprint from planning; execution refuses to
+            // replace or remove a file that changed since.
             var toCopy = new List<RestoreEntry>();
             var plan = new List<string>();
             var targetHashes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

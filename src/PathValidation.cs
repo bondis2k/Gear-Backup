@@ -9,11 +9,13 @@ partial class M8Backup
         return string.IsNullOrWhiteSpace(value) ? "" : Path.GetFullPath(Environment.ExpandEnvironmentVariables(value));
     }
 
+    // The full path with exactly one trailing backslash, so paths compare reliably as folder prefixes.
     static string Rooted(string path)
     {
         return Path.GetFullPath(path).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
     }
 
+    // True if path is parent itself or inside it.
     static bool Within(string path, string parent)
     {
         return Rooted(path).StartsWith(Rooted(parent), StringComparison.OrdinalIgnoreCase);
@@ -35,6 +37,7 @@ partial class M8Backup
         return full;
     }
 
+    // Fails when a file sits where one of path's parent folders must be created.
     static void CheckParents(string root, string path)
     {
         string parent = Path.GetDirectoryName(path);
@@ -46,6 +49,8 @@ partial class M8Backup
         }
     }
 
+    // Rejects path if it, or a folder between it and root, is a link (junction/symbolic link), which could
+    // redirect a write outside the intended folder.
     static void RejectLinks(string root, string path)
     {
         HashSet<string> verified = OperationContext.Current.VerifiedFolders;
@@ -74,6 +79,7 @@ partial class M8Backup
         verified.Add(key);
     }
 
+    // Rejects path if it or any folder above it, up to the drive root, is a link.
     static void RejectRootLinks(string path)
     {
         string current = Path.GetFullPath(path).TrimEnd('\\', '/');

@@ -4,6 +4,8 @@ using System.Windows.Forms;
 
 partial class M8Backup
 {
+    // Base for the GUI's dialogs. The engines' console questions become the heading: "[R]eplace" turns
+    // into "Replace", and console hints like "(y/n)" or "Enter = cancel" are removed.
     abstract class DialogForm : Form
     {
         public readonly Button Accept = GuiTheme.Button("Continue", true);
