@@ -208,7 +208,7 @@ partial class M8Backup
 
             nameWarnings = CheckNames(scan, source, config.MaxNameLength);
             if (nameWarnings.Count > 0)
-                WriteColored("  " + nameWarnings.Count + " name(s) the M8 may not handle well (listed in the statistics).", ConsoleColor.Yellow);
+                WriteColored("  " + nameWarnings.Count + " name(s) the " + CurrentDevice.Name + " may not handle well (listed in the statistics).", ConsoleColor.Yellow);
         }
 
         bool CheckSpace()
@@ -441,14 +441,14 @@ partial class M8Backup
             foreach (string path in scan.SkippedNamed)
                 report.WriteLine("    skipped: " + path.Substring(source.Length));
 
-            report.WriteLine("  Free space on M8:       {0}", DriveSpaceText(Path.GetPathRoot(source)));
+            report.WriteLine("  {0,-24}{1}", "Free space on " + CurrentDevice.Name + ":", DriveSpaceText(Path.GetPathRoot(source)));
             string destRoot = Path.GetPathRoot(dest);
             report.WriteLine("  Free space left on {0}  {1}", destRoot, FreeSpaceText(destRoot));
             report.WriteLine();
 
             if (nameWarnings.Count > 0)
             {
-                report.WriteLine("  Names the M8 may not handle well ({0}):", nameWarnings.Count);
+                report.WriteLine("  Names the {0} may not handle well ({1}):", CurrentDevice.Name, nameWarnings.Count);
                 foreach (string w in nameWarnings) report.WriteLine("    " + w);
                 report.WriteLine();
             }

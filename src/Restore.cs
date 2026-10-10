@@ -25,8 +25,7 @@ partial class M8Backup
             snapshot = CurrentBackup(backup);
         }
         OperationOutput.WriteLine("  Selected: " + snapshot.Name);
-        char mode = Ask("What should be restored?", new Option('a', "All files"), new Option('b', "Bundle"),
-            new Option('s', "Single file"), new Option('d', "Song with dependent samples"));
+        char mode = Ask("What should be restored?", RestoreModes(CurrentDevice));
         List<RestoreEntry> items;
         string bundle = null;
         if (mode == 'a') items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
@@ -71,6 +70,16 @@ partial class M8Backup
 
     // Throws if the backup copy is missing, has the wrong size, or (with verify) a different checksum
     // than when it was backed up.
+    // The restore choices a device supports: bundles and song-with-samples only where it has them.
+    static Option[] RestoreModes(DeviceProfile device)
+    {
+        var modes = new List<Option> { new Option('a', "All files") };
+        if (device.BundlesFolder != null) modes.Add(new Option('b', "Bundle"));
+        modes.Add(new Option('s', "Single file"));
+        if (device.ReadSamplePaths != null) modes.Add(new Option('d', "Song with dependent samples"));
+        return modes.ToArray();
+    }
+
     static void ValidateEntry(RestoreEntry item, bool verify = true)
     {
         if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
@@ -208,11 +217,12 @@ partial class M8Backup
         foreach (RestoreEntry file in snapshot.Files)
         {
             string[] parts = file.Relative.Split('\\');
-            if (parts.Length >= 3 && parts[0].Equals("Bundles", StringComparison.OrdinalIgnoreCase)) names.Add("Bundles\\" + parts[1]);
+            if (parts.Length >= 3 && parts[0].Equals(CurrentDevice.BundlesFolder, StringComparison.OrdinalIgnoreCase))
+                names.Add(CurrentDevice.BundlesFolder + "\\" + parts[1]);
         }
         var list = new List<string>(names);
         list.Sort(StringComparer.OrdinalIgnoreCase);
-        if (list.Count == 0) { OperationOutput.WriteLine("  No bundles found. Create a bundle on the M8 before backing up."); return null; }
+        if (list.Count == 0) { OperationOutput.WriteLine("  No bundles found. Create a bundle on the " + CurrentDevice.Name + " before backing up."); return null; }
         int pick = AskItem("Choose a bundle.", list);
         return pick == 0 ? null : list[pick - 1];
     }

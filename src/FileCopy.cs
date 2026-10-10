@@ -73,7 +73,7 @@ partial class M8Backup
                 sourceHash = CopyAndHash(file.FullName, target);
                 file.Refresh();
                 if (file.Length != originalSize || file.LastWriteTimeUtc != originalWrite)
-                    throw new IOException("the source changed while it was being copied; retry with the M8 idle");
+                    throw new IOException("the source changed while it was being copied; retry with the " + CurrentDevice.Name + " idle");
                 if (UsableFileTime(file.CreationTimeUtc)) File.SetCreationTimeUtc(target, file.CreationTimeUtc);
                 if (UsableFileTime(file.LastWriteTimeUtc)) File.SetLastWriteTimeUtc(target, file.LastWriteTimeUtc);
                 if (!verify || HashFileFromDisk(target) == sourceHash) return sourceHash;

@@ -74,22 +74,25 @@ partial class M8Backup
         return false;
     }
 
-    // The folder to back up or restore to: SourceFolder if set, otherwise the detected M8, otherwise a
-    // path typed by the user. pnpId is set only for a detected M8 (needed to eject it). Null if cancelled.
-    static string SelectSource(Config config, out string pnpId)
+    // The folder to back up or restore to: SourceFolder if set, otherwise a detected device, otherwise a
+    // path typed by the user. pnpId is set only for a detected device (needed to eject it), and device
+    // says which kind of device the source is. Null if cancelled.
+    static string SelectSource(Config config, out string pnpId, out DeviceProfile device)
     {
         pnpId = null;
+        DeviceProfile detected = null;
         string source = config.SourceFolder;
         if (source.Length == 0)
         {
-            try { source = FindM8Drive(out pnpId); }
+            try { source = FindDevice(out detected, out pnpId); }
             catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); source = null; }
             if (source == null)
             {
-                OperationOutput.WriteLine("  No M8 detected. Select an SD card in a reader or a folder instead.");
+                OperationOutput.WriteLine("  No " + Devices.Names + " detected. Select an SD card in a reader or a folder instead.");
                 source = ExpandPath(AskText("Source path (Enter = cancel):"));
             }
         }
+        device = DeviceFor(config, detected);
         if (string.IsNullOrEmpty(source)) return null;
         if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
         source = Rooted(source);

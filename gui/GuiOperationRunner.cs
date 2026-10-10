@@ -13,6 +13,7 @@ partial class M8Backup
         readonly MainForm form;
         CancellationTokenSource cancellation;
         string detectedSource, detectedPnp;
+        DeviceProfile detectedDevice;
         public GuiOperationRunner(MainForm owner) { form = owner; }
         public bool IsBusy { get { return cancellation != null; } }
         public bool CancellationRequested { get { return cancellation != null && cancellation.IsCancellationRequested; } }
@@ -38,23 +39,26 @@ partial class M8Backup
         {
             RunWorker(delegate(OperationContext context) {
                 string pnp;
-                string found = FindM8Drive(out pnp);
+                DeviceProfile device;
+                string found = FindDevice(out device, out pnp);
                 context.CheckCancellation();
-                if (found == null) throw new IOException("No M8 detected. Enable USB drive mode, or browse to a card or folder.");
-                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; return true; });
-                return new OperationResult { Summary = "M8 detected: " + found };
+                if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
+                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
+                return new OperationResult { Summary = device.Name + " detected: " + found };
             }, false);
         }
         public void Run(Config options, int choice, bool previewOnly)
         {
             string knownSource = detectedSource, knownPnp = detectedPnp;
+            DeviceProfile knownDevice = detectedDevice;
             RunWorker(delegate(OperationContext context) {
-                return Execute(options, choice, previewOnly, knownSource, knownPnp, context);
+                return Execute(options, choice, previewOnly, knownSource, knownPnp, knownDevice, context);
             }, previewOnly);
         }
 
         // choice is the operation list's index: 0 full backup, 1 incremental, 2 restore, 3 check.
-        OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp, OperationContext context)
+        OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp,
+            DeviceProfile knownDevice, OperationContext context)
         {
             string histories = HistoriesRoot(options);
             if (choice == 3)
@@ -67,17 +71,20 @@ partial class M8Backup
                 using (LockHistory(history)) return RunCheck(backups);
             }
             string selected = options.SourceFolder, pnp = null;
+            DeviceProfile detected = null;
             if (selected.Length == 0)
             {
-                selected = FindM8Drive(out pnp);
-                if (selected == null) throw new IOException("Choose a source folder, or connect the M8 in USB drive mode.");
+                selected = FindDevice(out detected, out pnp);
+                if (selected == null) throw new IOException("Choose a source folder, or connect the " + Devices.Names + " in USB drive mode.");
                 string found = selected;
-                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; return true; });
+                DeviceProfile foundDevice = detected;
+                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = foundDevice; return true; });
             }
             selected = Rooted(selected);
             if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);
             RejectRootLinks(selected);
-            if (knownSource == selected) pnp = knownPnp;
+            if (knownSource == selected) { pnp = knownPnp; if (detected == null) detected = knownDevice; }
+            context.Device = DeviceFor(options, detected);
             string root = HistoryFor(options, selected);
             OperationResult result;
             if (choice == 2)
@@ -94,8 +101,8 @@ partial class M8Backup
                 string changed = ConfirmSameDevice(selected, pnp);
                 if (changed != null) { OperationOutput.WriteLine(changed); return result; }
                 context.CheckCancellation();
-                bool eject = options.Eject == EjectMode.Yes || AskYesNo("Safely eject the M8 now?");
-                if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? "M8 safely ejected." : "Could not eject: " + error); }
+                bool eject = options.Eject == EjectMode.Yes || AskYesNo("Safely eject the " + context.Device.Name + " now?");
+                if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? context.Device.Name + " safely ejected." : "Could not eject: " + error); }
             }
             return result;
         }
