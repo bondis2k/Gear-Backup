@@ -21,6 +21,17 @@ partial class M8Backup
         assertions++;
         if (!condition) throw new Exception("ASSERTION FAILED: " + message);
     }
+    // Fixtures are kept after a failure (the exception skips this) or when M8_KEEP_TEST_FIXTURES=1.
+    static void RemoveFixtures(string root)
+    {
+        if (Environment.GetEnvironmentVariable("M8_KEEP_TEST_FIXTURES") == "1")
+        {
+            Console.WriteLine("Fixtures kept: " + root);
+            return;
+        }
+        try { Directory.Delete(root, true); }
+        catch (Exception ex) { Console.WriteLine("Could not remove fixtures " + root + ": " + ex.Message); }
+    }
     static void Throws(Action action, string message)
     {
         bool threw = false;
@@ -349,10 +360,21 @@ partial class M8Backup
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
         Assert(DriveSpaceText(@"\\server\share") == "unknown", "statistics free-space text tolerates network sources");
         Assert(DriveSpaceText(Path.GetPathRoot(root)).Contains(" of "), "statistics free-space text shows free and total size");
+        var original = new Config();
+        foreach (var field in typeof(Config).GetFields())
+        {
+            if (field.FieldType == typeof(bool)) field.SetValue(original, !(bool)field.GetValue(original));
+            else if (field.FieldType == typeof(int)) field.SetValue(original, 7);
+            else if (field.FieldType == typeof(string)) field.SetValue(original, "x");
+        }
+        Config cloned = original.Clone();
+        Assert(Array.TrueForAll(typeof(Config).GetFields(), f => Equals(f.GetValue(cloned), f.GetValue(original))),
+            "settings copy keeps every setting, including ones the GUI window doesn't show");
         TestEngineOperations(root);
         TestOptimizations(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
-        Console.WriteLine("PASS: " + assertions + " assertions. Fixtures: " + root);
+        Console.WriteLine("PASS: " + assertions + " assertions.");
+        RemoveFixtures(root);
     }
 
     sealed class TestInteraction : IOperationInteraction
@@ -403,6 +425,27 @@ partial class M8Backup
             File.WriteAllText(treeFile, "AAAZ");
             Assert(File.ReadAllText(objectFile) == "AAAZ", "HardLinks=yes shares one copy between backup file and history");
             File.WriteAllText(treeFile, "AAAA");
+
+            // A check reads hard-linked content once: the history object isn't hashed a second time.
+            var checkUi = new TestInteraction();
+            var verifiedLinks = new Dictionary<string, string>();
+            int linkOk = 0, linkDamaged = 0, linkMissing = 0, linkUnchecked = 0;
+            using (new OperationContext(checkUi, CancellationToken.None).Activate())
+            {
+                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
+                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
+            }
+            Assert(linkDamaged == 0 && linkMissing == 0 && linkOk == 2, "hard-linked backup checks OK");
+            Assert(!checkUi.Progress.Exists(p => p.Stage == "Hashing" && p.Path == objectFile), "check skips re-reading hard-linked history");
+            File.WriteAllText(treeFile, "AAAX");
+            linkOk = 0; verifiedLinks.Clear();
+            using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            {
+                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
+                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
+            }
+            Assert(linkDamaged == 2, "damage to hard-linked content is reported for the backup file and its history");
+            File.WriteAllText(treeFile, "AAAA");
         }
 
         // Full backup with Thorough=yes: no hashing before copying, and a same-size, same-time
@@ -434,6 +477,7 @@ partial class M8Backup
         mklink.WaitForExit();
         using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
             Throws(() => SafePath(linkRoot, "sub\\file.txt"), "junction created after an earlier operation is rejected");
+        Directory.Delete(Path.Combine(linkRoot, "sub"));  // removes only the junction
     }
 
     static void TestEngineOperations(string root)

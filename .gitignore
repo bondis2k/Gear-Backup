@@ -3,3 +3,4 @@
 .test-output.txt
 tests/.build/
 *.exe
+M8Backup.ini

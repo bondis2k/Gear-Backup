@@ -217,7 +217,7 @@ When an incremental backup has no new or changed files to copy, it skips the Pro
 
 ## Checking backups
 
-Run `M8Backup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder.
+Run `M8Backup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder. With `HardLinks=yes`, an object that is the same file on disk as a backup file already checked in that run isn't read a second time.
 
 Missing or damaged objects and malformed manifests are reported. Backups without a checksum list offer to create one from their current contents; that establishes a future baseline, not proof that those files were originally undamaged.
 
@@ -297,7 +297,7 @@ Run `build-gui.cmd --no-pause` to build `M8Backup.GUI.exe` from `src\*.cs`, `gui
 
 If `M8Backup.exe` is running and Windows locks it, use `build.cmd --no-pause M8Backup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
-Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. They create isolated fixtures under `.test-runs`, use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. They do not write to a connected M8 or test hardware ejection.
+Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `M8_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. They do not write to a connected M8 or test hardware ejection.
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 
@@ -307,7 +307,8 @@ Backup file traversal skips metadata folders before descending into them, so nor
 
 | File | Responsibility |
 |---|---|
-| `Program.cs` | Arguments, source/profile selection, menu, history locking. |
+| `Program.cs` | CLI arguments, source selection and menu. |
+| `Session.cs` | Workflow steps shared by the CLI and GUI: history per source, check target, history lock, resume question, same-device check before ejecting. |
 | `Config.cs` | INI defaults and parsing. |
 | `Workflow.cs` | Profiles, previews, status, atomic metadata writes. |
 | `PathValidation.cs` | Path normalization, containment, link rejection, and safe relative paths. |

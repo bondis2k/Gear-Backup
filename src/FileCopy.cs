@@ -97,6 +97,33 @@ partial class M8Backup
         catch (Exception) { return false; }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    struct FileInformation
+    {
+        public uint Attributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME Created, Accessed, Written;
+        public uint VolumeSerial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, out FileInformation info);
+
+    // Identifies the file on disk behind a hard-linked name ("volume:index"), so a check can skip
+    // reading the same content twice. Null for a file with only one name, or if it can't be read.
+    static string SharedFileId(string path)
+    {
+        try
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                FileInformation info;
+                if (!GetFileInformationByHandle(stream.SafeFileHandle, out info) || info.Links < 2) return null;
+                return info.VolumeSerial + ":" + (((ulong)info.IndexHigh << 32) | info.IndexLow);
+            }
+        }
+        catch (Exception) { return null; }
+    }
+
     // NTFS supports hard links; the history store then needs no extra space for file content.
     static bool SupportsHardLinks(string path)
     {
