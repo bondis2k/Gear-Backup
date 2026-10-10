@@ -19,7 +19,8 @@ partial class GearBackup
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); Controls.Add(layout);
             layout.Controls.Add(Explanation("Preferences are shared with the command-line program."), 0, 0);
             var tabs = new TabControl { Dock = DockStyle.Fill, AccessibleName = "Preference categories" };
-            layout.Controls.Add(tabs, 0, 1);
+            var tabsCard = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(8), Margin = Padding.Empty };
+            layout.Controls.Add(tabsCard, 0, 1);
             var backup = PreferencePage(tabs, "Backup");
             var restore = PreferencePage(tabs, "Restore");
             var device = PreferencePage(tabs, "Device");
@@ -58,10 +59,11 @@ partial class GearBackup
             var eject = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, AccessibleName = "Device ejection preference" };
             eject.Items.AddRange(new object[] { "Leave the device connected", "Ask before ejecting the device", "Eject the device after completion" });
             eject.SelectedIndex = (int)config.Eject; device.Controls.Add(eject);
-            var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 14, 0, 0) };
+            tabsCard.Controls.Add(GuiTheme.Tabbed(tabs));
+            var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(0, 14, 0, 0), FlowDirection = FlowDirection.RightToLeft };
             var save = GuiTheme.Button("Save settings", true); save.Name = "SaveSettings";
             var cancel = GuiTheme.Button("Cancel", false); cancel.DialogResult = DialogResult.Cancel;
-            actions.Controls.Add(save); actions.Controls.Add(cancel); layout.Controls.Add(actions, 0, 2); AcceptButton = save; CancelButton = cancel;
+            save.Margin = Padding.Empty; actions.Controls.Add(save); actions.Controls.Add(cancel); layout.Controls.Add(actions, 0, 2); AcceptButton = save; CancelButton = cancel;
             save.Click += delegate {
                 try
                 {

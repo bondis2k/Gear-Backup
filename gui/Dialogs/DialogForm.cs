@@ -18,10 +18,11 @@ partial class GearBackup
             layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), RowCount = 3, ColumnCount = 1 };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var title = GuiTheme.Label(heading.Trim().TrimEnd(',', ':'), 12, GuiTheme.Ink); title.AutoSize = false; title.Dock = DockStyle.Fill;
+            title.Font = GuiTheme.Heading(12.5f);
             layout.Controls.Add(title, 0, 0);
             buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 10, 0, 0) };
             var dismiss = GuiTheme.Button("Cancel", false); dismiss.DialogResult = DialogResult.Cancel; CancelButton = dismiss;
-            buttons.Controls.Add(Accept); buttons.Controls.Add(dismiss); layout.Controls.Add(buttons, 0, 2);
+            Accept.Margin = Padding.Empty; buttons.Controls.Add(Accept); buttons.Controls.Add(dismiss); layout.Controls.Add(buttons, 0, 2);
             Accept.DialogResult = DialogResult.OK; AcceptButton = Accept; Controls.Add(layout);
             Shown += delegate { GuiTheme.FitToScreen(this); };
         }

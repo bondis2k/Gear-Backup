@@ -169,6 +169,48 @@ partial class GearBackup
         ValidateProfile(longName);
     }
 
+    // The Dashboard/Storage scan's shortcuts give the same answers as the slow ways.
+    static void TestCatalogShortcuts(string root)
+    {
+        Config config;
+        BackupCatalog withRecord = ManagementFixture(root, out config);
+        CatalogBackup old = withRecord.Backups.Find(b => !b.Latest);
+        WithUi(() => {
+            // Manifest names read without disk checks match the full reader's.
+            foreach (string manifest in Directory.GetFiles(SnapshotRoot(old.Path), "*.manifest"))
+            {
+                var full = ReadSnapshot(old.Path, manifest).Files.ConvertAll(f => f.Relative);
+                Assert(string.Join("|", SnapshotFileNames(manifest).ToArray()) == string.Join("|", full.ToArray()), "manifest names match the full reader");
+            }
+            string bad = Path.Combine(root, "bad.manifest");
+            Put(bad, AppIdentity.SnapshotHeader + "\nF\tonly-two");
+            Throws(() => SnapshotFileNames(bad), "a damaged manifest is still refused");
+
+            // Without the old-version record (older backups), snapshots identify the same old versions.
+            HashSet<string> recorded = KnownOldVersions(old.Path);
+            File.Delete(Path.Combine(AppIdentity.MetadataRoot(old.Path), "old-versions.txt"));
+            HashSet<string> fromSnapshots = KnownOldVersions(old.Path);
+            Assert(recorded.Count == 1 && fromSnapshots.SetEquals(recorded), "old versions are found from snapshots without the record");
+        });
+        CatalogBackup rescanned = ScanBackupCatalog(config, Path.Combine(root, "mirrors")).Backups.Find(b => !b.Latest);
+        Assert(rescanned.VersionsBytes == old.VersionsBytes && rescanned.FilesBytes == old.FilesBytes, "the scan reports the same sizes without the record");
+
+        // Hard links share one identity; separate files don't, even with the same content.
+        string folder = Folder(root, "identities");
+        string first = Path.Combine(folder, "a.wav"), linked = Path.Combine(folder, "b.wav"), copy = Path.Combine(folder, "c.wav");
+        Put(first, "SAME");
+        Put(copy, "SAME");
+        if (SupportsHardLinks(folder) && TryHardLink(first, linked))
+        {
+            var files = new List<FileInfo> { new FileInfo(first), new FileInfo(linked), new FileInfo(copy) };
+            Dictionary<string, string> ids = null;
+            WithUi(() => ids = FileIdentities(folder, files));
+            Assert(ids[first] == ids[linked] && ids[first] != ids[copy], "hard links share an identity; copies don't");
+            Assert(ids[first] == SharedFileId(first), "a folder's file IDs match the ones read file by file");
+            Assert(FolderFileIds(Path.Combine(folder, "missing")) == null, "a folder that can't be listed falls back");
+        }
+    }
+
     static void TestRecipeReading(string root)
     {
         Dictionary<string, byte[]> files;

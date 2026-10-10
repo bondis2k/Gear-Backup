@@ -36,17 +36,40 @@ partial class GearBackup
         // Without that evidence, individual versions are left out of cleanup.
         string snapshots = SnapshotRoot(backup);
         if (!Directory.Exists(snapshots)) return result;
-        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string[] manifests = Directory.GetFiles(snapshots, "*.manifest");
         if (manifests.Length == 0) return result;
-        foreach (string manifest in manifests)
-            foreach (RestoreEntry entry in ReadSnapshot(backup, manifest).Files) sourceNames.Add(entry.Relative);
+        // Only dated names can be old versions; most backups have none, and then the manifests, which
+        // can list many thousands of files, needn't be read at all.
+        var dated = new List<string>();
         foreach (string file in BackupFiles(backup))
         {
             string name = file.Substring(Rooted(backup).Length);
-            if (IsOldVersion(name) && !sourceNames.Contains(name)) result.Add(name);
+            if (IsOldVersion(name)) dated.Add(name);
         }
+        if (dated.Count == 0) return result;
+        var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string manifest in manifests) sourceNames.UnionWith(SnapshotFileNames(manifest));
+        foreach (string name in dated)
+            if (!sourceNames.Contains(name)) result.Add(name);
         return result;
+    }
+
+    // The file names a manifest lists, for comparing names only. Unlike ReadSnapshot it doesn't check each
+    // path on disk (nothing is read or written through these names), which makes it many times faster;
+    // the format is still checked, so a damaged manifest is reported rather than half-read.
+    static List<string> SnapshotFileNames(string manifest)
+    {
+        string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
+        if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
+            throw new IOException("Unsupported snapshot format.");
+        var names = new List<string>();
+        for (int i = 1; i < rows.Length; i++)
+        {
+            string[] parts = rows[i].Split('\t');
+            if (parts[0] == "F" && parts.Length == 6) names.Add(Decode(parts[1]).Replace('/', '\\'));
+            else if (parts[0] != "D" || parts.Length != 2) throw new IOException("Invalid snapshot row.");
+        }
+        return names;
     }
 
     // Updates the record after a backup: adds the versions it kept, and drops names that are on the source

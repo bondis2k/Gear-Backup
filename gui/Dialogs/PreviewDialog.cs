@@ -30,14 +30,14 @@ partial class GearBackup
             tools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65)); tools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
             tools.Controls.Add(GuiTheme.Label("Search paths (Ctrl+F)", 9, GuiTheme.Muted), 0, 0);
             tools.Controls.Add(GuiTheme.Label("Show", 9, GuiTheme.Muted), 1, 0);
-            tools.Controls.Add(search, 0, 1); tools.Controls.Add(filter, 1, 1);
+            tools.Controls.Add(new FieldPanel(search) { Dock = DockStyle.Fill }, 0, 1); tools.Controls.Add(filter, 1, 1);
             filter.Items.AddRange(new object[] { "All changes", "Additions", "Replacements", "Removals", "Unchanged" });
             grid.Columns.Add("Action", "Action"); grid.Columns.Add("Path", "Path"); grid.Columns.Add("Size", "Size");
             grid.Columns[0].FillWeight = 28; grid.Columns[1].FillWeight = 62; grid.Columns[2].FillWeight = 10;
             grid.Columns[2].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-            grid.Font = new Font("Segoe UI", 9);
+            GuiTheme.StyleGrid(grid);
             grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            grid.AlternatingRowsDefaultCellStyle.BackColor = GuiTheme.Background;
+            GuiTheme.StyleComboBox(filter);
             grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
             content.Controls.Add(tools, 0, 0); content.Controls.Add(grid, 0, 1); content.Controls.Add(count, 0, 2);
             layout.Controls.Add(content, 0, 1);

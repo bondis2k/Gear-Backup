@@ -29,12 +29,14 @@ partial class GearBackup
             config = options;
             saved = ReadProfileSettings(config);
 
-            var content = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+            var content = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, BackColor = GuiTheme.Surface };
+            GuiTheme.StyleComboBox(scope);
+            scope.Margin = new Padding(0, 0, 0, 10);
             content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             content.Controls.Add(scope, 0, 0);
             content.Controls.Add(grid, 0, 1);
-            ToolLayout.Controls.Add(content, 0, 1);
+            SetContent(content);
 
             grid.ReadOnly = false;
             grid.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Override", HeaderText = "Override", FillWeight = 25 });
@@ -50,7 +52,7 @@ partial class GearBackup
             scope.SelectedIndexChanged += delegate { if (scope.SelectedIndex >= 0) LoadScope(); };
             scope.Validated += delegate { try { LoadScope(); } catch (Exception ex) { ShowToolError(ex); } };
 
-            ToolButton("Save overrides", "SaveProfilePreferences", SaveScope);
+            ToolButton("Save overrides", "SaveProfilePreferences", SaveScope, true);
             ToolButton("Browse location", "BrowseProfileLocation", BrowseLocation);
             ToolButton("Use inherited settings", "ResetProfilePreferences", delegate {
                 string name = ScopeKey();

@@ -45,20 +45,31 @@ partial class GearBackup
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var heading = GuiTheme.Label(description, 11, GuiTheme.Ink);
+            var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
+            var titleLabel = new Label { Text = title, AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(17), Margin = new Padding(0, 0, 0, 4) };
+            var heading = GuiTheme.Label(description, 10, GuiTheme.Muted);
             heading.MaximumSize = new Size(940, 0);
-            ToolLayout.Controls.Add(heading, 0, 0);
+            top.Controls.Add(titleLabel);
+            top.Controls.Add(heading);
+            ToolLayout.Controls.Add(top, 0, 0);
             Notice = GuiTheme.Label("", 9, GuiTheme.Muted);
             Notice.MaximumSize = new Size(940, 130);
+            Notice.Margin = new Padding(0, 10, 0, 0);
             Notice.Name = "ToolNotice";
             ToolLayout.Controls.Add(Notice, 0, 2);
-            Actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Padding = new Padding(0, 12, 0, 0) };
+            // The bottom bar: the window's actions on the left, Close on the right.
+            var bar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 14, 0, 0), Margin = Padding.Empty };
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
             var close = GuiTheme.Button("Close", false);
+            close.Margin = Padding.Empty;
             close.Click += delegate { Close(); };
             close.DialogResult = DialogResult.Cancel;
-            Actions.Controls.Add(close);
             CancelButton = close;
-            ToolLayout.Controls.Add(Actions, 0, 3);
+            bar.Controls.Add(Actions, 0, 0);
+            bar.Controls.Add(close, 1, 0);
+            ToolLayout.Controls.Add(bar, 0, 3);
             Controls.Add(ToolLayout);
 
             Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -82,10 +93,20 @@ partial class GearBackup
 
         protected bool Working { get { return cancellation != null; } }
 
-        // Adds an action button. It does nothing while work runs, and shows any error it throws.
-        protected Button ToolButton(string text, string name, Action action)
+        // Puts the window's main content (a table, or tabs) on a card in the middle row.
+        protected void SetContent(Control content)
         {
-            var button = GuiTheme.Button(text, false);
+            var card = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(10), Margin = Padding.Empty };
+            content.Dock = DockStyle.Fill;
+            card.Controls.Add(content);
+            ToolLayout.Controls.Add(card, 0, 1);
+        }
+
+        // Adds an action button (primary: the window's main action). It does nothing while work runs, and
+        // shows any error it throws.
+        protected Button ToolButton(string text, string name, Action action, bool primary = false)
+        {
+            var button = GuiTheme.Button(text, primary);
             button.Name = name;
             button.Click += delegate {
                 if (Working) return;
@@ -143,13 +164,13 @@ partial class GearBackup
         // A read-only, full-row-select table in the app's style.
         internal static DataGridView ToolGrid(string name)
         {
-            return new DataGridView { Name = name, AccessibleName = name, Dock = DockStyle.Fill, BackgroundColor = Color.White,
-                BorderStyle = BorderStyle.None, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false,
+            var grid = new DataGridView { Name = name, AccessibleName = name, Dock = DockStyle.Fill,
+                AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false,
                 RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 ReadOnly = true, MultiSelect = false, AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
-                DefaultCellStyle = new DataGridViewCellStyle { Padding = new Padding(5), ForeColor = GuiTheme.Ink,
-                    SelectionBackColor = GuiTheme.Accent, SelectionForeColor = Color.White } };
+                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize };
+            GuiTheme.StyleGrid(grid);
+            return grid;
         }
     }
 }
