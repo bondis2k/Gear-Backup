@@ -440,15 +440,23 @@ partial class GearBackup
 
         // KeepOldVersions groups old versions per file and offers the oldest ones.
         string backup = Path.Combine(dir, "versions");
+        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string name in new[] { "Jam_2026-01-01_120000", "Jam_2026-02-01_120000", "Jam_2026-03-01_120000", "Solo_2026-01-01_120000", "Jam" })
+        {
             Put(Path.Combine(backup, "Songs", name + ".m8s"), name);
+            if (name != "Jam") known.Add(@"Songs\" + name + ".m8s");
+        }
+        // The user's own dated files, which the program never recorded as kept versions.
+        Put(Path.Combine(backup, "Songs", "Take_2025-01-01_120000.m8s"), "own");
+        Put(Path.Combine(backup, "Songs", "Take_2025-02-01_120000.m8s"), "own");
         int moved = 0;
-        ui = WithUi(() => { moved = PruneOldVersions(backup, 1, new HashSet<string>(StringComparer.OrdinalIgnoreCase)); }, 'n');
+        ui = WithUi(() => { moved = PruneOldVersions(backup, 1, new HashSet<string>(StringComparer.OrdinalIgnoreCase), known); }, 'n');
         string listed = ui.Output.ToString();
         Assert(moved == 0 && listed.Contains("Jam_2026-01-01_120000") && listed.Contains("Jam_2026-02-01_120000") &&
             !listed.Contains("Jam_2026-03-01_120000") && !listed.Contains("Solo_"), "KeepOldVersions offers each file's oldest extra versions");
+        Assert(!listed.Contains("Take_"), "dated files the program didn't keep are never offered");
         ui = WithUi(() => PruneOldVersions(backup, 1, new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-            @"Songs\Jam_2026-01-01_120000.m8s", @"Songs\Jam_2026-02-01_120000.m8s" }), 'n');
+            @"Songs\Jam_2026-01-01_120000.m8s", @"Songs\Jam_2026-02-01_120000.m8s" }, known), 'n');
         Assert(ui.Questions.Count == 0, "dated files that are also on the card aren't treated as old versions");
         Assert(VersionedName(Path.Combine(backup, "Songs", "Jam.m8s"), new DateTime(2026, 1, 1, 12, 0, 0)).EndsWith("Jam_2026-01-01_120000_2.m8s"),
             "a taken old-version name gets _2");

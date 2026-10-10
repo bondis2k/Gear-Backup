@@ -472,4 +472,14 @@ partial class GearBackup
         Assert(refused && asked == 1 && opened == 2, "a camera switched to settings mode after detection is refused before its photos are read");
         Assert(Directory.Exists(camera.Mirror), "the mirror is left alone");
     }
+
+    // Values a faulty MTP device could report.
+    static void TestMtpDeviceValues()
+    {
+        Assert(OleDate(45000.5) == DateTime.FromOADate(45000.5), "a valid device date is read");
+        Assert(OleDate(double.NaN) == DateTime.MinValue && OleDate(1e300) == DateTime.MinValue && OleDate(-1e300) == DateTime.MinValue,
+            "an invalid device date counts as no date instead of failing the listing");
+        Assert(MtpDevice.DownloadBufferSize(0) == 256 * 1024 && MtpDevice.DownloadBufferSize(1024 * 1024) == 1024 * 1024 &&
+            MtpDevice.DownloadBufferSize(uint.MaxValue) == 4 * 1024 * 1024, "the device's buffer size is kept between 256 KB and 4 MB");
+    }
 }

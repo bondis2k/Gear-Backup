@@ -21,6 +21,7 @@ partial class GearBackup
     {
         string file = Path.Combine(folder, ChecksumFileName);
         if (!File.Exists(file)) return null;
+        CheckRecordSize(file, ListRecordLimit, "Checksum list");
         var sums = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string line in File.ReadAllLines(file, Encoding.UTF8))
         {
