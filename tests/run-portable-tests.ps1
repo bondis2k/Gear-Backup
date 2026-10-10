@@ -44,6 +44,7 @@ function Extract([string]$logName) {
     Assert (@(Get-ChildItem -LiteralPath $applicationPath -Filter 'unins*').Count -eq 0) 'Portable extraction created an uninstaller.'
 }
 Extract 'extract.log'
+Assert (-not (Test-Path -LiteralPath (Join-Path $applicationPath 'GearBackup.installed'))) 'Portable extraction has an installed settings marker.'
 $packageVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($PortablePath).ProductVersion.Trim()
 foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe', 'Manual.html', 'Manual-original.html', 'Manual-original-dark.html', 'Manual-retro.html', 'MANUAL.md', 'README.md')) {
     Assert (Test-Path -LiteralPath (Join-Path $applicationPath $file)) "Missing portable file: $file"

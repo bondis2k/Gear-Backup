@@ -55,7 +55,6 @@ partial class GearBackup
             Text = AppIdentity.Name;
             // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
             // assets\Backup.ico); only the header picture changes when a device is detected.
-            try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10);
             ForeColor = GuiTheme.Ink;
             BackColor = GuiTheme.Desktop;

@@ -193,6 +193,7 @@ partial class GearBackup
         TestPreviewFiltering();
         TestSettingsInteraction(root);
         TestGuiThemes(root);
+        TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
@@ -274,12 +275,15 @@ partial class GearBackup
             using (var table = new PreviewDialog(new OperationPlan { Label = "Theme test", Actions = new List<string> { "New: song.txt" }, Bytes = 4 }))
             {
                 form.Show(); table.Show(form); Application.DoEvents();
+                Assert(form.Icon != null && object.ReferenceEquals(form.Icon, table.Icon),
+                    "Review changes uses the shared Gear Backup window icon");
                 form.ShowDevice(Devices.OPXY, "MTP");
                 Assert(form.BackColor == Color.FromArgb(0, 128, 128), "retro theme is the default desktop palette");
                 var source = (TextBox)form.Controls.Find("SourceFolder", true)[0]; string previousSource = source.Text;
                 var grid = FindGuiControl<DataGridView>(table);
                 SetGuiTheme(form, 0, true);
                 Assert(GuiTheme.ThemeName == "original" && form.BackColor == Color.FromArgb(243, 245, 247), "saving Original recolors the main window immediately");
+                CheckNativeTitleBar(form, false);
                 Assert(grid.BackgroundColor == Color.White && grid.DefaultCellStyle.BackColor == Color.White,
                     "open dialog tables change along with the main window: " + grid.BackgroundColor + " / " + grid.DefaultCellStyle.BackColor);
                 Assert(grid.AlternatingRowsDefaultCellStyle.BackColor == GuiTheme.Surface &&
@@ -299,18 +303,34 @@ partial class GearBackup
                 SetGuiTheme(form, 2, true);
                 Assert(GuiTheme.ThemeName == "original-dark" && form.BackColor == Color.FromArgb(19, 25, 30),
                     "saving Original dark applies the charcoal palette immediately");
+                CheckNativeTitleBar(form, true);
+                CheckNativeTitleBar(table, true);
+                using (var about = new AboutDialog())
+                {
+                    about.Show(form); Application.DoEvents();
+                    CheckNativeTitleBar(about, true);
+                    Assert(object.ReferenceEquals(form.Icon, about.Icon), "new About window uses the app icon");
+                }
                 Assert(grid.DefaultCellStyle.BackColor == GuiTheme.Surface && grid.DefaultCellStyle.ForeColor == GuiTheme.Ink &&
                     ((ComboBox)table.Controls.Find("PreviewFilter", true)[0]).BackColor == GuiTheme.Surface,
                     "open dialog tables and native inputs use dark surfaces and readable text");
                 WithUi(() => loaded = LoadConfig(settingsPath));
                 Assert(loaded.Theme == "original-dark", "dark theme persists in the INI");
                 using (var restarted = new MainForm(false, loaded))
+                {
+                    restarted.Show();
                     Assert(restarted.BackColor == Color.FromArgb(19, 25, 30), "startup restores the dark palette");
+                    CheckNativeTitleBar(restarted, true);
+                    typeof(Control).GetMethod("RecreateHandle", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(restarted, null);
+                    CheckNativeTitleBar(restarted, true);
+                }
                 string themedManual = Path.Combine(settingsPath, "Manual-original-dark.html");
                 File.WriteAllText(themedManual, "test");
                 Assert(MainForm.ManualPath(settingsPath, "original-dark") == themedManual, "Help selects the matching dark manual");
                 Assert(MainForm.ManualPath(settingsPath, "original") == Path.Combine(settingsPath, "Manual.html"), "Help falls back when a themed manual is absent");
                 SetGuiTheme(form, 1, true);
+                CheckNativeTitleBar(form, false);
+                CheckNativeTitleBar(table, false);
                 Assert(form.BackColor == Color.FromArgb(0, 128, 128) && grid.BackgroundColor == Color.FromArgb(255, 255, 240),
                     "switching back to Retro restores the desktop and paper colors");
                 Assert(((Label)form.Controls.Find("DetectedDevice", true)[0]).ForeColor == GuiTheme.AccentDark,
@@ -319,6 +339,67 @@ partial class GearBackup
         }
         finally { GuiTheme.ApplyTheme("retro"); }
     }
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
+
+    static void CheckNativeTitleBar(Form form, bool dark)
+    {
+        int value;
+        if (DwmGetWindowAttribute(form.Handle, 20, out value, sizeof(int)) == 0)
+            Assert(value == (dark ? 1 : 0), "native title bar follows theme for " + form.GetType().Name);
+        if (DwmGetWindowAttribute(form.Handle, 35, out value, sizeof(int)) == 0)
+            Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? GuiTheme.Accent : GuiTheme.Background),
+                "native caption exactly matches the selected palette");
+        if (DwmGetWindowAttribute(form.Handle, 36, out value, sizeof(int)) == 0)
+            Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink),
+                "native caption text matches the selected palette");
+    }
+
+    static void TestAllWindowThemes(string root)
+    {
+        Config config; BackupCatalog catalog = ManagementFixture(root, out config);
+        try
+        {
+            foreach (string initial in new[] { "original", "original-dark", "retro" })
+            using (var owner = new MainForm(true, new Config { Theme = initial }))
+            using (var profiles = new ProfileSettingsDialog(owner, config))
+            {
+                owner.Show();
+                var windows = new List<Form> {
+                    new AboutDialog(), new SettingsDialog(config),
+                    new PreviewDialog(new OperationPlan { Label = "Review changes", Actions = new List<string> { "New: song.txt" } }),
+                    new SelectionDialog("Choose backup", new List<string> { "Backup" }),
+                    new ChoiceDialog("Continue?", new List<Option>()), new SearchDialog("Search", "Enter a name"),
+                    new CatalogDialog(owner, config, false, catalog), new CatalogDialog(owner, config, true, catalog),
+                    new RecipeViewerDialog(owner, null), profiles.CreateProfilePrompt()
+                };
+                try
+                {
+                    foreach (Form window in windows)
+                    {
+                        CheckNativeTitleBar(window, initial == "original-dark");
+                        Assert(object.ReferenceEquals(owner.Icon, window.Icon), "window has app icon before opening: " + window.Text);
+                        window.Show(owner);
+                    }
+                    profiles.Show(owner);
+                    foreach (string theme in new[] { "original-dark", "retro", "original" })
+                    {
+                        GuiTheme.ApplyTheme(theme);
+                        CheckNativeTitleBar(owner, theme == "original-dark");
+                        CheckNativeTitleBar(profiles, theme == "original-dark");
+                        foreach (Form window in windows) CheckNativeTitleBar(window, theme == "original-dark");
+                        var preferences = (SettingsDialog)windows[1];
+                        foreach (string name in new[] { "VerifyCopies", "CompareContents", "ReviewChanges", "PointInTimeHistory", "RecoveryCopies" })
+                            Assert(preferences.Controls.Find(name, true)[0].ForeColor == GuiTheme.Ink,
+                                "settings checkbox label follows the palette: " + theme + " / " + name);
+                    }
+                }
+                finally { foreach (Form window in windows) window.Dispose(); }
+            }
+        }
+        finally { GuiTheme.ApplyTheme("retro"); }
+    }
+
     static void SetGuiTheme(MainForm form, int selected, bool save)
     {
         Exception failure = null;

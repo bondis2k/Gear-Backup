@@ -107,7 +107,7 @@ Automatic profiles separate histories by source: card volume identity, folder pa
 
 Restore and check history selection covers all configured backup locations, with location labels distinguishing profiles that share a name.
 
-Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
+Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Installed copies use `%APPDATA%\GearBackup`; portable copies and local builds keep settings beside the executables. Existing installed INI files migrate on first normal launch without overwriting destination settings or deleting originals; previews remain read-only. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
 
 The profile editor separates device settings from backup profiles, groups options into Backup, Restore and Advanced tabs, and shows each setting's default. Uncheck **Use default** to customize a value; **New profile**, **Save changes** and **Reset to defaults** provide explicit actions.
 
@@ -146,10 +146,12 @@ The main window focuses on **Detect device**, the operation choice and **Back up
 
 Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
 
-**Settings → Appearance** offers **Original** (light gray and teal), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream; default). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual.
+**Settings → Appearance** offers **Original** (light gray and teal), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream; default). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual. Windows 11 title bars, title text and borders match the selected palette. Supported earlier Windows versions use standard dark title bars for Original (dark). App dialogs share the Gear Backup icon.
 
 ## Distribution
 
 Per-user setup and portable extraction packages include both apps and the offline manual. Updates preserve personal INI settings. Portable extraction creates no shortcuts or uninstall entry; backup paths remain configurable and MTP mirrors still use the PC's Local AppData folder.
+
+Setup offers an **Add CLI to PATH** checkbox, unchecked by default, for running `GearBackup.exe` from any folder in a new terminal. It updates the current user's PATH, avoids duplicate entries and remembers the choice on upgrades. Deselection or uninstall removes installer-added entries while preserving pre-existing entries. Portable extraction leaves PATH unchanged.
 
 Existing settings and histories from the previous application name remain supported. Build and automated-test instructions are in the [manual](MANUAL.md#building-and-testing).

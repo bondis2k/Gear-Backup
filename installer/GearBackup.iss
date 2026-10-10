@@ -32,6 +32,7 @@ OutputBaseFilename=GearBackup-Setup-{#AppVersion}
 UninstallDisplayIcon={app}\GearBackup.GUI.exe
 UsePreviousAppDir=yes
 UsePreviousTasks=yes
+ChangesEnvironment=yes
 #endif
 AppVersion={#AppVersion}
 VersionInfoVersion={#AppVersion}
@@ -62,6 +63,7 @@ WelcomeLabel2=This wizard extracts Gear Backup into a folder you choose.%n%nNo s
 #else
 [Tasks]
 Name: desktopicon; Description: "Create a desktop shortcut"; Flags: unchecked
+Name: clipath; Description: "Add CLI to PATH"; Flags: unchecked
 #endif
 
 [Files]
@@ -73,6 +75,14 @@ Source: "{#PayloadDir}\MANUAL.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\assets\manual\*.png"; DestDir: "{app}\assets\manual"; Flags: ignoreversion
 ; GearBackup.ini is created by the app. Never package personal settings or delete them.
+
+#ifdef PortableBuild
+[InstallDelete]
+Type: files; Name: "{app}\GearBackup.installed"
+#else
+[UninstallDelete]
+Type: files; Name: "{app}\GearBackup.installed"
+#endif
 
 #ifndef PortableBuild
 [Icons]
@@ -87,6 +97,25 @@ Name: "{autodesktop}\Gear Backup"; Filename: "{app}\GearBackup.GUI.exe"; Working
 Filename: "{app}\GearBackup.GUI.exe"; Description: "Open Gear Backup"; Flags: nowait postinstall skipifsilent
 
 [Code]
+#ifndef PortableBuild
+#include "cli-path.iss"
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if not SaveStringToFile(ExpandConstant('{app}\GearBackup.installed'), 'Installed application: settings in APPDATA\GearBackup', False) then
+      RaiseException('Could not initialize the installed settings location.');
+    UpdateCliPath(ExpandConstant('{app}'), WizardIsTaskSelected('clipath'));
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then RemoveOwnedCliPath;
+end;
+#endif
+
 function InitializeSetup: Boolean;
 begin
   Result := IsDotNetInstalled(net46, 0);

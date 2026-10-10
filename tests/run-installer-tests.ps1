@@ -44,6 +44,7 @@ try {
         Assert (([version]$metadata.FileVersion) -eq ([version]$setupVersion)) "File version differs from Setup: $file"
     }
     Assert (-not (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.ini'))) 'The installer shipped an INI file.'
+    Assert (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.installed')) 'Installed settings marker is missing.'
     Assert (Test-Path $registration) 'The per-user uninstall registration is missing.'
     Assert (((Get-ItemProperty $registration).InstallLocation).TrimEnd('\') -eq $installPath) 'Incorrect registered install location.'
     $shell = New-Object -ComObject WScript.Shell
@@ -87,6 +88,7 @@ try {
 Assert (-not (Test-Path $registration)) 'Uninstall registration was left behind.'
 Assert (-not (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.GUI.exe'))) 'Uninstall left the GUI executable.'
 Assert (-not (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.exe'))) 'Uninstall left the CLI executable.'
+Assert (-not (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.installed'))) 'Uninstall left the settings marker.'
 Assert ((Get-FileHash -LiteralPath $configPath).Hash -eq $configHash) 'Uninstall removed or changed the INI.'
 Assert (-not (Test-Path -LiteralPath $groupPath)) 'Uninstall left the test shortcuts.'
 Write-Output "PASS: $assertions installer assertions (install, shortcuts, offline manual, CLI/GUI, upgrade, uninstall)."

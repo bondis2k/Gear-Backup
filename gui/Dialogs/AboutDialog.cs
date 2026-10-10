@@ -28,6 +28,7 @@ partial class GearBackup
             layout.Controls.Add(close);
             AcceptButton = close; CancelButton = close;
             Controls.Add(layout);
+            GuiTheme.ApplyTo(this);
         }
     }
 }

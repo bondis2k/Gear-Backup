@@ -34,6 +34,7 @@ partial class GearBackup
             MinimumSize = new Size(680, 440);
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false;
+            GuiTheme.StyleWindow(this);
             AutoScaleDimensions = new SizeF(96, 96);
             AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;

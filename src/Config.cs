@@ -1,4 +1,4 @@
-// Settings from GearBackup.ini next to the exe. Every setting is described once, in the Settings table:
+// Settings from GearBackup.ini in the installed or portable settings folder. Every setting is described once, in the Settings table:
 // loading, saving, the explanations written into the file, device/profile overrides and the Profiles
 // window all work from it.
 using System;
@@ -32,6 +32,7 @@ partial class GearBackup
 
         public Config Clone() { return (Config)MemberwiseClone(); }
         internal string SettingsDirectory { get; set; }
+        internal string PreviousSettingsDirectory { get; set; }
     }
 
     // One setting: its INI key, the explanation written into GearBackup.ini when it's missing, and how its
@@ -189,22 +190,23 @@ partial class GearBackup
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
     }
 
-    // Reads GearBackup.ini next to the exe. Settings missing from it are appended with their default and
+    // Reads GearBackup.ini from the selected settings folder. Missing settings are appended with their default and
     // explanation, so the file always documents every option. A --preview run doesn't write the file.
     static Config LoadConfig()
     {
-        return LoadConfig(AppDomain.CurrentDomain.BaseDirectory);
+        return LoadApplicationConfig(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     }
 
-    static Config LoadConfig(string directory)
+    static Config LoadConfig(string directory, string previousDirectory = null)
     {
-        var config = new Config { SettingsDirectory = directory };
+        var config = new Config { SettingsDirectory = directory, PreviousSettingsDirectory = previousDirectory };
         string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
-        string legacyFile = Path.Combine(directory, AppIdentity.Legacy.ConfigFileName);
+        string legacyFile = SettingsReadPath(config, AppIdentity.Legacy.ConfigFileName);
         try
         {
-            bool migrate = !File.Exists(configFile) && File.Exists(legacyFile);
-            string readFile = migrate ? legacyFile : configFile;
+            string currentFile = SettingsReadPath(config, AppIdentity.ConfigFileName);
+            bool migrate = !File.Exists(currentFile) && File.Exists(legacyFile);
+            string readFile = migrate ? legacyFile : currentFile;
             bool exists = File.Exists(readFile);
             var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (exists)
@@ -260,7 +262,7 @@ partial class GearBackup
     // Preserve comments and unrelated keys when the GUI saves shared preferences.
     static void SaveConfig(Config config)
     {
-        string path = Path.Combine(config.SettingsDirectory ?? AppDomain.CurrentDomain.BaseDirectory, AppIdentity.ConfigFileName);
+        string path = Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), AppIdentity.ConfigFileName);
         SaveConfig(config, path);
     }
 

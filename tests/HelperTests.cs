@@ -18,6 +18,7 @@ partial class GearBackup
         RunTest("Helpers: change summary and name warnings", () => TestChangesAndNames(dir));
         RunTest("Helpers: checksum lists", () => TestChecksumLists(dir));
         RunTest("Helpers: settings", () => TestSettings(dir));
+        RunTest("Installed and portable settings locations", () => TestSettingsLocations(Folder(root, "settings-locations")));
         RunTest("Helpers: retention", () => TestRetention(dir));
         RunTest("Helpers: resume question", () => TestResumeQuestion(dir));
         RunTest("Helpers: zip failures", () => TestZipFailures(dir));
@@ -40,6 +41,55 @@ partial class GearBackup
         RunTest("X100VI: photos", () => TestX100VI(dir));
         RunTest("X100VI: settings capture and selector safety", () => TestFujiSettings(Folder(dir, "fuji-settings")));
         RunTest("Gear Backup identity and upgrade compatibility", () => TestIdentityUpgrade(Folder(root, "identity-upgrade")));
+    }
+
+    static void TestSettingsLocations(string root)
+    {
+        string app = Folder(root, "installed"), roaming = Path.Combine(root, "roaming");
+        string destination = Path.Combine(roaming, AppIdentity.DirectoryName);
+        Put(Path.Combine(app, AppIdentity.InstalledMarker), "installed");
+        string ini = Path.Combine(app, AppIdentity.ConfigFileName), profiles = Path.Combine(app, AppIdentity.ProfileConfigFileName);
+        string globalText = "; keep comments\nProfile=Studio\nTheme=original-dark\nCustomKey=keep\n";
+        string profileText = "; keep profile comments\n[profile:Studio]\nVerify=yes\n";
+        Put(ini, globalText); Put(profiles, profileText);
+        Config loaded = null;
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
+        {
+            loaded = LoadApplicationConfig(app, roaming);
+            Assert(loaded.Profile == "Studio" && loaded.Theme == "original-dark" && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
+                "installed preview reads both previous INI files");
+            Assert(!Directory.Exists(roaming), "preview creates no AppData folder or settings");
+        }
+        WithUi(() => loaded = LoadApplicationConfig(app, roaming));
+        Assert(loaded.SettingsDirectory == destination && loaded.Theme == "original-dark", "installed settings move to the roaming folder");
+        Assert(File.ReadAllText(Path.Combine(destination, AppIdentity.ConfigFileName)).Contains(globalText.TrimEnd()), "migration preserves global comments and unknown keys");
+        Assert(File.ReadAllText(ProfileSettingsPath(loaded)) == profileText && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
+            "profile migration preserves the complete file and preferences");
+        Assert(File.ReadAllText(ini) == globalText && File.ReadAllText(profiles) == profileText, "migration keeps originals unchanged");
+        loaded.Theme = "original";
+        WithUi(() => SaveConfig(loaded));
+        WithUi(() => loaded = LoadApplicationConfig(app, roaming));
+        Assert(loaded.Theme == "original", "existing roaming settings win over old copies beside the app");
+        Assert(File.ReadAllText(ini) == globalText, "saving installed settings does not change the executable-folder INI");
+        Put(ProfileSettingsPath(loaded), "[profile:Studio]\nVerify=no\n");
+        WithUi(() => loaded = LoadApplicationConfig(app, roaming));
+        Assert(!ResolveProfileSettings(loaded, "m8", "Studio").Verify, "existing roaming profile preferences are not overwritten by migration");
+        File.Delete(Path.Combine(destination, AppIdentity.ProfileConfigFileName));
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
+        {
+            loaded = LoadApplicationConfig(app, roaming);
+            Assert(loaded.Theme == "original" && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
+                "preview supports partly migrated settings without replacing newer global settings");
+            Assert(!File.Exists(ProfileSettingsPath(loaded)), "preview does not migrate a missing profile file");
+        }
+        string portable = Folder(root, "portable"); Put(Path.Combine(portable, AppIdentity.ConfigFileName), "Theme=retro\n");
+        WithUi(() => loaded = LoadApplicationConfig(portable, roaming));
+        Assert(loaded.SettingsDirectory == portable && loaded.Theme == "retro", "portable and local builds keep independent settings beside the exe");
+        string legacyApp = Folder(root, "legacy-app"), legacyRoaming = Path.Combine(root, "legacy-roaming");
+        Put(Path.Combine(legacyApp, AppIdentity.InstalledMarker), "installed");
+        Put(Path.Combine(legacyApp, AppIdentity.Legacy.ConfigFileName), "Verify=yes\n");
+        WithUi(() => loaded = LoadApplicationConfig(legacyApp, legacyRoaming));
+        Assert(loaded.Verify && File.Exists(Path.Combine(loaded.SettingsDirectory, AppIdentity.ConfigFileName)), "legacy installed INI migrates to the current AppData file");
     }
 
     static void TestIdentityUpgrade(string root)
