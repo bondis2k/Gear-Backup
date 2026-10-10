@@ -47,7 +47,7 @@ partial class GearBackup
             clean.Controls.Add(cleanup);
             tabs.TabPages.Add(usage);
             tabs.TabPages.Add(clean);
-            ToolLayout.Controls.Add(tabs, 0, 1);
+            SetContent(GuiTheme.Tabbed(tabs));
             // Only the Select column can be changed; nothing is selected at first.
             cleanup.ReadOnly = false;
             cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Select", FillWeight = 15 });
@@ -57,20 +57,20 @@ partial class GearBackup
                 cleanup.Columns[i].ReadOnly = true;
             }
             cleanup.Columns["Location"].FillWeight = 280;
-            ToolButton("Preview cleanup", "PreviewCleanup", ReviewCleanup);
+            ToolButton("Preview cleanup", "PreviewCleanup", ReviewCleanup, true);
         }
 
         void BuildDashboard(MainForm owner)
         {
             foreach (string column in new[] { "Profile", "Last successful backup", "Latest status", "Last check", "Check result", "Stored size", "Attention", "Location" })
                 grid.Columns.Add(column, column);
-            ToolLayout.Controls.Add(grid, 0, 1);
+            SetContent(grid);
             ToolButton("Check latest backup", "CheckCatalogBackup", delegate {
                 CatalogBackup row = SelectedBackup();
                 if (row == null) return;
                 Work(() => { using (LockHistory(row.History)) return new IntegrityEngine().Run(new List<string> { row.Path }, OperationContext.Current); },
                     result => { Notice.Text = result.Summary; RefreshCatalog(); });
-            });
+            }, true);
             ToolButton("View recipes", "ViewCatalogRecipes", delegate {
                 CatalogBackup row = SelectedBackup();
                 if (row == null) return;

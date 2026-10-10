@@ -15,25 +15,25 @@ partial class GearBackup
         // Only for full backups; not saved in the settings, so it's a per-run choice like the CLI's --zip.
         readonly CheckBox zip = new CheckBox { Text = "Also save as zip", AutoSize = true, Name = "ZipBackup" };
         readonly Button start = GuiTheme.Button("Back up", true), preview = GuiTheme.Button("Preview", false),
-            cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.Button("Settings", false), detect = GuiTheme.Button("Detect device", false),
-            about = GuiTheme.Button("About", false), help = GuiTheme.Button("Help", false);
+            cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.GhostButton("Settings"), detect = GuiTheme.Button("Detect device", false),
+            about = GuiTheme.GhostButton("About"), help = GuiTheme.GhostButton("Help");
         readonly RichTextBox log = new RichTextBox();
         readonly Label sourceCaption = GuiTheme.Label("", 9, GuiTheme.Muted), deviceName = GuiTheme.Label("No device detected", 10, GuiTheme.Muted),
             metrics = GuiTheme.Label("", 9, GuiTheme.Muted), counts = GuiTheme.Label("", 10, GuiTheme.Ink);
         readonly Button openFolder = GuiTheme.Button("Open backup folder", false);
-        readonly Button dashboard = GuiTheme.Button("Dashboard", false), storage = GuiTheme.Button("Storage", false),
-            profiles = GuiTheme.Button("Profiles", false), recipes = GuiTheme.Button("X100VI recipes", false);
+        readonly Button dashboard = GuiTheme.GhostButton("Dashboard"), storage = GuiTheme.GhostButton("Storage"),
+            profiles = GuiTheme.GhostButton("Profiles"), recipes = GuiTheme.GhostButton("X100VI recipes");
         Button sourceBrowse;
         string outputFolder;
         readonly System.Diagnostics.Stopwatch elapsed = new System.Diagnostics.Stopwatch();
         OperationProgress latestProgress;
         readonly ToolTip hints = new ToolTip();
-        readonly Label status = GuiTheme.Label("Ready", 17, GuiTheme.Ink), detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
+        readonly Label status = new Label { Text = "Ready", AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(16), Margin = new Padding(0, 0, 12, 4) }, detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
         // The detected device's picture in the header; see ShowDevice.
         readonly PictureBox deviceImage = new PictureBox { Name = "DeviceImage", Size = new Size(64, 64),
             SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 16, 0) };
-        readonly Panel inputs = new Panel();
+        readonly CardPanel inputs = new CardPanel();
         // Worker threads add log text and progress here; the display timer moves them into the window every
         // 150 ms, so a fast copy doesn't flood the UI thread with updates.
         readonly object queueLock = new object();
@@ -126,10 +126,12 @@ partial class GearBackup
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.Controls.Add(deviceImage, 0, 0);
             var branding = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            var title = GuiTheme.Label(AppIdentity.Name, 25, GuiTheme.Ink); title.Font = new Font("Segoe UI", 25, FontStyle.Bold);
+            var title = GuiTheme.Label(AppIdentity.Name, 22, GuiTheme.Ink);
+            title.Font = GuiTheme.Heading(22);
             title.Margin = new Padding(0, 0, 0, 0);
             branding.Controls.Add(title);
             branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
+            deviceName.Margin = new Padding(0, 0, 0, 0);
             branding.Controls.Add(deviceName);
             header.Controls.Add(branding, 1, 0);
             var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
@@ -137,7 +139,7 @@ partial class GearBackup
             header.Controls.Add(headerActions, 2, 0);
             layout.Controls.Add(header, 0, 0);
 
-            inputs.Dock = DockStyle.Top; inputs.AutoSize = true; inputs.BackColor = Color.White; inputs.Padding = new Padding(20, 14, 20, 14);
+            inputs.Dock = DockStyle.Top; inputs.AutoSize = true; inputs.Padding = new Padding(22, 16, 22, 18);
             inputs.Margin = new Padding(0, 0, 0, 0);
             var fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, RowCount = 6 };
             fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -145,20 +147,22 @@ partial class GearBackup
             fields.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (int i = 0; i < 6; i++) fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             sourceBrowse = AddPath(fields, 0, sourceCaption, source, false); sourceBrowse.AccessibleName = "Browse source or restore destination";
-            fields.Controls.Add(detect, 2, 1); detect.MinimumSize = new Size(110, 28); detect.Padding = Padding.Empty;
-            AddPath(fields, 2, GuiTheme.Label("Backup location", 9, GuiTheme.Muted), backupFolder, true);
-            var profileLabel = GuiTheme.Label("Profile  ·  leave blank for automatic card identity", 9, GuiTheme.Muted);
+            fields.Controls.Add(detect, 2, 1); detect.MinimumSize = new Size(120, 36);
+            AddPath(fields, 2, FieldLabel("Backup location"), backupFolder, true);
+            var profileLabel = FieldLabel("Profile  ·  leave blank for automatic card identity");
             fields.Controls.Add(profileLabel, 0, 4); fields.SetColumnSpan(profileLabel, 3);
-            profile.Dock = DockStyle.Fill; fields.Controls.Add(profile, 0, 5); fields.SetColumnSpan(profile, 3);
+            var profileField = new FieldPanel(profile) { Dock = DockStyle.Fill, Margin = Padding.Empty };
+            fields.Controls.Add(profileField, 0, 5); fields.SetColumnSpan(profileField, 3);
             inputs.Controls.Add(fields); layout.Controls.Add(inputs, 0, 1);
 
             var actions = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 5, Padding = new Padding(0, 14, 0, 14), Margin = Padding.Empty };
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             for (int i = 0; i < 4; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
+            GuiTheme.StyleComboBox(operation); operation.Font = GuiTheme.Font(10.5f);
             // In the order of GuiOperation: the selected index is the operation.
             operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups", "Back up X100VI settings" });
-            operation.SelectedIndex = 0; operation.Margin = new Padding(0, 4, 24, 0);
+            operation.SelectedIndex = 0; operation.Margin = new Padding(0, 5, 24, 0);
             zip.Margin = new Padding(0, 8, 20, 0); zip.ForeColor = GuiTheme.Ink;
             actions.Controls.Add(operation, 0, 0); actions.Controls.Add(zip, 1, 0);
             actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0); actions.Controls.Add(cancel, 4, 0);
@@ -171,27 +175,46 @@ partial class GearBackup
             state.Controls.Add(resultHeader, 0, 0);
             state.Controls.Add(counts, 0, 1); detail.AutoSize = false; detail.Height = 28; detail.Dock = DockStyle.Top; detail.AutoEllipsis = true;
             state.Controls.Add(detail, 0, 2); state.Controls.Add(metrics, 0, 3);
-            progress.Dock = DockStyle.Top; progress.Height = 6; progress.Margin = Padding.Empty; state.Controls.Add(progress, 0, 4);
+            progress.Dock = DockStyle.Top; progress.Height = 8; progress.Margin = new Padding(0, 4, 0, 0); state.Controls.Add(progress, 0, 4);
             layout.Controls.Add(state, 0, 3);
 
-            var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(16), RowCount = 3 };
-            activity.RowStyles.Add(new RowStyle(SizeType.AutoSize)); activity.RowStyles.Add(new RowStyle(SizeType.Absolute, 27)); activity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 12) };
-            tools.Controls.Add(dashboard); tools.Controls.Add(storage); tools.Controls.Add(profiles); tools.Controls.Add(recipes); activity.Controls.Add(tools, 0, 0);
-            activity.Margin = Padding.Empty; activity.Controls.Add(GuiTheme.Label("ACTIVITY", 9, GuiTheme.Muted), 0, 1);
+            // The activity card: a heading with the tools on the right, then the log.
+            var activityCard = new CardPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(18, 12, 12, 14) };
+            var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = GuiTheme.Surface, RowCount = 3, ColumnCount = 2, Margin = Padding.Empty };
+            activity.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            activity.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            activity.RowStyles.Add(new RowStyle(SizeType.AutoSize)); activity.RowStyles.Add(new RowStyle(SizeType.Absolute, 9)); activity.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var activityTitle = GuiTheme.SectionTitle("Activity");
+            activityTitle.Anchor = AnchorStyles.Left;
+            activity.Controls.Add(activityTitle, 0, 0);
+            var tools = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, BackColor = GuiTheme.Surface, Anchor = AnchorStyles.Right };
+            tools.Controls.Add(dashboard); tools.Controls.Add(storage); tools.Controls.Add(profiles); tools.Controls.Add(recipes);
+            activity.Controls.Add(tools, 1, 0);
+            var rule = new Panel { Height = 1, Dock = DockStyle.Bottom, BackColor = GuiTheme.Border, Margin = new Padding(0, 0, 6, 8) };
+            activity.Controls.Add(rule, 0, 1); activity.SetColumnSpan(rule, 2);
             log.Dock = DockStyle.Fill; log.BorderStyle = BorderStyle.None; log.ReadOnly = true;
-            log.BackColor = Color.White; log.ForeColor = GuiTheme.Ink; log.Font = new Font("Consolas", 9);
-            log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 2); layout.Controls.Add(activity, 0, 4);
+            log.BackColor = GuiTheme.Surface; log.ForeColor = GuiTheme.Ink; log.Font = new Font("Consolas", 9.5f);
+            log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 2); activity.SetColumnSpan(log, 2);
+            activityCard.Controls.Add(activity); layout.Controls.Add(activityCard, 0, 4);
 
+        }
+
+        // A small caption above a field.
+        static Label FieldLabel(string text)
+        {
+            var label = GuiTheme.Label(text, 9, GuiTheme.Muted);
+            label.Margin = new Padding(0, 8, 0, 6);
+            return label;
         }
 
         Button AddPath(TableLayoutPanel fields, int row, Label label, TextBox text, bool destination)
         {
+            label.Margin = new Padding(0, row == 0 ? 0 : 10, 0, 6);
             fields.Controls.Add(label, 0, row); fields.SetColumnSpan(label, 3);
-            text.Dock = DockStyle.Fill; text.Margin = new Padding(0, 0, 8, 0); fields.Controls.Add(text, 0, row + 1);
-            var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(100, 28); browse.Padding = Padding.Empty;
+            var field = new FieldPanel(text) { Dock = DockStyle.Fill };
+            fields.Controls.Add(field, 0, row + 1);
+            var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(110, 36);
             fields.Controls.Add(browse, 1, row + 1);
-            if (destination) fields.SetColumnSpan(text, 1);
             browse.AccessibleName = destination ? "Browse backup location" : "Browse source folder";
             browse.Click += delegate { BrowseFolder(this, text, destination || Selected == GuiOperation.Restore,
                 destination ? "Choose the backup location" : Selected == GuiOperation.Restore ? "Choose the restore destination" : "Choose the card or source folder"); };

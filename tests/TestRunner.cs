@@ -145,6 +145,7 @@ partial class GearBackup
         RunTest("Backup without point-in-time history", () => TestWithoutHistory(Folder(root, "without-history")));
         RunTest("Device and profile preferences", () => TestProfilePreferences(Folder(root, "profile-preferences")));
         RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
+        RunTest("Fast catalog scan", () => TestCatalogShortcuts(Folder(root, "catalog-shortcuts")));
         RunTest("Readable X100VI recipes", () => TestRecipeReading(Folder(root, "recipe-reading")));
         RunTest("Shared source flow", () => TestSharedFlow(Folder(root, "shared-flow")));
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));

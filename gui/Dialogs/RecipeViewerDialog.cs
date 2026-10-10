@@ -20,19 +20,21 @@ partial class GearBackup
             : base(owner, "X100VI recipes", "Read saved C1–C7 recipes and shooting settings. Open a backup folder or an exported XML file; " +
                 "the camera is not needed.")
         {
-            var content = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1 };
+            var content = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, ColumnCount = 1, BackColor = GuiTheme.Surface };
+            GuiTheme.StyleComboBox(recipe);
+            recipe.Margin = new Padding(0, 0, 0, 10);
             content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             content.Controls.Add(recipe, 0, 0);
             content.Controls.Add(grid, 0, 1);
-            ToolLayout.Controls.Add(content, 0, 1);
+            SetContent(content);
             foreach (string column in new[] { "Setting", "Value", "Protocol number", "Raw bytes" }) grid.Columns.Add(column, column);
             recipe.SelectedIndexChanged += delegate { DisplayRecipe(); };
 
             ToolButton("Open backup folder", "OpenRecipeFolder", delegate {
                 using (var picker = new FolderBrowserDialog { Description = "Choose an X100VI settings backup folder" })
                     if (picker.ShowDialog(this) == DialogResult.OK) LoadFolder(picker.SelectedPath);
-            });
+            }, true);
             ToolButton("Open XML", "OpenRecipeXml", delegate {
                 using (var picker = new OpenFileDialog { Filter = "Gear Backup settings (*.xml)|*.xml", CheckFileExists = true })
                     if (picker.ShowDialog(this) == DialogResult.OK) LoadFiles(new[] { picker.FileName });

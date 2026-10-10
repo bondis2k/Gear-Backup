@@ -9,10 +9,11 @@ partial class GearBackup
         public readonly ListBox List = new ListBox();
         public SelectionDialog(string heading, List<string> choices) : base(heading)
         {
-            List.Dock = DockStyle.Fill; List.BorderStyle = BorderStyle.FixedSingle;
-            List.Font = new Font("Consolas", 10); List.HorizontalScrollbar = true;
+            List.Dock = DockStyle.Fill; List.BorderStyle = BorderStyle.None;
+            List.Font = GuiTheme.Font(10.5f); List.HorizontalScrollbar = true; List.IntegralHeight = false;
             List.Items.AddRange(choices.ToArray()); if (choices.Count > 0) List.SelectedIndex = 0;
-            Accept.Enabled = choices.Count > 0; layout.Controls.Add(List, 0, 1);
+            Accept.Enabled = choices.Count > 0; var card = new CardPanel { Dock = DockStyle.Fill, Padding = new Padding(10), Margin = Padding.Empty };
+            card.Controls.Add(List); layout.Controls.Add(card, 0, 1);
             List.DoubleClick += delegate { if (List.SelectedIndex >= 0) { DialogResult = DialogResult.OK; Close(); } };
         }
     }

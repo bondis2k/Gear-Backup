@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
+using Microsoft.Win32.SafeHandles;
 
 partial class GearBackup
 {
@@ -119,11 +121,78 @@ partial class GearBackup
         }
     }
 
-    static void CountUnique(BackupCatalog catalog, string path, long length, CatalogBackup row = null)
+    // Counts a file's size towards the unique total once per identity (see FileIdentities).
+    static void CountUnique(BackupCatalog catalog, string identity, long length, CatalogBackup row = null)
     {
-        if (!catalog.Counted.Add(SharedFileId(path) ?? path)) return;
+        if (!catalog.Counted.Add(identity)) return;
         catalog.UniqueBytes += length;
         if (row != null) row.UniqueBytes += length;
+    }
+
+    // What tells files apart for the unique total, by path: hard links to one file share an identity. On
+    // NTFS that's the file's ID, read a whole folder at a time; opening every file instead took seconds on
+    // a large history. File systems without hard links (FAT, exFAT) just use the path.
+    static Dictionary<string, string> FileIdentities(string root, List<FileInfo> files)
+    {
+        var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!SupportsHardLinks(root))
+        {
+            foreach (FileInfo file in files) identities[file.FullName] = file.FullName;
+            return identities;
+        }
+        uint serial, maxComponent, flags;
+        string volume = GetVolumeInformationW(Path.GetPathRoot(Path.GetFullPath(root)), null, 0, out serial, out maxComponent, out flags, null, 0)
+            ? serial.ToString(CultureInfo.InvariantCulture) : null;
+        var folders = new Dictionary<string, Dictionary<string, long>>(StringComparer.OrdinalIgnoreCase);
+        foreach (FileInfo file in files)
+        {
+            Dictionary<string, long> ids;
+            if (!folders.TryGetValue(file.DirectoryName, out ids)) folders[file.DirectoryName] = ids = volume == null ? null : FolderFileIds(file.DirectoryName);
+            long id;
+            identities[file.FullName] = ids != null && ids.TryGetValue(file.Name, out id) && id != 0
+                ? volume + ":" + (ulong)id
+                : SharedFileId(file.FullName) ?? file.FullName;
+        }
+        return identities;
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool GetFileInformationByHandleEx(SafeFileHandle file, int infoClass, IntPtr buffer, uint size);
+
+    // The NTFS file ID of every entry in a folder, by name, from FILE_ID_BOTH_DIR_INFO records (FileId at
+    // offset 96, FileNameLength at 60, FileName at 104). Null if Windows can't list it this way.
+    static Dictionary<string, long> FolderFileIds(string folder)
+    {
+        const uint ListDirectory = 1, ShareAll = 7, OpenExisting = 3, BackupSemantics = 0x02000000, OpenReparsePoint = 0x00200000;
+        const int RestartInfo = 11, NextInfo = 10, NoMoreFiles = 18, Size = 64 * 1024;
+        var ids = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        using (SafeFileHandle handle = CreateFileW(folder, ListDirectory, ShareAll, IntPtr.Zero, OpenExisting, BackupSemantics | OpenReparsePoint, IntPtr.Zero))
+        {
+            if (handle.IsInvalid) return null;
+            IntPtr buffer = Marshal.AllocHGlobal(Size);
+            try
+            {
+                int infoClass = RestartInfo;
+                while (GetFileInformationByHandleEx(handle, infoClass, buffer, Size))
+                {
+                    infoClass = NextInfo;
+                    for (int offset = 0; ; )
+                    {
+                        IntPtr entry = IntPtr.Add(buffer, offset);
+                        int next = Marshal.ReadInt32(entry, 0);
+                        int nameBytes = Marshal.ReadInt32(entry, 60);
+                        ids[Marshal.PtrToStringUni(IntPtr.Add(entry, 104), nameBytes / 2)] = Marshal.ReadInt64(entry, 96);
+                        if (next == 0) break;
+                        offset += next;
+                    }
+                }
+                if (Marshal.GetLastWin32Error() != NoMoreFiles) return null;
+            }
+            finally { Marshal.FreeHGlobal(buffer); }
+        }
+        return ids;
     }
 
     // Scans every configured backup location (the global one and those named in device/profile
@@ -176,7 +245,7 @@ partial class GearBackup
                 continue;
             StorageItem item = MakeStorageItem(StorageKind.Zip, zip, history, null, false);
             catalog.ZipBytes += item.Bytes;
-            CountUnique(catalog, zip, item.Bytes);
+            CountUnique(catalog, SharedFileId(zip) ?? zip, item.Bytes);
             catalog.Cleanup.Add(item);
         }
     }
@@ -189,6 +258,7 @@ partial class GearBackup
         List<FileInfo> files = StorageFiles(backup, folders);
         HashSet<string> oldVersionNames = KnownOldVersions(backup);
         var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest };
+        Dictionary<string, string> identities = FileIdentities(backup, files);
         var versions = new List<string>();
         foreach (FileInfo file in files)
         {
@@ -205,7 +275,7 @@ partial class GearBackup
                 versions.Add(file.FullName);
             }
             else row.FilesBytes += file.Length;
-            CountUnique(catalog, file.FullName, file.Length, row);
+            CountUnique(catalog, identities[file.FullName], file.Length, row);
         }
         row.CompletedUtc = LastSuccess(backup, row.Status);
         ReadCheckRecord(row);
@@ -244,7 +314,8 @@ partial class GearBackup
                 List<FileInfo> files = StorageFiles(mirror, folders);
                 StorageItem item = MakeStorageItem(StorageKind.Mirror, mirror, mirrors, null, files, folders);
                 catalog.MirrorBytes += item.Bytes;
-                foreach (FileInfo file in files) CountUnique(catalog, file.FullName, file.Length);
+                Dictionary<string, string> identities = FileIdentities(mirror, files);
+                foreach (FileInfo file in files) CountUnique(catalog, identities[file.FullName], file.Length);
                 catalog.Cleanup.Add(item);
             });
         }
