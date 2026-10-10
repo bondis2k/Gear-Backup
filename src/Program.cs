@@ -136,14 +136,14 @@ partial class GearBackup
                 restore = choice == '3';
             }
         }
-        else if (!restore && previous == null && config.Mode == BackupMode.Ask && HasHistory(histories))
+        else if (!restore && previous == null && config.Mode == BackupMode.Ask && HasHistory(prepared.Global))
         {
             OperationOutput.WriteLine("  No backups yet for this profile; other histories are available.");
             var menu = new List<Option> { new Option('1', "Full backup for this profile") };
             if (mtp == null) menu.Add(new Option('3', "Restore from another history"));
             menu.Add(new Option('4', "Check another history"));
             char choice = Ask("What would you like to do?", menu.ToArray());
-            if (choice == '4') return CheckHistory(ChooseHistory(histories, null));
+            if (choice == '4') return CheckHistory(ChooseHistory(prepared.Global, null));
             restore = choice == '3';
         }
         OperationOutput.WriteLine();

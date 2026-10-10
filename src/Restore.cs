@@ -6,7 +6,7 @@ using System.Text;
 partial class GearBackup
 {
     // The full result, including whether the restore was cancelled. Title is null if nothing was done.
-    static OperationResult RunRestore(string m8, List<string> backups, Config config)
+    static OperationResult RunRestore(string m8, List<string> backups, Config config, Config global = null)
     {
         if (backups.Count == 0) { OperationOutput.WriteLine("  No backups found."); return new OperationResult { ExitCode = 1 }; }
         var choices = new List<string>(backups);
@@ -16,6 +16,19 @@ partial class GearBackup
         int pick = AskItem("Restore from which backup?", labels);
         if (pick == 0) return new OperationResult();
         string backup = choices[pick - 1];
+        DeviceProfile previousDevice = CurrentDevice;
+        try
+        {
+            OperationContext.Current.Device = BackupDevice(backup) ?? previousDevice;
+            if (global != null)
+                config = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(Path.GetDirectoryName(backup)));
+            return RestoreSelectedBackup(m8, backup, config);
+        }
+        finally { OperationContext.Current.Device = previousDevice; }
+    }
+
+    static OperationResult RestoreSelectedBackup(string m8, string backup, Config config)
+    {
         Snapshot snapshot = ChooseSnapshot(backup);
         bool historical = snapshot != null;
         if (!historical)
@@ -28,21 +41,21 @@ partial class GearBackup
         char mode = Ask("What should be restored?", RestoreModes(CurrentDevice));
         List<RestoreEntry> items;
         string bundle = null;
-        if (mode == RestoreMode.All) items = snapshot.Files.FindAll(f => historical || !IsOldVersion(f.Relative));
+        if (mode == RestoreMode.All) items = snapshot.Files.FindAll(f => !snapshot.OldVersions.Contains(f.Relative));
         else if (mode == RestoreMode.Bundle || mode == RestoreMode.ProjectFolder)
         {
             // A bundle or a song folder: everything under one folder, restored like a bundle.
             bundle = mode == RestoreMode.Bundle ? PickBundle(snapshot) : PickSongFolder(snapshot);
             if (bundle == null) return new OperationResult();
             items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase) &&
-                (historical || !IsOldVersion(f.Relative)));
+                !snapshot.OldVersions.Contains(f.Relative));
         }
         else
         {
             RestoreEntry file = PickEntry(snapshot, mode == RestoreMode.SongWithSamples);
             if (file == null) return new OperationResult();
             items = mode == RestoreMode.SongWithSamples ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
-            if (!historical && IsOldVersion(file.Relative))
+            if (snapshot.OldVersions.Contains(file.Relative))
             {
                 if (Ask("Restore this old version under which name?", new Option('o', "Original name"), new Option('d', "Dated name")) == 'o')
                 {
@@ -77,7 +90,7 @@ partial class GearBackup
     // explains why and asks first. True to go ahead.
     static bool ConfirmRestoreTarget(string backup, string target)
     {
-        DeviceProfile from = HistoryDevice(backup);
+        DeviceProfile from = BackupDevice(backup);
         if (from == null || from.RestoreWarning == null || Rooted(target) != Rooted(Path.GetPathRoot(Rooted(target)))) return true;
         OperationOutput.WriteLine("  " + target + " is a memory card. " + from.RestoreWarning);
         return AskYesNo("Restore the " + from.Name + "'s files onto " + target + " anyway?");
@@ -229,7 +242,7 @@ partial class GearBackup
     {
         var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (RestoreEntry file in snapshot.Files)
-            if (IsSong(file.Relative) && !IsOldVersion(file.Relative)) folders.Add(Path.GetDirectoryName(file.Relative));
+            if (IsSong(file.Relative) && !snapshot.OldVersions.Contains(file.Relative)) folders.Add(Path.GetDirectoryName(file.Relative));
         var list = new List<string>(folders);
         list.Sort(StringComparer.OrdinalIgnoreCase);
         if (list.Count == 0) { OperationOutput.WriteLine("  No " + CurrentDevice.SongsLabel + " found in this backup."); return null; }

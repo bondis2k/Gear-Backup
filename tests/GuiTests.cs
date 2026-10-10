@@ -170,6 +170,7 @@ partial class GearBackup
         TestSettingsInteraction(root);
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
+        TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
@@ -363,6 +364,48 @@ partial class GearBackup
         }
     }
 
+    static void TestRestoreLocationsGui(string root)
+    {
+        Directory.CreateDirectory(root);
+        var config = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        string alternate = Path.Combine(root, "tracker");
+        SaveProfileSettings(config, "device:tracker-mini", new Dictionary<string, string> {
+            { "BackupFolder", alternate }, { "PointInTimeHistory", "no" }, { "Verify", "yes" }
+        });
+        string source = Folder(root, "source"), relative = "Projects\\Demo\\take_2026-01-01_120000.wav";
+        Put(Path.Combine(source, "Projects", "Demo", "project.mt"), "PROJECT");
+        Put(Path.Combine(source, relative), "SAMPLE");
+        string history = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
+        new BackupEngine().Run(source, history, null, false, ResolveProfileSettings(config, "tracker-mini", "Studio"),
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini });
+        using (var form = new MainForm(true))
+        {
+            typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(form, config);
+            form.Show(); Application.DoEvents();
+            string target = Folder(root, "target");
+            ((TextBox)form.Controls.Find("SourceFolder", true)[0]).Text = target;
+            ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = config.BackupFolder;
+            ((TextBox)form.Controls.Find("Profile", true)[0]).Text = "";
+            var operation = (ComboBox)form.Controls.Find("Operation", true)[0];
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var status = (Label)form.Controls.Find("OperationStatus", true)[0];
+            bool offeredProject = false;
+            operation.SelectedIndex = 2; start.PerformClick();
+            DriveGui(form, status, "Complete", false, dialog => {
+                var buttons = new List<Button>(); CollectGuiButtons(dialog, buttons);
+                if (buttons.Exists(b => b.Text == "Whole project folder")) offeredProject = true;
+            });
+            Assert(offeredProject, "GUI local-folder restore offers the saved Tracker Mini's project choices");
+            Assert(File.ReadAllText(Path.Combine(target, relative)) == "SAMPLE", "GUI current-file restore preserves dated samples from an override location");
+            operation.SelectedIndex = 3; start.PerformClick();
+            DriveGui(form, status, "Complete", false);
+            Assert(File.Exists(Path.Combine(AppIdentity.MetadataRoot(LatestBackup(history)), "last-check.txt")),
+                "GUI checks find alternate locations without a named profile or source device");
+            Assert(!Directory.Exists(config.BackupFolder), "restore and check do not create an unused global backup location");
+            form.Close();
+        }
+    }
+
     static void TestScaledGuiLayouts()
     {
         string output = Path.Combine(Environment.CurrentDirectory, "tests", ".build");
@@ -410,7 +453,7 @@ partial class GearBackup
         return (bool)method.Invoke(form, arguments);
     }
 
-    static void DriveGui(Form form, Label state, string expected, bool dismiss)
+    static void DriveGui(Form form, Label state, string expected, bool dismiss, Action<Form> inspect = null)
     {
         var timer = Stopwatch.StartNew();
         var handled = new HashSet<Form>();
@@ -423,6 +466,7 @@ partial class GearBackup
                 foreach (Form owned in form.OwnedForms)
                 {
                     if (!owned.Visible || !handled.Add(owned)) continue;
+                    if (inspect != null) inspect(owned);
                     if (dismiss) { owned.DialogResult = DialogResult.Cancel; owned.Close(); continue; }
                     var choices = FindGuiControl<ListBox>(owned);
                     if (choices != null && choices.Items.Count > 0 && choices.SelectionMode != SelectionMode.None) choices.SelectedIndex = 0;

@@ -91,16 +91,48 @@ partial class GearBackup
     static string ChooseHistory(string root, string preferred)
     {
         var roots = new List<string>();
+        CollectHistories(root, roots);
+        return ChooseHistoryList(roots, preferred, preferred ?? root);
+    }
+
+    static List<string> AvailableHistories(Config config)
+    {
+        var roots = new List<string>();
+        foreach (string location in ConfiguredBackupLocations(config))
+            CollectHistories(HistoriesRoot(new Config { BackupFolder = location }), roots);
+        roots.Sort(StringComparer.OrdinalIgnoreCase);
+        return roots;
+    }
+
+    static void CollectHistories(string root, List<string> roots)
+    {
+        RejectRootLinks(root);
         string profiles = Path.Combine(root, "profiles");
         if (Directory.Exists(profiles))
+        {
+            RejectRootLinks(profiles);
             foreach (string dir in Directory.GetDirectories(profiles))
-                if (ListBackups(dir).Count > 0) roots.Add(dir);
-        if (ListBackups(root).Count > 0) roots.Add(root);
+                if (ListBackups(dir).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(dir))) roots.Add(dir);
+        }
+        if (ListBackups(root).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(root))) roots.Add(root);
+    }
+
+    static string ChooseHistory(Config config, string preferred)
+    {
+        var roots = AvailableHistories(config);
+        if (preferred != null && ListBackups(preferred).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(preferred)))
+            roots.Add(preferred);
+        return ChooseHistoryList(roots, preferred, preferred ?? HistoriesRoot(config));
+    }
+
+    static string ChooseHistoryList(List<string> roots, string preferred, string fallback)
+    {
         roots.Sort(StringComparer.OrdinalIgnoreCase);
-        if (roots.Count == 0) return preferred ?? root;
+        if (roots.Count == 0) return fallback;
         var labels = new List<string>();
         foreach (string history in roots)
-            labels.Add((history == root ? "Legacy backups" : Path.GetFileName(history)) +
+            labels.Add((Path.GetFileName(Path.GetDirectoryName(history)).Equals("profiles", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetFileName(history) : "Legacy backups") + " — " + history +
                 (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
         int pick = AskItem("Choose a backup history.", labels);
         return pick == 0 ? null : roots[pick - 1];
@@ -114,6 +146,8 @@ partial class GearBackup
             foreach (string dir in Directory.GetDirectories(profiles)) if (ListBackups(dir).Count > 0) return true;
         return false;
     }
+
+    static bool HasHistory(Config config) { return AvailableHistories(config).Count > 0; }
 
     // The CLI's source: SourceFolder if set, otherwise a detected device, otherwise a path typed by the
     // user. Null if cancelled. An MTP device's mirror isn't read yet: RunPrepared syncs it.

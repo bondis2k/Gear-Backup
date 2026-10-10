@@ -306,13 +306,17 @@ Start with menu option 3 or `GearBackup.exe --restore`.
 
 | Choice | What it restores |
 |---|---|
-| **A — All** | All files and empty folders in the snapshot. When browsing current files, metadata and recognisable dated old versions are excluded. |
+| **A — All** | All files and empty folders in the snapshot. When browsing current files, metadata and recorded old versions are excluded. Genuine source files containing dates are kept. |
 | **B — Bundle** | One `Bundles\<name>` folder, including its project, samples, instruments, and empty subfolders. |
 | **P — Whole project folder** | Tracker Mini: one project folder, with its patterns, instruments and samples. |
 | **S — Single file** | Search by name/path and select one song, instrument, sample, or old version. |
 | **D — Song with dependent samples** | Select a song and include the sample paths referenced by its sampler instruments. |
 
-Historical manifests distinguish real dated filenames from generated old versions, so a song whose original name contains a date is retained in historical restores. When browsing a dated old version directly, choose its original or dated name.
+Current-file restores use the backup's old-version registry, or snapshot evidence for older backups, to distinguish generated versions from real dated source filenames. Without that evidence, files are kept rather than classified by name alone. When browsing a recorded old version directly, choose its original or dated name.
+
+Restore and check history pickers search the global backup destination and all destinations configured in device/profile preferences. History labels include their location so identical profile names can be distinguished.
+
+Restore choices and device preferences follow the selected backup, including when restoring to a plain PC folder. New backups record the device type independently of the profile name; older automatic profiles use their device prefix. For an older named or legacy history without a device record, the selected target/device setting supplies the fallback. Profile overrides still take priority over device preferences.
 
 ### Song dependencies
 
