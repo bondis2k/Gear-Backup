@@ -89,6 +89,11 @@ partial class GearBackup
         var result = new MirrorResult();
         Directory.CreateDirectory(mirror);
         RejectRootLinks(mirror);
+        // Refuse existing links before downloading or removing anything, including folders that
+        // are no longer on the device. Recursive GetFiles would follow their junction targets.
+        var files = new List<string>();
+        var folders = new List<string>();
+        ReadMirrorTree(mirror, files, folders);
         List<MtpObject> items = source.ListAll();
 
         var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -100,6 +105,7 @@ partial class GearBackup
             try { path = SafePath(mirror, item.RelativePath); }
             catch (IOException) { result.Skipped.Add(item.RelativePath); continue; }
             onDevice.Add(item.RelativePath);
+            RejectRootLinks(path);
             if (item.IsFolder) { Directory.CreateDirectory(path); continue; }
             var existing = new FileInfo(path);
             if (existing.Exists && existing.Length == item.Size && item.Modified != DateTime.MinValue &&
@@ -117,6 +123,7 @@ partial class GearBackup
         {
             MtpObject item = download.Key;
             string path = download.Value;
+            RejectRootLinks(path);
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             string temp = Path.Combine(Path.GetDirectoryName(path), ".geardownload-" + Guid.NewGuid().ToString("N") + ".tmp");
             try
@@ -130,6 +137,7 @@ partial class GearBackup
                 // reports some factory sounds as 1970, which FAT cards can't store but the PC's disk can.)
                 if (item.Modified != DateTime.MinValue)
                     try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { }
+                RejectRootLinks(path);
                 TryDelete(path);
                 File.Move(temp, path);
                 done += size;
@@ -140,18 +148,52 @@ partial class GearBackup
         }
 
         // Remove what's no longer on the device (and any download left over from an interrupted run).
-        foreach (string file in Directory.GetFiles(mirror, "*", SearchOption.AllDirectories))
+        files.Clear();
+        folders.Clear();
+        ReadMirrorTree(mirror, files, folders);
+        foreach (string file in files)
         {
             string relative = file.Substring(Rooted(mirror).Length);
             if (onDevice.Contains(relative)) continue;
+            RejectRootLinks(file);
             File.Delete(file);
             if (!Path.GetFileName(file).StartsWith(".geardownload-")) result.Removed++;
         }
-        var folders = new List<string>(Directory.GetDirectories(mirror, "*", SearchOption.AllDirectories));
         folders.Sort((a, b) => b.Length.CompareTo(a.Length));
         foreach (string folder in folders)
+        {
+            RejectRootLinks(folder);
             if (!onDevice.Contains(folder.Substring(Rooted(mirror).Length)) && Directory.GetFileSystemEntries(folder).Length == 0)
                 Directory.Delete(folder);
+        }
         return result;
+    }
+
+    // Enumerate one level at a time, checking each entry before descending. These checks deliberately
+    // bypass the per-operation folder cache so cleanup also detects links added since the first scan.
+    static void ReadMirrorTree(string mirror, List<string> files, List<string> folders)
+    {
+        var pending = new Stack<string>();
+        pending.Push(Path.GetFullPath(mirror));
+        while (pending.Count > 0)
+        {
+            OperationContext.Current.CheckCancellation();
+            string parent = pending.Pop();
+            RejectRootLinks(parent);
+            foreach (string entry in Directory.GetFileSystemEntries(parent))
+            {
+                if (!Within(entry, mirror)) throw new IOException("Path escapes its mirror: " + entry);
+                FileAttributes attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    throw new IOException("Linked paths are not supported: " + entry);
+                RejectRootLinks(entry);
+                if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    folders.Add(entry);
+                    pending.Push(entry);
+                }
+                else files.Add(entry);
+            }
+        }
     }
 }
