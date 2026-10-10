@@ -1,6 +1,6 @@
 // Focused tests for the helpers the backup, restore and check workflows depend on: change summaries,
 // name warnings, file classification, comparisons, path safety, checksum lists, settings, retention,
-// the resume question and the zip's failure paths. Called from RunTests in TestRunner.cs.
+// the resume question and the zip's failure paths. Each runs as a named test; see RunTests in TestRunner.cs.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,17 +12,17 @@ partial class M8Backup
     {
         string dir = Path.Combine(root, "helpers");
         Directory.CreateDirectory(dir);
-        TestClassification();
-        TestComparisons(dir);
-        TestPathSafety(dir);
-        TestChangesAndNames(dir);
-        TestChecksumLists(dir);
-        TestSettings(dir);
-        TestRetention(dir);
-        TestResumeQuestion(dir);
-        TestZipFailures(dir);
-        TestSecurity(dir);
-        TestConsoleQuestions();
+        RunTest("Helpers: file classification", TestClassification);
+        RunTest("Helpers: comparisons", () => TestComparisons(dir));
+        RunTest("Helpers: path safety", () => TestPathSafety(dir));
+        RunTest("Helpers: change summary and name warnings", () => TestChangesAndNames(dir));
+        RunTest("Helpers: checksum lists", () => TestChecksumLists(dir));
+        RunTest("Helpers: settings", () => TestSettings(dir));
+        RunTest("Helpers: retention", () => TestRetention(dir));
+        RunTest("Helpers: resume question", () => TestResumeQuestion(dir));
+        RunTest("Helpers: zip failures", () => TestZipFailures(dir));
+        RunTest("Security hardening", () => TestSecurity(dir));
+        RunTest("Console questions", TestConsoleQuestions);
     }
 
     // Runs action against the real console front end with scripted input; returns what it printed.
