@@ -46,10 +46,13 @@ partial class M8Backup
                 {
                     MtpSource mtp = FindMtpSource();
                     if (mtp != null)
+                    {
+                        form.OnUi(delegate { form.ShowDevice(mtp.Device); return true; });
                         return new OperationResult { Summary = mtp.Device.Name + " detected over MTP. Leave the source empty to back it up." };
+                    }
                 }
                 if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
-                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
+                form.OnUi(delegate { form.SetDetectedSource(found); form.ShowDevice(device); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
                 return new OperationResult { Summary = device.Name + " detected: " + found };
             }, false);
         }
@@ -103,6 +106,8 @@ partial class M8Backup
             RejectRootLinks(selected);
             if (knownSource == selected) { pnp = knownPnp; if (detected == null) detected = knownDevice; }
             context.Device = DeviceFor(options, detected);
+            DeviceProfile shown = context.Device;
+            form.OnUi(delegate { form.ShowDevice(shown); return true; });
             string root = HistoryFor(options, selected);
             OperationResult result;
             if (choice == 2 && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));

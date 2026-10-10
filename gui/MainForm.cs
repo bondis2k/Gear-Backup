@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -18,6 +19,9 @@ partial class M8Backup
         readonly RichTextBox log = new RichTextBox();
         readonly Label status = GuiTheme.Label("Ready", 17, GuiTheme.Ink), detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
+        // The detected device's picture in the header; see ShowDevice.
+        readonly PictureBox deviceImage = new PictureBox { Name = "DeviceImage", Size = new Size(64, 64),
+            SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 16, 0) };
         readonly Panel inputs = new Panel();
         // Worker threads add log text and progress here; the display timer moves them into the window every
         // 150 ms, so a fast copy doesn't flood the UI thread with updates.
@@ -51,6 +55,7 @@ partial class M8Backup
             var interaction = new GuiInteraction(this);
             using (new OperationContext(interaction, CancellationToken.None).Activate())
                 config = designPreview ? new Config { BackupFolder = @"D:\Music backups" } : LoadConfig();
+            ShowDevice(DeviceFor(config, null));
             source.Text = designPreview ? @"E:\" : config.SourceFolder;
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
             operation.SelectedIndex = config.Mode == BackupMode.Incremental ? 1 : 0;
@@ -84,17 +89,19 @@ partial class M8Backup
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             Controls.Add(layout);
 
-            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+            var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = Padding.Empty };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            header.Controls.Add(deviceImage, 0, 0);
             var branding = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
             var title = GuiTheme.Label("M8 Backup", 25, GuiTheme.Ink); title.Font = new Font("Segoe UI", 25, FontStyle.Bold);
             title.Margin = new Padding(0, 0, 0, 0);
             branding.Controls.Add(title);
             branding.Controls.Add(GuiTheme.Label("Your music. Safely kept.", 10, GuiTheme.Muted));
-            header.Controls.Add(branding, 0, 0);
+            header.Controls.Add(branding, 1, 0);
             settings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            header.Controls.Add(settings, 1, 0);
+            header.Controls.Add(settings, 2, 0);
             layout.Controls.Add(header, 0, 0);
 
             inputs.Dock = DockStyle.Fill; inputs.BackColor = Color.White; inputs.Padding = new Padding(20, 14, 20, 14);
@@ -234,6 +241,40 @@ partial class M8Backup
         }
 
         public void SetDetectedSource(string found) { source.Text = found; }
+
+        // Shows the device's picture in the header and as the window and taskbar icon. Devices without a
+        // picture, or a build without the embedded pictures, keep what's shown.
+        public void ShowDevice(DeviceProfile device)
+        {
+            if (device == null || device.IconName == null) return;
+            Image image = LoadImage(device.IconName + "-256.png");
+            if (image != null)
+            {
+                Image old = deviceImage.Image;
+                deviceImage.Image = image;
+                deviceImage.AccessibleName = device.Name;
+                if (old != null) old.Dispose();
+            }
+            try
+            {
+                using (Stream stream = Resource(device.IconName + ".ico"))
+                    if (stream != null) Icon = new Icon(stream);
+            }
+            catch (Exception) { }  // the window keeps its current icon
+        }
+
+        // build-gui.cmd embeds the device pictures from the assets folder under their file names.
+        static Stream Resource(string name) { return typeof(MainForm).Assembly.GetManifestResourceStream(name); }
+
+        static Image LoadImage(string name)
+        {
+            try
+            {
+                using (Stream stream = Resource(name))
+                    return stream == null ? null : new Bitmap(Image.FromStream(stream));
+            }
+            catch (Exception) { return null; }
+        }
         public void PrepareOperation()
         {
             lock (queueLock) { pendingLog.Length = 0; pendingProgress = null; }

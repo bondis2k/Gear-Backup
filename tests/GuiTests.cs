@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
@@ -41,6 +42,17 @@ partial class M8Backup
             var cancel = (Button)form.Controls.Find("CancelOperation", true)[0];
             var state = (Label)form.Controls.Find("OperationStatus", true)[0];
             var zipBox = (CheckBox)form.Controls.Find("ZipBackup", true)[0];
+            var deviceImage = (PictureBox)form.Controls.Find("DeviceImage", true)[0];
+            Assert(deviceImage.Image != null && deviceImage.AccessibleName == "M8", "the header shows the M8 by default");
+            Icon m8Icon = form.Icon;
+            ((MainForm)form).ShowDevice(Devices.OP1Field);
+            Assert(deviceImage.AccessibleName == "OP-1 Field" && deviceImage.Image != null && form.Icon != m8Icon && form.Icon.Handle != IntPtr.Zero,
+                "showing the OP-1 Field switches the header picture and the window icon");
+            Icon op1Icon = form.Icon;
+            ((MainForm)form).ShowDevice(new DeviceProfile { Id = "other", Name = "Other" });
+            Assert(deviceImage.AccessibleName == "OP-1 Field" && form.Icon == op1Icon, "a device without a picture keeps what's shown");
+            ((MainForm)form).ShowDevice(Devices.M8);
+            Assert(deviceImage.AccessibleName == "M8", "the M8 picture comes back");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
             mode.SelectedIndex = 3;
             Assert(start.Text == "Check" && !preview.Enabled, "GUI check mode disables copy preview");
