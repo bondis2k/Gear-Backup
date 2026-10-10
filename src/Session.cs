@@ -43,7 +43,6 @@ partial class GearBackup
         {
             found.CameraSettingsMode = FujiSettingsMode(mtp.Info);
             found.CameraMode = FujiModeName(found.CameraSettingsMode);
-            mtp.SettingsMode = found.CameraSettingsMode;
         }
         return found;
     }

@@ -451,16 +451,25 @@ partial class GearBackup
             Throws(() => WithUi(() => RunPrepared(PrepareSource(global, choice), false, true)), "the mirror isn't synced while storage cleanup holds its lock");
         Assert(opened == 2, "a refused run never opens the device");
 
-        // The X100VI's mode from detection is reused: in settings mode, photos aren't read at all.
-        var camera = new MtpSource { Device = Devices.X100VI, Mirror = Path.Combine(mirrors, "x100vi-TEST"), SettingsMode = true,
+        // The X100VI's mode is asked again right before syncing: in settings mode, photos aren't read at all
+        // (a sync would see none and empty the mirror).
+        int asked = 0;
+        bool settingsMode = false;
+        var camera = new MtpSource { Device = Devices.X100VI, Mirror = Path.Combine(mirrors, "x100vi-TEST"),
+            ReadSettingsMode = () => { asked++; return settingsMode; },
             Info = new MtpDeviceInfo { InstanceId = @"USB\VID_04CB&PID_0305\TEST", FriendlyName = "X100VI" },
             Open = () => { opened++; return device; } };
         Directory.CreateDirectory(camera.Mirror);
+        var cameraChoice = new SourceChoice { Path = camera.Mirror, Detected = Devices.X100VI, Mtp = camera, CameraSettingsMode = false };
+        PreparedSource preparedCamera = null;
+        WithUi(() => preparedCamera = PrepareSource(global, cameraChoice));
+        settingsMode = true; // switched on the camera after detection, e.g. while a menu waited
         bool refused = false;
         WithUi(() => {
-            try { RunPrepared(PrepareSource(global, new SourceChoice { Path = camera.Mirror, Detected = Devices.X100VI, Mtp = camera }), false, false); }
+            try { RunPrepared(preparedCamera, false, false); }
             catch (IOException ex) { refused = ex.Message.Contains("settings mode"); }
         });
-        Assert(refused && opened == 2, "a camera in settings mode is refused for photos without opening it again");
+        Assert(refused && asked == 1 && opened == 2, "a camera switched to settings mode after detection is refused before its photos are read");
+        Assert(Directory.Exists(camera.Mirror), "the mirror is left alone");
     }
 }
