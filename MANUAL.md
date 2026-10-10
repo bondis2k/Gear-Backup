@@ -66,6 +66,17 @@ Summaries list **projects** instead of songs: new, edited and removed `.xy` proj
 
 If both an OP-1 Field and an OP-XY are connected, the OP-1 Field is found first; set `SourceFolder` to back up the other one's mirror, or connect one at a time.
 
+## Polyend Tracker Mini
+
+The Tracker Mini works like the M8: in USB drive mode its SD card appears as a drive (labelled `TRACKER_M`), which is detected automatically, backed up, restored to and ejected the same way. Its history is named after the card (`card-<serial>`).
+
+1. Connect the Tracker Mini by USB and turn on its USB drive mode (the card is unavailable on the Tracker while it is connected as a drive).
+2. Leave the source empty and start a backup.
+
+Each project is a folder, `Projects\<group>\<name>`, holding `project.mt` with the project's own patterns, instruments and samples; `Workspace` holds the project that is currently open. Summaries list **projects** by folder (`User\My Song`), and restores offer **P — Whole project folder** to bring back one project with everything in it. Everything else on the card (`Samples`, `Instruments`, `Patches`, `Recordings`, `Firmware` and so on) is backed up as well.
+
+If a backup reports many files as *The device is not ready*, the Tracker has stopped answering in USB drive mode: leave USB mode on the Tracker (or unplug it), reconnect, and run the backup again; it continues with what's missing.
+
 ## Separate card and folder histories
 
 New backups are stored here:
@@ -189,6 +200,7 @@ Start with menu option 3 or `M8Backup.exe --restore`.
 |---|---|
 | **A — All** | All files and empty folders in the snapshot. When browsing current files, metadata and recognisable dated old versions are excluded. |
 | **B — Bundle** | One `Bundles\<name>` folder, including its project, samples, instruments, and empty subfolders. |
+| **P — Whole project folder** | Tracker Mini: one project folder, with its patterns, instruments and samples. |
 | **S — Single file** | Search by name/path and select one song, instrument, sample, or old version. |
 | **D — Song with dependent samples** | Select a song and include the sample paths referenced by its sampler instruments. |
 
@@ -305,7 +317,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
 | `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
-| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 in USB disk mode, or an OP-1 Field or OP-XY in MTP mode); or name it: `m8`, `op1-field` or `op-xy`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
+| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field or OP-XY in MTP mode); or name it: `m8`, `op1-field`, `op-xy` or `tracker-mini`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |

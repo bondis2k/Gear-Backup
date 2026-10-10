@@ -64,7 +64,7 @@ partial class M8Backup
     static int Run(bool restore, bool check, string[] args)
     {
         OperationOutput.WriteLine();
-        OperationOutput.WriteLine("  Dirtywave M8 backup");
+        OperationOutput.WriteLine("  M8 Backup");
         OperationOutput.WriteLine("  ----------------------------------------");
 
         Config config = LoadConfig();
@@ -95,7 +95,7 @@ partial class M8Backup
             OperationOutput.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
             return 0;
         }
-        WriteColored("  Source: " + source, ConsoleColor.Green);
+        WriteColored("  Source: " + source + " (" + device.Name + ")", ConsoleColor.Green);
         string backupRoot = HistoryFor(config, source);
         OperationOutput.WriteLine("  Profile: " + Path.GetFileName(backupRoot));
         string previous = LatestBackup(backupRoot);

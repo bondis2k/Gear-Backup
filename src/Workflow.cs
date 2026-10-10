@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Management;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -33,20 +33,19 @@ partial class M8Backup
             return Path.GetFileName(normalized.TrimEnd('\\'));
         if (normalized == Rooted(Path.GetPathRoot(normalized)))
         {
-            try
-            {
-                using (var volume = new ManagementObject("Win32_LogicalDisk.DeviceID='" + normalized.Substring(0, 2) + "'"))
-                {
-                    volume.Get();
-                    string serial = (volume["VolumeSerialNumber"] ?? "").ToString();
-                    if (serial.Length > 0) return "card-" + serial;
-                }
-            }
-            catch (Exception) { }
+            // Asked of Windows directly: WMI's Win32_LogicalDisk leaves the serial blank for some cards
+            // (the Tracker Mini's exFAT card). Same 8 hex digits as WMI, so existing histories keep their name.
+            uint serial, maxComponent, flags;
+            if (GetVolumeInformationW(normalized, null, 0, out serial, out maxComponent, out flags, null, 0) && serial != 0)
+                return "card-" + serial.ToString("X8");
         }
         using (var sha = SHA256.Create())
             return "folder-" + ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant()))).Substring(0, 16);
     }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool GetVolumeInformationW(string rootPath, StringBuilder volumeName, int volumeNameSize,
+        out uint serialNumber, out uint maxComponentLength, out uint fileSystemFlags, StringBuilder fileSystemName, int fileSystemNameSize);
 
     // Lets the user pick one of the histories that has backups: each profile, plus backups made before
     // profiles existed ("Legacy backups", directly under M8 Backups). Null when cancelled.

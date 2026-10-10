@@ -28,6 +28,10 @@ partial class M8Backup
         public string SongsLabel = "songs";
         // Folders whose files never count as songs, e.g. the OP-XY's automatic project backups.
         public string[] NotSongFolders = new string[0];
+        // Whether each song is a folder holding the song file and everything it uses (the Tracker's
+        // project.mt next to its patterns, instruments and samples). Songs are then named after their
+        // folder, and a whole song folder can be restored.
+        public bool SongIsFolder;
         public string BundlesFolder;       // null when the device has no bundles
         // Lists the sample files a song uses, for "song with samples" restore; null when not supported.
         public Func<string, List<string>> ReadSamplePaths;
@@ -72,8 +76,17 @@ partial class M8Backup
             SongExtensions = new[] { ".xy" }, SongsFolder = @"projects\user", SongsLabel = "projects",
             NotSongFolders = new[] { "backups" }, IconName = "OPXY" };
 
+        // The Polyend Tracker Mini in USB drive mode: disk "POLYEND TRACKER STORAGE" (USB\VID_16D0&PID_1118),
+        // card label TRACKER_M. Each project is a folder, Projects\<group>\<name>\project.mt, with its own
+        // patterns, instruments and samples; Workspace holds the project that is currently open. The name
+        // rules (MaxNameLength, special characters) are the M8's, so there are no name warnings.
+        public static readonly DeviceProfile TrackerMini = new DeviceProfile {
+            Id = "tracker-mini", Name = "Tracker Mini", UsbVendor = "VEN_POLYEND&PROD_TRACKER", VolumeLabel = "TRACKER_M",
+            NameWarnings = false, SongExtensions = new[] { ".mt" }, SongsFolder = "Projects", SongsLabel = "projects",
+            SongIsFolder = true, IconName = "TrackerMini" };
+
         // Detection tries these in order. The first is also the default for a folder of unknown type.
-        public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY };
+        public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY, TrackerMini };
 
         public static DeviceProfile Find(string id)
         {
