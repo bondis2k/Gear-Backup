@@ -36,7 +36,8 @@ partial class M8Backup
         {
             runner = new GuiOperationRunner(this);
             Text = "M8 Backup";
-            // The window uses the icon embedded in the exe (build-gui.cmd adds assets\M8Backup.ico).
+            // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
+            // assets\Backup.ico); only the header picture changes when a device is detected.
             try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10);
             ForeColor = GuiTheme.Ink;
@@ -55,7 +56,7 @@ partial class M8Backup
             var interaction = new GuiInteraction(this);
             using (new OperationContext(interaction, CancellationToken.None).Activate())
                 config = designPreview ? new Config { BackupFolder = @"D:\Music backups" } : LoadConfig();
-            ShowDevice(DeviceFor(config, null));
+            ShowDevice(null);
             source.Text = designPreview ? @"E:\" : config.SourceFolder;
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
             operation.SelectedIndex = config.Mode == BackupMode.Incremental ? 1 : 0;
@@ -242,25 +243,19 @@ partial class M8Backup
 
         public void SetDetectedSource(string found) { source.Text = found; }
 
-        // Shows the device's picture in the header and as the window and taskbar icon. Devices without a
-        // picture, or a build without the embedded pictures, keep what's shown.
+        // Shows a detected device's picture in the header; null shows the general backup picture (at
+        // startup, and when detection finds nothing). The window and taskbar icon never change. A device
+        // without a picture, or a build without the embedded pictures, keeps what's shown.
         public void ShowDevice(DeviceProfile device)
         {
-            if (device == null || device.IconName == null) return;
-            Image image = LoadImage(device.IconName + "-256.png");
-            if (image != null)
-            {
-                Image old = deviceImage.Image;
-                deviceImage.Image = image;
-                deviceImage.AccessibleName = device.Name;
-                if (old != null) old.Dispose();
-            }
-            try
-            {
-                using (Stream stream = Resource(device.IconName + ".ico"))
-                    if (stream != null) Icon = new Icon(stream);
-            }
-            catch (Exception) { }  // the window keeps its current icon
+            string picture = device == null ? "Backup" : device.IconName;
+            if (picture == null) return;
+            Image image = LoadImage(picture + "-256.png");
+            if (image == null) return;
+            Image old = deviceImage.Image;
+            deviceImage.Image = image;
+            deviceImage.AccessibleName = device == null ? "No device detected" : device.Name;
+            if (old != null) old.Dispose();
         }
 
         // build-gui.cmd embeds the device pictures from the assets folder under their file names.

@@ -7,7 +7,7 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 - **Graphical app** — `M8Backup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
 - **Command-line app** — `M8Backup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
 - **Shared engine** — both apps use the same backup, restore and check code and the same `M8Backup.ini`.
-- **App icon** — a tracker-style icon embedded in both programs.
+- **App icon** — a general backup icon (music notes and a backup badge) for both programs, the window and the taskbar; the GUI header shows the M8 or OP-1 Field picture when that device is detected.
 
 ## Sources
 

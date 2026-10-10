@@ -23,7 +23,7 @@ Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallba
 
 Run `build-gui.cmd --no-pause`, then open `M8Backup.GUI.exe`. The existing `M8Backup.exe` command-line interface remains available separately. Both executables use `M8Backup.ini` beside them and the same backup histories and file operations.
 
-1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: an M8 in USB disk mode, or an [OP-1 Field](#teenage-engineering-op-1-field) in MTP mode.
+1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: an M8 in USB disk mode, or an [OP-1 Field](#teenage-engineering-op-1-field) in MTP mode. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
 3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too.
 4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.

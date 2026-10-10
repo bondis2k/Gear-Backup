@@ -20,7 +20,7 @@ partial class M8Backup
         public bool Mtp { get { return MtpVendor != null; } }
         // Whether to warn about file names the device may not handle (MaxNameLength, special characters).
         public bool NameWarnings = true;
-        // Its picture in the GUI: assets\<IconName>.ico and assets\<IconName>-256.png, embedded in the GUI exe.
+        // Its picture in the GUI header once detected: assets\<IconName>-256.png, embedded in the GUI exe.
         public string IconName;
         public string[] SongExtensions = new string[0];
         public string SongsFolder;         // left out of song names in summaries, e.g. "Songs"
