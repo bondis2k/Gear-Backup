@@ -47,7 +47,11 @@ partial class GearBackup
                     MtpSource mtp = FindMtpSource();
                     if (mtp != null)
                     {
-                        form.OnUi(delegate { form.ShowDevice(mtp.Device); return true; });
+                        bool settingsMode = mtp.Device == Devices.X100VI && FujiSettingsMode(mtp.Info);
+                        string mode = mtp.Device == Devices.X100VI ? FujiModeName(settingsMode) : null;
+                        form.OnUi(delegate { form.ShowDevice(mtp.Device, mode); if (settingsMode) form.SelectCameraSettings(); return true; });
+                        if (settingsMode) return new OperationResult { Summary = "X100VI detected in settings mode. Back up C1–C7 recipes and shooting settings with the selected operation." };
+                        if (mtp.Device == Devices.X100VI) return new OperationResult { Summary = "X100VI detected in photo-transfer mode (USB card reader / MTP). Leave the source empty to back up photos and videos." };
                         return new OperationResult { Summary = mtp.Device.Name + " detected over MTP. Leave the source empty to back it up." };
                     }
                 }
@@ -70,10 +74,16 @@ partial class GearBackup
             }, previewOnly);
         }
 
-        // choice is the operation list's index: 0 full backup, 1 incremental, 2 restore, 3 check.
+        // 0 full backup, 1 incremental, 2 restore, 3 check, 4 X100VI settings snapshot.
         OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp,
             DeviceProfile knownDevice, OperationContext context)
         {
+            if (choice == 4)
+            {
+                OperationResult settingsResult = RunFujiSettingsBackup(options);
+                form.OnUi(delegate { form.ShowDevice(Devices.X100VI, FujiModeName(true)); return true; });
+                return settingsResult;
+            }
             string histories = HistoriesRoot(options);
             if (choice == 3)
             {
@@ -87,6 +97,7 @@ partial class GearBackup
             string selected = options.SourceFolder, pnp = null;
             DeviceProfile detected = null;
             MtpSource mtp = null;
+            string detectedMode = null;
             if (selected.Length == 0)
             {
                 selected = FindDevice(out detected, out pnp);
@@ -100,6 +111,7 @@ partial class GearBackup
                         throw new IOException("Choose a source folder, or connect the " + Devices.Names + ".");
                     }
                     detected = mtp.Device;
+                    if (detected == Devices.X100VI) detectedMode = FujiModeName(FujiSettingsMode(mtp.Info));
                     Directory.CreateDirectory(mtp.Mirror);
                     selected = mtp.Mirror;
                 }
@@ -111,7 +123,7 @@ partial class GearBackup
                 }
                 // Only detection changes the header picture; a folder chosen by hand leaves it as it is.
                 DeviceProfile shown = detected;
-                form.OnUi(delegate { form.ShowDevice(shown); return true; });
+                form.OnUi(delegate { form.ShowDevice(shown, detectedMode); return true; });
             }
             selected = Rooted(selected);
             if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);

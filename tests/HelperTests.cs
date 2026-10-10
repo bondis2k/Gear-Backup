@@ -37,6 +37,7 @@ partial class GearBackup
         RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
         RunTest("History names per device", () => TestProfileNames(dir));
         RunTest("X100VI: photos", () => TestX100VI(dir));
+        RunTest("X100VI: settings capture and selector safety", () => TestFujiSettings(Folder(dir, "fuji-settings")));
         RunTest("Gear Backup identity and upgrade compatibility", () => TestIdentityUpgrade(Folder(root, "identity-upgrade")));
     }
 

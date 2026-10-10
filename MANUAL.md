@@ -147,6 +147,24 @@ Summaries list **photos and videos** by name (`100_FUJI\DSCF0689`); a shot saved
 
 The mirror keeps a copy of the camera's card on the PC, so incremental backups only download new photos; it takes as much space as the photos on the camera.
 
+### Recipes and shooting settings
+
+Choose **USB RAW CONV./BACKUP RESTORE** on the camera, then select **Back up X100VI settings** in the GUI, or run:
+
+```cmd
+GearBackup.exe --camera-settings --no-pause
+```
+
+Close other camera applications first and leave the camera controls untouched during capture. **Detect device** shows **settings mode** or **photo-transfer mode** beside the X100VI name in the header and describes the mode in the result. It selects the settings operation when it finds the camera in settings mode. The source-folder field is unused; the backup location and optional profile still apply. Photo backups require **USB card reader** mode and explain this if the camera is in settings mode.
+
+This operation captures the names and 23 raw property values for **C1–C7**, plus the readable current shooting settings: image size/quality, dynamic range, film simulation, grain and color effects, white balance and shifts, tone, color, sharpness, noise reduction, clarity, lens modulation optimizer and color space. XML files retain numeric values and exact little-endian bytes; unavailable shooting properties are marked explicitly. Enum numbers are camera protocol values, not necessarily the numbers shown in camera menus.
+
+The camera's recipe read selector is temporarily changed to read each bank, then restored and checked. Shooting values are compared before and after capture. Cancel also restores the selector before stopping. If the camera disconnects and the selector cannot be restored, the operation reports the failure; reconnect and check the selected recipe before retrying.
+
+Each run makes a **new dated full backup**, with normal checksums, snapshots, verification, retention and optional ZIP. The automatic profile is `x100vi-settings-<serial>`, separate from photo backups. A custom `Profile` overrides it, so use a separate name for settings. `Mode` and `SourceFolder` do not affect this operation. **Preview** captures the values and displays the file plan without saving a backup; temporary capture files are removed.
+
+This is **not a full-camera backup** or an X Acquire/Tether App settings file. Button assignments, network configuration and other setup menus are outside its scope. Gear Backup can restore the XML files to a PC folder for reference, but does **not** write settings back to the camera. Use Fujifilm's software for its native full settings backup/restore workflow. Direct capture was tested with an X100VI on firmware **1.32**.
+
 ## Separate card and folder histories
 
 New backups are stored here:
@@ -410,7 +428,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 ## Command line and exit codes
 
 ```
-GearBackup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
+GearBackup.exe [--restore | --check | --camera-settings] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 ```
 
 Examples:
@@ -421,6 +439,7 @@ GearBackup.exe --source D:\M8Card --preview
 GearBackup.exe --source E:\ --zip
 GearBackup.exe --restore --source E:\ --preview
 GearBackup.exe --check --profile "Studio M8" --no-pause
+GearBackup.exe --camera-settings --zip --no-pause
 ```
 
 | Exit code | Meaning |
@@ -430,6 +449,8 @@ GearBackup.exe --check --profile "Studio M8" --no-pause
 | `2` | A backup, restore, or integrity check finished with failures. |
 
 Unknown arguments and missing argument values are errors. The program remains interactive even with `--no-pause`; that option only suppresses the final exit prompt. A history lock prevents two instances writing the same history concurrently. It does not prevent another application or another history from accessing the same card.
+
+`--camera-settings` captures X100VI recipes and shooting settings. It cannot be combined with `--restore`, `--check` or `--source`; `--profile`, `--zip` and `--preview` are supported.
 
 ## Building and testing
 
@@ -462,6 +483,8 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `AppIdentity.cs` | Shared product identity, storage names and compatibility with earlier settings and histories. |
 | `AssemblyInfo.cs` | Executable metadata using the shared application name and release version. |
 | `Program.cs` | CLI arguments, source selection and menu. |
+| `FujiPtp.cs` | Windows PTP settings reads and restricted recipe read-bank selection. |
+| `FujiSettings.cs` | X100VI capability validation, capture, selector restoration, XML export and settings backup workflow. |
 | `Session.cs` | Workflow steps shared by the CLI and GUI: history per source, check target, history lock, resume question, same-device check before ejecting. |
 | `Config.cs` | INI defaults and parsing. |
 | `Workflow.cs` | Profiles, previews, status, atomic metadata writes. |

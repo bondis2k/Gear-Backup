@@ -69,6 +69,8 @@ partial class GearBackup
     // Brings the device's mirror up to date and returns its path, ready to be backed up.
     static string SyncMtpSource(MtpSource mtp)
     {
+        if (mtp.Device == Devices.X100VI && FujiSettingsMode(mtp.Info))
+            throw new IOException("The X100VI is in settings mode. Choose Back up X100VI settings (CLI: --camera-settings), or select USB card reader on the camera to back up photos.");
         OperationOutput.WriteLine("  Reading the " + mtp.Device.Name + " over MTP into " + mtp.Mirror);
         MirrorResult result;
         using (var device = new MtpDevice(mtp.Info.InterfacePath)) result = SyncMirror(device, mtp.Mirror);

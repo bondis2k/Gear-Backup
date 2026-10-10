@@ -152,7 +152,7 @@ partial class GearBackup
             for (int i = 0; i < 4; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
             // The index is the operation number GuiOperationRunner.Execute uses: 0 full, 1 incremental, 2 restore, 3 check.
-            operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups" });
+            operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups", "Back up X100VI settings" });
             operation.SelectedIndex = 0; operation.Margin = new Padding(0, 4, 24, 0);
             zip.Margin = new Padding(0, 8, 20, 0); zip.ForeColor = GuiTheme.Ink;
             actions.Controls.Add(operation, 0, 0); actions.Controls.Add(zip, 1, 0);
@@ -248,24 +248,26 @@ partial class GearBackup
             Config copy = config.Clone();
             copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
                 ? Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) : ExpandPath(backupFolder.Text);
-            copy.SourceFolder = forOperation && operation.SelectedIndex == 3 ? "" : ExpandPath(source.Text);
+            copy.SourceFolder = forOperation && (operation.SelectedIndex == 3 || operation.SelectedIndex == 4) ? "" : ExpandPath(source.Text);
             copy.Profile = profile.Text.Trim();
-            copy.Zip = zip.Checked && operation.SelectedIndex == 0;
+            copy.Zip = zip.Checked && (operation.SelectedIndex == 0 || operation.SelectedIndex == 4);
             if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
             return copy;
         }
         void RefreshOperationControls()
         {
-            bool checking = operation.SelectedIndex == 3, restoring = operation.SelectedIndex == 2;
-            sourceCaption.Text = checking ? "Source not needed · select backups from the backup location" :
+            bool checking = operation.SelectedIndex == 3, restoring = operation.SelectedIndex == 2, cameraSettings = operation.SelectedIndex == 4;
+            sourceCaption.Text = cameraSettings ? "X100VI · USB RAW CONV./BACKUP RESTORE · C1–C7 and shooting settings" :
+                checking ? "Source not needed · select backups from the backup location" :
                 restoring ? "Restore destination · folder or connected card" : "Source folder · leave blank to detect a device";
             source.AccessibleName = restoring ? "Restore destination" : "Source folder";
             sourceBrowse.AccessibleName = restoring ? "Browse restore destination" : "Browse source folder";
-            source.Enabled = sourceBrowse.Enabled = detect.Enabled = !checking && !runner.IsBusy;
+            source.Enabled = sourceBrowse.Enabled = detect.Enabled = !checking && !cameraSettings && !runner.IsBusy;
             start.Text = restoring ? "Restore" : checking ? "Check" : "Back up";
             preview.Enabled = !checking && !runner.IsBusy;
-            zip.Enabled = operation.SelectedIndex == 0 && !runner.IsBusy;
+            zip.Enabled = (operation.SelectedIndex == 0 || cameraSettings) && !runner.IsBusy;
         }
+        public void SelectCameraSettings() { operation.SelectedIndex = 4; }
         void RefreshProgressMetrics()
         {
             if (!elapsed.IsRunning) return;
@@ -312,7 +314,7 @@ partial class GearBackup
         {
             inputs.Enabled = !busy; operation.Enabled = !busy; start.Enabled = !busy; settings.Enabled = !busy;
             preview.Enabled = !busy && operation.SelectedIndex != 3; cancel.Enabled = busy;
-            zip.Enabled = !busy && operation.SelectedIndex == 0;
+            zip.Enabled = !busy && (operation.SelectedIndex == 0 || operation.SelectedIndex == 4);
             openFolder.Enabled = !busy;
             if (busy) { status.ForeColor = GuiTheme.Ink; status.Text = "Preparing"; detail.Text = "You can cancel at any time."; progress.Style = ProgressBarStyle.Marquee; }
             else { progress.Style = ProgressBarStyle.Continuous; }
@@ -337,9 +339,10 @@ partial class GearBackup
         // Shows a detected device's picture in the header; null shows the general backup picture (at
         // startup, and when detection finds nothing). The window and taskbar icon never change. A device
         // without a picture, or a build without the embedded pictures, keeps what's shown.
-        public void ShowDevice(DeviceProfile device)
+        public void ShowDevice(DeviceProfile device, string mode = null)
         {
-            deviceName.Text = device == null ? "No device detected" : device.Name + " · detected";
+            deviceName.Text = device == null ? "No device detected" : device.Name + " · detected" +
+                (string.IsNullOrEmpty(mode) ? "" : " · " + mode);
             string picture = device == null ? "Backup" : device.IconName;
             if (picture == null) return;
             Image image = LoadImage(picture + "-256.png");

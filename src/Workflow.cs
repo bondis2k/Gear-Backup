@@ -140,6 +140,8 @@ partial class GearBackup
                 source = mtp.Mirror;
                 Directory.CreateDirectory(source);
                 OperationOutput.WriteLine("  " + mtp.Device.Name + " found over MTP (" + mtp.Info.FriendlyName + ", serial " + mtp.Info.Serial + ").");
+                if (mtp.Device == Devices.X100VI)
+                    OperationOutput.WriteLine("  Camera connection: " + FujiModeName(FujiSettingsMode(mtp.Info)) + ".");
             }
             else if (source == null)
             {

@@ -10,9 +10,10 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 | Polyend Tracker Mini | USB drive | yes, or drive labelled `TRACKER_M`; its card in a reader by `trackerConfig` | yes | yes | projects (folders with `project.mt`) | whole project folder | no |
 | Teenage Engineering OP-1 Field | MTP | yes | no, restores to a PC folder | not needed | — (file counts only) | — | no |
 | Teenage Engineering OP-XY | MTP | yes | no, restores to a PC folder | not needed | projects (`.xy`) | — | no |
-| Fujifilm X100VI | MTP | yes | no, restores to a PC folder | not needed | photos and videos (a JPG + RAF shot counts once) | — | no |
+| Fujifilm X100VI | MTP for photos; PTP for settings | yes, with connection mode shown | no, restores exported files to a PC folder | not needed | photos and videos (a JPG + RAF shot counts once) | — | no |
 
 Every feature in the sections after **Devices** works for all of them, unless marked otherwise.
+X100VI settings capture makes dated full backups only; incremental photo-mirror behavior and resume do not apply to that capture operation.
 
 ## Devices
 
@@ -47,18 +48,28 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 - **Photos and videos** — summaries list shots by name (JPG, RAF, HIF, MOV); a shot saved as JPG and RAF counts once.
 - **Capture dates** — files keep the time the photo was taken, which the camera reports instead of a modified date.
 - **Restore warning** — explains why photos aren't restored to the camera, and asks before restoring them onto a memory card.
+- **Connection mode** — detection identifies settings mode or photo-transfer mode in the GUI header and result, and in CLI source detection.
+- **Recipe backup** — captures all C1–C7 names and 23 raw properties per recipe in USB RAW CONV./BACKUP RESTORE mode (GUI operation or `--camera-settings`).
+- **Shooting settings** — captures readable current shooting values separately, with unavailable properties marked explicitly.
+- **Settings exports** — XML retains exact raw bytes and numeric values, with camera model, serial and firmware; each run makes a dated full backup in a separate automatic settings profile, with normal checksums, history and optional ZIP.
+- **Selector safety** — restores and verifies the original recipe read selector after capture or cancellation, checks that shooting values stayed unchanged, and prevents concurrent settings captures by Gear Backup.
+- **Settings scope** — recipe and shooting-settings export only; full-camera setup menus and native Fujifilm backup files are not captured, and settings are not written back to the camera.
 
 ### All devices
 
 - **Device profiles** — everything device-specific is described per device, so new devices can be added (`Device` names one when it can't be detected).
-- **Device picture** — the GUI header shows the detected device's picture.
+- **Device picture and name** — the GUI header shows the detected device's picture and name.
 
 ## Interfaces
 
 - **Graphical app** — `GearBackup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
-- **Command-line app** — `GearBackup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
+- **Command-line app** — `GearBackup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--camera-settings`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
 - **Shared engine** — both apps use the same backup, restore and check code and the same `GearBackup.ini`.
 - **App icon** — a general backup icon (a memory card with a backup badge, for any device) for both programs, the window and the taskbar.
+- **Operation-specific fields** — source controls adapt to backup, restore, check and camera settings operations; unused source fields are disabled.
+- **Grouped settings** — Backup, Restore and Device tabs, with the recovery location enabled only when recovery copies are selected.
+- **Keyboard and accessibility** — keyboard shortcuts, tooltips, accessible control names, DPI awareness and layouts that adapt to smaller screens.
+- **HTML help** — Help and F1 open an illustrated offline HTML manual in the default browser; GUI builds generate it beside the executable.
 
 ## Sources
 
@@ -115,13 +126,17 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 ## Previews and progress
 
 - **Preview** — lists planned actions and asks before copying (`Preview`).
-- **Preview only** — `--preview` shows the plan and changes nothing.
+- **GUI preview table** — action, path and size columns with search and action filters; filtering does not change the plan that will be executed.
+- **Preview only** — `--preview` shows the plan without saving a backup or changing restore targets; camera settings preview temporarily selects recipe read banks and restores the selector.
+- **Unchanged incremental backups** — omit skipped files from the acceptance list and finish without a proceed question when no files changed.
 - **Progress** — shows scanning, copying, hashing and checking progress.
+- **Overall full-backup progress** — suppresses individual file paths during full backups; the GUI shows percentage, processed bytes and elapsed time when available.
 - **Cancel** — Cancel in the app or Ctrl+C stops safely, with no partial files left behind.
 
 ## Reports and notifications
 
 - **Statistics** — every backup saves a report of files, sizes, speed, warnings, failures and free space.
+- **GUI completion** — shows copied, unchanged, removed and failed counts, with a button to open the output folder.
 - **Change summary** — lists new, edited and removed songs, projects or photos since the last backup (file counts for devices without them).
 - **Notifications** — the command-line app shows a Windows notification with the result.
 - **Eject** — leave a USB-drive device connected, ask, or eject it automatically, only if it's still the same device (`Eject`).
@@ -134,5 +149,6 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 
 ## Development
 
-- **No install needed** — builds with the C# compiler included in Windows (`build.cmd`, `build-gui.cmd`).
-- **Automated tests** — integration tests for the engines and the GUI (`tests\run-tests.ps1`, `tests\run-gui-tests.ps1`).
+- **Local builds** — uses the C# compiler included in Windows (`build.cmd`, `build-gui.cmd`); GUI manual generation requires PowerShell 7.
+- **Installers** — per-user setup and portable extraction packages include both interfaces and the offline manual; upgrades preserve INI settings.
+- **Automated tests** — engine and GUI regression tests, including camera capture, malformed metadata, interrupted transfers and selector restoration (`tests\run-tests.ps1`, `tests\run-gui-tests.ps1`).

@@ -66,12 +66,25 @@ partial class GearBackup
             Assert(deviceImage.AccessibleName == "Tracker Mini" && deviceImage.Image != null, "a detected Tracker Mini shows its picture");
             ((MainForm)form).ShowDevice(Devices.X100VI);
             Assert(deviceImage.AccessibleName == "X100VI" && deviceImage.Image != null, "a detected X100VI shows its picture");
+            ((MainForm)form).ShowDevice(Devices.X100VI, FujiModeName(true));
+            Assert(deviceLabel.Text.Contains("settings mode"), "camera settings mode remains visible in the header");
+            ((MainForm)form).ShowDevice(Devices.X100VI, FujiModeName(false));
+            Assert(deviceLabel.Text.Contains("photo-transfer mode") && !deviceLabel.Text.Contains("settings mode"),
+                "camera photo mode replaces the previously displayed settings mode");
             ((MainForm)form).ShowDevice(Devices.M8);
             Assert(deviceImage.AccessibleName == "M8", "a detected M8 shows its picture");
             ((MainForm)form).ShowDevice(null);
             Assert(deviceImage.AccessibleName == "No device detected", "no device detected brings back the general picture");
             Assert(form.Icon == windowIcon, "the window and taskbar icon never change");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
+            mode.SelectedIndex = 4;
+            Assert(!sourceBox.Enabled && preview.Enabled && zipBox.Enabled && sourceLabel.Text.Contains("C1–C7"),
+                "camera settings operation uses the connected camera, supports preview and zip, and identifies its scope");
+            sourceBox.Text = "invalid|unused";
+            var settingsConfig = (Config)typeof(MainForm).GetMethod("CaptureConfig", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Invoke(form, new object[] { true });
+            Assert(settingsConfig.SourceFolder == "", "camera settings capture ignores an unused source path");
+            sourceBox.Text = source;
             mode.SelectedIndex = 3;
             Assert(!sourceBox.Enabled && sourceLabel.Text.Contains("not needed"), "check mode disables the unused source and explains it");
             Assert(start.Text == "Check" && !preview.Enabled, "GUI check mode disables copy preview");
