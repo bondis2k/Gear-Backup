@@ -71,8 +71,7 @@ partial class M8Backup
         public void ReportProgress(OperationProgress progress)
         {
             if (Console.IsOutputRedirected) return;
-            if (progress.OverallOnly && (progress.Stage == "Copying" || progress.Stage == "Hashing" || progress.Stage == "Verifying" ||
-                progress.Stage == "Comparing" || progress.Stage == "Scanning backup")) return;
+            if (progress.OverallOnly && Stage.IsFileDetail(progress.Stage)) return;
             DateTime now = DateTime.UtcNow;
             bool changed = progress.Stage != lastStage;
             bool finished = progress.TotalBytes > 0 && progress.Bytes == progress.TotalBytes;
@@ -80,7 +79,7 @@ partial class M8Backup
             if (changed) Console.WriteLine();
             lastStage = progress.Stage;
             lastProgress = now;
-            if (progress.Stage == "Backup copy")
+            if (progress.Stage == Stage.BackupCopy)
             {
                 int percent = progress.TotalBytes == 0 ? 100 : (int)(progress.Bytes * 100 / progress.TotalBytes);
                 Console.Write("\r  {0,3}%  {1}/{2} files processed      ", percent, progress.Files, progress.TotalFiles);
@@ -135,7 +134,7 @@ partial class M8Backup
 
     static void PrintProgress(long processedBytes, long totalBytes, int done, int total, long copiedBytes)
     {
-        OperationContext.Current.Progress("Backup copy", "", processedBytes, totalBytes, done, total);
+        OperationContext.Current.Progress(Stage.BackupCopy, "", processedBytes, totalBytes, done, total);
     }
 
     static string FormatSize(long bytes)

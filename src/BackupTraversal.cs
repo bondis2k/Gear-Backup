@@ -9,7 +9,7 @@ partial class M8Backup
     {
         foreach (FileSystemInfo entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
         {
-            OperationContext.Current.Progress("Scanning backup", entry.FullName, 0, 0);
+            OperationContext.Current.Progress(Stage.ScanningBackup, entry.FullName, 0, 0);
             if (IsBackupMetaFile(entry.FullName)) continue;
             if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked backup paths are not supported: " + entry.FullName);

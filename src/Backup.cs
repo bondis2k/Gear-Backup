@@ -194,7 +194,7 @@ partial class M8Backup
     // Walks the tree, skipping Windows system folders and leftovers from other computers (see IsLeftover).
     static void CollectFiles(string dir, ScanResult scan)
     {
-        OperationContext.Current.Progress("Scanning", dir, 0, 0, scan.Files.Count);
+        OperationContext.Current.Progress(Stage.Scanning, dir, 0, 0, scan.Files.Count);
         try
         {
             foreach (FileInfo file in new DirectoryInfo(dir).EnumerateFiles())

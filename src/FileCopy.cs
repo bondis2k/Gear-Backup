@@ -41,7 +41,7 @@ partial class M8Backup
             int count;
             while ((count = ReadBlock(a, left)) > 0)
             {
-                OperationContext.Current.Progress("Comparing", first, a.Position, a.Length);
+                OperationContext.Current.Progress(Stage.Comparing, first, a.Position, a.Length);
                 if (ReadBlock(b, right) != count) return false;
                 for (int i = 0; i < count; i++) if (left[i] != right[i]) return false;
             }
@@ -183,7 +183,7 @@ partial class M8Backup
                     sha.TransformBlock(current, 0, read, null, 0);
                     output.Write(current, 0, read);
                     done += read;
-                    OperationContext.Current.Progress("Copying", label, done, total);
+                    OperationContext.Current.Progress(Stage.Copying, label, done, total);
                     read = Result(pending);
                     pending = null;
                     spare = current;
@@ -230,7 +230,7 @@ partial class M8Backup
             while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
             {
                 sha.TransformBlock(buffer, 0, read, null, 0);
-                OperationContext.Current.Progress("Hashing", path, input.Position, input.Length);
+                OperationContext.Current.Progress(Stage.Hashing, path, input.Position, input.Length);
             }
             sha.TransformFinalBlock(buffer, 0, 0);
             return ToHex(sha.Hash);
@@ -274,7 +274,7 @@ partial class M8Backup
                         Marshal.Copy(aligned, buffer, 0, read);
                         sha.TransformBlock(buffer, 0, read, null, 0);
                         done += read;
-                        OperationContext.Current.Progress("Verifying", path, done, total);
+                        OperationContext.Current.Progress(Stage.Verifying, path, done, total);
                     }
                     sha.TransformFinalBlock(buffer, 0, 0);
                     return ToHex(sha.Hash);

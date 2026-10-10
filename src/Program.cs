@@ -100,11 +100,11 @@ partial class M8Backup
         bool incremental = false;
         if (!restore && previous != null)
         {
-            if (config.Mode == "incremental")
+            if (config.Mode == BackupMode.Incremental)
             {
                 incremental = true;
             }
-            else if (config.Mode == "ask")
+            else if (config.Mode == BackupMode.Ask)
             {
                 OperationOutput.WriteLine("  Last backup: " + previous);
                 OperationOutput.WriteLine();
@@ -122,7 +122,7 @@ partial class M8Backup
                 restore = choice == '3';
             }
         }
-        else if (!restore && previous == null && config.Mode == "ask" && HasHistory(histories))
+        else if (!restore && previous == null && config.Mode == BackupMode.Ask && HasHistory(histories))
         {
             OperationOutput.WriteLine("  No backups yet for this profile; other histories are available.");
             OperationOutput.WriteLine("    1) Full backup for this profile");
@@ -153,7 +153,7 @@ partial class M8Backup
             else if (pnpId != null)
             {
                 // Same check as the GUI: never eject a device that no longer owns this source.
-                string changed = config.Eject == "no" ? null : ConfirmSameDevice(source, pnpId);
+                string changed = config.Eject == EjectMode.No ? null : ConfirmSameDevice(source, pnpId);
                 if (changed == null) Finish(pnpId, result.Title, result.Summary, config.Eject);
                 else
                 {

@@ -9,16 +9,16 @@ partial class M8Backup
 {
     // Shows the final notification and handles ejecting, depending on the Eject setting:
     // "no" = just the summary, "ask" = "Eject M8" / "Not now" buttons, "yes" = eject straight away.
-    static void Finish(string pnpId, string title, string summary, string ejectMode)
+    static void Finish(string pnpId, string title, string summary, EjectMode ejectMode)
     {
-        if (ejectMode == "no")
+        if (ejectMode == EjectMode.No)
         {
             ShowToast(title, summary, false);
             Console.WriteLine("  M8 left connected.");
             return;
         }
 
-        if (ejectMode == "ask")
+        if (ejectMode == EjectMode.Ask)
         {
             bool? answer = ShowToast(title, summary + " Eject the M8?", true);
             if (answer == null) answer = AskInConsole("  Eject the M8 now? (y/n) ");
@@ -37,7 +37,7 @@ partial class M8Backup
 
         // With Eject=yes this is the only notification, so it carries the summary too
         string result = error == null ? "M8 ejected; it is safe to unplug it." : "Could not eject the M8: " + error;
-        if (ejectMode == "yes")
+        if (ejectMode == EjectMode.Yes)
             ShowToast(title, summary + " " + result, false);
         else
             ShowToast(error == null ? "M8 ejected" : "Could not eject the M8",

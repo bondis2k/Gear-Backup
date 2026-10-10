@@ -83,7 +83,7 @@ partial class M8Backup
             long bytes = 0, missingBytes = 0;
             foreach (RestoreEntry item in items)
             {
-                OperationContext.Current.Progress("Planning restore", item.Relative, 0, 0);
+                OperationContext.Current.Progress(Stage.PlanningRestore, item.Relative, 0, 0);
                 string target = SafePath(m8, item.Relative);
                 CheckParents(m8, target);
                 if (Directory.Exists(target)) throw new IOException("A folder blocks the file: " + item.Relative);
@@ -170,7 +170,7 @@ partial class M8Backup
             }
             foreach (RestoreEntry item in copies)
             {
-                OperationContext.Current.Progress("Restoring", item.Relative, 0, 0);
+                OperationContext.Current.Progress(Stage.Restoring, item.Relative, 0, 0);
                 string target = SafePath(targetRoot, item.Relative);
                 string temp = Path.Combine(Path.GetDirectoryName(target), ".m8restore-" + Guid.NewGuid().ToString("N") + ".tmp");
                 try

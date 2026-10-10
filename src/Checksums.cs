@@ -46,7 +46,7 @@ partial class M8Backup
         int count = 0;
         foreach (string path in files)
         {
-            OperationContext.Current.Progress("Saving checksums", path, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingChecksums, path, 0, 0);
             if (IsBackupMetaFile(path)) continue;
             string relative = path.Substring(folder.Length).TrimStart('\\');
             string hash;
@@ -162,7 +162,7 @@ partial class M8Backup
                 damaged++;
                 if (hash != null) problems.Add("damaged: " + entry.Key);
             }
-            OperationContext.Current.Progress("Checking backup", entry.Key, doneBytes, totalBytes, done, sums.Count);
+            OperationContext.Current.Progress(Stage.CheckingBackup, entry.Key, doneBytes, totalBytes, done, sums.Count);
         }
         OperationOutput.WriteLine();
 

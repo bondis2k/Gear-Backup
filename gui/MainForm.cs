@@ -53,7 +53,7 @@ partial class M8Backup
                 config = designPreview ? new Config { BackupFolder = @"D:\Music backups" } : LoadConfig();
             source.Text = designPreview ? @"E:\" : config.SourceFolder;
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
-            operation.SelectedIndex = config.Mode == "incremental" ? 1 : 0;
+            operation.SelectedIndex = config.Mode == BackupMode.Incremental ? 1 : 0;
             start.Click += delegate { StartOperation(false); };
             preview.Click += delegate { StartOperation(true); };
             cancel.Click += delegate { RequestCancel(); };
@@ -173,8 +173,7 @@ partial class M8Backup
         }
         public void UpdateProgress(OperationProgress value)
         {
-            if (value.OverallOnly && (value.Stage == "Copying" || value.Stage == "Hashing" || value.Stage == "Verifying" ||
-                value.Stage == "Comparing" || value.Stage == "Scanning backup")) return;
+            if (value.OverallOnly && Stage.IsFileDetail(value.Stage)) return;
             lock (queueLock) pendingProgress = value;
         }
         public void DrainDisplay()

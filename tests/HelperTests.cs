@@ -222,8 +222,8 @@ partial class M8Backup
     static void TestSettings(string dir)
     {
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
-        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = "incremental", Verify = true, KeepBackups = 4,
-            MaxNameLength = 40, Eject = "ask", KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
+        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
+            MaxNameLength = 40, Eject = EjectMode.Ask, KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
             SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, Zip = true };
         string ini = Path.Combine(dir, "roundtrip.ini");
         WithUi(() => SaveConfig(saved, ini));
@@ -248,11 +248,11 @@ partial class M8Backup
             ApplySetting(config, "Eject", "maybe");
             ApplySetting(config, "Verify", "perhaps");
         });
-        Assert(config.Mode == "ask" && config.KeepBackups == 0 && config.Eject == "no" && !config.Verify, "invalid values keep the defaults");
+        Assert(config.Mode == BackupMode.Ask && config.KeepBackups == 0 && config.Eject == EjectMode.No && !config.Verify, "invalid values keep the defaults");
         Assert(ui.Output.ToString().Contains("Mode=sometimes isn't valid") && ui.Output.ToString().Contains("KeepBackups=-1 isn't valid"),
             "invalid values are reported");
         WithUi(() => { ApplySetting(config, "VERIFY", "On"); ApplySetting(config, "eject", "YES"); ApplySetting(config, "Mode", "Full"); });
-        Assert(config.Verify && config.Eject == "yes" && config.Mode == "full", "setting names and values aren't case-sensitive");
+        Assert(config.Verify && config.Eject == EjectMode.Yes && config.Mode == BackupMode.Full, "setting names and values aren't case-sensitive");
     }
 
     static void TestRetention(string dir)
@@ -302,19 +302,19 @@ partial class M8Backup
         bool? answer = true;
         TestInteraction ui = WithUi(() => { answer = ConfirmResume(backup, true, config); });
         Assert(answer == true && ui.Questions.Count == 0, "no question when the latest backup has no unfinished status");
-        SetBackupStatus(backup, "complete");
+        SetBackupStatus(backup, Status.Complete);
         WithUi(() => { answer = ConfirmResume(backup, false, config); });
         Assert(answer == false, "a complete backup keeps the chosen mode");
-        SetBackupStatus(backup, "incomplete");
+        SetBackupStatus(backup, Status.Incomplete);
         WithUi(() => { answer = ConfirmResume(backup, false, config); }, 'r');
         Assert(answer == true, "Resume continues into the unfinished backup");
         WithUi(() => { answer = ConfirmResume(backup, true, config); }, 'n');
         Assert(answer == false, "New full backup is chosen instead of resuming");
-        SetBackupStatus(backup, "failed");
+        SetBackupStatus(backup, Status.Failed);
         WithUi(() => { answer = ConfirmResume(backup, true, config); }, 'c');
         Assert(answer == null, "Cancel returns no choice");
         Assert(ConfirmResume(null, true, config) == true, "with no backup yet, nothing is asked");
-        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == "legacy (status unknown)", "backups without a status file are legacy");
+        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Legacy, "backups without a status file are legacy");
 
         var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
         Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "M8 Backups", "card")), "a source inside the backup location is rejected");
@@ -343,18 +343,18 @@ partial class M8Backup
         var ui = new TestInteraction();
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         string backup = ListBackups(history)[0];
-        Assert(result.ExitCode == 2 && result.Summary.Contains("zip could not be saved") && BackupStatus(backup) == "complete",
+        Assert(result.ExitCode == 2 && result.Summary.Contains("zip could not be saved") && BackupStatus(backup) == Status.Complete,
             "a zip that can't be saved gives exit code 2, but the backup stays complete");
         Directory.Delete(Path.Combine(history, date + ".zip.tmp"));
 
         // Cancelling while zipping leaves no partial zip; the finished backup stays complete.
         var cts = new CancellationTokenSource();
         ui = new TestInteraction();
-        ui.OnProgress = delegate(OperationProgress p) { if (p.Stage == "Zipping") cts.Cancel(); };
+        ui.OnProgress = delegate(OperationProgress p) { if (p.Stage == Stage.Zipping) cts.Cancel(); };
         Put(Path.Combine(source, "Samples", "b.wav"), "B");
         result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, cts.Token));
         string second = ListBackups(history)[1];
-        Assert(result.Cancelled && BackupStatus(second) == "complete", "cancelling the zip leaves the finished backup complete");
+        Assert(result.Cancelled && BackupStatus(second) == Status.Complete, "cancelling the zip leaves the finished backup complete");
         Assert(Directory.GetFiles(history, "*.tmp").Length == 0 && !File.Exists(second + ".zip"), "a cancelled zip leaves nothing behind");
 
         // Without --zip, nothing is zipped.

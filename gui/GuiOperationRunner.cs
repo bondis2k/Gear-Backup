@@ -100,12 +100,12 @@ partial class M8Backup
                 result.Cancelled |= context.Cancellation.IsCancellationRequested;
             }
             else result = BackupWithLock(selected, root, choice == 1, options);
-            if (!previewOnly && !result.Cancelled && result.ExitCode == 0 && result.Title != null && pnp != null && options.Eject != "no")
+            if (!previewOnly && !result.Cancelled && result.ExitCode == 0 && result.Title != null && pnp != null && options.Eject != EjectMode.No)
             {
                 string changed = ConfirmSameDevice(selected, pnp);
                 if (changed != null) { OperationOutput.WriteLine(changed); return result; }
                 context.CheckCancellation();
-                bool eject = options.Eject == "yes" || AskInConsole("Safely eject the M8 now? (y/n)");
+                bool eject = options.Eject == EjectMode.Yes || AskInConsole("Safely eject the M8 now? (y/n)");
                 if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? "M8 safely ejected." : "Could not eject: " + error); }
             }
             return result;

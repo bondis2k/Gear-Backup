@@ -99,7 +99,7 @@ partial class M8Backup
         PreviewOnly = false;
         Assert(Backup(source, history, null, false, config, out title, out summary) == 0, "full backup succeeds");
         string backup = ListBackups(history)[0];
-        Assert(BackupStatus(backup) == "complete", "full backup complete status");
+        Assert(BackupStatus(backup) == Status.Complete, "full backup complete status");
         Snapshot first = LatestSnapshot(backup);
         Assert(first.Files.Count == 6, "snapshot contains exactly user files");
         Assert(first.Folders.Contains("Empty"), "empty folder recorded");
@@ -121,19 +121,19 @@ partial class M8Backup
         Assert(File.ReadAllText(first.Files.Find(f => f.Relative == "Songs\\one.m8s").StoredPath) == "AAAA", "old snapshot contents immutable");
         Assert(second.Files.Exists(f => f.Relative == "Songs\\dated_2026-01-01_120000.m8s"), "genuine dated song included in snapshot");
 
-        SetBackupStatus(backup, "incomplete");
+        SetBackupStatus(backup, Status.Incomplete);
         Put(Path.Combine(backup, "Songs", "one.m8s"), "PARTIAL");
         // Content comparison is explicitly opted in for resume repair tests.
         config.Thorough = true;
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 0, "resume repairs partial file despite fast setting");
         Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "BBBB", "resume restores source content");
-        Assert(BackupStatus(backup) == "complete", "resume complete status");
+        Assert(BackupStatus(backup) == Status.Complete, "resume complete status");
         Assert(Directory.GetFiles(Path.Combine(backup, ".m8backup", "quarantine"), "*", SearchOption.AllDirectories).Length == 1, "partial copy quarantined");
         int checkedOk = 0, checkedDamaged = 0, checkedMissing = 0, uncheckedBackups = 0;
         CheckBackup(backup, ref checkedOk, ref checkedDamaged, ref checkedMissing, ref uncheckedBackups);
         Assert(checkedDamaged == 0 && checkedMissing == 0, "resume does not bless partial files as valid versions");
         // Simulate an interrupted incremental after the file was copied but before checksums were updated.
-        SetBackupStatus(backup, "incomplete");
+        SetBackupStatus(backup, Status.Incomplete);
         Put(song, "CCCC"); File.SetLastWriteTimeUtc(song, oldTime);
         Put(Path.Combine(backup, "Songs", "one.m8s"), "CCCC");
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 0, "resume refreshes stale checksum entries");
@@ -290,7 +290,7 @@ partial class M8Backup
         RestoreEntry currentSong = LatestSnapshot(backup).Files.Find(f => f.Relative == "Songs\\one.m8s");
         Put(currentSong.StoredPath, "BAD");
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 2, "history failure prevents successful backup");
-        Assert(BackupStatus(backup) == "failed", "history failure sets failed status");
+        Assert(BackupStatus(backup) == Status.Failed, "history failure sets failed status");
         // Opt-out tests: preserve hashing records without comparing SHA-256 automatically.
         string optionalPath = Path.Combine(root, "optional-check.bin");
         Put(optionalPath, "AAAA");
@@ -483,7 +483,7 @@ partial class M8Backup
             string hash;
             using (new OperationContext(ui, CancellationToken.None).Activate()) hash = CopyFile(new FileInfo(from), to, true);
             Assert(hash == HashFile(from) && FilesEqual(from, to), "pipelined copy is exact for " + size + " bytes");
-            Assert(ui.Progress.Exists(p => p.Stage == "Verifying") || size == 0, "verification reads the copy back from disk, bypassing the cache");
+            Assert(ui.Progress.Exists(p => p.Stage == Stage.Verifying) || size == 0, "verification reads the copy back from disk, bypassing the cache");
             Assert(HashFileFromDisk(to) == hash, "unbuffered read-back gives the same checksum for " + size + " bytes");
         }
 
@@ -493,7 +493,7 @@ partial class M8Backup
         string big = Path.Combine(root, "pipe-" + (3 * ChunkSize + 12345) + ".bin"), cancelledCopy = big + ".cancelled";
         var cts = new CancellationTokenSource();
         var cancelUi = new TestInteraction();
-        cancelUi.OnProgress = delegate(OperationProgress p) { if (p.Stage == "Copying") cts.Cancel(); };
+        cancelUi.OnProgress = delegate(OperationProgress p) { if (p.Stage == Stage.Copying) cts.Cancel(); };
         bool cancelled = false;
         using (new OperationContext(cancelUi, cts.Token).Activate())
         {
@@ -542,7 +542,7 @@ partial class M8Backup
                 CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
             }
             Assert(linkDamaged == 0 && linkMissing == 0 && linkOk == 2, "hard-linked backup checks OK");
-            Assert(!checkUi.Progress.Exists(p => p.Stage == "Hashing" && p.Path == objectFile), "check skips re-reading hard-linked history");
+            Assert(!checkUi.Progress.Exists(p => p.Stage == Stage.Hashing && p.Path == objectFile), "check skips re-reading hard-linked history");
             File.WriteAllText(treeFile, "AAAX");
             linkOk = 0; verifiedLinks.Clear();
             using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
@@ -562,8 +562,8 @@ partial class M8Backup
         var hashedBeforeCopy = new List<string>();
         bool copying = false;
         ui.OnProgress = delegate(OperationProgress p) {
-            if (p.Stage == "Copying") copying = true;
-            if (!copying && p.Stage == "Hashing") hashedBeforeCopy.Add(p.Path);
+            if (p.Stage == Stage.Copying) copying = true;
+            if (!copying && p.Stage == Stage.Hashing) hashedBeforeCopy.Add(p.Path);
         };
         OperationResult second = new BackupEngine().Run(source, history, backup, false, config, new OperationContext(ui, CancellationToken.None));
         Assert(second.ExitCode == 0 && hashedBeforeCopy.Count == 0, "thorough full backup reads the card once");
@@ -596,14 +596,14 @@ partial class M8Backup
         var ui = new TestInteraction();
         bool delayed = false;
         ui.OnProgress = delegate(OperationProgress p) {
-            if (!delayed && p.Stage == "Saving history") { delayed = true; Thread.Sleep(350); }
+            if (!delayed && p.Stage == Stage.SavingHistory) { delayed = true; Thread.Sleep(350); }
         };
         var context = new OperationContext(ui, CancellationToken.None);
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, context);
         Assert(result.ExitCode == 0 && !result.Cancelled && ui.Plans == 1, "backup engine uses injected plan review without console input");
-        Assert(ui.Progress.Exists(p => p.Stage == "Scanning") && ui.Progress.Exists(p => p.Stage == "Copying") &&
-            ui.Progress.Exists(p => p.Stage == "Saving history"), "structured backup progress covers scan, copy, and history");
-        Assert(!ui.Progress.Exists(p => p.Stage == "Hashing"), "default full backup avoids standalone preflight hashing reads");
+        Assert(ui.Progress.Exists(p => p.Stage == Stage.Scanning) && ui.Progress.Exists(p => p.Stage == Stage.Copying) &&
+            ui.Progress.Exists(p => p.Stage == Stage.SavingHistory), "structured backup progress covers scan, copy, and history");
+        Assert(!ui.Progress.Exists(p => p.Stage == Stage.Hashing), "default full backup avoids standalone preflight hashing reads");
         Assert(result.Elapsed.TotalMilliseconds >= 350, "engine elapsed time includes snapshot creation");
         var time = System.Text.RegularExpressions.Regex.Match(ui.Output.ToString(), @"Time:\s+([\d.,]+)s");
         Assert(time.Success && double.Parse(time.Groups[1].Value.Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture) >= 0.3,
@@ -619,9 +619,9 @@ partial class M8Backup
         config.Verify = true;
         result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, CancellationToken.None));
         string sharedObject = snapshot.Files[0].StoredPath;
-        Assert(ui.Progress.FindAll(p => p.Stage == "Hashing" && p.Path == sharedObject && p.Bytes == p.TotalBytes).Count == 1,
+        Assert(ui.Progress.FindAll(p => p.Stage == Stage.Hashing && p.Path == sharedObject && p.Bytes == p.TotalBytes).Count == 1,
             "shared snapshot object verified only once per run");
-        Assert(ui.Progress.FindAll(p => p.Stage == "Hashing" && p.Path == Path.Combine(source, "Songs", "one.m8s") && p.Bytes == p.TotalBytes).Count == 1,
+        Assert(ui.Progress.FindAll(p => p.Stage == Stage.Hashing && p.Path == Path.Combine(source, "Songs", "one.m8s") && p.Bytes == p.TotalBytes).Count == 1,
             "thorough planning reuses source hash instead of rehashing for space estimate");
         Assert(result.ExitCode == 0 && ui.Plans == 0, "unchanged incremental needs no injected confirmation");
 
@@ -632,7 +632,7 @@ partial class M8Backup
             config, new OperationContext(ui, CancellationToken.None));
         Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "HEADLESS",
             "restore planning and execution run through injected frontend");
-        Assert(ui.Plans == 1 && ui.Progress.Exists(p => p.Stage == "Planning restore"), "restore engine reports planning and reviews plan");
+        Assert(ui.Plans == 1 && ui.Progress.Exists(p => p.Stage == Stage.PlanningRestore), "restore engine reports planning and reviews plan");
 
         string cancelSource = Rooted(Path.Combine(root, "cancel-source"));
         FileInfo large = new FileInfo(Path.Combine(cancelSource, "large.wav"));
@@ -643,10 +643,10 @@ partial class M8Backup
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             result = new BackupEngine().Run(cancelSource, cancelHistory, null, false, config, new OperationContext(ui, cancellation.Token));
             string interrupted = ListBackups(cancelHistory)[0];
-            Assert(result.Cancelled && result.ExitCode == 0 && BackupStatus(interrupted) == "incomplete", "cancelled backup remains resumable");
+            Assert(result.Cancelled && result.ExitCode == 0 && BackupStatus(interrupted) == Status.Incomplete, "cancelled backup remains resumable");
             Assert(!File.Exists(Path.Combine(interrupted, "large.wav")), "cancelling during copy removes partial backup file");
         }
 
@@ -655,7 +655,7 @@ partial class M8Backup
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, cancellation.Token));
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "HEADLESS",
                 "cancelled incremental replacement puts old backup copy back");
@@ -671,7 +671,7 @@ partial class M8Backup
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
                 config, new OperationContext(ui, cancellation.Token));
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL",
@@ -683,14 +683,14 @@ partial class M8Backup
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Hashing") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Hashing) cancellation.Cancel(); };
             result = new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(ui, cancellation.Token));
             Assert(result.Cancelled && result.Title == "M8 check cancelled", "integrity cancellation is not reported as corruption or success");
         }
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Copying") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             var recoveryConfig = new Config { BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
             result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
                 recoveryConfig, new OperationContext(ui, cancellation.Token));
@@ -703,11 +703,11 @@ partial class M8Backup
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == "Saving history") cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.SavingHistory) cancellation.Cancel(); };
             string cancelledHistory = Path.Combine(root, "cancel-history-save");
             result = new BackupEngine().Run(cancelSource, cancelledHistory, null, false, config, new OperationContext(ui, cancellation.Token));
             string interrupted = ListBackups(cancelledHistory)[0];
-            Assert(result.Cancelled && File.Exists(Path.Combine(interrupted, "large.wav")) && BackupStatus(interrupted) == "incomplete",
+            Assert(result.Cancelled && File.Exists(Path.Combine(interrupted, "large.wav")) && BackupStatus(interrupted) == Status.Incomplete,
                 "history cancellation retains completed browsable copies for resume");
             Assert(!Directory.Exists(SnapshotRoot(interrupted)), "history cancellation does not publish manifest");
         }
@@ -725,5 +725,5 @@ partial class M8Backup
     }
     // Tests exclude Windows toast code to avoid registry writes/desktop notifications.
     static bool? ShowToast(string title, string summary, bool ask) { return false; }
-    static void Finish(string pnp, string title, string summary, string mode) { }
+    static void Finish(string pnp, string title, string summary, EjectMode mode) { }
 }

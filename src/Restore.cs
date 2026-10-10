@@ -21,7 +21,7 @@ partial class M8Backup
         if (!historical)
         {
             string status = BackupStatus(backup);
-            if (status != "complete" && !AskInConsole("  Backup status is " + status + ". Browse its available files anyway? (y/n) ")) return new OperationResult();
+            if (status != Status.Complete && !AskInConsole("  Backup status is " + status + ". Browse its available files anyway? (y/n) ")) return new OperationResult();
             snapshot = CurrentBackup(backup);
         }
         OperationOutput.WriteLine("  Selected: " + snapshot.Name);
@@ -156,7 +156,7 @@ partial class M8Backup
         var sums = new StringBuilder();
         foreach (string relative in paths)
         {
-            OperationContext.Current.Progress("Saving recovery", relative, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingRecovery, relative, 0, 0);
             string from = SafePath(targetRoot, relative), to = SafePath(folder, relative);
             AssertTargetUnchanged(from, targetHashes[relative]);
             Directory.CreateDirectory(Path.GetDirectoryName(to));

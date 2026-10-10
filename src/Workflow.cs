@@ -169,12 +169,12 @@ partial class M8Backup
         TryDelete(rollback);
     }
 
-    // "incomplete" while a backup runs (or after it was interrupted), then "complete" or "failed".
-    // Backups made before status files existed report "legacy (status unknown)".
+    // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
+    // Backups made before status files existed report Status.Legacy.
     static string BackupStatus(string folder)
     {
         string path = Path.Combine(folder, ".m8backup", "status.txt");
-        return File.Exists(path) ? File.ReadAllText(path).Trim() : "legacy (status unknown)";
+        return File.Exists(path) ? File.ReadAllText(path).Trim() : Status.Legacy;
     }
 
     static void SetBackupStatus(string folder, string status)

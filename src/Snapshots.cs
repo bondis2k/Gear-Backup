@@ -48,7 +48,7 @@ partial class M8Backup
             rows.Append("D\t").Append(Encode(folder.Substring(source.Length))).Append('\n');
         foreach (FileInfo original in scan.Files)
         {
-            OperationContext.Current.Progress("Saving history", original.FullName, 0, 0);
+            OperationContext.Current.Progress(Stage.SavingHistory, original.FullName, 0, 0);
             string relative = original.FullName.Substring(source.Length);
             string path = SafePath(backup, relative);
             string hash;
@@ -189,7 +189,7 @@ partial class M8Backup
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
         {
-            OperationContext.Current.Progress("Checking history", manifest, 0, 0);
+            OperationContext.Current.Progress(Stage.CheckingHistory, manifest, 0, 0);
             try
             {
                 Snapshot snapshot = ReadSnapshot(backup, manifest);
