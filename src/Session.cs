@@ -17,7 +17,7 @@ partial class M8Backup
         string histories = HistoriesRoot(config);
         if (Within(histories, source) || Within(source, histories))
             throw new IOException("The backup folder and source must not contain one another.");
-        return Path.Combine(histories, "profiles", ProfileId(source, config.Profile));
+        return ProfileFolder(Path.Combine(histories, "profiles"), source, config.Profile);
     }
 
     // The history to check: the named profile, or one the user picks. Null when cancelled.

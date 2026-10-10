@@ -28,6 +28,7 @@ partial class M8Backup
         RunTest("OP-1 Field: backup of a mirrored device", () => TestOp1FieldBackup(dir));
         RunTest("OP-XY: projects and backup", () => TestOpXy(dir));
         RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
+        RunTest("History names per device", () => TestProfileNames(dir));
     }
 
     // An MTP device in memory: files are path -> content, with a date per file. Counts downloads.
@@ -226,6 +227,36 @@ partial class M8Backup
             "other projects are left alone");
     }
 
+    // Histories are named per device, and older histories keep working.
+    static void TestProfileNames(string dir)
+    {
+        string source = Rooted(Path.Combine(dir, "named-source"));
+        Directory.CreateDirectory(source);
+        string key = SourceKey(source);
+        string profiles = Path.Combine(dir, "named-histories", "profiles");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini }.Activate())
+        {
+            Assert(key.StartsWith("folder-") && ProfileId(source, "") == "tracker-mini-" + key, "a history name starts with its device");
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key), "a new source gets a device-named history");
+
+            // A history from before device names is renamed, but not by a preview.
+            string old = Path.Combine(profiles, key, "2026-01-01");
+            Directory.CreateDirectory(old);
+            OperationContext.Current.PreviewOnly = true;
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, key), "a preview uses the old history without renaming it");
+            OperationContext.Current.PreviewOnly = false;
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key) &&
+                Directory.Exists(Path.Combine(profiles, "tracker-mini-" + key, "2026-01-01")) && !Directory.Exists(Path.Combine(profiles, key)),
+                "an old history is renamed to the device-named one");
+            Assert(((TestInteraction)OperationContext.Current.Interaction).Output.ToString().Contains("renamed to tracker-mini-" + key), "the rename is reported");
+
+            Assert(ProfileFolder(profiles, source, "studio") == Path.Combine(profiles, "studio"), "a named profile is used as it is");
+        }
+        // The same card taken for another device keeps its one history.
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key), "a source keeps its history under another device's name");
+    }
+
     static void TestOp1FieldBackup(string dir)
     {
         Assert(Devices.Find("op1-field") == Devices.OP1Field && Devices.OP1Field.Mtp && !Devices.M8.Mtp, "the OP-1 Field is an MTP device");
@@ -267,6 +298,12 @@ partial class M8Backup
         var other = new DeviceProfile { Id = "other", Name = "Other Synth", SongExtensions = new[] { ".song" }, SongsFolder = "projects" };
         Assert(DeviceFor(new Config { Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
         Assert(DeviceFor(new Config(), other) == other && DeviceFor(new Config(), null) == Devices.M8, "auto uses the detected device, else the default");
+        string trackerCard = Rooted(Path.Combine(dir, "tracker-card-in-reader"));
+        Put(Path.Combine(trackerCard, "trackerConfig"), "EEPROM");
+        Assert(DeviceFor(new Config(), null, trackerCard) == Devices.TrackerMini, "a Tracker card in a reader is recognised by its trackerConfig");
+        Assert(DeviceFor(new Config(), Devices.M8, trackerCard) == Devices.M8 && DeviceFor(new Config { Device = "m8" }, null, trackerCard) == Devices.M8,
+            "detection and the Device setting win over the marker file");
+        Assert(DeviceFor(new Config(), null, Rooted(dir)) == Devices.M8, "a folder without a marker file is the default device");
         var config = new Config();
         TestInteraction ui = WithUi(() => { ApplySetting(config, "Device", "M8"); ApplySetting(config, "Device", "toaster"); });
         Assert(config.Device == "m8" && ui.Output.ToString().Contains("Device=toaster isn't valid"), "the Device setting accepts known devices only");

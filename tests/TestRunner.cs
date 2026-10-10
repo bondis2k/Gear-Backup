@@ -207,8 +207,8 @@ partial class M8Backup
         using (var volume = new System.Management.ManagementObject("Win32_LogicalDisk.DeviceID='" + systemDrive.Substring(0, 2) + "'"))
         {
             volume.Get();
-            Assert(ProfileId(systemDrive, "") == "card-" + volume["VolumeSerialNumber"],
-                "a drive's history is named after its serial number, the same as WMI reports it");
+            Assert(ProfileId(systemDrive, "") == "m8-card-" + volume["VolumeSerialNumber"],
+                "a drive's history is named after its device and serial number, the same as WMI reports it");
         }
         Throws(() => SafePath(root, "..\\escape.txt"), "traversal rejected");
         Throws(() => SafePath(root, "C:\\escape.txt"), "absolute manifest path rejected");

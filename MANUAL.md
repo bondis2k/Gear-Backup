@@ -68,7 +68,7 @@ If both an OP-1 Field and an OP-XY are connected, the OP-1 Field is found first;
 
 ## Polyend Tracker Mini
 
-The Tracker Mini works like the M8: in USB drive mode its SD card appears as a drive (labelled `TRACKER_M`), which is detected automatically, backed up, restored to and ejected the same way. Its history is named after the card (`card-<serial>`).
+The Tracker Mini works like the M8: in USB drive mode its SD card appears as a drive (labelled `TRACKER_M`), which is detected automatically, backed up, restored to and ejected the same way. Its history is named after the card (`tracker-mini-card-<serial>`). A Tracker card in a card reader is recognised by the `trackerConfig` file at its top, so it gets the same history and project summaries.
 
 1. Connect the Tracker Mini by USB and turn on its USB drive mode (the card is unavailable on the Tracker while it is connected as a drive).
 2. Leave the source empty and start a backup.
@@ -87,7 +87,9 @@ New backups are stored here:
 
 `BackupFolder` defaults to your Windows Music folder.
 
-With `Profile=` empty, a drive root uses its Windows volume serial number, for example `card-1234ABCD`. A folder uses an identity derived from its full path. A card formatted again normally gets a new serial, and a folder moved to another path gets a new identity. If Windows cannot read a volume serial, the program falls back to a path identity. Set a named profile when automatic identity is unsuitable:
+With `Profile=` empty, each history's name starts with its device, so the M8's and the Tracker Mini's are easy to tell apart. A drive root then uses its Windows volume serial number, for example `m8-card-1234ABCD` or `tracker-mini-card-06FE6B87`. A folder uses an identity derived from its full path (`m8-folder-…`), and an MTP device its serial (`op-xy-XXYWV10D`).
+
+A card keeps one history: if it already has one under another device's name (for example after changing `Device`), that one is used. Histories from older versions, named `card-<serial>` or `folder-…` without a device, are renamed to the new name the next time that card or folder is backed up or restored (not by a preview). A card formatted again normally gets a new serial, and a folder moved to another path gets a new identity. If Windows cannot read a volume serial, the program falls back to a path identity. Set a named profile when automatic identity is unsuitable:
 
 ```ini
 Profile=Studio M8
@@ -105,7 +107,7 @@ Restore and check offer a history selector, including existing backups directly 
 
 ### Zip copy of a full backup
 
-Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
+Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\m8-card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
 
 - The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. Because a zip is made to be shared, its copy of the statistics hides where things are on this PC: the backup folder appears as `<this backup>` and your user folder (`C:\Users\<name>`) as `%USERPROFILE%`. The statistics file in the backup folder keeps the full paths. The `.m8backup` history store is left out; it's only useful to this program and would double the size.
 - It's written under a temporary name and renamed when complete, so a zip that exists is never half-written.

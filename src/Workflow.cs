@@ -21,26 +21,65 @@ partial class M8Backup
             throw new ArgumentException("Profile must be 1-64 letters, digits, spaces, - or _, and not a Windows reserved name.");
     }
 
-    // The history folder name for a source. A whole drive is identified by its volume serial number
-    // ("card-1A2B3C4D"), so the same SD card keeps its history in another reader or drive letter. A
-    // folder gets a short hash of its full path. A named Profile setting overrides both.
+    // The history folder name for a source, starting with the current device's id so each device's
+    // histories are easy to tell apart. A whole drive is identified by its volume serial number
+    // ("m8-card-1A2B3C4D"), so the same SD card keeps its history in another reader or drive letter. A
+    // folder gets a short hash of its full path ("m8-folder-..."). A mirrored MTP device is named by its
+    // mirror folder ("op1-field-L1PRC121"). A named Profile setting overrides all of these.
     static string ProfileId(string source, string requested)
     {
         if (requested.Length > 0) { ValidateProfile(requested); return requested; }
         string normalized = Rooted(source);
-        // A mirrored MTP device: its folder name, e.g. "op1-field-L1PRC121", identifies the device.
         if (Within(normalized, MirrorRoot) && Rooted(normalized) != Rooted(MirrorRoot))
             return Path.GetFileName(normalized.TrimEnd('\\'));
+        return CurrentDevice.Id + "-" + SourceKey(normalized);
+    }
+
+    // What identifies a drive or folder, without the device: "card-1A2B3C4D" or "folder-<hash>". Before
+    // histories were named per device, this alone was the history's name.
+    static string SourceKey(string normalized)
+    {
         if (normalized == Rooted(Path.GetPathRoot(normalized)))
         {
             // Asked of Windows directly: WMI's Win32_LogicalDisk leaves the serial blank for some cards
-            // (the Tracker Mini's exFAT card). Same 8 hex digits as WMI, so existing histories keep their name.
+            // (the Tracker Mini's exFAT card). Same 8 hex digits as WMI.
             uint serial, maxComponent, flags;
             if (GetVolumeInformationW(normalized, null, 0, out serial, out maxComponent, out flags, null, 0) && serial != 0)
                 return "card-" + serial.ToString("X8");
         }
         using (var sha = SHA256.Create())
             return "folder-" + ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant()))).Substring(0, 16);
+    }
+
+    // The history folder for a source under profiles. A card keeps one history whatever it's taken for:
+    // an existing history of the same card or folder under another device's name is used as it is, and
+    // one from before histories were named per device ("card-1A2B3C4D") is renamed to the new name
+    // (except in a preview, which changes nothing).
+    static string ProfileFolder(string profiles, string source, string requested)
+    {
+        string id = ProfileId(source, requested);
+        string folder = Path.Combine(profiles, id);
+        string normalized = Rooted(source);
+        if (requested.Length > 0 || Directory.Exists(folder) || !Directory.Exists(profiles) ||
+            (Within(normalized, MirrorRoot) && Rooted(normalized) != Rooted(MirrorRoot)))
+            return folder;
+        string key = SourceKey(normalized);
+        foreach (DeviceProfile device in Devices.All)
+        {
+            string other = Path.Combine(profiles, device.Id + "-" + key);
+            if (Directory.Exists(other)) return other;
+        }
+        string old = Path.Combine(profiles, key);
+        if (!Directory.Exists(old)) return folder;
+        if (PreviewOnly) return old;
+        try
+        {
+            Directory.Move(old, folder);
+            OperationOutput.WriteLine("  History " + key + " renamed to " + id + ".");
+            return folder;
+        }
+        catch (IOException) { return old; }           // e.g. open in Explorer or locked by another backup
+        catch (UnauthorizedAccessException) { return old; }
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -108,7 +147,7 @@ partial class M8Backup
                 source = ExpandPath(AskText("Source path (Enter = cancel):"));
             }
         }
-        device = DeviceFor(config, detected);
+        device = DeviceFor(config, detected, source);
         if (string.IsNullOrEmpty(source)) return null;
         if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
         source = Rooted(source);
