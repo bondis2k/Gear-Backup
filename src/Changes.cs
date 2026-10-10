@@ -73,14 +73,15 @@ partial class M8Backup
         }
         if (!changes.HasBaseline)
         {
-            report.WriteLine("  Songs: {0:N0} (first backup, nothing to compare with)", changes.TotalSongs);
+            report.WriteLine("  {0}: {1:N0} (first backup, nothing to compare with)", Capitalized(CurrentDevice.SongsLabel), changes.TotalSongs);
             report.WriteLine();
             return;
         }
         report.WriteLine("  Changes since the last backup ({0}):", Path.GetFileName(baseline));
-        WriteNameList(report, "New songs", changes.NewSongs);
-        WriteNameList(report, "Edited songs", changes.EditedSongs);
-        WriteNameList(report, "Songs no longer on the " + CurrentDevice.Name, changes.RemovedSongs);
+        string songs = CurrentDevice.SongsLabel;
+        WriteNameList(report, "New " + songs, changes.NewSongs);
+        WriteNameList(report, "Edited " + songs, changes.EditedSongs);
+        WriteNameList(report, Capitalized(songs) + " no longer on the " + CurrentDevice.Name, changes.RemovedSongs);
         report.WriteLine("    Other files: {0:N0} new, {1:N0} changed", changes.OtherNew, changes.OtherChanged);
         report.WriteLine();
     }
@@ -106,7 +107,13 @@ partial class M8Backup
         var parts = new List<string>();
         if (changes.NewSongs.Count > 0) parts.Add(changes.NewSongs.Count + " new (" + FirstNames(changes.NewSongs) + ")");
         if (changes.EditedSongs.Count > 0) parts.Add(changes.EditedSongs.Count + " edited (" + FirstNames(changes.EditedSongs) + ")");
-        return parts.Count == 0 ? " No songs changed." : " Songs: " + string.Join(", ", parts.ToArray()) + ".";
+        string songs = CurrentDevice.SongsLabel;
+        return parts.Count == 0 ? " No " + songs + " changed." : " " + Capitalized(songs) + ": " + string.Join(", ", parts.ToArray()) + ".";
+    }
+
+    static string Capitalized(string word)
+    {
+        return word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word.Substring(1);
     }
 
     static string FirstNames(List<string> names)

@@ -112,7 +112,7 @@ partial class M8Backup
             fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 114));
             fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
             for (int i = 0; i < 3; i++) { fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); }
-            AddPath(fields, 0, "Device, card or source folder  ·  leave blank to detect an M8 or OP-1 Field", source, false);
+            AddPath(fields, 0, "Device, card or source folder  ·  leave blank to detect an " + Devices.Names, source, false);
             fields.Controls.Add(detect, 2, 1); detect.MinimumSize = new Size(110, 28); detect.Padding = Padding.Empty;
             AddPath(fields, 2, "Backup location", backupFolder, true);
             var profileLabel = GuiTheme.Label("Profile  ·  leave blank for automatic card identity", 9, GuiTheme.Muted);
