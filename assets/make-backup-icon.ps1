@@ -1,5 +1,6 @@
-# Draws the general M8 Backup icon (assets\Backup.ico and a 256px PNG) with System.Drawing: a teal tile
-# with music notes and the coral backup badge shared with the device icons. It's the app's icon (exe,
+# Draws the general M8 Backup icon (assets\Backup.ico and a 256px PNG) with System.Drawing: a teal memory
+# card with gold contacts and a smiling label, and the coral backup badge shared with the device icons.
+# It stands for any device with a card (synths, cameras, ...). It's the app's icon (exe,
 # window, taskbar) and the GUI header's picture until a device is detected.
 # Usage: powershell -File assets\make-backup-icon.ps1 -OutDir assets
 param([string]$OutDir)
@@ -19,13 +20,17 @@ function RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {
 function Color([string]$hex) { return [System.Drawing.ColorTranslator]::FromHtml($hex) }
 function Brush([string]$hex) { return New-Object System.Drawing.SolidBrush (Color $hex) }
 
-# A note head: an ellipse tilted like a written note.
-function NoteHead($g, $brush, [float]$cx, [float]$cy, [float]$w, [float]$h) {
-    $state = $g.Save()
-    $g.TranslateTransform($cx, $cy)
-    $g.RotateTransform(-22)
-    $g.FillEllipse($brush, -$w / 2, -$h / 2, $w, $h)
-    $g.Restore($state)
+# An SD card outline: rounded corners, with the top-right corner cut off.
+function CardShape([float]$x, [float]$y, [float]$w, [float]$h, [float]$r, [float]$cut) {
+    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $d = 2 * $r
+    $p.AddArc($x, $y, $d, $d, 180, 90)
+    $p.AddLine($x + $r, $y, $x + $w - $cut, $y)
+    $p.AddLine($x + $w - $cut, $y, $x + $w, $y + $cut)
+    $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d, 0, 90)
+    $p.AddArc($x, $y + $h - $d, $d, $d, 90, 90)
+    $p.CloseFigure()
+    return $p
 }
 
 # Draws the icon on a 256-unit canvas, scaled to $size pixels.
@@ -38,29 +43,45 @@ function Render([int]$size) {
     $s = $size / 256.0
     $g.ScaleTransform($s, $s)
 
-    # Soft shadow and the teal tile
-    $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(55, 0, 0, 0))), (RoundRect 26 26 200 200 44))
-    $tile = RoundRect 18 14 200 200 44
-    $tileBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-        (New-Object System.Drawing.PointF(0, 14)), (New-Object System.Drawing.PointF(0, 214)),
-        (Color '#1FB3A1'), (Color '#00675D'))
-    $g.FillPath($tileBrush, $tile)
-    $g.DrawPath((New-Object System.Drawing.Pen((Color '#00544C'), 4)), $tile)
-    # A soft highlight across the top
-    $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(40, 255, 255, 255))), (RoundRect 30 24 176 70 34))
+    $small = $size -le 32
 
-    # Two beamed music notes in white
-    $white = Brush '#FFFFFF'
-    $stem = $(if ($size -le 24) { 14 } else { 11 })
-    NoteHead $g $white 82 160 46 34
-    NoteHead $g $white 150 140 46 34
-    $g.FillRectangle($white, 97, 70, $stem, 92)
-    $g.FillRectangle($white, 165, 50, $stem, 92)
-    $beam = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $beam.AddPolygon([System.Drawing.PointF[]]@(
-        (New-Object System.Drawing.PointF(97, 70)), (New-Object System.Drawing.PointF(176, 50)),
-        (New-Object System.Drawing.PointF(176, 76)), (New-Object System.Drawing.PointF(97, 96))))
-    $g.FillPath($white, $beam)
+    # Soft shadow and the teal memory card
+    $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(55, 0, 0, 0))), (CardShape 44 22 172 214 22 48))
+    $card = CardShape 36 12 172 214 22 48
+    $cardBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
+        (New-Object System.Drawing.PointF(0, 12)), (New-Object System.Drawing.PointF(0, 226)),
+        (Color '#1FB3A1'), (Color '#00675D'))
+    $g.FillPath($cardBrush, $card)
+    $g.DrawPath((New-Object System.Drawing.Pen((Color '#00544C'), 4)), $card)
+
+    # Gold contacts along the top
+    if (-not $small) {
+        $gold = Brush '#F4C84F'
+        $goldEdge = New-Object System.Drawing.Pen((Color '#B98A1E'), 2)
+        for ($i = 0; $i -lt 5; $i++) {
+            $contact = RoundRect (56 + $i * 22) 26 14 34 4
+            $g.FillPath($gold, $contact); $g.DrawPath($goldEdge, $contact)
+        }
+    }
+
+    # White label with the same happy face as the device icons
+    $label = RoundRect 54 $(if ($small) { 46 } else { 76 }) 136 $(if ($small) { 140 } else { 124 }) 16
+    $g.FillPath((Brush '#FFFFFF'), $label)
+    $face = Brush '#0E6F65'
+    $top = $(if ($small) { 70 } else { 98 })
+    if ($small) {
+        $g.FillRectangle($face, 82, $top, 20, 30)
+        $g.FillRectangle($face, 138, $top, 20, 30)
+    } else {
+        $g.FillPath($face, (RoundRect 86 $top 16 24 5))
+        $g.FillPath($face, (RoundRect 140 $top 16 24 5))
+        $cheek = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(170, 255, 120, 160))
+        $g.FillEllipse($cheek, 70, ($top + 28), 20, 11)
+        $g.FillEllipse($cheek, 152, ($top + 28), 20, 11)
+    }
+    $smile = New-Object System.Drawing.Pen($face.Color, $(if ($small) { 12 } else { 8 }))
+    $smile.StartCap = 'Round'; $smile.EndCap = 'Round'
+    $g.DrawArc($smile, 100, ($top + 22), 42, 30, 20, 140)
 
     # Backup badge: the coral bubble with a white arrow into a tray, as on the device icons
     $g.FillEllipse((Brush '#FFFFFF'), 150, 152, 104, 104)
