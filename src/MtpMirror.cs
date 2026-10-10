@@ -29,8 +29,10 @@ partial class GearBackup
         public string Mirror;
         // Opens the device for reading; null means the real device (tests supply a fake).
         public Func<IMtpSource> Open;
-        // The X100VI's connection mode when already known from detection, so it isn't asked again.
-        public bool? SettingsMode;
+        // Asks whether the X100VI is in settings mode; null means asking the real camera (tests supply an
+        // answer). Asked right before every sync, not taken from detection: the camera can be switched
+        // while a menu waits, and a sync in settings mode would see no photos and empty the mirror.
+        public Func<bool> ReadSettingsMode;
     }
 
     static string MirrorRoot
@@ -73,7 +75,7 @@ partial class GearBackup
     // Brings the device's mirror up to date and returns its path, ready to be backed up.
     static string SyncMtpSource(MtpSource mtp)
     {
-        if (mtp.Device == Devices.X100VI && (mtp.SettingsMode ?? FujiSettingsMode(mtp.Info)))
+        if (mtp.Device == Devices.X100VI && (mtp.ReadSettingsMode != null ? mtp.ReadSettingsMode() : FujiSettingsMode(mtp.Info)))
             throw new IOException("The X100VI is in settings mode. Choose Back up X100VI settings (CLI: --camera-settings), or select USB card reader on the camera to back up photos.");
         OperationOutput.WriteLine("  Reading the " + mtp.Device.Name + " over MTP into " + mtp.Mirror);
         MirrorResult result;

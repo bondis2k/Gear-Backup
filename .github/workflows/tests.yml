@@ -8,12 +8,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Read-only, whatever the repository's default: the tests run code from the pull request.
+permissions:
+  contents: read
+
 jobs:
   tests:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to exact commits (the release in the comment), so a moved tag can't change them.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Core tests
         shell: powershell
@@ -26,7 +33,7 @@ jobs:
 
       - name: Keep fixtures of failed tests
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: failed-test-fixtures
           path: .test-runs
