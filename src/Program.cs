@@ -3,7 +3,7 @@
 // or restores a backup to a selected card or folder. Settings are in GearBackup.ini next to the exe.
 // Afterwards it offers to eject supported USB-drive devices via a Windows notification.
 //
-// Usage: GearBackup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
+// Usage: GearBackup.exe [--restore | --check | --camera-settings] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 // Build: build.cmd
 using System;
 using System.Collections.Generic;
@@ -77,10 +77,18 @@ partial class GearBackup
                 ApplySetting(config, key == "--source" ? "SourceFolder" : "Profile", args[i]);
             }
             else if (args[i] == "--zip") config.Zip = true;
-            else if (args[i] != "--restore" && args[i] != "--check" && args[i] != "--preview" && args[i] != "--no-pause")
+            else if (args[i] != "--restore" && args[i] != "--check" && args[i] != "--camera-settings" && args[i] != "--preview" && args[i] != "--no-pause")
                 throw new ArgumentException("Unknown argument: " + args[i]);
         }
         if (restore && check) throw new ArgumentException("Choose --restore or --check, not both.");
+        if (Array.IndexOf(args, "--camera-settings") >= 0)
+        {
+            if (restore || check || Array.IndexOf(args, "--source") >= 0)
+                throw new ArgumentException("--camera-settings cannot be combined with --restore, --check or --source.");
+            OperationResult settingsResult = RunFujiSettingsBackup(config);
+            if (settingsResult.Summary != null) OperationOutput.WriteLine("  " + settingsResult.Summary);
+            return settingsResult.ExitCode;
+        }
         if (config.Zip && (restore || check)) throw new ArgumentException("--zip applies to backups, not to --restore or --check.");
         string histories = HistoriesRoot(config);
         if (check) return CheckHistory(HistoryToCheck(config));

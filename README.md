@@ -5,6 +5,7 @@ A Windows tool with graphical and command-line interfaces for backing up and res
 - Full and incremental backups with dated snapshots and separate card profiles.
 - Restore all files, a folder bundle, a single file, or a song with its samples.
 - Preview changes, check backup integrity, and optionally keep recovery copies.
+- X100VI C1–C7 recipe and shooting-settings snapshots in USB RAW CONV./BACKUP RESTORE mode (GUI operation or `--camera-settings`). This is a separate XML export; camera settings restore and full-camera settings export are not supported.
 
 ## Build and run
 
