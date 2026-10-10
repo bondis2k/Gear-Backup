@@ -285,6 +285,9 @@ partial class GearBackup
             // Mark before the first mutation. A killed process leaves an incomplete status.
             Directory.CreateDirectory(dest);
             SetBackupStatus(dest, Status.Incomplete);
+            string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
+            RejectRootLinks(devicePath);
+            AtomicText(devicePath, CurrentDevice.Id + "\n");
             foreach (string folder in scan.Folders)
                 Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
 

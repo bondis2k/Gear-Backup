@@ -20,6 +20,7 @@ partial class GearBackup
         public string Name;
         public List<RestoreEntry> Files = new List<RestoreEntry>();
         public List<string> Folders = new List<string>();
+        public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
@@ -157,7 +158,7 @@ partial class GearBackup
     // where available.
     static Snapshot CurrentBackup(string backup)
     {
-        var result = new Snapshot { Name = "current backup files" };
+        var result = new Snapshot { Name = "current backup files", OldVersions = KnownOldVersions(backup) };
         Dictionary<string, string> sums = LoadChecksums(backup);
         foreach (FileSystemInfo entry in BackupEntries(backup))
         {

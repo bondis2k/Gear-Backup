@@ -136,6 +136,19 @@ partial class GearBackup
         return null;
     }
 
+    // New backups remember their device even with a custom profile name. Older automatic histories
+    // can still identify it through their name; unknown legacy histories use the caller's fallback.
+    static DeviceProfile BackupDevice(string backup)
+    {
+        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt");
+        if (!File.Exists(path)) return HistoryDevice(backup);
+        RejectRootLinks(path);
+        if (new FileInfo(path).Length > 128) throw new IOException("Invalid backup device record.");
+        DeviceProfile device = Devices.Find(File.ReadAllText(path).Trim());
+        if (device == null) throw new IOException("Unknown device in backup record.");
+        return device;
+    }
+
     // The device the current operation works with (set by the front end once the source is known).
     static DeviceProfile CurrentDevice { get { return OperationContext.Current.Device; } }
 

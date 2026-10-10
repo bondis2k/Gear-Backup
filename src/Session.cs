@@ -71,14 +71,13 @@ partial class GearBackup
         {
             string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
             if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
-            string history = ChooseHistory(prepared.Histories, prepared.History);
+            string history = ChooseHistory(prepared.Global, prepared.History);
             if (history == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
             List<string> backups = ListBackups(history);
             if (backups.Count == 0) throw new IOException("No backups found at this location.");
-            // Restore preferences (recovery copies, verification) follow the chosen history.
-            Config config = ResolveProfileSettings(prepared.Global, prepared.Device.Id, Path.GetFileName(history));
             OperationResult result;
-            using (LockUnlessPreview(history)) result = RunRestore(source, backups, config);
+            // Resolve device and profile preferences after the backup itself is selected.
+            using (LockUnlessPreview(history)) result = RunRestore(source, backups, prepared.Config, prepared.Global);
             result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
             return result;
         }
@@ -102,13 +101,10 @@ partial class GearBackup
     static string HistoryToCheck(Config config)
     {
         string histories = HistoriesRoot(config);
-        if (config.Profile.Length == 0) return ChooseHistory(histories, null);
-        var found = new List<string>();
-        foreach (string location in ConfiguredBackupLocations(config))
-        {
-            string path = Path.Combine(HistoriesRoot(new Config { BackupFolder = location }), "profiles", config.Profile);
-            if (Directory.Exists(path) && !found.Exists(p => Rooted(p) == Rooted(path))) { RejectRootLinks(path); found.Add(path); }
-        }
+        if (config.Profile.Length == 0) return ChooseHistory(config, null);
+        var found = AvailableHistories(config).FindAll(path =>
+            Path.GetFileName(Path.GetDirectoryName(path)).Equals("profiles", StringComparison.OrdinalIgnoreCase) &&
+            Path.GetFileName(path).Equals(config.Profile, StringComparison.OrdinalIgnoreCase));
         if (found.Count == 1) return found[0];
         if (found.Count > 1) { int pick = AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
         return Path.Combine(histories, "profiles", config.Profile);

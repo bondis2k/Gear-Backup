@@ -63,6 +63,8 @@ Turning history off preserves existing snapshots. Dated old versions, separate f
 
 Restore can use current backup files or a saved snapshot. Available selections include all files, a single file, an M8 bundle, an M8 firmware-6 song with its referenced samples, or a Tracker Mini project folder. Retained old versions can be restored under their original or dated names.
 
+Current-file restores distinguish recorded old versions from genuine filenames containing dates. Device-specific restore choices and preferences follow the selected backup; new backups record the device even when a custom profile name is used.
+
 - **Merge:** restore selected content while keeping extra target files.
 - **Exact:** remove extra target content after successful copying and a separate confirmation.
 - **Overwrite choices:** replace differing files, keep the target versions or cancel; newer target files are highlighted. Keeping differing files disables exact removal.
@@ -102,6 +104,8 @@ For media, Gear Backup copies `DCIM`, preserves camera-reported capture times an
 ## Profiles and backup management
 
 Automatic profiles separate histories by source: card volume identity, folder path or MTP device identity. A card can retain its history after a reader or drive-letter change. Named profiles provide an explicit history name.
+
+Restore and check history selection covers all configured backup locations, with location labels distinguishing profiles that share a name.
 
 Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
 

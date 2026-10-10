@@ -151,6 +151,9 @@ partial class GearBackup
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
         RunTest("Zip", () => TestZip(Folder(root, "zip")));
         RunTest("Paths over Windows' length limit", () => TestLongPaths(Folder(root, "long-paths")));
+        RunTest("Current restore preserves dated source names", () => TestDatedRestoreNames(Folder(root, "dated-restore")));
+        RunTest("History selection across configured locations", () => TestHistoryLocations(Folder(root, "history-locations")));
+        RunTest("Restore uses saved device and preferences", () => TestRestoreDevicePreferences(Folder(root, "restore-device")));
         TestHelpers(root);
         return Summarize(root);
     }
@@ -211,7 +214,8 @@ partial class GearBackup
         public void Write(string text) { Output.Append(text); }
         public void WriteLine(string text) { Output.AppendLine(text); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
-        public string AskText(string question) { throw new Exception("Engine unexpectedly asked for text: " + question); }
+        public Func<string, string> OnAskText;
+        public string AskText(string question) { if (OnAskText != null) return OnAskText(question); throw new Exception("Engine unexpectedly asked for text: " + question); }
         // Scripted answers for questions, in order; once used up, the first allowed key is chosen.
         public readonly Queue<char> Keys = new Queue<char>();
         public readonly List<string> Questions = new List<string>();
