@@ -9,12 +9,12 @@ class TestRunner
 {
     static int Main()
     {
-        try { return M8Backup.RunTests(); }
+        try { return GearBackup.RunTests(); }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }
 
-partial class M8Backup
+partial class GearBackup
 {
     static int assertions;
     static void Assert(bool condition, string message)
@@ -22,10 +22,10 @@ partial class M8Backup
         assertions++;
         if (!condition) throw new Exception("ASSERTION FAILED: " + message);
     }
-    // Fixtures are kept after a failure (Summarize skips this) or when M8_KEEP_TEST_FIXTURES=1.
+    // Fixtures are kept after a failure (Summarize skips this) or when GEAR_KEEP_TEST_FIXTURES=1.
     static void RemoveFixtures(string root)
     {
-        if (Environment.GetEnvironmentVariable("M8_KEEP_TEST_FIXTURES") == "1")
+        if (Environment.GetEnvironmentVariable("GEAR_KEEP_TEST_FIXTURES") == "1")
         {
             Console.WriteLine("Fixtures kept: " + root);
             return;
@@ -192,7 +192,7 @@ partial class M8Backup
         var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
         Assert(!new Config().Verify && !new Config().Thorough, "SHA-256 comparisons default off");
         Assert(!config.Recovery, "recovery defaults to no");
-        Assert(RecoveryRoot(config) == Path.Combine(root, "M8 Recovery"), "empty recovery location defaults under backup folder");
+        Assert(RecoveryRoot(config) == Path.Combine(root, "Gear Recovery"), "empty recovery location defaults under backup folder");
         ApplySetting(config, "RecoveryFolder", "%USERPROFILE%\\M8-test-recovery");
         Assert(config.RecoveryFolder == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "M8-test-recovery"), "recovery folder expands environment variables");
         ApplySetting(config, "Recovery", "yes"); Assert(config.Recovery, "INI enables recovery");
@@ -239,7 +239,7 @@ partial class M8Backup
         Assert(first.Folders.Contains("Empty"), "empty folder recorded");
         Assert(!File.Exists(Path.Combine(backup, "Thumbs.db")), "OS junk excluded");
         Assert(LoadChecksums(backup).Count == 6, "metadata not included in checksums");
-        int objects = Directory.GetFiles(Path.Combine(backup, ".m8backup", "objects")).Length;
+        int objects = Directory.GetFiles(Path.Combine(backup, ".gearbackup", "objects")).Length;
         Assert(objects == 5, "identical samples share one history object");
 
         string song = Path.Combine(source, "Songs", "one.m8s");
@@ -273,7 +273,7 @@ partial class M8Backup
         Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 0, "resume repairs partial file despite fast setting");
         Assert(File.ReadAllText(Path.Combine(f.Backup, "Songs", "one.m8s")) == "BBBB", "resume restores source content");
         Assert(BackupStatus(f.Backup) == Status.Complete, "resume complete status");
-        Assert(Directory.GetFiles(Path.Combine(f.Backup, ".m8backup", "quarantine"), "*", SearchOption.AllDirectories).Length == 1, "partial copy quarantined");
+        Assert(Directory.GetFiles(Path.Combine(f.Backup, ".gearbackup", "quarantine"), "*", SearchOption.AllDirectories).Length == 1, "partial copy quarantined");
         int checkedOk = 0, checkedDamaged = 0, checkedMissing = 0, uncheckedBackups = 0;
         CheckBackup(f.Backup, ref checkedOk, ref checkedDamaged, ref checkedMissing, ref uncheckedBackups);
         Assert(checkedDamaged == 0 && checkedMissing == 0, "resume does not bless partial files as valid versions");
@@ -296,7 +296,7 @@ partial class M8Backup
         var removals = new List<string> { "extra.txt" };
         config.Recovery = true; config.RecoveryFolder = Path.Combine(root, "custom-recovery");
         ExecuteRestore(target, f.First.Files, removals, f.First.Folders, new List<string>(), TargetHashes(target, f.First.Files, removals), config, out title, out summary);
-        Assert(title == "M8 restore complete", "historical restore complete");
+        Assert(title == "Gear Backup restore complete", "historical restore complete");
         Assert(File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "AAAA", "point in time restores old song");
         Assert(File.Exists(Path.Combine(target, "Songs", "removed.m8s")), "point in time restores subsequently deleted song");
         Assert(File.Exists(Path.Combine(target, "Songs", "dated_2026-01-01_120000.m8s")), "historical restore keeps real dated songs");
@@ -305,7 +305,7 @@ partial class M8Backup
         string recovery = Directory.GetDirectories(config.RecoveryFolder)[0];
         Assert(File.ReadAllText(Path.Combine(recovery, "Songs", "one.m8s")) == "CURRENT", "recovery saves overwritten song");
         Assert(File.ReadAllText(Path.Combine(recovery, "extra.txt")) == "KEEP ME IN RECOVERY", "recovery saves exact-removal file");
-        Assert(File.ReadAllText(Path.Combine(recovery, ".m8backup", "recovery-status.txt")).StartsWith("complete"), "recovery status complete");
+        Assert(File.ReadAllText(Path.Combine(recovery, ".gearbackup", "recovery-status.txt")).StartsWith("complete"), "recovery status complete");
     }
 
     static void TestRestoreSafety(string root)
@@ -320,7 +320,7 @@ partial class M8Backup
         ExecuteRestore(noRecovery, one, new List<string>(), new List<string>(), new List<string>(), TargetHashes(noRecovery, one, new List<string>()), config, out title, out summary);
         Assert(!Directory.Exists(config.RecoveryFolder), "Recovery=no creates no recovery folder");
         Assert(File.ReadAllText(Path.Combine(noRecovery, "Songs", "one.m8s")) == "AAAA", "restore works with recovery disabled");
-        Assert(Directory.GetFiles(noRecovery, ".m8rollback-*", SearchOption.AllDirectories).Length == 0, "successful replacements clean transient rollback files");
+        Assert(Directory.GetFiles(noRecovery, ".gearrollback-*", SearchOption.AllDirectories).Length == 0, "successful replacements clean transient rollback files");
         string lockedTarget = Path.Combine(root, "locked.txt"), stagedFile = Path.Combine(root, "staged.txt");
         Put(lockedTarget, "ORIGINAL"); Put(stagedFile, "REPLACEMENT");
         using (var locked = new FileStream(lockedTarget, FileMode.Open, FileAccess.Read, FileShare.None))
@@ -339,7 +339,7 @@ partial class M8Backup
         var beforeChange = TargetHashes(noRecovery, one, new List<string>());
         Put(Path.Combine(noRecovery, "Songs", "one.m8s"), "CHANGED DURING PREVIEW");
         ExecuteRestore(noRecovery, one, new List<string>(), new List<string>(), new List<string>(), beforeChange, config, out title, out summary);
-        Assert(title != "M8 restore complete", "target change rejected");
+        Assert(title != "Gear Backup restore complete", "target change rejected");
         Assert(File.ReadAllText(Path.Combine(noRecovery, "Songs", "one.m8s")) == "CHANGED DURING PREVIEW", "changed target preserved");
 
         string growingTarget = Rooted(Path.Combine(root, "growing-files"));
@@ -400,16 +400,16 @@ partial class M8Backup
         Put(Path.Combine(source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(source, "Samples", "kick.wav"), "WAVE");
         // Run the real argument/source/profile entry flow against a private INI beside the test executable.
-        string testIni = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M8Backup.ini");
+        string testIni = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GearBackup.ini");
         Put(testIni, "BackupFolder=" + root + "\nMode=full\nPreview=no\nRecovery=no\nThorough=yes\n");
         Assert(Run(false, false, new[] { "--source", source, "--profile", "card-A" }) == 0, "CLI manual source full backup");
-        Assert(ListBackups(Path.Combine(root, "M8 Backups", "profiles", "card-A")).Count == 1, "CLI named profile uses separate history");
+        Assert(ListBackups(Path.Combine(root, "Gear Backups", "profiles", "card-A")).Count == 1, "CLI named profile uses separate history");
         Assert(Run(false, false, new[] { "--source", source, "--profile", "card-B" }) == 0, "second CLI profile backup");
-        Assert(ListBackups(Path.Combine(root, "M8 Backups", "profiles", "card-B")).Count == 1, "second profile separated");
+        Assert(ListBackups(Path.Combine(root, "Gear Backups", "profiles", "card-B")).Count == 1, "second profile separated");
         string iniBeforePreview = File.ReadAllText(testIni);
         PreviewOnly = true;
         Assert(Run(false, false, new[] { "--source", source, "--profile", "preview-card", "--preview" }) == 0, "CLI preview entry flow");
-        Assert(!Directory.Exists(Path.Combine(root, "M8 Backups", "profiles", "preview-card")), "CLI preview creates no history or lock");
+        Assert(!Directory.Exists(Path.Combine(root, "Gear Backups", "profiles", "preview-card")), "CLI preview creates no history or lock");
         Assert(File.ReadAllText(testIni) == iniBeforePreview, "preview does not update INI");
         PreviewOnly = false;
         Console.SetIn(new StringReader("1\n"));
@@ -453,7 +453,7 @@ partial class M8Backup
         string title, summary;
         var one = new List<RestoreEntry> { f.First.Files.Find(e => e.Relative == "Songs\\one.m8s") };
         string malicious = Path.Combine(root, "bad.manifest");
-        Put(malicious, "M8SNAPSHOT\t1\nD\t" + Encode("..\\outside") + "\n");
+        Put(malicious, "GEARSNAPSHOT\t1\nD\t" + Encode("..\\outside") + "\n");
         Throws(() => ReadSnapshot(f.Backup, malicious), "malicious manifest rejected");
         int ok = 0, damaged = 0, missing = 0;
         CheckSnapshots(f.Backup, ref ok, ref damaged, ref missing);
@@ -493,7 +493,7 @@ partial class M8Backup
         var optionalHashes = new Dictionary<string, string> { { "optional.bin", Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false) } };
         var offConfig = new Config { BackupFolder = root, Preview = false };
         ExecuteRestore(optionalTarget, optionalCopies, new List<string>(), new List<string>(), new List<string>(), optionalHashes, offConfig, out title, out summary);
-        Assert(title == "M8 restore complete" && File.ReadAllText(Path.Combine(optionalTarget, "optional.bin")) == "BBBB", "Verify=no permits restore without stored-checksum comparison");
+        Assert(title == "Gear Backup restore complete" && File.ReadAllText(Path.Combine(optionalTarget, "optional.bin")) == "BBBB", "Verify=no permits restore without stored-checksum comparison");
         Assert(CopyFile(new FileInfo(optionalPath), Path.Combine(root, "optional-copy.bin"), false) == HashFile(optionalPath), "checksum records are generated when verification is off");
         f.Config.Verify = false;
         RestoreEntry currentSong = f.Latest.Files.Find(e => e.Relative == "Songs\\one.m8s");
@@ -657,7 +657,7 @@ partial class M8Backup
             Assert(names.Contains("Songs/a.m8s") && names.Contains("Samples/kick.wav") && names.Contains("Empty/") &&
                 names.Contains("checksums.sha256") && names.Contains("backup-statistics.txt"),
                 "zip holds the card's files, empty folders, checksums and statistics");
-            Assert(!new List<string>(names).Exists(n => n.StartsWith(".m8backup")), "zip leaves out the history store");
+            Assert(!new List<string>(names).Exists(n => n.StartsWith(".gearbackup")), "zip leaves out the history store");
             using (var reader = new StreamReader(zip.GetEntry("Songs/a.m8s").Open()))
                 Assert(reader.ReadToEnd() == "ZIP SONG", "zipped content matches the backup");
             Assert(zip.GetEntry("Songs/undated.m8s") != null, "undated files are zipped");
@@ -811,7 +811,7 @@ partial class M8Backup
             "printed backup duration includes snapshot creation");
         string backup = ListBackups(history)[0];
         Snapshot snapshot = LatestSnapshot(backup);
-        Put(Path.Combine(backup, ".m8backup", "objects", "not-a-user-file"), "HIDDEN");
+        Put(Path.Combine(backup, ".gearbackup", "objects", "not-a-user-file"), "HIDDEN");
         Assert(BackupFiles(backup).Count == 2, "backup traversal excludes metadata and statistics");
         Assert(CurrentBackup(backup).Files.Count == 2, "current restore view excludes history store contents");
 
@@ -878,7 +878,7 @@ partial class M8Backup
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL",
                 "cancelled staged restore preserves existing target");
             Assert(File.Exists(Path.Combine(cancelTarget, "extra.wav")), "cancelled restore does not remove extras");
-            Assert(Directory.GetFiles(cancelTarget, ".m8restore-*.tmp", SearchOption.AllDirectories).Length == 0,
+            Assert(Directory.GetFiles(cancelTarget, ".gearrestore-*.tmp", SearchOption.AllDirectories).Length == 0,
                 "cancelled restore cleans staged file");
         }
         using (var cancellation = new CancellationTokenSource())
@@ -886,7 +886,7 @@ partial class M8Backup
             ui = new TestInteraction();
             ui.OnProgress = p => { if (p.Stage == Stage.Hashing) cancellation.Cancel(); };
             result = new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(ui, cancellation.Token));
-            Assert(result.Cancelled && result.Title == "M8 check cancelled", "integrity cancellation is not reported as corruption or success");
+            Assert(result.Cancelled && result.Title == "Gear Backup check cancelled", "integrity cancellation is not reported as corruption or success");
         }
         using (var cancellation = new CancellationTokenSource())
         {
@@ -898,7 +898,7 @@ partial class M8Backup
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL" &&
                 File.ReadAllText(Path.Combine(cancelTarget, "extra.wav")) == "KEEP EXTRA", "cancelling recovery leaves every target file untouched");
             string recoveryFolder = Directory.GetDirectories(recoveryConfig.RecoveryFolder)[0];
-            Assert(File.ReadAllText(Path.Combine(recoveryFolder, ".m8backup", "recovery-status.txt")).Trim() == "incomplete",
+            Assert(File.ReadAllText(Path.Combine(recoveryFolder, ".gearbackup", "recovery-status.txt")).Trim() == "incomplete",
                 "cancelled recovery does not claim completion");
         }
         using (var cancellation = new CancellationTokenSource())

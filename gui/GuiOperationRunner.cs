@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Owns the worker lifetime and operation orchestration; the form owns display.
     sealed class GuiOperationRunner

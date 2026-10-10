@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Colours and control factories for the window's flat look.
     static class GuiTheme

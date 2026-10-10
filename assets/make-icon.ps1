@@ -1,4 +1,4 @@
-# Draws the M8 Backup icon (assets\M8Backup.ico and a 256px PNG) with System.Drawing.
+# Draws the M8 device icon (assets\M8.ico and a 256px PNG) with System.Drawing.
 # Usage: powershell -File assets\make-icon.ps1 -OutDir assets
 param([string]$OutDir)
 Add-Type -AssemblyName System.Drawing
@@ -101,7 +101,7 @@ foreach ($size in $sizes) {
     $ms = New-Object System.IO.MemoryStream
     $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
     $images += , @($size, $ms.ToArray())
-    if ($size -eq 256) { $bmp.Save((Join-Path $OutDir 'M8Backup-256.png'), [System.Drawing.Imaging.ImageFormat]::Png) }
+    if ($size -eq 256) { $bmp.Save((Join-Path $OutDir 'M8-256.png'), [System.Drawing.Imaging.ImageFormat]::Png) }
     $bmp.Dispose()
 }
 
@@ -119,7 +119,7 @@ foreach ($img in $images) {
 }
 foreach ($img in $images) { $w.Write($img[1]) }
 $w.Flush()
-[System.IO.File]::WriteAllBytes((Join-Path $OutDir 'M8Backup.ico'), $ico.ToArray())
+[System.IO.File]::WriteAllBytes((Join-Path $OutDir 'M8.ico'), $ico.ToArray())
 
 # Preview sheet: every size on a light and a dark background
 $sheet = New-Object System.Drawing.Bitmap(760, 300)

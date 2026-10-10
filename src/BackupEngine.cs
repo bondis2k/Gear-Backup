@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     internal sealed class BackupEngine
     {
@@ -38,7 +38,7 @@ partial class M8Backup
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = "M8 backup cancelled",
+                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " cancelled",
                         Summary = "Backup cancelled. Completed copies remain available; incomplete backups can be resumed.", Elapsed = timer.Elapsed };
                 }
                 finally { context.OverallProgressOnly = previousProgressMode; }
@@ -105,7 +105,7 @@ partial class M8Backup
             if (failed == 0 && config.KeepBackups > 0)
                 PruneBackups(backupRoot, config.KeepBackups, dest);
 
-            title = failed == 0 ? "M8 backup complete" : "M8 backup finished with errors";
+            title = AppIdentity.Name + (failed == 0 ? " complete" : " finished with errors");
             summary = string.Format("{0:N0} files, {1} copied in {2}.", copied, FormatSize(copiedBytes), FormatTime(stopwatch.Elapsed));
             if (failed > 0) summary += " " + failed + " file(s) failed.";
             summary += ShortSongSummary(changes);
@@ -287,7 +287,7 @@ partial class M8Backup
                     bool suspect = (config.Verify && hasOldHash && HashFile(target) != expectedOld) || (resuming && !hasOldHash);
                     if (suspect)
                     {
-                        oldVersion = SafePath(Path.Combine(dest, ".m8backup", "quarantine", Guid.NewGuid().ToString("N")), relative);
+                        oldVersion = SafePath(Path.Combine(AppIdentity.MetadataRoot(dest), "quarantine", Guid.NewGuid().ToString("N")), relative);
                         Directory.CreateDirectory(Path.GetDirectoryName(oldVersion));
                         WriteColored("  Preserving unverified/partial existing copy in quarantine: " + relative, ConsoleColor.Yellow);
                     }
@@ -422,7 +422,7 @@ partial class M8Backup
             report.WriteLine("  Average speed: {0}/s", FormatSize((long)(copiedBytes / seconds)));
             report.WriteLine("  Verified:      {0}", config.Verify
                 ? "yes (each copy read back and its SHA-256 checksum compared)"
-                : "no (Verify=no in M8Backup.ini)");
+                : "no (Verify=no in " + AppIdentity.ConfigFileName + ")");
             report.WriteLine("  Checksums:     {0}", checksumStatus);
             if (largest != null)
                 report.WriteLine("  Largest file:  {0} ({1})", Relative(largest), FormatSize(largest.Length));
@@ -487,7 +487,7 @@ partial class M8Backup
                 : "backup-statistics.txt");
             try
             {
-                File.WriteAllText(statsFile, "  M8 " + (incremental ? "incremental " : "") + "backup statistics\r\n" + report + "  " + status + "\r\n");
+                File.WriteAllText(statsFile, "  " + AppIdentity.Name + " " + (incremental ? "incremental " : "") + "statistics\r\n" + report + "  " + status + "\r\n");
                 OperationOutput.WriteLine("  Statistics saved to " + statsFile);
             }
             catch (Exception ex)

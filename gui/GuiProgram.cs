@@ -2,8 +2,8 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-// Entry point of M8Backup.GUI.exe.
-class M8Gui
+// Entry point of GearBackup.GUI.exe.
+class GearGui
 {
     [STAThread]
     static int Main(string[] args)
@@ -13,8 +13,8 @@ class M8Gui
         // Design aid: renders the main window or the settings dialog to a PNG without showing it.
         if (args.Length == 2 && (args[0] == "--render-preview" || args[0] == "--render-settings"))
         {
-            M8Backup.GuiHeadless = true;
-            using (var form = args[0] == "--render-settings" ? M8Backup.CreateSettingsPreview() : M8Backup.CreateGui(true))
+            GearBackup.GuiHeadless = true;
+            using (var form = args[0] == "--render-settings" ? GearBackup.CreateSettingsPreview() : GearBackup.CreateGui(true))
             {
                 form.Opacity = 0;
                 form.ShowInTaskbar = false;
@@ -29,12 +29,12 @@ class M8Gui
             }
             return 0;
         }
-        Application.Run(M8Backup.CreateGui(false));
+        Application.Run(GearBackup.CreateGui(false));
         return 0;
     }
 }
 
-partial class M8Backup
+partial class GearBackup
 {
     internal static Form CreateGui(bool designPreview) { return new MainForm(designPreview); }
     internal static Form CreateSettingsPreview() { return new SettingsDialog(new Config()); }

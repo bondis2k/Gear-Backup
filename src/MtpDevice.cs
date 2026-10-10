@@ -11,7 +11,7 @@ using System.Management;
 using System.Runtime.InteropServices;
 using CT = System.Runtime.InteropServices.ComTypes;
 
-partial class M8Backup
+partial class GearBackup
 {
     [StructLayout(LayoutKind.Sequential)]
     internal struct PropertyKey

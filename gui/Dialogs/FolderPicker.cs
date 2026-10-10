@@ -1,7 +1,7 @@
 using System.IO;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     static void BrowseFolder(IWin32Window owner, TextBox target, bool allowNew)
     {

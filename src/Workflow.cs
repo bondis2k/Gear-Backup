@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
-partial class M8Backup
+partial class GearBackup
 {
     static bool PreviewOnly
     {
@@ -87,7 +87,7 @@ partial class M8Backup
         out uint serialNumber, out uint maxComponentLength, out uint fileSystemFlags, StringBuilder fileSystemName, int fileSystemNameSize);
 
     // Lets the user pick one of the histories that has backups: each profile, plus backups made before
-    // profiles existed ("Legacy backups", directly under M8 Backups). Null when cancelled.
+    // profiles existed ("Legacy backups", directly under Gear Backups). Null when cancelled.
     static string ChooseHistory(string root, string preferred)
     {
         var roots = new List<string>();
@@ -208,7 +208,7 @@ partial class M8Backup
     {
         // ReplaceFile can lose the old name on certain failures without a backup argument.
         // Keep a transient on-volume rollback file even when optional PC recovery is off.
-        string rollback = Path.Combine(Path.GetDirectoryName(target), ".m8rollback-" + Guid.NewGuid().ToString("N") + ".tmp");
+        string rollback = Path.Combine(Path.GetDirectoryName(target), ".gearrollback-" + Guid.NewGuid().ToString("N") + ".tmp");
         try { File.Replace(staged, target, rollback); }
         catch (Exception ex)
         {
@@ -230,13 +230,13 @@ partial class M8Backup
     // Backups made before status files existed report Status.Legacy.
     static string BackupStatus(string folder)
     {
-        string path = Path.Combine(folder, ".m8backup", "status.txt");
+        string path = Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt");
         return File.Exists(path) ? File.ReadAllText(path).Trim() : Status.Legacy;
     }
 
     static void SetBackupStatus(string folder, string status)
     {
-        AtomicText(Path.Combine(folder, ".m8backup", "status.txt"), status + "\n");
+        AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt"), status + "\n");
     }
 
     // Holds .history.lock open without sharing, so a second program or window can't write to the same

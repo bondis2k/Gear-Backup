@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 
-partial class M8Backup
+partial class GearBackup
 {
     // "<history>\2026-10-10.zip" for the backup folder "<history>\2026-10-10" (_2, _3, ... if taken).
     // Kept beside the folder, not inside it, so restores and checks never treat it as card content.
@@ -20,7 +20,7 @@ partial class M8Backup
     }
 
     // Zips the card's files and folders (empty ones included) plus checksums.sha256 and the statistics,
-    // leaving out the .m8backup history store, which only this program uses and would double the size.
+    // leaving out the .gearbackup history store, which only this program uses and would double the size.
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
     static string ZipBackup(string backup)
     {

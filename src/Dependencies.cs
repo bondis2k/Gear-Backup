@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Read-only dependency extraction, bounded to the known firmware-6 song layout.
     // Layout references: github.com/jhw/pym8 m8/api/{instrument.py,instruments/sampler.py}

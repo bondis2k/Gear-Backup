@@ -2,13 +2,13 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     sealed class SettingsDialog : Form
     {
         public SettingsDialog(Config config)
         {
-            Text = "Settings · M8 Backup"; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
+            Text = "Settings · " + AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
             StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false; FormBorderStyle = FormBorderStyle.FixedDialog;
             MinimizeBox = false; MaximizeBox = false; ClientSize = new Size(640, 520); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;

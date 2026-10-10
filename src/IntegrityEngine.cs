@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     // "Check backups": verifies backup files against checksums.sha256 and history objects against their
     // manifests. Reads only; never changes a backup (apart from offering to create a missing checksum list).
@@ -22,7 +22,7 @@ partial class M8Backup
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = "M8 check cancelled",
+                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " check cancelled",
                         Summary = "Integrity check cancelled; remaining files were not checked.", Elapsed = timer.Elapsed };
                 }
             }
@@ -45,7 +45,7 @@ partial class M8Backup
             summary += ".";
             bool good = damaged == 0 && missing == 0;
             WriteColored("  " + summary, good ? ConsoleColor.Green : ConsoleColor.Red);
-            title = good ? "M8 backups OK" : "M8 backup problems found";
+            title = AppIdentity.Name + (good ? ": backups OK" : ": backup problems found");
             return good ? 0 : 2;
         }
     }

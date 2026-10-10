@@ -1,10 +1,10 @@
-// Settings from M8Backup.ini next to the exe.
+// Settings from GearBackup.ini next to the exe.
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-partial class M8Backup
+partial class GearBackup
 {
     internal class Config
     {
@@ -28,11 +28,11 @@ partial class M8Backup
         public Config Clone() { return (Config)MemberwiseClone(); }
     }
 
-    // Each setting with the explanation written into M8Backup.ini when it's missing from the file.
+    // Each setting with the explanation written into GearBackup.ini when it's missing from the file.
     static readonly string[][] SettingDocs =
     {
         new[] { "Recovery", "; Recovery: save PC recovery copies before replacing or removing files during restore.\r\n; Default no. A recovery failure stops the restore before changing the target.\r\nRecovery=no\r\n" },
-        new[] { "RecoveryFolder", "\r\n; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\M8 Recovery.\r\n; Environment variables work. Must be outside the source card/folder.\r\nRecoveryFolder=\r\n" },
+        new[] { "RecoveryFolder", "\r\n; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\" + AppIdentity.RecoveryFolderName + ".\r\n; Environment variables work. Must be outside the source card/folder.\r\nRecoveryFolder=\r\n" },
         new[] { "SourceFolder", "\r\n; SourceFolder: optional SD card drive or folder, e.g. E:\\ or D:\\M8Card.\r\n; Empty = detect the M8, or offer manual selection if detection fails.\r\nSourceFolder=\r\n" },
         new[] { "Profile", "\r\n; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\nProfile=\r\n" },
         new[] { "Device", "\r\n; Device: what kind of device the source is. auto = detect the connected device\r\n; (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP),\r\n; or name it: m8, op1-field, op-xy, tracker-mini or x100vi. Matters for a card reader or folder.\r\nDevice=auto\r\n" },
@@ -41,7 +41,7 @@ partial class M8Backup
         new[] { "HardLinks", "\r\n; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n; no = keep separate copies (default). Other file systems always use copies.\r\nHardLinks=no\r\n" },
         new[] { "BackupFolder",
             "; BackupFolder: where backups go. Each backup is saved to\r\n" +
-            ";   <BackupFolder>\\M8 Backups\\profiles\\<profile>\\<date>\r\n" +
+            ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
             "; Leave it empty to use your Music folder. Environment variables work,\r\n" +
             "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" +
             "BackupFolder=\r\n" },
@@ -51,7 +51,7 @@ partial class M8Backup
             ";   ask         = show a menu: full backup, incremental backup or restore\r\n" +
             ";   full        = always make a new full backup\r\n" +
             ";   incremental = always copy new and changed files into the last backup\r\n" +
-            "; To restore when Mode isn't ask, run: M8Backup.exe --restore\r\n" +
+            "; To restore when Mode isn't ask, run: " + AppIdentity.DirectoryName + ".exe --restore\r\n" +
             "Mode=ask\r\n" },
         new[] { "Verify",
             "\r\n" +
@@ -86,21 +86,27 @@ partial class M8Backup
             "KeepOldVersions=0\r\n" },
     };
 
-    // Reads M8Backup.ini next to the exe. Settings missing from the file (or the whole file) are
-    // added with their defaults and explanations, so the file always shows every option.
-    // Reads M8Backup.ini next to the exe. Settings missing from it are appended with their default and
+    // Reads GearBackup.ini next to the exe. Settings missing from it are appended with their default and
     // explanation, so the file always documents every option. A --preview run doesn't write the file.
     static Config LoadConfig()
     {
+        return LoadConfig(AppDomain.CurrentDomain.BaseDirectory);
+    }
+
+    static Config LoadConfig(string directory)
+    {
         var config = new Config { BackupFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) };
-        string configFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M8Backup.ini");
+        string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
+        string legacyFile = Path.Combine(directory, AppIdentity.Legacy.ConfigFileName);
         try
         {
-            bool exists = File.Exists(configFile);
+            bool migrate = !File.Exists(configFile) && File.Exists(legacyFile);
+            string readFile = migrate ? legacyFile : configFile;
+            bool exists = File.Exists(readFile);
             var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (exists)
             {
-                foreach (string line in File.ReadAllLines(configFile))
+                foreach (string line in File.ReadAllLines(readFile))
                 {
                     string trimmed = line.Trim();
                     int equals = trimmed.IndexOf('=');
@@ -112,10 +118,28 @@ partial class M8Backup
                 }
             }
 
-            var missing = new StringBuilder(exists ? "" : "; M8 Backup settings\r\n;\r\n");
+            var missing = new StringBuilder(exists ? "" : "; " + AppIdentity.Name + " settings\r\n;\r\n");
             foreach (string[] setting in SettingDocs)
                 if (!found.Contains(setting[0])) missing.Append(setting[1]);
-            if (missing.Length > 0 && !PreviewOnly) File.AppendAllText(configFile, missing.ToString());
+            if (!PreviewOnly)
+            {
+                if (migrate)
+                {
+                    // Preserve values and comments; only update product names in comment lines.
+                    var text = new StringBuilder();
+                    foreach (string line in File.ReadAllLines(readFile))
+                    {
+                        string trimmed = line.TrimStart();
+                        text.AppendLine(trimmed.StartsWith(";") || trimmed.StartsWith("#")
+                            ? line.Replace(AppIdentity.Legacy.DirectoryName, AppIdentity.DirectoryName)
+                                  .Replace(AppIdentity.Legacy.Name, AppIdentity.Name)
+                                  .Replace(AppIdentity.Legacy.RecoveryFolderName, AppIdentity.RecoveryFolderName) : line);
+                    }
+                    text.Append(missing);
+                    AtomicText(configFile, text.ToString());
+                }
+                else if (missing.Length > 0) File.AppendAllText(configFile, missing.ToString());
+            }
         }
         catch (Exception ex)
         {
@@ -127,7 +151,7 @@ partial class M8Backup
     // Preserve comments and unrelated keys when the GUI saves shared preferences.
     static void SaveConfig(Config config)
     {
-        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M8Backup.ini");
+        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppIdentity.ConfigFileName);
         SaveConfig(config, path);
     }
 
@@ -229,7 +253,7 @@ partial class M8Backup
 
     static void WarnSetting(string key, string value, string expected)
     {
-        WriteColored("  M8Backup.ini: " + key + "=" + value + " isn't valid (expected " + expected + "), using the default.",
+        WriteColored("  " + AppIdentity.ConfigFileName + ": " + key + "=" + value + " isn't valid (expected " + expected + "), using the default.",
                      ConsoleColor.Yellow);
     }
 }
