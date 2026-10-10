@@ -115,6 +115,44 @@ partial class M8Backup
         return config;
     }
 
+    // Preserve comments and unrelated keys when the GUI saves shared preferences.
+    static void SaveConfig(Config config)
+    {
+        string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "M8Backup.ini");
+        SaveConfig(config, path);
+    }
+
+    static void SaveConfig(Config config, string path)
+    {
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            { "BackupFolder", config.BackupFolder }, { "SourceFolder", config.SourceFolder }, { "Profile", config.Profile },
+            { "Mode", config.Mode }, { "Verify", config.Verify ? "yes" : "no" },
+            { "Thorough", config.Thorough ? "yes" : "no" }, { "Preview", config.Preview ? "yes" : "no" },
+            { "Recovery", config.Recovery ? "yes" : "no" }, { "RecoveryFolder", config.RecoveryFolder },
+            { "KeepBackups", config.KeepBackups.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            { "KeepOldVersions", config.KeepOldVersions.ToString(System.Globalization.CultureInfo.InvariantCulture) },
+            { "MaxNameLength", config.MaxNameLength.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "Eject", config.Eject }
+        };
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var text = new StringBuilder();
+        if (File.Exists(path)) foreach (string line in File.ReadAllLines(path))
+        {
+            string trimmed = line.Trim();
+            int equals = trimmed.IndexOf('=');
+            string key = equals < 0 ? "" : trimmed.Substring(0, equals).Trim();
+            string value;
+            if (!trimmed.StartsWith(";") && !trimmed.StartsWith("#") && values.TryGetValue(key, out value))
+            {
+                text.Append(key).Append('=').Append(value).AppendLine();
+                found.Add(key);
+            }
+            else text.AppendLine(line);
+        }
+        foreach (string[] setting in SettingDocs)
+            if (!found.Contains(setting[0])) text.Append(setting[0]).Append('=').Append(values[setting[0]]).AppendLine();
+        AtomicText(path, text.ToString());
+    }
+
     static void ApplySetting(Config config, string key, string value)
     {
         string lower = value.ToLowerInvariant();
