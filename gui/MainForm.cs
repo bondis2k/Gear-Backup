@@ -161,7 +161,7 @@ partial class M8Backup
         }
         public void UpdateProgress(OperationProgress value)
         {
-            if (value.OverallOnly && (value.Stage == "Copying" || value.Stage == "Hashing" ||
+            if (value.OverallOnly && (value.Stage == "Copying" || value.Stage == "Hashing" || value.Stage == "Verifying" ||
                 value.Stage == "Comparing" || value.Stage == "Scanning backup")) return;
             lock (queueLock) pendingProgress = value;
         }

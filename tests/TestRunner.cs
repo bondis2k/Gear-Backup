@@ -372,6 +372,7 @@ partial class M8Backup
             "settings copy keeps every setting, including ones the GUI window doesn't show");
         TestEngineOperations(root);
         TestOptimizations(root);
+        TestCopyPipeline(root);
         using (LockHistory(history)) Throws(() => LockHistory(history), "concurrent history writer rejected");
         Console.WriteLine("PASS: " + assertions + " assertions.");
         RemoveFixtures(root);
@@ -395,6 +396,62 @@ partial class M8Backup
             Progress.Add(progress);
             if (OnProgress != null) OnProgress(progress);
         }
+    }
+
+    // Returns `firstBytes` bytes, then fails like a card being unplugged mid-copy.
+    sealed class FailingStream : Stream
+    {
+        int remaining;
+        public FailingStream(int firstBytes) { remaining = firstBytes; }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (remaining <= 0) throw new IOException("card unplugged");
+            int n = Math.Min(count, remaining);
+            remaining -= n;
+            return n;
+        }
+        public override bool CanRead { get { return true; } }
+        public override bool CanSeek { get { return false; } }
+        public override bool CanWrite { get { return false; } }
+        public override long Length { get { throw new NotSupportedException(); } }
+        public override long Position { get { throw new NotSupportedException(); } set { throw new NotSupportedException(); } }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        public override void SetLength(long value) { throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
+    }
+
+    static void TestCopyPipeline(string root)
+    {
+        var random = new Random(8);
+        foreach (int size in new[] { 0, 1, ChunkSize - 1, ChunkSize, 3 * ChunkSize + 12345 })
+        {
+            byte[] data = new byte[size];
+            random.NextBytes(data);
+            string from = Path.Combine(root, "pipe-" + size + ".bin"), to = from + ".copy";
+            File.WriteAllBytes(from, data);
+            var ui = new TestInteraction();
+            string hash;
+            using (new OperationContext(ui, CancellationToken.None).Activate()) hash = CopyFile(new FileInfo(from), to, true);
+            Assert(hash == HashFile(from) && FilesEqual(from, to), "pipelined copy is exact for " + size + " bytes");
+            Assert(ui.Progress.Exists(p => p.Stage == "Verifying") || size == 0, "verification reads the copy back from disk, bypassing the cache");
+            Assert(HashFileFromDisk(to) == hash, "unbuffered read-back gives the same checksum for " + size + " bytes");
+        }
+
+        Throws(() => CopyAndHash(new FailingStream(ChunkSize + 10), new MemoryStream(), "failing"),
+            "a read error during a pipelined copy surfaces as an IOException");
+
+        string big = Path.Combine(root, "pipe-" + (3 * ChunkSize + 12345) + ".bin"), cancelledCopy = big + ".cancelled";
+        var cts = new CancellationTokenSource();
+        var cancelUi = new TestInteraction();
+        cancelUi.OnProgress = delegate(OperationProgress p) { if (p.Stage == "Copying") cts.Cancel(); };
+        bool cancelled = false;
+        using (new OperationContext(cancelUi, cts.Token).Activate())
+        {
+            try { CopyFile(new FileInfo(big), cancelledCopy, false); }
+            catch (OperationCanceledException) { cancelled = true; }
+        }
+        Assert(cancelled && !File.Exists(cancelledCopy), "cancelling mid-copy stops and leaves no partial file");
     }
 
     static void TestOptimizations(string root)

@@ -92,7 +92,9 @@ Thorough mode compares content hashes. Identical contents can be skipped even wh
 
 A full backup copies every file anyway, so with `Thorough=yes` it doesn't hash the card beforehand: the content comparison for the change summary uses the checksums calculated while copying and the previous backup's `checksums.sha256`. The card is read once. Incremental backups and resume still hash both sides before copying, which also repairs a damaged copy in the backup.
 
-Automatic SHA-256 integrity comparison is independently controlled by `Verify=no` (the default). Set `Verify=yes` to check copied files, restore sources, snapshot objects, and recovery copies. Hashes are still generated for integrity records and history object identities when comparison is off. Selecting **Check backups** explicitly runs checksum checks regardless of either setting.
+Automatic SHA-256 integrity comparison is independently controlled by `Verify=no` (the default). Set `Verify=yes` to check copied files, restore sources, snapshot objects, and recovery copies. Each copy is read back from the disk itself, bypassing Windows' file cache, so the check sees what was actually written rather than what is still in memory; file systems that don't allow this (some network shares) get a normal read-back.
+
+Copying reads the next 1 MB from the source while the current 1 MB is hashed and written, so the card and the backup drive work at the same time. This mainly helps when the backup drive is about as slow as the card, such as an external HDD or USB stick. Hashes are still generated for integrity records and history object identities when comparison is off. Selecting **Check backups** explicitly runs checksum checks regardless of either setting.
 
 ### Completion status and resume
 
