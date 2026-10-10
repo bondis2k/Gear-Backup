@@ -161,7 +161,7 @@ This operation captures the names and 23 raw property values for **C1–C7**, pl
 
 The camera's recipe read selector is temporarily changed to read each bank, then restored and checked. Shooting values are compared before and after capture. Cancel also restores the selector before stopping. If the camera disconnects and the selector cannot be restored, the operation reports the failure; reconnect and check the selected recipe before retrying.
 
-Each run makes a **new dated full backup**, with normal checksums, snapshots, verification, retention and optional ZIP. The automatic profile is `x100vi-settings-<serial>`, separate from photo backups. A custom `Profile` overrides it, so use a separate name for settings. `Mode` and `SourceFolder` do not affect this operation. **Preview** captures the values and displays the file plan without saving a backup; temporary capture files are removed.
+Each run makes a **new dated full backup**, with normal checksums, optional point-in-time history, verification, retention and optional ZIP. The automatic profile is `x100vi-settings-<serial>`, separate from photo backups. A custom `Profile` overrides it, so use a separate name for settings. `Mode` and `SourceFolder` do not affect this operation. **Preview** captures the values and displays the file plan without saving a backup; temporary capture files are removed.
 
 This is **not a full-camera backup** or an X Acquire/Tether App settings file. Button assignments, network configuration and other setup menus are outside its scope. Gear Backup can restore the XML files to a PC folder for reference, but does **not** write settings back to the camera. Use Fujifilm's software for its native full settings backup/restore workflow. Direct capture was tested with an X100VI on firmware **1.32**.
 
@@ -191,7 +191,7 @@ Restore and check offer a history selector, including existing backups directly 
 
 **Full:** copy the card's user files into a new dated folder. If the date is already used, the time and fractional seconds are added to create a distinct folder.
 
-**Incremental:** add and update files in the latest backup of the current profile. Changed files keep their previous browsable copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`. Deleted source files remain in the browsable backup. A dated snapshot separately records which files actually existed during this run.
+**Incremental:** add and update files in the latest backup of the current profile. Changed files keep their previous browsable copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`. Deleted source files remain in the browsable backup. When point-in-time history is enabled, a dated snapshot separately records which files actually existed during this run.
 
 ### Zip copy of a full backup
 
@@ -245,7 +245,7 @@ Each new backup has one of these statuses:
 |---|---|
 | `incomplete` | A run started but did not reach its final status, for example because the process stopped or USB was disconnected. |
 | `failed` | The run reached the end with file, history, or checksum-list failures. |
-| `complete` | The run finished with its files, snapshot, and checksum list saved, using the selected verification settings. |
+| `complete` | The run finished with its files, checksum list and (when enabled) snapshot saved, using the selected verification settings. |
 | `legacy (status unknown)` | An older backup without status metadata. |
 
 When the latest backup is incomplete or failed, choose **Resume**, **New full backup**, or **Cancel**. Resume uses the selected `Thorough` comparison, repairs partial or missing copies it detects, and refreshes checksum records. Use `Thorough=yes` to detect partial/corrupt copies that retain the correct size and time. It resumes against the source as it exists now; it cannot reconstruct unsaved files or a previous source state that was never copied.
@@ -256,13 +256,23 @@ Older completed snapshots remain selectable even if the latest incremental run f
 
 ## Point-in-time history
 
+Point-in-time history is enabled by default (`PointInTimeHistory=yes`). To save disk space, open **Settings → Backup** and clear **Save point-in-time history**, or set this in `GearBackup.ini`:
+
+```ini
+PointInTimeHistory=no
+```
+
+With history off, backups save the browsable files and checksum list without snapshot manifests or the extra content store. A fresh backup typically needs roughly half the space of the default backup with copied history. Incremental backups, current-file restore, verification, integrity checks and ZIP creation still work; you cannot select a point in time from runs made with history off. `HardLinks` has no effect in this mode, and free-space planning excludes history objects.
+
+Changed files still keep dated old versions, deleted source files remain in the browsable backup, and each full backup still creates a separate folder. `KeepOldVersions` and `KeepBackups` control those copies independently; optional ZIPs also use extra space. Turning history off does not delete existing snapshots or objects. For the space saving on an existing history, start a new full backup with history off and manage older backup folders separately. Turning history back on captures subsequent runs; it cannot recreate snapshots for runs made while history was off.
+
 ![Backup history example: the first snapshot contains Jam version 1 and Kick; after editing Jam and deleting Kick, the second snapshot contains only Jam version 2, while Kick remains in the browsable backup.](assets/manual/backup-history.png)
 
 *The illustration shows one full backup followed by an incremental run in the same backup folder. A new full backup creates a separate dated folder instead.*
 
 Choose a saved snapshot when you want the files that existed at a particular backup time. Browsing current backup files also exposes retained files that have since been deleted from the source, plus dated old versions of changed files. In the example, restoring snapshot 1 brings back the original song and sample; snapshot 2 selects only the edited song. Whether extra files already on the target are retained depends on [merge versus exact snapshot](#merge-versus-exact-snapshot).
 
-Every successful backup run saves a dated manifest under:
+With history enabled, every successful backup run saves a dated manifest under:
 
 ```
 <backup>\.gearbackup\snapshots\<timestamp>.manifest
@@ -365,7 +375,7 @@ Recovery metadata is under `.gearbackup`: `recovery-status.txt` records completi
 
 Incremental backup previews list only new and changed files. Unchanged files are shown as a total count, without listing their names.
 
-When an incremental backup has no new or changed files to copy, it skips the Proceed prompt automatically. It still records the current snapshot membership, including deleted files and empty folders, and updates the backup status and statistics.
+When an incremental backup has no new or changed files to copy, it skips the Proceed prompt automatically. It still records the current snapshot membership when history is enabled, including deleted files and empty folders, and updates the backup status and statistics.
 
 `--preview` displays the plan and exits without writing files. It can be combined with `--restore`. Selection questions remain so you can choose the intended operation. Preview reads and hashes files; it is not an unattended operation.
 
@@ -424,6 +434,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
 | `HardLinks` | `no` | On NTFS, store history as hard links to the backup files instead of second copies (see Point-in-time history). |
+| `PointInTimeHistory` | `yes` | Save dated snapshots and their content store. Set `no` for files and checksums only, avoiding the second history copy. Existing snapshots are preserved; old-version and full-backup retention are independent. |
 
 ## Command line and exit codes
 

@@ -142,6 +142,7 @@ partial class GearBackup
         RunTest("History lock", () => TestHistoryLock(Folder(root, "lock")));
         RunTest("Engine operations", () => TestEngineOperations(Folder(root, "engine")));
         RunTest("Optimizations", () => TestOptimizations(Folder(root, "optimizations")));
+        RunTest("Backup without point-in-time history", () => TestWithoutHistory(Folder(root, "without-history")));
         RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
         RunTest("Zip", () => TestZip(Folder(root, "zip")));
         TestHelpers(root);
@@ -713,6 +714,73 @@ partial class GearBackup
             catch (OperationCanceledException) { cancelled = true; }
         }
         Assert(cancelled && !File.Exists(cancelledCopy), "cancelling mid-copy stops and leaves no partial file");
+    }
+
+    static void TestWithoutHistory(string root)
+    {
+        Assert(new Config().PointInTimeHistory, "point-in-time history is enabled by default");
+        string source = Rooted(Path.Combine(root, "source"));
+        Put(Path.Combine(source, "song.txt"), "FIRST");
+        Put(Path.Combine(source, "unchanged.txt"), "SAME");
+        Directory.CreateDirectory(Path.Combine(source, "empty"));
+        string history = Path.Combine(root, "history");
+        var config = new Config { PointInTimeHistory = false, HardLinks = true, Verify = true, Thorough = true, Preview = false };
+        var ui = new TestInteraction();
+        OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
+        string backup = ListBackups(history)[0];
+        Assert(result.ExitCode == 0 && BackupStatus(backup) == Status.Complete, "full backup completes with history disabled");
+        Assert(!Directory.Exists(SnapshotRoot(backup)) && !Directory.Exists(Path.Combine(backup, ".gearbackup", "objects")), "no snapshot or second content store is created");
+        Assert(ui.Output.ToString().Contains("no extra history content store"), "space planning ignores history even with HardLinks enabled");
+        Assert(LoadChecksums(backup).Count == 2, "history-free backup still has checksums");
+
+        Put(Path.Combine(source, "song.txt"), "SECOND VERSION");
+        Put(Path.Combine(source, "new.txt"), "NEW");
+        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0 && result.Counts.Copied == 2 && result.Counts.Unchanged == 1, "incremental backup updates changed and new files and skips unchanged files");
+        Assert(BackupFiles(backup).Exists(f => File.ReadAllText(f) == "FIRST"), "old browsable versions remain independent of snapshot history");
+        int ok = 0, damaged = 0, missing = 0, uncheckedFiles = 0;
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            CheckBackup(backup, ref ok, ref damaged, ref missing, ref uncheckedFiles);
+            CheckSnapshots(backup, ref ok, ref damaged, ref missing);
+        }
+        Assert(ok == 4 && damaged == 0 && missing == 0 && uncheckedFiles == 0, "integrity checks verify current files and retained versions without snapshots");
+        Snapshot current = CurrentBackup(backup);
+        string target = Rooted(Path.Combine(root, "restored"));
+        Directory.CreateDirectory(target);
+        result = new RestoreEngine().RunSelected(target, current, current.Files, 'a', null, false, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "song.txt")) == "SECOND VERSION" &&
+            File.ReadAllText(Path.Combine(target, "new.txt")) == "NEW" && Directory.Exists(Path.Combine(target, "empty")),
+            "current files and empty folders can be restored with history disabled");
+        Assert(!Directory.Exists(SnapshotRoot(backup)), "incremental backups also omit snapshots");
+
+        string resumeSource = Rooted(Path.Combine(root, "resume-source"));
+        Directory.CreateDirectory(resumeSource);
+        File.WriteAllBytes(Path.Combine(resumeSource, "large.wav"), new byte[2 * 1024 * 1024]);
+        string resumeHistory = Path.Combine(root, "resume-history");
+        using (var cancellation = new CancellationTokenSource())
+        {
+            ui = new TestInteraction();
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
+            result = new BackupEngine().Run(resumeSource, resumeHistory, null, false, config, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && BackupStatus(ListBackups(resumeHistory)[0]) == Status.Incomplete,
+                "cancelled history-free backup remains resumable");
+        }
+        string interrupted = ListBackups(resumeHistory)[0];
+        result = new BackupEngine().Run(resumeSource, resumeHistory, interrupted, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0 && BackupStatus(interrupted) == Status.Complete &&
+            LoadChecksums(interrupted)["large.wav"] == HashFile(Path.Combine(resumeSource, "large.wav")) && !Directory.Exists(SnapshotRoot(interrupted)),
+            "resuming without history completes copies and checksum records without creating snapshots");
+
+        config.PointInTimeHistory = true;
+        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0 && LatestSnapshot(backup).Files.Count == 3, "enabling history later captures the current source membership");
+        int manifests = Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length;
+        config.PointInTimeHistory = false;
+        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(result.ExitCode == 0 && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == manifests,
+            "disabling history preserves existing snapshots without adding one");
     }
 
     static void TestOptimizations(string root)

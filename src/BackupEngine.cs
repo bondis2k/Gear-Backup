@@ -184,7 +184,7 @@ partial class GearBackup
             Dictionary<string, string> oldSums = previous == null ? null : LoadChecksums(previous);
             var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             // HardLinks=yes on NTFS: the history store shares the backup files' content instead of copying it.
-            linkedHistory = config.HardLinks && SupportsHardLinks(backupRoot);
+            linkedHistory = config.PointInTimeHistory && config.HardLinks && SupportsHardLinks(backupRoot);
             // A full backup copies everything anyway, so with Thorough=yes its content comparison (only used
             // for the change summary) waits for the checksums computed while copying: the card is read once.
             bool thoroughNow = config.Thorough && incremental;
@@ -206,7 +206,7 @@ partial class GearBackup
                 string hash = comparedHash;
                 if (hash == null && !resuming && incremental && states[i] == FileState.Same && oldSums != null)
                     oldSums.TryGetValue(relative, out hash);
-                if (linkedHistory) continue;
+                if (!config.PointInTimeHistory || linkedHistory) continue;
                 if (hash == null) historyBytes += file.Length;
                 else if (!File.Exists(ObjectPath(dest, hash)) && pendingObjects.Add(hash)) historyBytes += file.Length;
             }
@@ -218,7 +218,9 @@ partial class GearBackup
 
         bool CheckSpace()
         {
-            if (linkedHistory)
+            if (!config.PointInTimeHistory)
+                OperationOutput.WriteLine("  Point-in-time history is off; backup files and checksums only, with no extra history content store.");
+            else if (linkedHistory)
                 OperationOutput.WriteLine("  History store shares the backup files through hard links; no extra space needed.");
             else
                 OperationOutput.WriteLine("  History store needs up to {0} additional space (identical content is shared).", FormatSize(historyBytes));
@@ -343,22 +345,25 @@ partial class GearBackup
             if (config.Thorough && !incremental && previous != null) RefineByChecksums();
             changes = FindChanges(scan, source, states, previous);
 
-            try
+            if (config.PointInTimeHistory)
             {
-                // Populate missing hashes for verified resume/legacy files before creating history.
-                foreach (FileInfo f in scan.Files)
+                try
                 {
-                    string rel = Relative(f);
-                    if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
+                    // Populate missing hashes for verified resume/legacy files before creating history.
+                    foreach (FileInfo f in scan.Files)
+                    {
+                        string rel = Relative(f);
+                        if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
+                    }
+                    if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory);
                 }
-                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory);
-            }
-            catch (Exception ex)
-            {
-                if (ex is OperationCanceledException) throw;
-                failed++;
-                failures.Add("Point-in-time history: " + ex.Message);
-                WriteColored("  Could not save point-in-time history: " + ex.Message, ConsoleColor.Red);
+                catch (Exception ex)
+                {
+                    if (ex is OperationCanceledException) throw;
+                    failed++;
+                    failures.Add("Point-in-time history: " + ex.Message);
+                    WriteColored("  Could not save point-in-time history: " + ex.Message, ConsoleColor.Red);
+                }
             }
             if (failed == 0 && incremental && config.KeepOldVersions > 0)
             {

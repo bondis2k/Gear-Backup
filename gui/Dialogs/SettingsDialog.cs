@@ -26,11 +26,14 @@ partial class GearBackup
             var verify = Check("Verify copied files", "VerifyCopies", config.Verify);
             var thorough = Check("Compare file contents", "CompareContents", config.Thorough);
             var review = Check("Review changes before copying", "ReviewChanges", config.Preview);
+            var history = Check("Save point-in-time history", "PointInTimeHistory", config.PointInTimeHistory);
             backup.Controls.Add(verify);
             backup.Controls.Add(Explanation("Reads copied files back during backups and restores, checking SHA-256 integrity. Adds time; off by default."));
             backup.Controls.Add(thorough);
             backup.Controls.Add(Explanation("Uses SHA-256 to detect content changes even when size and date match. Adds reading time; off by default."));
             backup.Controls.Add(review);
+            backup.Controls.Add(history);
+            backup.Controls.Add(Explanation("Turn off to keep backup files and checksums without a second history copy: roughly half the space for a fresh backup. Old file versions and separate backups are still kept."));
             var retention = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
             var backups = NumberField(retention, "Backups to keep", config.KeepBackups);
             var versions = NumberField(retention, "Old versions to keep", config.KeepOldVersions);
@@ -64,6 +67,7 @@ partial class GearBackup
                 {
                     config.RecoveryFolder = ExpandPath(recoveryPath.Text); config.Verify = verify.Checked; config.Thorough = thorough.Checked;
                     config.Recovery = recovery.Checked; config.Preview = review.Checked; config.KeepBackups = (int)backups.Value;
+                    config.PointInTimeHistory = history.Checked;
                     config.KeepOldVersions = (int)versions.Value; config.MaxNameLength = (int)length.Value;
                     config.Eject = (EjectMode)eject.SelectedIndex;
                     DialogResult = DialogResult.OK; Close();
