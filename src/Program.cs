@@ -108,11 +108,11 @@ partial class M8Backup
             {
                 OperationOutput.WriteLine("  Last backup: " + previous);
                 OperationOutput.WriteLine();
-                OperationOutput.WriteLine("    1) Full backup to a new folder");
-                OperationOutput.WriteLine("    2) Incremental backup into the last backup (only new and changed files)");
-                OperationOutput.WriteLine("    3) Restore from a backup to the M8");
-                OperationOutput.WriteLine("    4) Check backups for damaged files");
-                char choice = AskKey("  Choose 1, 2, 3 or 4: ", "1234");
+                char choice = Ask("What would you like to do?",
+                    new Option('1', "Full backup to a new folder"),
+                    new Option('2', "Incremental backup into the last backup (only new and changed files)"),
+                    new Option('3', "Restore from a backup to the M8"),
+                    new Option('4', "Check backups for damaged files"));
                 if (choice == '4')
                 {
                     OperationOutput.WriteLine();
@@ -125,10 +125,10 @@ partial class M8Backup
         else if (!restore && previous == null && config.Mode == BackupMode.Ask && HasHistory(histories))
         {
             OperationOutput.WriteLine("  No backups yet for this profile; other histories are available.");
-            OperationOutput.WriteLine("    1) Full backup for this profile");
-            OperationOutput.WriteLine("    3) Restore from another history");
-            OperationOutput.WriteLine("    4) Check another history");
-            char choice = AskKey("  Choose 1, 3 or 4: ", "134");
+            char choice = Ask("What would you like to do?",
+                new Option('1', "Full backup for this profile"),
+                new Option('3', "Restore from another history"),
+                new Option('4', "Check another history"));
             if (choice == '4') return CheckHistory(ChooseHistory(histories, null));
             restore = choice == '3';
         }
@@ -179,9 +179,8 @@ partial class M8Backup
     // Checks backups against their checksum lists; only shows a notification (the M8 isn't involved).
     static int Check(List<string> backups)
     {
-        string title, summary;
-        int result = CheckBackups(backups, out title, out summary);
-        if (title != null) ShowToast(title, summary, false);
-        return result;
+        OperationResult result = RunCheck(backups);
+        if (result.Title != null) ShowToast(result.Title, result.Summary, false);
+        return result.ExitCode;
     }
 }

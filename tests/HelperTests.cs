@@ -22,6 +22,57 @@ partial class M8Backup
         TestResumeQuestion(dir);
         TestZipFailures(dir);
         TestSecurity(dir);
+        TestConsoleQuestions();
+    }
+
+    // Runs action against the real console front end with scripted input; returns what it printed.
+    static string OnConsole(string input, Action<ConsoleInteraction> action)
+    {
+        TextWriter oldOut = Console.Out;
+        TextReader oldIn = Console.In;
+        var output = new StringWriter();
+        try
+        {
+            Console.SetOut(output);
+            Console.SetIn(new StringReader(input));
+            action(new ConsoleInteraction());
+        }
+        finally { Console.SetOut(oldOut); Console.SetIn(oldIn); }
+        return output.ToString();
+    }
+
+    static void TestConsoleQuestions()
+    {
+        char key = ' ';
+        string shown = OnConsole("x\nk\n", c => key = c.Choose("Some target files differ from the backup.", new[] {
+            new Option('r', "Replace them"), new Option('k', "Keep them (copy only missing files)"), new Option('c', "Cancel") }));
+        Assert(key == 'k', "console accepts an option's key, ignoring other input");
+        Assert(shown.Contains("Some target files differ from the backup. [R]eplace them, [K]eep them (copy only missing files) or [C]ancel?"),
+            "console shows options inline, with each key's letter bracketed");
+
+        shown = OnConsole("d\n", c => key = c.Choose("What should be restored?", new[] {
+            new Option('a', "All files"), new Option('d', "Song with dependent samples") }));
+        Assert(key == 'd' && shown.Contains("[A]ll files or Song with [D]ependent samples?"), "the bracketed letter can be inside a word");
+
+        shown = OnConsole("2\n", c => key = c.Choose("What would you like to do?", new[] {
+            new Option('1', "Full backup"), new Option('2', "Restore") }));
+        Assert(key == '2' && shown.Contains("    1) Full backup") && shown.Contains("What would you like to do? (1 or 2)"),
+            "options whose key isn't in the label are shown as a numbered menu");
+
+        shown = OnConsole("n\n", c => key = c.Choose("Move them to the Recycle Bin?", new[] { Yes, No }));
+        Assert(key == 'n' && shown.Contains("Move them to the Recycle Bin? (y/n)"), "yes/no questions end in (y/n)");
+
+        int item = -1;
+        shown = OnConsole("9\n2\n", c => item = c.ChooseItem("Choose a bundle.", new[] { "Bundles\\a", "Bundles\\b" }, null));
+        Assert(item == 2 && shown.Contains(" 1) Bundles\\a") && shown.Contains("Please enter a number from 1 to 2"),
+            "console lists the items and asks again after an invalid number");
+        Assert(shown.Contains("Number, or Enter to cancel"), "a list without a 'none' option offers Enter to cancel");
+        shown = OnConsole("\n", c => item = c.ChooseItem("Choose a file.", new[] { "a.m8s" }, "Search again"));
+        Assert(item == 0 && shown.Contains("Number, or Enter for search again"), "Enter picks the 'none' option");
+
+        string text = null;
+        OnConsole("jam\n", c => text = c.AskText("Search file name:"));
+        Assert(text == "jam", "console reads free text");
     }
 
     static void TestSecurity(string dir)

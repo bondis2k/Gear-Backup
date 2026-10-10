@@ -80,7 +80,7 @@ partial class M8Backup
         for (int i = 0; i < extra.Count && i < 15; i++)
             OperationOutput.WriteLine("    " + extra[i].Substring(backup.Length).TrimStart('\\'));
         if (extra.Count > 15) OperationOutput.WriteLine("    ... and {0} more", extra.Count - 15);
-        if (!AskInConsole("  Move them to the Recycle Bin? (y/n) "))
+        if (!AskYesNo("Move them to the Recycle Bin?"))
         {
             OperationOutput.WriteLine();
             return 0;
@@ -144,7 +144,7 @@ partial class M8Backup
         List<string> old = backups.GetRange(0, extra);
         OperationOutput.WriteLine("  KeepBackups is {0}, so these {1} old backup(s) can go:", keep, old.Count);
         foreach (string dir in old) OperationOutput.WriteLine("    " + Path.GetFileName(dir));
-        if (!AskInConsole("  Move them to the Recycle Bin? (y/n) ")) return;
+        if (!AskYesNo("Move them to the Recycle Bin?")) return;
 
         foreach (string dir in old)
         {

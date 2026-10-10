@@ -90,6 +90,22 @@ partial class M8Backup
             Assert(state.Text == "Cancelled", "GUI dialog cancellation is not reported as an invocation error");
             form.Close();
         }
+        // Choice buttons show the option labels exactly; the same key can label different buttons.
+        using (var dialog = new ChoiceDialog("Resume the unfinished backup?", new[] {
+            new Option('r', "Resume into it"), new Option('n', "New full backup"), new Option('c', "Cancel") }))
+        {
+            var labels = new List<Button>();
+            CollectGuiButtons(dialog, labels);
+            Assert(labels.Exists(b => b.Text == "Resume into it") && labels.Exists(b => b.Text == "New full backup"),
+                "GUI choice buttons use the question's own labels");
+        }
+        using (var dialog = new ChoiceDialog("Some target files differ from the backup.", new[] {
+            new Option('r', "Replace them"), new Option('k', "Keep them (copy only missing files)") }))
+        {
+            var labels = new List<Button>();
+            CollectGuiButtons(dialog, labels);
+            Assert(labels.Exists(b => b.Text == "Replace them"), "the same key gets a different label in a different question");
+        }
         string ini = Path.Combine(root, "shared-settings.ini");
         Put(ini, "; keep this comment\nVerify=no\nCustomOption=unchanged\nVerify=no\n");
         var saved = new Config { BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio", HardLinks = true };

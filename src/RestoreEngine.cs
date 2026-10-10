@@ -107,7 +107,8 @@ partial class M8Backup
             if (newer > 0) WriteColored("  " + newer + " target file(s) are newer than this backup.", ConsoleColor.Yellow);
             if (differing > 0 && !PreviewOnly)
             {
-                char answer = AskKey("  [R]eplace differing files, [K]eep them (missing files only), or [C]ancel? ", "rkc");
+                char answer = Ask("Some target files differ from the backup.", new Option('r', "Replace them"),
+                    new Option('k', "Keep them (copy only missing files)"), new Option('c', "Cancel"));
                 if (answer == 'c') return new OperationResult();
                 if (answer == 'k')
                 {
@@ -153,7 +154,7 @@ partial class M8Backup
             else OperationOutput.WriteLine("  Recovery copies: disabled (Recovery=no).");
             OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
             if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config)) return new OperationResult();
-            if (exact && !AskInConsole("  Confirm removal of " + removals.Count + " extra file(s) from the selected target? (y/n) ")) return new OperationResult();
+            if (exact && !AskYesNo("Remove " + removals.Count + " extra file(s) from the selected target?")) return new OperationResult();
             return new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
         }
 

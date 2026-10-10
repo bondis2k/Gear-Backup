@@ -390,16 +390,18 @@ partial class M8Backup
         public void Write(string text) { Output.Append(text); }
         public void WriteLine(string text) { Output.AppendLine(text); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
-        public string ReadLine() { throw new Exception("Engine unexpectedly requested console-style input"); }
+        public string AskText(string question) { throw new Exception("Engine unexpectedly asked for text: " + question); }
         // Scripted answers for questions, in order; once used up, the first allowed key is chosen.
         public readonly Queue<char> Keys = new Queue<char>();
         public readonly List<string> Questions = new List<string>();
-        public char ChooseKey(string question, string allowed)
+        public readonly List<IList<Option>> Options = new List<IList<Option>>();
+        public char Choose(string question, IList<Option> options)
         {
             Questions.Add(question);
-            return Keys.Count > 0 ? Keys.Dequeue() : allowed[0];
+            Options.Add(options);
+            return Keys.Count > 0 ? Keys.Dequeue() : options[0].Key;
         }
-        public int ChooseNumber(string question, int max) { throw new Exception("Engine unexpectedly requested backup selection"); }
+        public int ChooseItem(string question, IList<string> items, string noneLabel) { throw new Exception("Engine unexpectedly asked to pick from: " + question); }
         public bool ReviewPlan(OperationPlan plan) { Plans++; return !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
         {

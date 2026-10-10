@@ -141,9 +141,9 @@ partial class M8Backup
         files.Sort(StringComparer.OrdinalIgnoreCase);
         files.Reverse();
         if (files.Count == 0) return null;
-        OperationOutput.WriteLine("  Saved points in time:");
-        for (int i = 0; i < files.Count; i++) OperationOutput.WriteLine("    {0}) {1}", i + 1, Path.GetFileNameWithoutExtension(files[i]));
-        int pick = AskNumber("  Choose snapshot (Enter = browse current backup files): ", files.Count);
+        var names = new List<string>();
+        foreach (string file in files) names.Add(Path.GetFileNameWithoutExtension(file));
+        int pick = AskItem("Restore from which saved point in time?", names, "Current backup files (no snapshot)");
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
 

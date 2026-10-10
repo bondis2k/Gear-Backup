@@ -21,7 +21,7 @@ partial class M8Backup
         if (ejectMode == EjectMode.Ask)
         {
             bool? answer = ShowToast(title, summary + " Eject the M8?", true);
-            if (answer == null) answer = AskInConsole("  Eject the M8 now? (y/n) ");
+            if (answer == null) answer = AskYesNo("Eject the M8 now?");
             if (answer != true)
             {
                 Console.WriteLine("  M8 left connected.");

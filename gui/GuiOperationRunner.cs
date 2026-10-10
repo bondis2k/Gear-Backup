@@ -63,19 +63,8 @@ partial class M8Backup
                 if (history == null) return new OperationResult { Cancelled = true, Summary = "Check cancelled." };
                 var backups = ListBackups(history);
                 if (backups.Count == 0) throw new IOException("No backups found at this location.");
-                backups.Reverse();
-                var labels = new List<string>();
-                foreach (string path in backups) labels.Add(Path.GetFileName(path) + " [" + BackupStatus(path) + "]");
-                labels.Add("All backups in this history");
-                int pick = form.OnUi(delegate {
-                    using (var dialog = new SelectionDialog("Choose backups to check", labels))
-                    {
-                        if (dialog.ShowDialog(form) != DialogResult.OK) throw new OperationCanceledException();
-                        return dialog.List.SelectedIndex;
-                    }
-                });
-                var selectedBackups = pick == backups.Count ? backups : new List<string> { backups[pick] };
-                using (LockHistory(history)) return new IntegrityEngine().Run(selectedBackups, context);
+                // The same backup choice and check as the CLI's; the question becomes a list dialog.
+                using (LockHistory(history)) return RunCheck(backups);
             }
             string selected = options.SourceFolder, pnp = null;
             if (selected.Length == 0)
@@ -105,7 +94,7 @@ partial class M8Backup
                 string changed = ConfirmSameDevice(selected, pnp);
                 if (changed != null) { OperationOutput.WriteLine(changed); return result; }
                 context.CheckCancellation();
-                bool eject = options.Eject == EjectMode.Yes || AskInConsole("Safely eject the M8 now? (y/n)");
+                bool eject = options.Eject == EjectMode.Yes || AskYesNo("Safely eject the M8 now?");
                 if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? "M8 safely ejected." : "Could not eject: " + error); }
             }
             return result;

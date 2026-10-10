@@ -1,61 +1,55 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 partial class M8Backup
 {
+    // The GUI's front end: questions become dialogs, output goes to the activity log, and progress to the
+    // status area. Dialogs are shown on the UI thread; the operation itself runs on a worker thread.
     sealed class GuiInteraction : IOperationInteraction
     {
         readonly MainForm form;
-        // The engines print numbered lists ("  3) 2026-10-09") before asking for a number, as in the console.
-        // WriteLine remembers those lines so ChooseNumber can show them as a list to pick from.
-        readonly Dictionary<int, string> numbered = new Dictionary<int, string>();
         public GuiInteraction(MainForm owner) { form = owner; }
         public void Write(string text) { form.AppendActivity(text); }
-        public void WriteLine(string text)
-        {
-            var match = Regex.Match(text, @"^\s*(\d+)\)\s*(.*)$");
-            if (match.Success) numbered[int.Parse(match.Groups[1].Value)] = match.Groups[2].Value;
-            form.AppendActivity(text + Environment.NewLine);
-        }
+        public void WriteLine(string text) { form.AppendActivity(text + Environment.NewLine); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
         public void ReportProgress(OperationProgress progress) { form.UpdateProgress(progress); }
-        // The engines only ask for free text when searching for a file to restore. Cancel returns "q".
-        public string ReadLine()
+
+        // One button per option. Closing the dialog cancels the operation.
+        public char Choose(string question, IList<Option> options)
         {
             return form.OnUi(delegate {
-                using (var dialog = new SearchDialog("Find a file", "Search by name or path. Leave blank to list songs."))
-                    return dialog.ShowDialog(form) == DialogResult.OK ? dialog.Input.Text : "q";
-            });
-        }
-        public char ChooseKey(string question, string allowed)
-        {
-            return form.OnUi(delegate {
-                using (var dialog = new ChoiceDialog(question, allowed))
+                using (var dialog = new ChoiceDialog(question, options))
                 {
                     if (dialog.ShowDialog(form) != DialogResult.OK) throw new OperationCanceledException();
                     return dialog.Key;
                 }
             });
         }
-        public int ChooseNumber(string question, int max)
+
+        // A list to pick from; noneLabel, if given, is offered as an extra last entry and returns 0.
+        public int ChooseItem(string question, IList<string> items, string noneLabel)
         {
-            var choices = new List<string>();
-            for (int i = 1; i <= max; i++) choices.Add(numbered.ContainsKey(i) ? numbered[i] : i.ToString());
-            // The snapshot question accepts Enter for "current backup files"; offer that as an extra choice.
-            bool allowCurrentFiles = question.IndexOf("browse current backup files", StringComparison.OrdinalIgnoreCase) >= 0;
-            if (allowCurrentFiles) choices.Add("Current backup files (browse without a snapshot)");
-            numbered.Clear();
+            var choices = new List<string>(items);
+            if (noneLabel != null) choices.Add(noneLabel);
             return form.OnUi(delegate {
                 using (var dialog = new SelectionDialog(question, choices))
                 {
                     if (dialog.ShowDialog(form) != DialogResult.OK) throw new OperationCanceledException();
                     int selected = dialog.List.SelectedIndex + 1;
-                    return allowCurrentFiles && selected > max ? 0 : selected;
+                    return selected > items.Count ? 0 : selected;
                 }
             });
         }
+
+        public string AskText(string question)
+        {
+            return form.OnUi(delegate {
+                using (var dialog = new SearchDialog(question, ""))
+                    return dialog.ShowDialog(form) == DialogResult.OK ? dialog.Input.Text : null;
+            });
+        }
+
         public bool ReviewPlan(OperationPlan plan)
         {
             if (!plan.ShowDetails && !plan.PreviewOnly) return true;

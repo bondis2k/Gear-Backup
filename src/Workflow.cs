@@ -57,11 +57,11 @@ partial class M8Backup
         if (ListBackups(root).Count > 0) roots.Add(root);
         roots.Sort(StringComparer.OrdinalIgnoreCase);
         if (roots.Count == 0) return preferred ?? root;
-        OperationOutput.WriteLine("  Backup histories:");
-        for (int i = 0; i < roots.Count; i++)
-            OperationOutput.WriteLine("    {0}) {1}{2}", i + 1, roots[i] == root ? "Legacy backups" : Path.GetFileName(roots[i]),
-                string.Equals(roots[i], preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : "");
-        int pick = AskNumber("  Choose history, Enter = cancel: ", roots.Count);
+        var labels = new List<string>();
+        foreach (string history in roots)
+            labels.Add((history == root ? "Legacy backups" : Path.GetFileName(history)) +
+                (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
+        int pick = AskItem("Choose a backup history.", labels);
         return pick == 0 ? null : roots[pick - 1];
     }
 
@@ -87,8 +87,7 @@ partial class M8Backup
             if (source == null)
             {
                 OperationOutput.WriteLine("  No M8 detected. Select an SD card in a reader or a folder instead.");
-                OperationOutput.Write("  Source path (Enter = cancel): ");
-                source = ExpandPath(OperationOutput.ReadLine());
+                source = ExpandPath(AskText("Source path (Enter = cancel):"));
             }
         }
         if (string.IsNullOrEmpty(source)) return null;
