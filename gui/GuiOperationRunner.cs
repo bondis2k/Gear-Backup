@@ -116,7 +116,7 @@ partial class M8Backup
             if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);
             RejectRootLinks(selected);
             if (knownSource == selected) { pnp = knownPnp; if (detected == null) detected = knownDevice; }
-            context.Device = DeviceFor(options, detected);
+            context.Device = DeviceFor(options, detected, selected);
             string root = HistoryFor(options, selected);
             OperationResult result;
             if (choice == 2 && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));

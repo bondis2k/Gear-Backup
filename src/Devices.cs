@@ -32,6 +32,9 @@ partial class M8Backup
         // project.mt next to its patterns, instruments and samples). Songs are then named after their
         // folder, and a whole song folder can be restored.
         public bool SongIsFolder;
+        // A file at the top of the device's card that only this device writes ("trackerConfig"), so its
+        // card is recognised in a card reader too. Null when there is none.
+        public string MarkerFile;
         public string BundlesFolder;       // null when the device has no bundles
         // Lists the sample files a song uses, for "song with samples" restore; null when not supported.
         public Func<string, List<string>> ReadSamplePaths;
@@ -83,7 +86,7 @@ partial class M8Backup
         public static readonly DeviceProfile TrackerMini = new DeviceProfile {
             Id = "tracker-mini", Name = "Tracker Mini", UsbVendor = "VEN_POLYEND&PROD_TRACKER", VolumeLabel = "TRACKER_M",
             NameWarnings = false, SongExtensions = new[] { ".mt" }, SongsFolder = "Projects", SongsLabel = "projects",
-            SongIsFolder = true, IconName = "TrackerMini" };
+            SongIsFolder = true, MarkerFile = "trackerConfig", IconName = "TrackerMini" };
 
         // Detection tries these in order. The first is also the default for a folder of unknown type.
         public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY, TrackerMini };
@@ -112,11 +115,16 @@ partial class M8Backup
     static DeviceProfile CurrentDevice { get { return OperationContext.Current.Device; } }
 
     // The kind of device a source is: the Device setting when it names one, otherwise the detected
-    // device, otherwise the first known device.
-    static DeviceProfile DeviceFor(Config config, DeviceProfile detected)
+    // device, otherwise the device whose marker file is at the top of the source (a card in a reader),
+    // otherwise the first known device.
+    static DeviceProfile DeviceFor(Config config, DeviceProfile detected, string source = null)
     {
         DeviceProfile named = Devices.Find(config.Device);
         if (named != null) return named;
-        return detected ?? Devices.All[0];
+        if (detected != null) return detected;
+        if (!string.IsNullOrEmpty(source))
+            foreach (DeviceProfile device in Devices.All)
+                if (device.MarkerFile != null && File.Exists(Path.Combine(source, device.MarkerFile))) return device;
+        return Devices.All[0];
     }
 }
