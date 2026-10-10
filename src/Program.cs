@@ -86,7 +86,9 @@ partial class M8Backup
         if (check) return CheckHistory(HistoryToCheck(config));
 
         string pnpId;
-        string source = SelectSource(config, out pnpId);
+        DeviceProfile device;
+        string source = SelectSource(config, out pnpId, out device);
+        OperationContext.Current.Device = device;
         if (source == null)
         {
             OperationOutput.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
@@ -111,7 +113,7 @@ partial class M8Backup
                 char choice = Ask("What would you like to do?",
                     new Option('1', "Full backup to a new folder"),
                     new Option('2', "Incremental backup into the last backup (only new and changed files)"),
-                    new Option('3', "Restore from a backup to the M8"),
+                    new Option('3', "Restore from a backup to the " + device.Name),
                     new Option('4', "Check backups for damaged files"));
                 if (choice == '4')
                 {

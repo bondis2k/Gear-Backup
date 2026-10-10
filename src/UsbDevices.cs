@@ -1,4 +1,4 @@
-// Finding the M8 drive and safely ejecting it.
+// Finding a connected device's drive (see Devices.cs for what identifies each device) and ejecting it.
 using System;
 using System.IO;
 using System.Management;
@@ -13,10 +13,11 @@ using System.Threading;
 
 partial class M8Backup
 {
-    // The M8 shows up as a USB disk with vendor "M8" (USB\VID_16C0&PID_0630).
-    // pnpId is the disk's device instance ID, needed to eject it (null if found by label only).
-    static string FindM8Drive(out string pnpId)
+    // Returns the drive of the first connected device that matches a known device profile, and which
+    // device it is. pnpId is the disk's device instance ID, needed to eject it (null if found by label only).
+    static string FindDevice(out DeviceProfile device, out string pnpId)
     {
+        device = null;
         pnpId = null;
         var disks = new ManagementObjectSearcher(
             "SELECT DeviceID, PNPDeviceID, Model FROM Win32_DiskDrive WHERE InterfaceType='USB'");
@@ -24,7 +25,10 @@ partial class M8Backup
         {
             string pnp = (disk["PNPDeviceID"] ?? "").ToString().ToUpperInvariant();
             string model = (disk["Model"] ?? "").ToString().ToUpperInvariant();
-            if (!pnp.Contains("VEN_M8") && !model.StartsWith("M8")) continue;
+            DeviceProfile match = null;
+            foreach (DeviceProfile profile in Devices.All)
+                if (profile.MatchesDisk(pnp, model)) { match = profile; break; }
+            if (match == null) continue;
 
             string partQuery = "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='" + disk["DeviceID"] +
                                "'} WHERE AssocClass=Win32_DiskDriveToDiskPartition";
@@ -34,17 +38,22 @@ partial class M8Backup
                                   "'} WHERE AssocClass=Win32_LogicalDiskToPartition";
                 foreach (ManagementObject vol in new ManagementObjectSearcher(volQuery).Get())
                 {
+                    device = match;
                     pnpId = disk["PNPDeviceID"].ToString();
                     return vol["DeviceID"] + "\\";
                 }
             }
         }
 
-        // Fallback: a removable drive labelled "M8"
+        // Fallback: a removable drive labelled like a known device (e.g. "M8")
         foreach (DriveInfo d in DriveInfo.GetDrives())
-            if (d.IsReady && d.DriveType == DriveType.Removable &&
-                string.Equals(d.VolumeLabel, "M8", StringComparison.OrdinalIgnoreCase))
-                return d.RootDirectory.FullName;
+            if (d.IsReady && d.DriveType == DriveType.Removable)
+                foreach (DeviceProfile profile in Devices.All)
+                    if (profile.VolumeLabel != null && string.Equals(d.VolumeLabel, profile.VolumeLabel, StringComparison.OrdinalIgnoreCase))
+                    {
+                        device = profile;
+                        return d.RootDirectory.FullName;
+                    }
 
         return null;
     }
@@ -60,10 +69,10 @@ partial class M8Backup
     // Returns null on success, otherwise the reason it failed.
     static string EjectDrive(string pnpId)
     {
-        if (pnpId == null) return "the M8 was found by drive label only, so it can't be ejected automatically.";
+        if (pnpId == null) return "the " + CurrentDevice.Name + " was found by drive label only, so it can't be ejected automatically.";
 
         uint disk;
-        if (CM_Locate_DevNodeW(out disk, pnpId, 0) != 0) return "the M8 device was not found.";
+        if (CM_Locate_DevNodeW(out disk, pnpId, 0) != 0) return "the " + CurrentDevice.Name + " device was not found.";
 
         // Eject the USB device the disk belongs to; if that's refused, try the disk itself.
         uint parent;
@@ -78,7 +87,7 @@ partial class M8Backup
                 int result = CM_Request_Device_EjectW(devInst, out vetoType, vetoName, vetoName.Capacity, 0);
                 if (result == 0 && vetoType == 0) return null;
                 lastError = vetoType != 0
-                    ? "it is in use (close any program or Explorer window using the M8 and try again)."
+                    ? "it is in use (close any program or Explorer window using the " + CurrentDevice.Name + " and try again)."
                     : "Windows refused to eject it (error " + result + ").";
                 Thread.Sleep(1000);
             }

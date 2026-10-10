@@ -22,6 +22,7 @@ partial class M8Backup
         public bool Thorough = false;
         public bool Preview = true;
         public bool HardLinks = false;  // share history content with the backup files (NTFS)
+        public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
         public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
         public Config Clone() { return (Config)MemberwiseClone(); }
@@ -34,6 +35,7 @@ partial class M8Backup
         new[] { "RecoveryFolder", "\r\n; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\M8 Recovery.\r\n; Environment variables work. Must be outside the source card/folder.\r\nRecoveryFolder=\r\n" },
         new[] { "SourceFolder", "\r\n; SourceFolder: optional SD card drive or folder, e.g. E:\\ or D:\\M8Card.\r\n; Empty = detect the M8, or offer manual selection if detection fails.\r\nSourceFolder=\r\n" },
         new[] { "Profile", "\r\n; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\nProfile=\r\n" },
+        new[] { "Device", "\r\n; Device: what kind of device the source is. auto = detect the connected device\r\n; (an M8 in USB disk mode), or name it: m8. Matters for a card reader or folder.\r\nDevice=auto\r\n" },
         new[] { "Thorough", "\r\n; Thorough: yes = compare file contents with SHA-256 during backup/restore,\r\n; no = compare size and modified time. Applies to resume too. Default no.\r\nThorough=no\r\n" },
         new[] { "Preview", "\r\n; Preview: show the file plan and ask before backups/restores. --preview only shows the plan.\r\nPreview=yes\r\n" },
         new[] { "HardLinks", "\r\n; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n; no = keep separate copies (default). Other file systems always use copies.\r\nHardLinks=no\r\n" },
@@ -135,7 +137,7 @@ partial class M8Backup
             { "BackupFolder", config.BackupFolder }, { "SourceFolder", config.SourceFolder }, { "Profile", config.Profile },
             { "Mode", config.Mode.ToString().ToLowerInvariant() }, { "Verify", config.Verify ? "yes" : "no" },
             { "Thorough", config.Thorough ? "yes" : "no" }, { "Preview", config.Preview ? "yes" : "no" },
-            { "HardLinks", config.HardLinks ? "yes" : "no" },
+            { "HardLinks", config.HardLinks ? "yes" : "no" }, { "Device", config.Device },
             { "Recovery", config.Recovery ? "yes" : "no" }, { "RecoveryFolder", config.RecoveryFolder },
             { "KeepBackups", config.KeepBackups.ToString(System.Globalization.CultureInfo.InvariantCulture) },
             { "KeepOldVersions", config.KeepOldVersions.ToString(System.Globalization.CultureInfo.InvariantCulture) },
@@ -180,6 +182,10 @@ partial class M8Backup
                 else if (key.Equals("thorough", StringComparison.OrdinalIgnoreCase)) config.Thorough = enabled;
                 else if (key.Equals("hardlinks", StringComparison.OrdinalIgnoreCase)) config.HardLinks = enabled;
                 else config.Preview = enabled;
+                return;
+            case "device":
+                if (lower == "auto" || Devices.Find(lower) != null) config.Device = lower;
+                else WarnSetting(key, value, "auto or " + string.Join(", ", Array.ConvertAll(Devices.All, d => d.Id)));
                 return;
             case "recoveryfolder": config.RecoveryFolder = ExpandPath(value); return;
             case "sourcefolder": config.SourceFolder = ExpandPath(value); return;

@@ -14,7 +14,7 @@ partial class M8Backup
     static List<string> SamplePaths(string song)
     {
         if (new FileInfo(song).Length > MaxSongSize)
-            throw new IOException("This file is too large to be an M8 song. Use bundle or full restore.");
+            throw new IOException("This file is too large to be an " + CurrentDevice.Name + " song. Use bundle or full restore.");
         byte[] data = File.ReadAllBytes(song);
         const int start = 80446, stride = 215, count = 128, pathOffset = 87, pathSize = 128;
         if (data.Length < start + stride * count || Encoding.ASCII.GetString(data, 0, 9) != "M8VERSION" || (data[11] & 15) != 6)
@@ -50,7 +50,9 @@ partial class M8Backup
         var available = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
         foreach (RestoreEntry item in snapshot.Files) available[item.Relative] = item;
         var missing = new List<string>();
-        foreach (string path in SamplePaths(song.StoredPath))
+        if (CurrentDevice.ReadSamplePaths == null)
+            throw new IOException("Restoring a song with its samples isn't supported for the " + CurrentDevice.Name + ".");
+        foreach (string path in CurrentDevice.ReadSamplePaths(song.StoredPath))
         {
             RestoreEntry item;
             if (available.TryGetValue(path, out item)) result.Add(item);

@@ -14,14 +14,15 @@ partial class M8Backup
 
     static bool IsSong(string path)
     {
-        return string.Equals(Path.GetExtension(path), ".m8s", StringComparison.OrdinalIgnoreCase);
+        return CurrentDevice.IsSong(path);
     }
 
-    // "Songs\Live\Jam.m8s" -> "Live\Jam"
+    // "Songs\Live\Jam.m8s" -> "Live\Jam" (the device's songs folder is left out)
     static string SongName(string relative)
     {
         string name = Path.Combine(Path.GetDirectoryName(relative), Path.GetFileNameWithoutExtension(relative));
-        return name.StartsWith("Songs\\", StringComparison.OrdinalIgnoreCase) ? name.Substring(6) : name;
+        string folder = CurrentDevice.SongsFolder == null ? null : CurrentDevice.SongsFolder + "\\";
+        return folder != null && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ? name.Substring(folder.Length) : name;
     }
 
     static Changes FindChanges(ScanResult scan, string source, FileState[] states, string baseline)
@@ -70,7 +71,7 @@ partial class M8Backup
         report.WriteLine("  Changes since the last backup ({0}):", Path.GetFileName(baseline));
         WriteNameList(report, "New songs", changes.NewSongs);
         WriteNameList(report, "Edited songs", changes.EditedSongs);
-        WriteNameList(report, "Songs no longer on the M8", changes.RemovedSongs);
+        WriteNameList(report, "Songs no longer on the " + CurrentDevice.Name, changes.RemovedSongs);
         report.WriteLine("    Other files: {0:N0} new, {1:N0} changed", changes.OtherNew, changes.OtherChanged);
         report.WriteLine();
     }

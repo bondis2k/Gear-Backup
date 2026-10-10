@@ -275,6 +275,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
 | `SourceFolder` | empty | Detect M8, with manual fallback; otherwise use this drive/folder. |
+| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device; or name it (`m8`). Matters when the source is a card reader or folder, since only a connected device can be detected. The M8 is currently the only supported device. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
@@ -339,7 +340,8 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `Checksums.cs` | Browsable-file checksum lists and check menu. |
 | `FileCopy.cs` | Copying/hashing, verification, free-space checks. |
 | `Changes.cs` | Song summaries and filename warnings. |
-| `M8Device.cs` | Windows M8 detection and safe ejection. |
+| `Devices.cs` | Device profiles: what identifies each device, its song files, bundles and song reader. The M8 is the first profile. |
+| `UsbDevices.cs` | Finding a connected device's drive by its profile, and safe ejection. |
 | `Notifications.cs` | Windows notifications. |
 | `ConsoleUi.cs` | Console prompts and formatting. |
 | `gui\GuiProgram.cs` | Windows Forms startup and preview rendering. |

@@ -23,6 +23,53 @@ partial class M8Backup
         RunTest("Helpers: zip failures", () => TestZipFailures(dir));
         RunTest("Security hardening", () => TestSecurity(dir));
         RunTest("Console questions", TestConsoleQuestions);
+        RunTest("Device profiles", () => TestDevices(dir));
+    }
+
+    static void TestDevices(string dir)
+    {
+        // The M8 profile holds what used to be spread around the code.
+        Assert(Devices.Find("m8") == Devices.M8 && Devices.Find("M8") == Devices.M8 && Devices.Find("op-9") == null, "devices are found by id");
+        Assert(Devices.Names == "M8" && Devices.All[0] == Devices.M8, "the M8 is the first and default device");
+        Assert(Devices.M8.MatchesDisk(@"USBSTOR\DISK&VEN_M8&PROD_X", "") && Devices.M8.MatchesDisk(@"USBSTOR\DISK&VEN_X", "M8 DISK"),
+            "the M8 is recognised by USB vendor or model");
+        Assert(!Devices.M8.MatchesDisk(@"USBSTOR\DISK&VEN_SANDISK", "CRUZER"), "other USB disks aren't the M8");
+        Assert(new OperationContext(new TestInteraction(), CancellationToken.None).Device == Devices.M8, "operations default to the M8");
+
+        // Which device a source is: a named Device setting wins, then detection, then the default.
+        var other = new DeviceProfile { Id = "other", Name = "Other Synth", SongExtensions = new[] { ".song" }, SongsFolder = "projects" };
+        Assert(DeviceFor(new Config { Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
+        Assert(DeviceFor(new Config(), other) == other && DeviceFor(new Config(), null) == Devices.M8, "auto uses the detected device, else the default");
+        var config = new Config();
+        TestInteraction ui = WithUi(() => { ApplySetting(config, "Device", "M8"); ApplySetting(config, "Device", "toaster"); });
+        Assert(config.Device == "m8" && ui.Output.ToString().Contains("Device=toaster isn't valid"), "the Device setting accepts known devices only");
+
+        // With another device current, everything device-specific follows it.
+        Option[] m8Modes = RestoreModes(Devices.M8), otherModes = RestoreModes(other);
+        Assert(m8Modes.Length == 4, "the M8 offers all four restore choices");
+        Assert(otherModes.Length == 2 && Array.TrueForAll(otherModes, o => o.Key == 'a' || o.Key == 's'),
+            "a device without bundles or a song reader only offers all files and single file");
+        using (var context = new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            OperationContext.Current.Device = other;
+            Assert(IsSong(@"projects\a.song") && !IsSong(@"Songs\a.m8s"), "songs are the current device's song files");
+            Assert(SongName(@"projects\live\jam.song") == @"live\jam", "song names drop the current device's songs folder");
+            Throws(() => SongDependencies(new RestoreEntry { Relative = "projects\\a.song", StoredPath = Path.Combine(dir, "nope.song") }, new Snapshot(), dir, false),
+                "song-with-samples restore is refused for a device without a song reader");
+
+            string source = Rooted(Path.Combine(dir, "other-card"));
+            Put(Path.Combine(source, "projects", "new.song"), "N");
+            Put(Path.Combine(source, "projects", "old.m8s"), "not a song here");
+            var scan = new ScanResult();
+            CollectFiles(source, scan);
+            var states = new FileState[scan.Files.Count];
+            string baseline = Path.Combine(dir, "other-baseline");
+            Directory.CreateDirectory(baseline);
+            Changes changes = FindChanges(scan, source, states, baseline);
+            Assert(changes.NewSongs.Count == 1 && changes.NewSongs[0] == "new" && changes.OtherNew == 1,
+                "the change summary counts the current device's songs");
+        }
+        Assert(OperationContext.Current.Device == Devices.M8, "the device setting ends with its operation");
     }
 
     // Runs action against the real console front end with scripted input; returns what it printed.

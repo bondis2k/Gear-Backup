@@ -76,7 +76,8 @@ partial class M8Backup
         try
         {
             string currentPnp;
-            string currentSource = FindM8Drive(out currentPnp);
+            DeviceProfile currentDevice;
+            string currentSource = FindDevice(out currentDevice, out currentPnp);
             if (currentSource == null || Rooted(currentSource) != Rooted(source) || currentPnp != pnpId)
                 return "The detected device changed, so it was left connected.";
             return null;
