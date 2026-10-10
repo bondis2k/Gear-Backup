@@ -57,6 +57,10 @@ partial class M8Backup
 
     static string MtpRestoreUnsupported(DeviceProfile device)
     {
+        if (device.RestoreWarning != null)
+            return "Restoring to the " + device.Name + " isn't offered. " + device.RestoreWarning +
+                   " To do that, put a PC folder in place of the " + device.Name +
+                   " (browse to it in the app, set SourceFolder, or use --source) and restore again.";
         return "Restoring to the " + device.Name + " isn't supported yet (it connects over MTP). Restore to a folder " +
                "instead (set SourceFolder or use --source), then copy the files to the " + device.Name + " with Explorer.";
     }

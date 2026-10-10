@@ -54,6 +54,8 @@ partial class M8Backup
         }
         if (items.Count == 0) { OperationOutput.WriteLine("  No files selected."); return new OperationResult(); }
 
+        if (!ConfirmRestoreTarget(backup, m8)) return new OperationResult { Cancelled = true };
+
         // Exact restore is available only for manifests, whose file membership is authoritative.
         bool exact = historical && mode == 'a' && Ask("How should the snapshot be restored?", new Option('m', "Merge"),
             new Option('e', "Exact snapshot (remove extra files)")) == 'e';
@@ -71,6 +73,16 @@ partial class M8Backup
 
     // Throws if the backup copy is missing, has the wrong size, or (with verify) a different checksum
     // than when it was backed up.
+    // A camera's photos going back onto a memory card (a drive root) are almost always a mistake, so this
+    // explains why and asks first. True to go ahead.
+    static bool ConfirmRestoreTarget(string backup, string target)
+    {
+        DeviceProfile from = HistoryDevice(backup);
+        if (from == null || from.RestoreWarning == null || Rooted(target) != Rooted(Path.GetPathRoot(Rooted(target)))) return true;
+        OperationOutput.WriteLine("  " + target + " is a memory card. " + from.RestoreWarning);
+        return AskYesNo("Restore the " + from.Name + "'s files onto " + target + " anyway?");
+    }
+
     // The restore choices a device supports: bundles and song-with-samples only where it has them.
     static Option[] RestoreModes(DeviceProfile device)
     {

@@ -174,7 +174,7 @@ partial class M8Backup
         static readonly Guid ObjectProperties = new Guid("EF6B490D-5CD8-437A-AFFC-DA8B60EE4A3C");
         static PropertyKey Key(uint id) { return new PropertyKey(ObjectProperties, id); }
         static readonly PropertyKey NameKey = Key(4), ContentTypeKey = Key(7), SizeKey = Key(11),
-            OriginalFileNameKey = Key(12), DateModifiedKey = Key(19);
+            OriginalFileNameKey = Key(12), DateCreatedKey = Key(18), DateModifiedKey = Key(19), DateAuthoredKey = Key(20);
         static readonly PropertyKey DefaultResource = new PropertyKey(new Guid("E81E79BE-34F0-41BF-B53F-F1A06AE87842"), 0);
         static readonly Guid FolderType = new Guid("27E2E392-A111-48E0-AB0C-E17705A05F85");
         static readonly Guid FunctionalObjectType = new Guid("99ED0160-17FF-4C44-9D98-1D7A6F941921");
@@ -257,7 +257,10 @@ partial class M8Backup
             item.IsFolder = type == FolderType || type == FunctionalObjectType;
             ulong size;
             try { values.GetUnsignedLargeIntegerValue(ref sizeKey, out size); item.Size = (long)size; } catch (COMException) { }
+            // The modified date, or for a camera (which reports none) the date the photo was taken.
             item.Modified = DateValue(values, DateModifiedKey);
+            if (item.Modified == DateTime.MinValue) item.Modified = DateValue(values, DateCreatedKey);
+            if (item.Modified == DateTime.MinValue) item.Modified = DateValue(values, DateAuthoredKey);
             item.RelativePath = parentPath.Length == 0 ? item.Name : parentPath + "\\" + item.Name;
             Marshal.ReleaseComObject(values);
             return item;

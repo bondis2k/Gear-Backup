@@ -10,6 +10,7 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 | Polyend Tracker Mini | USB drive | yes, or drive labelled `TRACKER_M`; its card in a reader by `trackerConfig` | yes | yes | projects (folders with `project.mt`) | whole project folder | no |
 | Teenage Engineering OP-1 Field | MTP | yes | no, restores to a PC folder | not needed | — (file counts only) | — | no |
 | Teenage Engineering OP-XY | MTP | yes | no, restores to a PC folder | not needed | projects (`.xy`) | — | no |
+| Fujifilm X100VI | MTP | yes | no, restores to a PC folder | not needed | photos and videos (a JPG + RAF shot counts once) | — | no |
 
 Every feature in the sections after **Devices** works for all of them, unless marked otherwise.
 
@@ -39,6 +40,13 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 
 - **MTP backup** — backed up the same way as the OP-1 Field, read-only.
 - **Projects** — summaries list `.xy` projects by name; the OP-XY's own automatic project backups are backed up but not listed.
+
+### Fujifilm X100VI
+
+- **MTP backup** — backs up the camera's `DCIM` folder over MTP, read-only, through a mirror that only downloads new photos.
+- **Photos and videos** — summaries list shots by name (JPG, RAF, HIF, MOV); a shot saved as JPG and RAF counts once.
+- **Capture dates** — files keep the time the photo was taken, which the camera reports instead of a modified date.
+- **Restore warning** — explains why photos aren't restored to the camera, and asks before restoring them onto a memory card.
 
 ### All devices
 
@@ -114,7 +122,7 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 ## Reports and notifications
 
 - **Statistics** — every backup saves a report of files, sizes, speed, warnings, failures and free space.
-- **Change summary** — lists new, edited and removed songs or projects since the last backup (file counts for devices without them).
+- **Change summary** — lists new, edited and removed songs, projects or photos since the last backup (file counts for devices without them).
 - **Notifications** — the command-line app shows a Windows notification with the result.
 - **Eject** — leave a USB-drive device connected, ask, or eject it automatically, only if it's still the same device (`Eject`).
 

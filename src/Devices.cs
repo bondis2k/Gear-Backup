@@ -35,6 +35,9 @@ partial class M8Backup
         // A file at the top of the device's card that only this device writes ("trackerConfig"), so its
         // card is recognised in a card reader too. Null when there is none.
         public string MarkerFile;
+        // Why restoring onto the device (or its card) is unusual, for devices where it is (a camera). Shown
+        // instead of a restore to the device, and before restoring one of its backups onto a memory card.
+        public string RestoreWarning;
         public string BundlesFolder;       // null when the device has no bundles
         // Lists the sample files a song uses, for "song with samples" restore; null when not supported.
         public Func<string, List<string>> ReadSamplePaths;
@@ -88,8 +91,20 @@ partial class M8Backup
             NameWarnings = false, SongExtensions = new[] { ".mt" }, SongsFolder = "Projects", SongsLabel = "projects",
             SongIsFolder = true, MarkerFile = "trackerConfig", IconName = "TrackerMini" };
 
+        // The Fujifilm X100VI camera. In its USB file-transfer mode it is a portable device "X100VI" with
+        // USB vendor 04CB (Fujifilm), holding DCIM\<nnn>_FUJI with each shot as a JPG, RAF (raw) and/or
+        // HIF (HEIF) file, and videos as MOV. Files report no modified date, only the time they were taken.
+        // A shot's files share a name, so summaries count it once.
+        public static readonly DeviceProfile X100VI = new DeviceProfile {
+            Id = "x100vi", Name = "X100VI", MtpVendor = "VID_04CB", MtpName = "X100VI", NameWarnings = false,
+            SongExtensions = new[] { ".jpg", ".raf", ".hif", ".mov" }, SongsFolder = "DCIM", SongsLabel = "photos and videos",
+            IconName = "X100VI",
+            RestoreWarning = "Photos are rarely put back on a camera: it doesn't need them to take new ones, and old " +
+                "photos back on the card can clash with the camera's file numbering. To view, edit or share them, " +
+                "restore to a folder on your PC instead." };
+
         // Detection tries these in order. The first is also the default for a folder of unknown type.
-        public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY, TrackerMini };
+        public static readonly DeviceProfile[] All = { M8, OP1Field, OPXY, TrackerMini, X100VI };
 
         public static DeviceProfile Find(string id)
         {
@@ -109,6 +124,16 @@ partial class M8Backup
                 return string.Join(", ", names.GetRange(0, names.Count - 1).ToArray()) + " or " + names[names.Count - 1];
             }
         }
+    }
+
+    // The device whose history a backup belongs to, from the history's name ("x100vi-<serial>",
+    // "m8-card-1A2B3C4D"); null for a named profile or a legacy history.
+    static DeviceProfile HistoryDevice(string backup)
+    {
+        string history = Path.GetFileName(Path.GetDirectoryName(Rooted(backup).TrimEnd('\\')));
+        foreach (DeviceProfile device in Devices.All)
+            if (history.StartsWith(device.Id + "-", StringComparison.OrdinalIgnoreCase)) return device;
+        return null;
     }
 
     // The device the current operation works with (set by the front end once the source is known).

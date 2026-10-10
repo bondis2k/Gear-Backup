@@ -29,6 +29,7 @@ partial class M8Backup
         RunTest("OP-XY: projects and backup", () => TestOpXy(dir));
         RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
         RunTest("History names per device", () => TestProfileNames(dir));
+        RunTest("X100VI: photos", () => TestX100VI(dir));
     }
 
     // An MTP device in memory: files are path -> content, with a date per file. Counts downloads.
@@ -162,6 +163,13 @@ partial class M8Backup
         OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
         Assert(second.Summary.Contains("Projects: 1 new (ziiamed 2)."), "OP-XY summaries name new projects");
+        File.Delete(Path.Combine(mirror, "projects", "user", "ziiamed 1.xy"));
+        new BackupEngine().Run(mirror, history, backup, true, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
+        bool listed = false;
+        foreach (string report in Directory.GetFiles(backup, "backup-statistics_*.txt"))
+            listed |= File.ReadAllText(report).Contains("Projects no longer on the OP-XY (1):\r\n      ziiamed 1");
+        Assert(listed, "a project removed from the OP-XY is reported");
     }
 
     static void TestTrackerMini(string dir)
@@ -227,6 +235,66 @@ partial class M8Backup
             "other projects are left alone");
     }
 
+    static void TestX100VI(string dir)
+    {
+        DeviceProfile camera = Devices.X100VI;
+        Assert(Devices.Find("x100vi") == camera && camera.Mtp && camera.MtpVendor == "VID_04CB" && camera.MtpName == "X100VI",
+            "the X100VI is an MTP device from Fujifilm's USB vendor");
+        Assert(RestoreModes(camera).Length == 2, "X100VI restores offer all files and single file only");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+        {
+            OperationContext.Current.Device = camera;
+            Assert(IsSong(@"DCIM\100_FUJI\DSCF0689.JPG") && IsSong(@"DCIM\100_FUJI\DSCF0689.RAF") && IsSong(@"DCIM\100_FUJI\DSCF0690.MOV") &&
+                IsSong(@"DCIM\100_FUJI\DSCF0691.HIF"), "photos and videos are the camera's songs");
+            Assert(SongName(@"DCIM\100_FUJI\DSCF0689.RAF") == @"100_FUJI\DSCF0689", "photo names leave out DCIM and the extension");
+        }
+
+        // A shot saved as JPG and RAF counts once, and photos deleted on the camera are reported.
+        string mirror = Rooted(Path.Combine(dir, "x100vi-mirror"));
+        foreach (string shot in new[] { "DSCF0001", "DSCF0002" })
+        {
+            Put(Path.Combine(mirror, "DCIM", "100_FUJI", shot + ".JPG"), "JPEG " + shot);
+            Put(Path.Combine(mirror, "DCIM", "100_FUJI", shot + ".RAF"), "RAW " + shot);
+        }
+        string history = Path.Combine(dir, "x100vi-history");
+        var config = new Config { BackupFolder = dir, Preview = false };
+        OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = camera });
+        string backup = ListBackups(history)[0];
+        Assert(first.ExitCode == 0 && File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains("Photos and videos: 2 (first backup"),
+            "a JPG and RAF of one shot count as one photo");
+        Put(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0003.JPG"), "JPEG 3");
+        Put(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0003.RAF"), "RAW 3");
+        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0001.JPG"));
+        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0001.RAF"));
+        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0002.RAF"));
+        OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config,
+            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = camera });
+        string report = File.ReadAllText(Directory.GetFiles(backup, "backup-statistics_*.txt")[0]);
+        Assert(second.Summary.Contains("Photos and videos: 1 new (DSCF0003)."), "a new shot is named once: " + second.Summary);
+        Assert(report.Contains("Photos and videos no longer on the X100VI (1):\r\n      100_FUJI\\DSCF0001"),
+            "a shot deleted on the camera is reported, one with a file left isn't");
+        Assert(File.Exists(Path.Combine(backup, @"DCIM\100_FUJI\DSCF0001.RAF")), "deleted photos stay in the backup");
+
+        // Photos going back onto the camera: refused over USB with the reason, and confirmed onto a card.
+        Assert(MtpRestoreUnsupported(camera).Contains("rarely put back on a camera") && !MtpRestoreUnsupported(Devices.OPXY).Contains("rarely"),
+            "restoring to the camera explains why it isn't offered");
+        Assert(HistoryDevice(backup) == camera && HistoryDevice(Path.Combine(dir, "card-1234ABCD", "2026-01-01")) == null,
+            "a backup's device comes from its history's name");
+        string folder = Rooted(Path.Combine(dir, "photos-out"));
+        TestInteraction asked = WithUi(() => Assert(ConfirmRestoreTarget(backup, folder), "restoring photos to a folder needs no confirmation"));
+        Assert(asked.Questions.Count == 0, "no question for a folder");
+        bool declined = true, accepted = false;
+        asked = WithUi(() => declined = ConfirmRestoreTarget(backup, @"Z:\"), 'n');
+        Assert(!declined && asked.Output.ToString().Contains(@"Z:\ is a memory card") && asked.Questions[0].Contains("anyway?"),
+            "restoring photos onto a memory card warns and can be declined");
+        WithUi(() => accepted = ConfirmRestoreTarget(backup, @"Z:\"), 'y');
+        Assert(accepted, "and can be confirmed");
+        string m8Backup = Path.Combine(dir, "m8-card-1234ABCD", "2026-01-01");
+        asked = WithUi(() => Assert(ConfirmRestoreTarget(m8Backup, @"Z:\"), "restoring an M8 backup onto a card isn't questioned"));
+        Assert(asked.Questions.Count == 0, "no question for the M8");
+    }
+
     // Histories are named per device, and older histories keep working.
     static void TestProfileNames(string dir)
     {
@@ -262,7 +330,7 @@ partial class M8Backup
         Assert(Devices.Find("op1-field") == Devices.OP1Field && Devices.OP1Field.Mtp && !Devices.M8.Mtp, "the OP-1 Field is an MTP device");
         Option[] modes = RestoreModes(Devices.OP1Field);
         Assert(modes.Length == 2, "OP-1 Field restores offer all files and single file only");
-        Assert(Devices.Names == "M8, OP-1 Field, OP-XY or Tracker Mini", "messages name every supported device");
+        Assert(Devices.Names == "M8, OP-1 Field, OP-XY, Tracker Mini or X100VI", "messages name every supported device");
 
         // The engine backs up a mirror like any folder, with OP-1 wording in the report.
         string mirror = Rooted(Path.Combine(dir, "op1-engine-mirror"));
