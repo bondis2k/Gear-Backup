@@ -5,6 +5,9 @@
 #ifndef PayloadDir
   #error PayloadDir must be supplied by the installer build script.
 #endif
+#ifndef BinaryVersion
+  #error BinaryVersion must come from the compiled application through the installer build script.
+#endif
 #ifndef OutputPath
   #error OutputPath must be supplied by the installer build script.
 #endif
@@ -35,9 +38,9 @@ UsePreviousTasks=yes
 ChangesEnvironment=yes
 #endif
 AppVersion={#AppVersion}
-VersionInfoVersion={#AppVersion}
+VersionInfoVersion={#BinaryVersion}
 VersionInfoTextVersion={#AppVersion}
-VersionInfoProductVersion={#AppVersion}
+VersionInfoProductVersion={#BinaryVersion}
 VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=bondis2k
 AppPublisherURL=https://github.com/bondis2k/Gear-Backup

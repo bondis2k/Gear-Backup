@@ -37,11 +37,12 @@ try {
     }
     $setupMetadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($InstallerPath)
     $setupVersion = $setupMetadata.ProductVersion.Trim()
-    Assert (([version]$setupMetadata.FileVersion.Trim()) -eq ([version]$setupVersion)) 'Setup file version differs from its product version.'
+    $setupBinaryVersion = '{0}.{1}.{2}.{3}' -f $setupMetadata.FileMajorPart, $setupMetadata.FileMinorPart, $setupMetadata.FileBuildPart, $setupMetadata.FilePrivatePart
     foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe')) {
         $metadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $installPath $file))
         Assert ($metadata.ProductVersion.Trim() -eq $setupVersion) "Product version differs from Setup: $file"
-        Assert (([version]$metadata.FileVersion) -eq ([version]$setupVersion)) "File version differs from Setup: $file"
+        $binaryVersion = '{0}.{1}.{2}.{3}' -f $metadata.FileMajorPart, $metadata.FileMinorPart, $metadata.FileBuildPart, $metadata.FilePrivatePart
+        Assert ($binaryVersion -eq $setupBinaryVersion) "File version differs from Setup: $file"
     }
     Assert (-not (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.ini'))) 'The installer shipped an INI file.'
     Assert (Test-Path -LiteralPath (Join-Path $installPath 'GearBackup.installed')) 'Installed settings marker is missing.'

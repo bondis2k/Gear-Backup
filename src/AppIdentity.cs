@@ -6,8 +6,9 @@ partial class GearBackup
     internal static class AppIdentity
     {
         public const string Name = "Gear Backup";
-        // Change this one value for a release; both executables and Setup use it.
-        public const string Version = "0.9.0";
+        // Display version supports suffixes; Windows binary metadata requires numbers.
+        public const string Version = "0.9.0A";
+        public const string BinaryVersion = "0.9.0.1";
         public const string DirectoryName = "GearBackup";
         public const string ConfigFileName = DirectoryName + ".ini";
         public const string ProfileConfigFileName = DirectoryName + ".Profiles.ini";
