@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
@@ -41,6 +42,18 @@ partial class M8Backup
             var cancel = (Button)form.Controls.Find("CancelOperation", true)[0];
             var state = (Label)form.Controls.Find("OperationStatus", true)[0];
             var zipBox = (CheckBox)form.Controls.Find("ZipBackup", true)[0];
+            var deviceImage = (PictureBox)form.Controls.Find("DeviceImage", true)[0];
+            Assert(deviceImage.Image != null && deviceImage.AccessibleName == "No device detected", "the header shows the general picture at startup");
+            Icon windowIcon = form.Icon;
+            ((MainForm)form).ShowDevice(Devices.OP1Field);
+            Assert(deviceImage.AccessibleName == "OP-1 Field" && deviceImage.Image != null, "a detected OP-1 Field shows its picture in the header");
+            ((MainForm)form).ShowDevice(new DeviceProfile { Id = "other", Name = "Other" });
+            Assert(deviceImage.AccessibleName == "OP-1 Field", "a device without a picture keeps what's shown");
+            ((MainForm)form).ShowDevice(Devices.M8);
+            Assert(deviceImage.AccessibleName == "M8", "a detected M8 shows its picture");
+            ((MainForm)form).ShowDevice(null);
+            Assert(deviceImage.AccessibleName == "No device detected", "no device detected brings back the general picture");
+            Assert(form.Icon == windowIcon, "the window and taskbar icon never change");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
             mode.SelectedIndex = 3;
             Assert(start.Text == "Check" && !preview.Enabled, "GUI check mode disables copy preview");

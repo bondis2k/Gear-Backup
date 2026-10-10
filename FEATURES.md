@@ -7,14 +7,15 @@ A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and s
 - **Graphical app** — `M8Backup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
 - **Command-line app** — `M8Backup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
 - **Shared engine** — both apps use the same backup, restore and check code and the same `M8Backup.ini`.
-- **App icon** — a tracker-style icon embedded in both programs.
+- **App icon** — a general backup icon (a memory card with a backup badge, for any device) for both programs, the window and the taskbar; the GUI header shows the M8 or OP-1 Field picture when that device is detected.
 
 ## Sources
 
 - **M8 detection** — finds the M8 in USB disk mode automatically, with a removable drive labelled `M8` as fallback.
+- **OP-1 Field** — backs up a Teenage Engineering OP-1 Field over MTP (no drive letter needed), through a local mirror that only downloads changes; read-only, restore goes to a folder.
 - **Device profiles** — everything device-specific (detection, song files, bundles, song-with-samples restore) is described per device, ready for more devices than the M8 (`Device`).
 - **Card reader or folder** — back up an SD card in a reader or any local folder (`SourceFolder`, `--source`).
-- **Manual fallback** — asks for a source path when no M8 is detected.
+- **Manual fallback** — asks for a source path when no M8 or OP-1 Field is detected.
 - **Profiles** — each card gets its own history, identified by its volume serial so it survives a new reader or drive letter.
 - **Named profiles** — choose a fixed history name with `Profile` or `--profile`.
 - **Legacy histories** — backups made before profiles existed stay available for restore and checks.

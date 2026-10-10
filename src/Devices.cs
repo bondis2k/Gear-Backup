@@ -15,6 +15,13 @@ partial class M8Backup
         public string UsbVendor, UsbModel;
         // Fallback detection: a removable drive with this label. Found this way, it can't be ejected.
         public string VolumeLabel;
+        // MTP devices (no drive letter): the USB vendor ID in their Windows device ID, and their name.
+        public string MtpVendor, MtpName;
+        public bool Mtp { get { return MtpVendor != null; } }
+        // Whether to warn about file names the device may not handle (MaxNameLength, special characters).
+        public bool NameWarnings = true;
+        // Its picture in the GUI header once detected: assets\<IconName>-256.png, embedded in the GUI exe.
+        public string IconName;
         public string[] SongExtensions = new string[0];
         public string SongsFolder;         // left out of song names in summaries, e.g. "Songs"
         public string BundlesFolder;       // null when the device has no bundles
@@ -41,10 +48,17 @@ partial class M8Backup
         public static readonly DeviceProfile M8 = new DeviceProfile {
             Id = "m8", Name = "M8", UsbVendor = "VEN_M8", UsbModel = "M8", VolumeLabel = "M8",
             SongExtensions = new[] { ".m8s" }, SongsFolder = "Songs", BundlesFolder = "Bundles",
-            ReadSamplePaths = SamplePaths };
+            ReadSamplePaths = SamplePaths, IconName = "M8Backup" };
+
+        // The Teenage Engineering OP-1 Field. It connects only over MTP (shift + COM, then T4), as a portable
+        // device "OP-1" with USB vendor 2367, holding synth, drum, tapes and mixdown folders. It has no song
+        // files or bundles, and file names are the device's own, so there are no name warnings.
+        public static readonly DeviceProfile OP1Field = new DeviceProfile {
+            Id = "op1-field", Name = "OP-1 Field", MtpVendor = "VID_2367", MtpName = "OP-1", NameWarnings = false,
+            IconName = "OP1Field" };
 
         // Detection tries these in order. The first is also the default for a folder of unknown type.
-        public static readonly DeviceProfile[] All = { M8 };
+        public static readonly DeviceProfile[] All = { M8, OP1Field };
 
         public static DeviceProfile Find(string id)
         {

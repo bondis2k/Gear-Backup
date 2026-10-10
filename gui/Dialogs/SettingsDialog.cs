@@ -32,7 +32,7 @@ partial class M8Backup
             var length = NumberField(retention, "Name warning length", config.MaxNameLength); layout.Controls.Add(retention);
             layout.Controls.Add(GuiTheme.Label("Zero keeps all backups/versions or disables name warnings.", 9, GuiTheme.Muted));
             var eject = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 250 };
-            eject.Items.AddRange(new object[] { "Leave M8 connected", "Ask before ejecting M8", "Eject M8 after completion" });
+            eject.Items.AddRange(new object[] { "Leave the device connected", "Ask before ejecting the device", "Eject the device after completion" });
             eject.SelectedIndex = (int)config.Eject; layout.Controls.Add(eject);
             var actions = new FlowLayoutPanel { Width = 580, Height = 50, Padding = new Padding(0, 12, 0, 0) };
             var save = GuiTheme.Button("Save settings", true); var cancel = GuiTheme.Button("Cancel", false); cancel.DialogResult = DialogResult.Cancel;

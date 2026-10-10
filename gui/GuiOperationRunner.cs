@@ -42,8 +42,21 @@ partial class M8Backup
                 DeviceProfile device;
                 string found = FindDevice(out device, out pnp);
                 context.CheckCancellation();
-                if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
-                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
+                if (found == null)
+                {
+                    MtpSource mtp = FindMtpSource();
+                    if (mtp != null)
+                    {
+                        form.OnUi(delegate { form.ShowDevice(mtp.Device); return true; });
+                        return new OperationResult { Summary = mtp.Device.Name + " detected over MTP. Leave the source empty to back it up." };
+                    }
+                }
+                if (found == null)
+                {
+                    form.OnUi(delegate { form.ShowDevice(null); return true; });
+                    throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
+                }
+                form.OnUi(delegate { form.SetDetectedSource(found); form.ShowDevice(device); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
                 return new OperationResult { Summary = device.Name + " detected: " + found };
             }, false);
         }
@@ -72,13 +85,32 @@ partial class M8Backup
             }
             string selected = options.SourceFolder, pnp = null;
             DeviceProfile detected = null;
+            MtpSource mtp = null;
             if (selected.Length == 0)
             {
                 selected = FindDevice(out detected, out pnp);
-                if (selected == null) throw new IOException("Choose a source folder, or connect the " + Devices.Names + " in USB drive mode.");
-                string found = selected;
-                DeviceProfile foundDevice = detected;
-                form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = foundDevice; return true; });
+                if (selected == null)
+                {
+                    // An MTP device has no drive letter: it's read into a local mirror, which is backed up.
+                    mtp = FindMtpSource();
+                    if (mtp == null)
+                    {
+                        form.OnUi(delegate { form.ShowDevice(null); return true; });
+                        throw new IOException("Choose a source folder, or connect the " + Devices.Names + ".");
+                    }
+                    detected = mtp.Device;
+                    Directory.CreateDirectory(mtp.Mirror);
+                    selected = mtp.Mirror;
+                }
+                else
+                {
+                    string found = selected;
+                    DeviceProfile foundDevice = detected;
+                    form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = foundDevice; return true; });
+                }
+                // Only detection changes the header picture; a folder chosen by hand leaves it as it is.
+                DeviceProfile shown = detected;
+                form.OnUi(delegate { form.ShowDevice(shown); return true; });
             }
             selected = Rooted(selected);
             if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);
@@ -87,6 +119,8 @@ partial class M8Backup
             context.Device = DeviceFor(options, detected);
             string root = HistoryFor(options, selected);
             OperationResult result;
+            if (choice == 2 && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+            if (mtp != null) selected = SyncMtpSource(mtp);
             if (choice == 2)
             {
                 root = ChooseHistory(histories, root);

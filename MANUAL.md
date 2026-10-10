@@ -23,7 +23,7 @@ Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallba
 
 Run `build-gui.cmd --no-pause`, then open `M8Backup.GUI.exe`. The existing `M8Backup.exe` command-line interface remains available separately. Both executables use `M8Backup.ini` beside them and the same backup histories and file operations.
 
-1. Select the M8 card/source folder, or click **Detect M8**. Leaving the source empty also attempts detection when starting a backup or restore.
+1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: an M8 in USB disk mode, or an [OP-1 Field](#teenage-engineering-op-1-field) in MTP mode. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
 3. Choose **Full backup**, **Incremental backup**, **Restore files**, or **Check backups**. For a full backup, tick **Also save as zip** to get a [zip copy](#zip-copy-of-a-full-backup) too.
 4. Click **Preview** for a backup/restore plan without writing files, or use the main action button to run the operation. Review changes when prompted.
@@ -35,6 +35,23 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 **Settings** saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, and eject preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
 
 Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
+
+## Teenage Engineering OP-1 Field
+
+The OP-1 Field is backed up as well as the M8. It has no USB disk mode: it connects with MTP (the protocol phones use), so Windows shows it in Explorer without a drive letter.
+
+1. Connect the OP-1 Field by USB-C, hold **shift** and press **COM**, then press **T4 (mtp)**.
+2. Leave the source empty (no `SourceFolder`) and start a backup. The program finds the OP-1 Field by its USB ID and reads it.
+
+How it works:
+
+- The device's files (`synth`, `drum`, `tapes`, `mixdown`) are first copied into a **local mirror**, `%LOCALAPPDATA%\M8Backup\Devices\op1-field-<serial>`. The mirror is then backed up like any other source, so history, checksums, checks, zips, `KeepBackups` and incremental backups all work as usual.
+- The mirror is kept between runs. Each run downloads only files whose size or date changed on the device, and removes files that were deleted there. An unchanged OP-1 Field takes a second or two to check.
+- The OP-1 Field gets its own backup history, `op1-field-<serial>`, separate from any M8.
+- **Nothing is ever written to the OP-1 Field.** Restoring to it isn't supported yet: the restore option isn't offered while it's the source, and asking for it explains what to do instead. Restore to a folder (set `SourceFolder`, or use `--source`, and `Device=op1-field`), then copy the files to the OP-1 Field with Explorer.
+- The OP-1 Field has no songs or bundles, so restores offer all files or a single file, summaries count files rather than songs, and there are no name warnings. Free space on the device isn't available over MTP.
+- File names from the device are checked before anything is written; a name that isn't valid on Windows is skipped with a warning.
+- The mirror holds one copy of the device's content (about 20 MB with the factory sounds; more with recorded tapes). Deleting it is safe: the next backup downloads everything again.
 
 ## Separate card and folder histories
 
@@ -274,8 +291,8 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `Eject` | `no` | `no`, `ask`, or `yes`. |
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
 | `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
-| `SourceFolder` | empty | Detect M8, with manual fallback; otherwise use this drive/folder. |
-| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device; or name it (`m8`). Matters when the source is a card reader or folder, since only a connected device can be detected. The M8 is currently the only supported device. |
+| `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
+| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 in USB disk mode, or an OP-1 Field in MTP mode); or name it: `m8` or `op1-field`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
 | `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
@@ -342,6 +359,8 @@ Backup file traversal skips metadata folders before descending into them, so nor
 | `Changes.cs` | Song summaries and filename warnings. |
 | `Devices.cs` | Device profiles: what identifies each device, its song files, bundles and song reader. The M8 is the first profile. |
 | `UsbDevices.cs` | Finding a connected device's drive by its profile, and safe ejection. |
+| `MtpDevice.cs` | Reading MTP devices (OP-1 Field) through Windows' Portable Devices API. Read-only. |
+| `MtpMirror.cs` | Mirroring an MTP device into a local folder, which is then backed up. |
 | `Notifications.cs` | Windows notifications. |
 | `ConsoleUi.cs` | Console prompts and formatting. |
 | `gui\GuiProgram.cs` | Windows Forms startup and preview rendering. |

@@ -206,7 +206,7 @@ partial class M8Backup
                 else if (!File.Exists(ObjectPath(dest, hash)) && pendingObjects.Add(hash)) historyBytes += file.Length;
             }
 
-            nameWarnings = CheckNames(scan, source, config.MaxNameLength);
+            nameWarnings = CurrentDevice.NameWarnings ? CheckNames(scan, source, config.MaxNameLength) : new List<string>();
             if (nameWarnings.Count > 0)
                 WriteColored("  " + nameWarnings.Count + " name(s) the " + CurrentDevice.Name + " may not handle well (listed in the statistics).", ConsoleColor.Yellow);
         }
@@ -441,7 +441,10 @@ partial class M8Backup
             foreach (string path in scan.SkippedNamed)
                 report.WriteLine("    skipped: " + path.Substring(source.Length));
 
-            report.WriteLine("  {0,-24}{1}", "Free space on " + CurrentDevice.Name + ":", DriveSpaceText(Path.GetPathRoot(source)));
+            string spaceLabel = "Free space on " + CurrentDevice.Name + ":";
+            // Same column as before for the M8; longer device names still get a gap before the value.
+            report.WriteLine("  {0}{1}", spaceLabel.PadRight(Math.Max(24, spaceLabel.Length + 2)),
+                CurrentDevice.Mtp ? "not available over MTP" : DriveSpaceText(Path.GetPathRoot(source)));
             string destRoot = Path.GetPathRoot(dest);
             report.WriteLine("  Free space left on {0}  {1}", destRoot, FreeSpaceText(destRoot));
             report.WriteLine();
