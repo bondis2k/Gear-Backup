@@ -22,6 +22,8 @@ partial class M8Backup
         public bool Thorough = false;
         public bool Preview = true;
         public bool HardLinks = false;  // share history content with the backup files (NTFS)
+
+        public Config Clone() { return (Config)MemberwiseClone(); }
     }
 
     // Each setting with the explanation written into M8Backup.ini when it's missing from the file.

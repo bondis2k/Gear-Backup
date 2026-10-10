@@ -63,9 +63,9 @@ partial class M8Backup
 
     static int Run(bool restore, bool check, string[] args)
     {
-        Console.WriteLine();
-        Console.WriteLine("  Dirtywave M8 backup");
-        Console.WriteLine("  ----------------------------------------");
+        OperationOutput.WriteLine();
+        OperationOutput.WriteLine("  Dirtywave M8 backup");
+        OperationOutput.WriteLine("  ----------------------------------------");
 
         Config config = LoadConfig();
         for (int i = 0; i < args.Length; i++)
@@ -80,29 +80,20 @@ partial class M8Backup
                 throw new ArgumentException("Unknown argument: " + args[i]);
         }
         if (restore && check) throw new ArgumentException("Choose --restore or --check, not both.");
-        string histories = Path.Combine(config.BackupFolder, "M8 Backups");
-        if (check)
-        {
-            string history = config.Profile.Length > 0 ? Path.Combine(histories, "profiles", config.Profile) : ChooseHistory(histories, null);
-            if (history == null) return 0;
-            if (PreviewOnly) { Console.WriteLine("  --preview applies to backups and restores; check reads files only."); return 0; }
-            using (LockHistory(history)) return Check(ListBackups(history));
-        }
+        string histories = HistoriesRoot(config);
+        if (check) return CheckHistory(HistoryToCheck(config));
+
         string pnpId;
         string source = SelectSource(config, out pnpId);
         if (source == null)
         {
-            Console.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
+            OperationOutput.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
             return 0;
         }
         WriteColored("  Source: " + source, ConsoleColor.Green);
-        if (Within(histories, source) || Within(source, histories))
-            throw new IOException("The backup folder and source must not contain one another.");
-        string profile = ProfileId(source, config.Profile);
-        string backupRoot = Path.Combine(histories, "profiles", profile);
-        Console.WriteLine("  Profile: " + profile);
-        List<string> backups = ListBackups(backupRoot);
-        string previous = backups.Count > 0 ? backups[backups.Count - 1] : null;
+        string backupRoot = HistoryFor(config, source);
+        OperationOutput.WriteLine("  Profile: " + Path.GetFileName(backupRoot));
+        string previous = LatestBackup(backupRoot);
 
         bool incremental = false;
         if (!restore && previous != null)
@@ -113,18 +104,17 @@ partial class M8Backup
             }
             else if (config.Mode == "ask")
             {
-                Console.WriteLine("  Last backup: " + previous);
-                Console.WriteLine();
-                Console.WriteLine("    1) Full backup to a new folder");
-                Console.WriteLine("    2) Incremental backup into the last backup (only new and changed files)");
-                Console.WriteLine("    3) Restore from a backup to the M8");
-                Console.WriteLine("    4) Check backups for damaged files");
+                OperationOutput.WriteLine("  Last backup: " + previous);
+                OperationOutput.WriteLine();
+                OperationOutput.WriteLine("    1) Full backup to a new folder");
+                OperationOutput.WriteLine("    2) Incremental backup into the last backup (only new and changed files)");
+                OperationOutput.WriteLine("    3) Restore from a backup to the M8");
+                OperationOutput.WriteLine("    4) Check backups for damaged files");
                 char choice = AskKey("  Choose 1, 2, 3 or 4: ", "1234");
                 if (choice == '4')
                 {
-                    if (PreviewOnly) { Console.WriteLine("  Preview only; check not started."); return 0; }
-                    Console.WriteLine();
-                    using (LockHistory(backupRoot)) return Check(backups);
+                    OperationOutput.WriteLine();
+                    return CheckHistory(backupRoot);
                 }
                 incremental = choice == '2';
                 restore = choice == '3';
@@ -132,54 +122,56 @@ partial class M8Backup
         }
         else if (!restore && previous == null && config.Mode == "ask" && HasHistory(histories))
         {
-            Console.WriteLine("  No backups yet for this profile; other histories are available.");
-            Console.WriteLine("    1) Full backup for this profile");
-            Console.WriteLine("    3) Restore from another history");
-            Console.WriteLine("    4) Check another history");
+            OperationOutput.WriteLine("  No backups yet for this profile; other histories are available.");
+            OperationOutput.WriteLine("    1) Full backup for this profile");
+            OperationOutput.WriteLine("    3) Restore from another history");
+            OperationOutput.WriteLine("    4) Check another history");
             char choice = AskKey("  Choose 1, 3 or 4: ", "134");
+            if (choice == '4') return CheckHistory(ChooseHistory(histories, null));
             restore = choice == '3';
-            if (choice == '4')
-            {
-                if (PreviewOnly) { Console.WriteLine("  Preview only; check not started."); return 0; }
-                string selected = ChooseHistory(histories, null);
-                if (selected == null) return 0;
-                using (LockHistory(selected)) return Check(ListBackups(selected));
-            }
         }
-        Console.WriteLine();
-        if (!restore && previous != null && (BackupStatus(previous) == "incomplete" || BackupStatus(previous) == "failed"))
-        {
-            Console.WriteLine("  Latest backup is " + BackupStatus(previous) + ". Resume uses " +
-                (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
-            char answer = AskKey("  [R]esume into it, [N]ew full backup, or [C]ancel? ", "rnc");
-            if (answer == 'c') return 0;
-            incremental = answer == 'r';
-        }
+        OperationOutput.WriteLine();
+
+        OperationResult result;
         if (restore)
         {
             backupRoot = ChooseHistory(histories, backupRoot);
             if (backupRoot == null) return 0;
-            backups = ListBackups(backupRoot);
+            using (LockUnlessPreview(backupRoot)) result = RunRestore(source, ListBackups(backupRoot), config);
         }
-        // A preview does not create a lock file or backup directories.
-        FileStream historyLock = PreviewOnly ? null : LockHistory(backupRoot);
-        using (historyLock)
+        else result = BackupWithLock(source, backupRoot, incremental, config);
+
+        if (result.Title != null && !PreviewOnly)
         {
-            OperationResult result = restore
-                ? RunRestore(source, backups, config)
-                : RunBackup(source, backupRoot, previous, incremental, config);
-            if (result.Title != null && !PreviewOnly)
+            if (result.Cancelled || OperationContext.Current.Cancellation.IsCancellationRequested)
             {
-                if (result.Cancelled || OperationContext.Current.Cancellation.IsCancellationRequested)
+                OperationOutput.WriteLine("  " + result.Summary);
+                ShowToast(result.Title, result.Summary, false);
+            }
+            else if (pnpId != null)
+            {
+                // Same check as the GUI: never eject a device that no longer owns this source.
+                string changed = config.Eject == "no" ? null : ConfirmSameDevice(source, pnpId);
+                if (changed == null) Finish(pnpId, result.Title, result.Summary, config.Eject);
+                else
                 {
-                    Console.WriteLine("  " + result.Summary);
+                    OperationOutput.WriteLine("  " + changed);
                     ShowToast(result.Title, result.Summary, false);
                 }
-                else if (pnpId != null) Finish(pnpId, result.Title, result.Summary, config.Eject);
-                else ShowToast(result.Title, result.Summary, false);
             }
-            return result.ExitCode;
+            else ShowToast(result.Title, result.Summary, false);
         }
+        else if (result.Cancelled && result.Title == null && result.Summary != null)
+            OperationOutput.WriteLine("  " + result.Summary);
+        return result.ExitCode;
+    }
+
+    // Checks one history's backups (the M8 isn't involved) and shows the result as a notification.
+    static int CheckHistory(string history)
+    {
+        if (history == null) return 0;
+        if (PreviewOnly) { OperationOutput.WriteLine("  --preview applies to backups and restores; check reads files only."); return 0; }
+        using (LockHistory(history)) return Check(ListBackups(history));
     }
 
     // Checks backups against their checksum lists; only shows a notification (the M8 isn't involved).
