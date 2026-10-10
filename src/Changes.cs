@@ -54,7 +54,8 @@ partial class GearBackup
         var removedSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (baseline != null)
         {
-            foreach (string path in Directory.GetFiles(baseline, "*", SearchOption.AllDirectories))
+            // Only the backup's own files: the history store can hold many thousands of objects.
+            foreach (string path in BackupFiles(baseline))
             {
                 string relative = path.Substring(baseline.Length).TrimStart('\\');
                 if (IsSong(relative) && !IsOldVersion(relative) && !onDevice.Contains(SongName(relative)))

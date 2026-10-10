@@ -7,13 +7,16 @@ using System.Windows.Forms;
 
 partial class GearBackup
 {
+    // The main window's operations, in the order of its Operation list.
+    internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings }
+
     // Owns the worker lifetime and operation orchestration; the form owns display.
     sealed class GuiOperationRunner
     {
         readonly MainForm form;
         CancellationTokenSource cancellation;
-        string detectedSource, detectedPnp;
-        DeviceProfile detectedDevice;
+        // The last drive found by detection, so a source typed as that same drive can still be ejected.
+        SourceChoice detectedDrive;
         public GuiOperationRunner(MainForm owner) { form = owner; }
         public bool IsBusy { get { return cancellation != null; } }
         public bool CancellationRequested { get { return cancellation != null && cancellation.IsCancellationRequested; } }
@@ -35,131 +38,90 @@ partial class GearBackup
                 form.BeginInvoke((Action)delegate { form.DrainDisplay(); cancellation.Dispose(); cancellation = null; form.CompleteOperation(result, previewOnly); });
             });
         }
+
+        // Detection shows the device in the header; a drive also fills in the source.
+        void ShowDetected(SourceChoice found)
+        {
+            if (found != null && found.Mtp == null) detectedDrive = found;
+            form.OnUi(delegate {
+                if (found != null && found.Mtp == null) form.SetDetectedSource(found.Path);
+                form.ShowDevice(found == null ? null : found.Detected, found == null ? null : found.CameraMode);
+                if (found != null && found.CameraSettingsMode) form.SelectCameraSettings();
+                return true;
+            });
+        }
+
         public void DetectSource()
         {
             RunWorker(delegate(OperationContext context) {
-                string pnp;
-                DeviceProfile device;
-                string found = FindDevice(out device, out pnp);
+                SourceChoice found = GearBackup.DetectSource();
                 context.CheckCancellation();
-                if (found == null)
-                {
-                    MtpSource mtp = FindMtpSource();
-                    if (mtp != null)
-                    {
-                        bool settingsMode = mtp.Device == Devices.X100VI && FujiSettingsMode(mtp.Info);
-                        string mode = mtp.Device == Devices.X100VI ? FujiModeName(settingsMode) : null;
-                        form.OnUi(delegate { form.ShowDevice(mtp.Device, mode); if (settingsMode) form.SelectCameraSettings(); return true; });
-                        if (settingsMode) return new OperationResult { Summary = "X100VI detected in settings mode. Back up C1–C7 recipes and shooting settings with the selected operation." };
-                        if (mtp.Device == Devices.X100VI) return new OperationResult { Summary = "X100VI detected in photo-transfer mode (USB card reader / MTP). Leave the source empty to back up photos and videos." };
-                        return new OperationResult { Summary = mtp.Device.Name + " detected over MTP. Leave the source empty to back it up." };
-                    }
-                }
-                if (found == null)
-                {
-                    form.OnUi(delegate { form.ShowDevice(null); return true; });
-                    throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
-                }
-                form.OnUi(delegate { form.SetDetectedSource(found); form.ShowDevice(device); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = device; return true; });
-                return new OperationResult { Summary = device.Name + " detected: " + found };
+                ShowDetected(found);
+                if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
+                if (found.CameraSettingsMode) return new OperationResult { Summary = "X100VI detected in settings mode. Back up C1–C7 recipes and shooting settings with the selected operation." };
+                if (found.Detected == Devices.X100VI) return new OperationResult { Summary = "X100VI detected in photo-transfer mode (USB card reader / MTP). Leave the source empty to back up photos and videos." };
+                if (found.Mtp != null) return new OperationResult { Summary = found.Detected.Name + " detected over MTP. Leave the source empty to back it up." };
+                return new OperationResult { Summary = found.Detected.Name + " detected: " + found.Path };
             }, false);
         }
-        public void Run(Config options, int choice, bool previewOnly)
+
+        public void Run(Config options, GuiOperation operation, bool previewOnly)
         {
-            string knownSource = detectedSource, knownPnp = detectedPnp;
-            DeviceProfile knownDevice = detectedDevice;
+            SourceChoice known = detectedDrive;
             RunWorker(delegate(OperationContext context) {
-                context.OverallProgressOnly = choice == 0;
-                return Execute(options, choice, previewOnly, knownSource, knownPnp, knownDevice, context);
+                context.OverallProgressOnly = operation == GuiOperation.FullBackup;
+                return Execute(options, operation, known, context);
             }, previewOnly);
         }
 
-        // 0 full backup, 1 incremental, 2 restore, 3 check, 4 X100VI settings snapshot.
-        OperationResult Execute(Config options, int choice, bool previewOnly, string knownSource, string knownPnp,
-            DeviceProfile knownDevice, OperationContext context)
+        OperationResult Execute(Config options, GuiOperation operation, SourceChoice known, OperationContext context)
         {
-            Config globalOptions = options;
-            if (choice == 4)
+            if (operation == GuiOperation.CameraSettings)
             {
                 OperationResult settingsResult = RunFujiSettingsBackup(options);
                 form.OnUi(delegate { form.ShowDevice(Devices.X100VI, FujiModeName(true)); return true; });
                 return settingsResult;
             }
-            string histories = HistoriesRoot(options);
-            if (choice == 3)
+            if (operation == GuiOperation.Check)
             {
-                if (options.Profile.Length > 0) options = ResolveProfileSettings(options, options.Device, options.Profile);
+                // The same history choice and check as the CLI's; the question becomes a list dialog.
                 string history = HistoryToCheck(options);
                 if (history == null) return new OperationResult { Cancelled = true, Summary = "Check cancelled." };
                 var backups = ListBackups(history);
                 if (backups.Count == 0) throw new IOException("No backups found at this location.");
-                // The same backup choice and check as the CLI's; the question becomes a list dialog.
                 using (LockHistory(history)) return RunCheck(backups);
             }
-            string selected = options.SourceFolder, pnp = null;
-            DeviceProfile detected = null;
-            MtpSource mtp = null;
-            string detectedMode = null;
-            if (selected.Length == 0)
+
+            SourceChoice chosen;
+            if (options.SourceFolder.Length == 0)
             {
-                selected = FindDevice(out detected, out pnp);
-                if (selected == null)
-                {
-                    // An MTP device has no drive letter: it's read into a local mirror, which is backed up.
-                    mtp = FindMtpSource();
-                    if (mtp == null)
-                    {
-                        form.OnUi(delegate { form.ShowDevice(null); return true; });
-                        throw new IOException("Choose a source folder, or connect the " + Devices.Names + ".");
-                    }
-                    detected = mtp.Device;
-                    if (detected == Devices.X100VI) detectedMode = FujiModeName(FujiSettingsMode(mtp.Info));
-                    Directory.CreateDirectory(mtp.Mirror);
-                    selected = mtp.Mirror;
-                }
-                else
-                {
-                    string found = selected;
-                    DeviceProfile foundDevice = detected;
-                    form.OnUi(delegate { form.SetDetectedSource(found); detectedSource = Rooted(found); detectedPnp = pnp; detectedDevice = foundDevice; return true; });
-                }
-                // Only detection changes the header picture; a folder chosen by hand leaves it as it is.
-                DeviceProfile shown = detected;
-                form.OnUi(delegate { form.ShowDevice(shown, detectedMode); return true; });
+                chosen = GearBackup.DetectSource();
+                ShowDetected(chosen);
+                if (chosen == null) throw new IOException("Choose a source folder, or connect the " + Devices.Names + ".");
             }
-            selected = Rooted(selected);
-            if (!Directory.Exists(selected)) throw new IOException("Source folder does not exist: " + selected);
-            RejectRootLinks(selected);
-            if (knownSource == selected) { pnp = knownPnp; if (detected == null) detected = knownDevice; }
-            context.Device = DeviceFor(options, detected, selected);
-            options = ResolveSourceSettings(options, selected);
-            histories = HistoriesRoot(options);
-            string root = HistoryFor(options, selected);
-            OperationResult result;
-            if (choice == 2 && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-            using (mtp == null ? null : LockHistory(MirrorRoot))
-            {
-                if (mtp != null) selected = SyncMtpSource(mtp);
-                if (choice == 2)
-                {
-                    root = ChooseHistory(histories, root);
-                    if (root == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
-                    options = ResolveProfileSettings(globalOptions, context.Device.Id, Path.GetFileName(root));
-                    if (ListBackups(root).Count == 0) throw new IOException("No backups found at this location.");
-                    using (LockUnlessPreview(root)) result = RunRestore(selected, ListBackups(root), options);
-                    result.Cancelled |= context.Cancellation.IsCancellationRequested;
-                }
-                else result = BackupWithLock(selected, root, choice == 1, options);
-            }
-            if (!previewOnly && !result.Cancelled && result.ExitCode == 0 && result.Title != null && pnp != null && options.Eject != EjectMode.No)
-            {
-                string changed = ConfirmSameDevice(selected, pnp);
-                if (changed != null) { OperationOutput.WriteLine(changed); return result; }
-                context.CheckCancellation();
-                bool eject = options.Eject == EjectMode.Yes || AskYesNo("Safely eject the " + context.Device.Name + " now?");
-                if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? context.Device.Name + " safely ejected." : "Could not eject: " + error); }
-            }
+            // A folder chosen by hand leaves the header as it is; the detected drive typed in again keeps its
+            // device and can still be ejected.
+            else if (known != null && Rooted(options.SourceFolder) == Rooted(known.Path)) chosen = known;
+            else chosen = new SourceChoice { Path = options.SourceFolder };
+
+            PreparedSource prepared = PrepareSource(options, chosen);
+            OperationResult result = RunPrepared(prepared, operation == GuiOperation.Restore, operation == GuiOperation.IncrementalBackup);
+            EjectIfWanted(prepared, result, context);
             return result;
+        }
+
+        // Ejects a detected drive after a successful run when the Eject preference asks for it, and only if
+        // it's still the same device.
+        static void EjectIfWanted(PreparedSource prepared, OperationResult result, OperationContext context)
+        {
+            string pnp = prepared.Source.PnpId;
+            if (context.PreviewOnly || result.Cancelled || result.ExitCode != 0 || result.Title == null || pnp == null ||
+                prepared.Config.Eject == EjectMode.No) return;
+            string changed = ConfirmSameDevice(prepared.Path, pnp);
+            if (changed != null) { OperationOutput.WriteLine(changed); return; }
+            context.CheckCancellation();
+            bool eject = prepared.Config.Eject == EjectMode.Yes || AskYesNo("Safely eject the " + prepared.Device.Name + " now?");
+            if (eject) { string error = EjectDrive(pnp); OperationOutput.WriteLine(error == null ? prepared.Device.Name + " safely ejected." : "Could not eject: " + error); }
         }
     }
 }

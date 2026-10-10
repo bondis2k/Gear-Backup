@@ -3,9 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
+// Which dated files in a backup are old versions the program kept (Song_2026-10-01_143000.m8s), as
+// opposed to the user's own files that happen to have a date in their name. Storage cleanup only offers
+// known old versions.
 partial class GearBackup
 {
-    // A timestamp-looking user filename is not sufficient evidence that it is a retained version.
+    // The backup's known old versions, from .gearbackup\old-versions.txt. Backups made before that record
+    // existed fall back to their snapshots: a dated name never seen on the source is an old version.
+    // Without either, nothing is reported, since a date in a name alone isn't evidence enough.
     static HashSet<string> KnownOldVersions(string backup)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -34,7 +39,8 @@ partial class GearBackup
         var sourceNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string[] manifests = Directory.GetFiles(snapshots, "*.manifest");
         if (manifests.Length == 0) return result;
-        foreach (string manifest in manifests) foreach (RestoreEntry entry in ReadSnapshot(backup, manifest).Files) sourceNames.Add(entry.Relative);
+        foreach (string manifest in manifests)
+            foreach (RestoreEntry entry in ReadSnapshot(backup, manifest).Files) sourceNames.Add(entry.Relative);
         foreach (string file in BackupFiles(backup))
         {
             string name = file.Substring(Rooted(backup).Length);
@@ -42,14 +48,19 @@ partial class GearBackup
         }
         return result;
     }
+
+    // Updates the record after a backup: adds the versions it kept, and drops names that are on the source
+    // again or no longer exist.
     static void SaveOldVersionRecord(string backup, HashSet<string> versions, List<string> added, HashSet<string> sourceNames)
     {
         foreach (string name in added) if (!IsBackupMetaFile(Path.Combine(backup, name))) versions.Add(name);
         versions.RemoveWhere(name => sourceNames.Contains(name) || !File.Exists(SafePath(backup, name)));
-        var names = new List<string>(versions); names.Sort(StringComparer.OrdinalIgnoreCase);
+        var names = new List<string>(versions);
+        names.Sort(StringComparer.OrdinalIgnoreCase);
         var text = new StringBuilder("GEARVERSIONS\t1\n");
         foreach (string name in names) text.AppendLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(name)));
-        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt"); RejectRootLinks(path);
+        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt");
+        RejectRootLinks(path);
         AtomicText(path, text.ToString());
     }
 }

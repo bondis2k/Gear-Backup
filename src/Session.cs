@@ -1,11 +1,88 @@
-// Workflow steps shared by the CLI (Program.cs) and the GUI (GuiOperationRunner.cs), so both
-// front ends pick histories, lock them, resume and eject by the same rules.
+// Workflow steps shared by the CLI (Program.cs) and the GUI (GuiOperationRunner.cs), so both front
+// ends detect sources, apply preferences, pick and lock histories, resume and eject by the same rules.
 using System;
 using System.Collections.Generic;
 using System.IO;
 
 partial class GearBackup
 {
+    // Where an operation's files come from (or, for a restore, go to).
+    internal sealed class SourceChoice
+    {
+        public string Path;             // the drive or folder; for an MTP device, its mirror
+        public string PnpId;            // set only for a detected drive, which can then be ejected
+        public DeviceProfile Detected;  // the detected device; null for a folder chosen by hand
+        public MtpSource Mtp;           // set for an MTP device, whose mirror is synced before a backup
+        public string CameraMode;       // the X100VI's connection mode, read once at detection
+        public bool CameraSettingsMode;
+    }
+
+    // A source with everything both front ends work out the same way: its device, its preferences
+    // (global, then device, then profile) and its history.
+    internal sealed class PreparedSource
+    {
+        public SourceChoice Source;
+        public string Path, Histories, History;
+        public DeviceProfile Device;
+        public Config Global, Config;
+    }
+
+    // The first connected supported device: a USB drive, otherwise an MTP device (whose mirror folder
+    // is created). Null when none is connected.
+    static SourceChoice DetectSource()
+    {
+        DeviceProfile device;
+        string pnp;
+        string drive = FindDevice(out device, out pnp);
+        if (drive != null) return new SourceChoice { Path = drive, PnpId = pnp, Detected = device };
+        MtpSource mtp = FindMtpSource();
+        if (mtp == null) return null;
+        Directory.CreateDirectory(mtp.Mirror);
+        var found = new SourceChoice { Path = mtp.Mirror, Detected = mtp.Device, Mtp = mtp };
+        if (mtp.Device == Devices.X100VI)
+        {
+            found.CameraSettingsMode = FujiSettingsMode(mtp.Info);
+            found.CameraMode = FujiModeName(found.CameraSettingsMode);
+        }
+        return found;
+    }
+
+    // Checks the source and works out its device, preferences and history. Sets the current device.
+    static PreparedSource PrepareSource(Config global, SourceChoice choice)
+    {
+        if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
+        string path = Rooted(choice.Path);
+        RejectRootLinks(path);
+        DeviceProfile device = DeviceFor(global, choice.Detected, path);
+        OperationContext.Current.Device = device;
+        Config config = ResolveSourceSettings(global, path);
+        return new PreparedSource { Source = choice, Path = path, Device = device, Global = global, Config = config,
+            Histories = HistoriesRoot(config), History = HistoryFor(config, path) };
+    }
+
+    // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
+    // device's mirror is synced first, under the mirror lock that storage cleanup also takes.
+    static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
+    {
+        MtpSource mtp = prepared.Source.Mtp;
+        if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+        using (mtp == null ? null : LockHistory(MirrorRoot))
+        {
+            string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+            if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
+            string history = ChooseHistory(prepared.Histories, prepared.History);
+            if (history == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
+            List<string> backups = ListBackups(history);
+            if (backups.Count == 0) throw new IOException("No backups found at this location.");
+            // Restore preferences (recovery copies, verification) follow the chosen history.
+            Config config = ResolveProfileSettings(prepared.Global, prepared.Device.Id, Path.GetFileName(history));
+            OperationResult result;
+            using (LockUnlessPreview(history)) result = RunRestore(source, backups, config);
+            result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
+            return result;
+        }
+    }
+
     static string HistoriesRoot(Config config)
     {
         return AppIdentity.ExistingFolder(config.BackupFolder, AppIdentity.BackupsFolderName, AppIdentity.Legacy.BackupsFolderName);

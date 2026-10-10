@@ -266,6 +266,30 @@ partial class GearBackup
             owner.Show(); Application.DoEvents();
             foreach (string name in new[] { "OpenDashboard", "OpenStorage", "OpenProfiles", "OpenRecipes" })
                 Assert(owner.Controls.Find(name, true).Length == 1, "main window exposes " + name);
+            // A scan started from a tool window shows its progress there, never as a main-window operation.
+            // Without an old-version record (backups from before it existed) the scan walks each backup's
+            // files, reporting progress for every one.
+            foreach (string record in Directory.GetFiles(HistoriesRoot(config), "old-versions.txt", SearchOption.AllDirectories)) File.Delete(record);
+            var mainStatus = (Label)owner.Controls.Find("OperationStatus", true)[0];
+            string statusBefore = mainStatus.Text;
+            foreach (bool storageMode in new[] { false, true })
+            using (var scanning = new CatalogDialog(owner, config, storageMode))
+            {
+                string window = storageMode ? "storage" : "dashboard";
+                var notice = (Label)scanning.Controls.Find("ToolNotice", true)[0];
+                var table = (DataGridView)scanning.Controls.Find(storageMode ? "StorageTable" : "DashboardTable", true)[0];
+                scanning.Show();
+                var waited = Stopwatch.StartNew();
+                while ((table.Rows.Count == 0 || notice.Text.StartsWith("Working")) && waited.Elapsed < TimeSpan.FromSeconds(30))
+                {
+                    Application.DoEvents();
+                    System.Threading.Thread.Sleep(20);
+                }
+                for (int i = 0; i < 20; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(20); }
+                Assert(table.Rows.Count > 0 && !notice.Text.StartsWith("Working"), "the " + window + " scans in the background and fills its table");
+                Assert(mainStatus.Text == statusBefore && !mainStatus.Text.Contains("Scanning"),
+                    "a " + window + " scan leaves the main window's status alone: " + mainStatus.Text);
+            }
             using (var dashboard = new CatalogDialog(owner, config, false, catalog))
             {
                 dashboard.Show(); Application.DoEvents();

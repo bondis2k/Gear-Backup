@@ -30,6 +30,18 @@ partial class GearBackup
         public static bool Unfinished(string status) { return status == Incomplete || status == Failed; }
     }
 
+    // What a restore brings back. Each value is also the key typed in the console menu.
+    internal static class RestoreMode
+    {
+        public const char All = 'a', Bundle = 'b', ProjectFolder = 'p', SingleFile = 's', SongWithSamples = 'd';
+    }
+
+    // The kinds of item Storage offers for cleanup; the text is shown in its table.
+    internal static class StorageKind
+    {
+        public const string OlderBackup = "Older backup", OldVersion = "Old version", Zip = "ZIP", Mirror = "MTP mirror";
+    }
+
     // Mode setting: what to do when a backup already exists.
     internal enum BackupMode { Ask, Full, Incremental }
 

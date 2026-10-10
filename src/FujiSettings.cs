@@ -230,10 +230,13 @@ partial class GearBackup
             finally { mutex.ReleaseMutex(); }
         }
         OperationContext.Current.CheckCancellation();
+        // Settings get their own history, never the photo history: a named profile "Studio" saves them as
+        // "Studio-settings" (using Studio's preferences), so the next photo backup can't continue into a
+        // settings-only folder.
         string automatic = Path.GetFileName(MirrorFolder(Devices.X100VI, cameras[0])).Replace("x100vi-", "x100vi-settings-");
-        string profileName = config.Profile.Length > 0 ? config.Profile : automatic;
+        string profileName = config.Profile.Length > 0 ? SettingsProfileName(config.Profile) : automatic;
         ValidateProfile(profileName);
-        config = ResolveProfileSettings(config, Devices.X100VI.Id, profileName);
+        config = ResolveProfileSettings(config, Devices.X100VI.Id, config.Profile.Length > 0 ? config.Profile : profileName);
         string history = Path.Combine(HistoriesRoot(config), "profiles", profileName);
         return SaveFujiSettings(files, history, config);
     }
@@ -265,6 +268,14 @@ partial class GearBackup
             foreach (string name in files.Keys) File.Delete(SafePath(staging, name));
             Directory.Delete(staging); // Don't recursively delete anything unexpected in the temporary folder.
         }
+    }
+
+    // "Studio" -> "Studio-settings", shortened to fit the 64-character profile limit.
+    static string SettingsProfileName(string profile)
+    {
+        const string suffix = "-settings";
+        if (profile.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return profile;
+        return profile.Substring(0, Math.Min(profile.Length, 64 - suffix.Length)).TrimEnd() + suffix;
     }
 
     static bool FujiSettingsMode(MtpDeviceInfo info)

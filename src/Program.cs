@@ -93,21 +93,20 @@ partial class GearBackup
         string histories = HistoriesRoot(config);
         if (check) return CheckHistory(HistoryToCheck(config));
 
-        string pnpId;
-        DeviceProfile device;
-        MtpSource mtp;
-        string source = SelectSource(config, out pnpId, out device, out mtp);
-        OperationContext.Current.Device = device;
-        if (source == null)
+        SourceChoice chosen = SelectSource(config);
+        if (chosen == null)
         {
             OperationOutput.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
             return 0;
         }
+        PreparedSource prepared = PrepareSource(config, chosen);
+        DeviceProfile device = prepared.Device;
+        MtpSource mtp = chosen.Mtp;
+        string source = prepared.Path, pnpId = chosen.PnpId;
         WriteColored("  Source: " + source + " (" + device.Name + ")", ConsoleColor.Green);
-        Config globalConfig = config;
-        config = ResolveSourceSettings(config, source);
-        histories = HistoriesRoot(config);
-        string backupRoot = HistoryFor(config, source);
+        config = prepared.Config;
+        histories = prepared.Histories;
+        string backupRoot = prepared.History;
         OperationOutput.WriteLine("  Profile: " + Path.GetFileName(backupRoot));
         string previous = LatestBackup(backupRoot);
 
@@ -149,20 +148,7 @@ partial class GearBackup
         }
         OperationOutput.WriteLine();
 
-        OperationResult result;
-        if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-        using (mtp == null ? null : LockHistory(MirrorRoot))
-        {
-            if (mtp != null) source = SyncMtpSource(mtp);
-            if (restore)
-            {
-                backupRoot = ChooseHistory(histories, backupRoot);
-                if (backupRoot == null) return 0;
-                config = ResolveProfileSettings(globalConfig, device.Id, Path.GetFileName(backupRoot));
-                using (LockUnlessPreview(backupRoot)) result = RunRestore(source, ListBackups(backupRoot), config);
-            }
-            else result = BackupWithLock(source, backupRoot, incremental, config);
-        }
+        OperationResult result = RunPrepared(prepared, restore, incremental);
 
         if (result.Title != null && !PreviewOnly)
         {

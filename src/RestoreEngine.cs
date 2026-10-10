@@ -127,7 +127,7 @@ partial class GearBackup
                 plan.Add("REMOVE extra file: " + relative);
             }
             foreach (string folder in extraFolders) plan.Add("Remove folder if empty: " + folder);
-            List<string> folders = snapshot.Folders.FindAll(f => mode == 'a' || (bundle != null &&
+            List<string> folders = snapshot.Folders.FindAll(f => mode == RestoreMode.All || (bundle != null &&
                 (f.Equals(bundle, StringComparison.OrdinalIgnoreCase) || f.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase))));
             foreach (string folder in folders)
             {

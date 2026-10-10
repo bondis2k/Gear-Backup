@@ -1,6 +1,9 @@
-// Settings from GearBackup.ini next to the exe.
+// Settings from GearBackup.ini next to the exe. Every setting is described once, in the Settings table:
+// loading, saving, the explanations written into the file, device/profile overrides and the Profiles
+// window all work from it.
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 
@@ -30,64 +33,152 @@ partial class GearBackup
         internal string SettingsDirectory { get; set; }
     }
 
-    // Each setting with the explanation written into GearBackup.ini when it's missing from the file.
-    static readonly string[][] SettingDocs =
+    // One setting: its INI key, the explanation written into GearBackup.ini when it's missing, and how its
+    // value is read and written. Preferences that can differ per device or profile have a Label, shown
+    // in the Profiles window.
+    internal sealed class Setting
     {
-        new[] { "Recovery", "; Recovery: save PC recovery copies before replacing or removing files during restore.\r\n; Default no. A recovery failure stops the restore before changing the target.\r\nRecovery=no\r\n" },
-        new[] { "RecoveryFolder", "\r\n; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\" + AppIdentity.RecoveryFolderName + ".\r\n; Environment variables work. Must be outside the source card/folder.\r\nRecoveryFolder=\r\n" },
-        new[] { "SourceFolder", "\r\n; SourceFolder: optional SD card drive or folder, e.g. E:\\ or D:\\M8Card.\r\n; Empty = detect the M8, or offer manual selection if detection fails.\r\nSourceFolder=\r\n" },
-        new[] { "Profile", "\r\n; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\nProfile=\r\n" },
-        new[] { "Device", "\r\n; Device: what kind of device the source is. auto = detect the connected device\r\n; (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP),\r\n; or name it: m8, op1-field, op-xy, tracker-mini or x100vi. Matters for a card reader or folder.\r\nDevice=auto\r\n" },
-        new[] { "Thorough", "\r\n; Thorough: yes = compare file contents with SHA-256 during backup/restore,\r\n; no = compare size and modified time. Applies to resume too. Default no.\r\nThorough=no\r\n" },
-        new[] { "Preview", "\r\n; Preview: show the file plan and ask before backups/restores. --preview only shows the plan.\r\nPreview=yes\r\n" },
-        new[] { "HardLinks", "\r\n; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n; no = keep separate copies (default). Other file systems always use copies.\r\nHardLinks=no\r\n" },
-        new[] { "PointInTimeHistory", "\r\n; PointInTimeHistory: yes = save restorable snapshots and a history content store (default).\r\n; no = save backup files and checksums only, avoiding the second copy of their content.\r\n; Old file versions and separate full backups are still kept according to their retention settings.\r\n; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\nPointInTimeHistory=yes\r\n" },
-        new[] { "BackupFolder",
-            "; BackupFolder: where backups go. Each backup is saved to\r\n" +
-            ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
-            "; Leave it empty to use your Music folder. Environment variables work,\r\n" +
-            "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" +
-            "BackupFolder=\r\n" },
-        new[] { "Mode",
-            "\r\n" +
+        public string Key, Doc, Label;
+        public string[] Choices;         // the allowed values of a yes/no or list setting; null otherwise
+        public bool Location;            // a folder, which the Profiles window can browse for
+        public bool AppliesEmpty;        // an empty value is applied (a path or name); otherwise it means "default"
+        public Func<Config, string> Get; // the value as written in the INI
+        // Applies a value; returns what was expected when the value isn't valid, otherwise null.
+        public Func<Config, string, string> Set;
+        public bool IsPreference { get { return Label != null; } }
+    }
+
+    static Setting YesNo(string key, string label, Func<Config, bool> get, Action<Config, bool> set, string doc)
+    {
+        return new Setting { Key = key, Label = label, Doc = doc, Choices = new[] { "yes", "no" },
+            Get = c => get(c) ? "yes" : "no",
+            Set = (c, value) => {
+                string lower = value.ToLowerInvariant();
+                if (lower == "yes" || lower == "true" || lower == "1" || lower == "on") set(c, true);
+                else if (lower == "no" || lower == "false" || lower == "0" || lower == "off") set(c, false);
+                else return "yes or no";
+                return null;
+            } };
+    }
+
+    static Setting Count(string key, string label, Func<Config, int> get, Action<Config, int> set, string zeroMeans, string doc)
+    {
+        return new Setting { Key = key, Label = label, Doc = doc,
+            Get = c => get(c).ToString(CultureInfo.InvariantCulture),
+            Set = (c, value) => {
+                int number;
+                if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out number) || number < 0)
+                    return "a number, 0 = " + zeroMeans;
+                set(c, number);
+                return null;
+            } };
+    }
+
+    // A setting with a fixed list of values; `values` are what the INI holds, lower case.
+    static Setting Choice(string key, string label, string[] values, Func<Config, string> get, Action<Config, string> set, string doc)
+    {
+        return new Setting { Key = key, Label = label, Doc = doc, Choices = values, Get = get,
+            Set = (c, value) => {
+                string lower = value.ToLowerInvariant();
+                if (Array.IndexOf(values, lower) < 0) return string.Join(", ", values, 0, values.Length - 1) + " or " + values[values.Length - 1];
+                set(c, lower);
+                return null;
+            } };
+    }
+
+    // In the order explanations are added to a new GearBackup.ini; preferences are listed in the same order.
+    static readonly Setting[] Settings =
+    {
+        new Setting { Key = "BackupFolder", Label = "Backup location", Location = true,
+            Get = c => c.BackupFolder,
+            Set = (c, value) => { c.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value)); return null; },
+            Doc = "; BackupFolder: where backups go. Each backup is saved to\r\n" +
+                  ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
+                  "; Leave it empty to use your Music folder. Environment variables work,\r\n" +
+                  "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" },
+        YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
+            "; PointInTimeHistory: yes = save restorable snapshots and a history content store (default).\r\n" +
+            "; no = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
+            "; Old file versions and separate full backups are still kept according to their retention settings.\r\n" +
+            "; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\n"),
+        YesNo("HardLinks", "Hard-linked history", c => c.HardLinks, (c, v) => c.HardLinks = v,
+            "; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n" +
+            "; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n" +
+            "; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n" +
+            "; no = keep separate copies (default). Other file systems always use copies.\r\n"),
+        YesNo("Verify", "Verify copied files", c => c.Verify, (c, v) => c.Verify = v,
+            "; Verify: yes = read every copied file back and compare its SHA-256 checksum\r\n" +
+            "; with the original, to catch bad copies (slower). Also checks restore sources,\r\n" +
+            "; history objects and recovery copies. no = skip automatic checksum checks.\r\n" +
+            "; Hashes are still recorded; Check backups explicitly verifies them. Default no.\r\n"),
+        YesNo("Thorough", "Compare file contents", c => c.Thorough, (c, v) => c.Thorough = v,
+            "; Thorough: yes = compare file contents with SHA-256 during backup/restore,\r\n" +
+            "; no = compare size and modified time. Applies to resume too. Default no.\r\n"),
+        YesNo("Preview", "Review changes", c => c.Preview, (c, v) => c.Preview = v,
+            "; Preview: show the file plan and ask before backups/restores. --preview only shows the plan.\r\n"),
+        Count("KeepBackups", "Backups to keep", c => c.KeepBackups, (c, v) => c.KeepBackups = v, "keep all",
+            "; KeepBackups: how many backup folders to keep. After a successful backup the\r\n" +
+            "; oldest extra ones are moved to the Recycle Bin (you're asked first). 0 = keep all.\r\n"),
+        Count("KeepOldVersions", "Old versions to keep", c => c.KeepOldVersions, (c, v) => c.KeepOldVersions = v, "keep all",
+            "; KeepOldVersions: how many old versions of each file to keep in a backup, when\r\n" +
+            "; incremental backups rename changed files (Song_2026-10-01_143000.m8s). After an\r\n" +
+            "; incremental backup the oldest extra ones are moved to the Recycle Bin (you're\r\n" +
+            "; asked first). 0 = keep all.\r\n"),
+        YesNo("Recovery", "Recovery copies", c => c.Recovery, (c, v) => c.Recovery = v,
+            "; Recovery: save PC recovery copies before replacing or removing files during restore.\r\n" +
+            "; Default no. A recovery failure stops the restore before changing the target.\r\n"),
+        new Setting { Key = "RecoveryFolder", Label = "Recovery location", Location = true, AppliesEmpty = true,
+            Get = c => c.RecoveryFolder, Set = (c, value) => { c.RecoveryFolder = ExpandPath(value); return null; },
+            Doc = "; RecoveryFolder: destination for dated recovery folders. Empty = <BackupFolder>\\" + AppIdentity.RecoveryFolderName + ".\r\n" +
+                  "; Environment variables work. Must be outside the source card/folder.\r\n" },
+        Count("MaxNameLength", "Name warning length", c => c.MaxNameLength, (c, v) => c.MaxNameLength = v, "don't check",
+            "; MaxNameLength: warn about file and folder names longer than this, which may not\r\n" +
+            "; show or load properly on the device. 0 = don't check the length.\r\n"),
+        Choice("Eject", "Eject after completion", new[] { "no", "ask", "yes" }, c => c.Eject.ToString().ToLowerInvariant(),
+            (c, v) => c.Eject = v == "yes" ? EjectMode.Yes : v == "ask" ? EjectMode.Ask : EjectMode.No,
+            "; Eject: what to do with a USB-drive device (M8, Tracker Mini) when a backup or restore is finished.\r\n" +
+            ";   no  = leave it connected, don't ask\r\n" +
+            ";   ask = ask in a notification (or press Y/N in the window)\r\n" +
+            ";   yes = always eject it, don't ask\r\n"),
+        Choice("Mode", null, new[] { "ask", "full", "incremental" }, c => c.Mode.ToString().ToLowerInvariant(),
+            (c, v) => c.Mode = v == "full" ? BackupMode.Full : v == "incremental" ? BackupMode.Incremental : BackupMode.Ask,
             "; Mode: what to do when there is already a backup.\r\n" +
             ";   ask         = show a menu: full backup, incremental backup or restore\r\n" +
             ";   full        = always make a new full backup\r\n" +
             ";   incremental = always copy new and changed files into the last backup\r\n" +
-            "; To restore when Mode isn't ask, run: " + AppIdentity.DirectoryName + ".exe --restore\r\n" +
-            "Mode=ask\r\n" },
-        new[] { "Verify",
-            "\r\n" +
-            "; Verify: yes = read every copied file back and compare its SHA-256 checksum\r\n" +
-            "; with the original, to catch bad copies (slower). Also checks restore sources,\r\n" +
-            "; history objects and recovery copies. no = skip automatic checksum checks.\r\n" +
-            "; Hashes are still recorded; Check backups explicitly verifies them. Default no.\r\n" +
-            "Verify=no\r\n" },
-        new[] { "KeepBackups",
-            "\r\n" +
-            "; KeepBackups: how many backup folders to keep. After a successful backup the\r\n" +
-            "; oldest extra ones are moved to the Recycle Bin (you're asked first). 0 = keep all.\r\n" +
-            "KeepBackups=0\r\n" },
-        new[] { "MaxNameLength",
-            "\r\n" +
-            "; MaxNameLength: warn about file and folder names longer than this, which may not\r\n" +
-            "; show or load properly on the M8. 0 = don't check the length.\r\n" +
-            "MaxNameLength=64\r\n" },
-        new[] { "Eject",
-            "\r\n" +
-            "; Eject: what to do with the M8 when a backup or restore is finished.\r\n" +
-            ";   no  = leave it connected, don't ask\r\n" +
-            ";   ask = ask in a notification (or press Y/N in the window)\r\n" +
-            ";   yes = always eject it, don't ask\r\n" +
-            "Eject=no\r\n" },
-        new[] { "KeepOldVersions",
-            "\r\n" +
-            "; KeepOldVersions: how many old versions of each file to keep in a backup, when\r\n" +
-            "; incremental backups rename changed files (Song_2026-10-01_143000.m8s). After an\r\n" +
-            "; incremental backup the oldest extra ones are moved to the Recycle Bin (you're\r\n" +
-            "; asked first). 0 = keep all.\r\n" +
-            "KeepOldVersions=0\r\n" },
+            "; To restore when Mode isn't ask, run: " + AppIdentity.DirectoryName + ".exe --restore\r\n"),
+        new Setting { Key = "SourceFolder", AppliesEmpty = true,
+            Get = c => c.SourceFolder, Set = (c, value) => { c.SourceFolder = ExpandPath(value); return null; },
+            Doc = "; SourceFolder: optional SD card drive or folder, e.g. E:\\ or D:\\M8Card.\r\n" +
+                  "; Empty = detect a connected device, or offer manual selection if detection fails.\r\n" },
+        new Setting { Key = "Profile", AppliesEmpty = true,
+            Get = c => c.Profile, Set = (c, value) => { if (value.Length > 0) ValidateProfile(value); c.Profile = value; return null; },
+            Doc = "; Profile: separate history name for this card (letters, digits, spaces, - and _).\r\n" +
+                  "; Empty = automatic volume serial / folder identity. Use a fixed name when changing readers.\r\n" },
+        new Setting { Key = "Device", Get = c => c.Device,
+            Set = (c, value) => {
+                string lower = value.ToLowerInvariant();
+                if (lower != "auto" && Devices.Find(lower) == null) return "auto or " + string.Join(", ", Array.ConvertAll(Devices.All, d => d.Id));
+                c.Device = lower;
+                return null;
+            },
+            Doc = "; Device: what kind of device the source is. auto = detect the connected device\r\n" +
+                  "; (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP),\r\n" +
+                  "; or name it: m8, op1-field, op-xy, tracker-mini or x100vi. Matters for a card reader or folder.\r\n" },
     };
+
+    static Setting FindSetting(string key)
+    {
+        foreach (Setting setting in Settings)
+            if (string.Equals(setting.Key, key, StringComparison.OrdinalIgnoreCase)) return setting;
+        return null;
+    }
+
+    // The explanation and default value written for a setting missing from GearBackup.ini.
+    static string SettingDocumentation(Setting setting)
+    {
+        return setting.Doc + setting.Key + "=" + setting.Get(new Config { BackupFolder = "" }) + "\r\n";
+    }
 
     // Reads GearBackup.ini next to the exe. Settings missing from it are appended with their default and
     // explanation, so the file always documents every option. A --preview run doesn't write the file.
@@ -122,8 +213,14 @@ partial class GearBackup
             }
 
             var missing = new StringBuilder(exists ? "" : "; " + AppIdentity.Name + " settings\r\n;\r\n");
-            foreach (string[] setting in SettingDocs)
-                if (!found.Contains(setting[0])) missing.Append(setting[1]);
+            bool first = !exists;
+            foreach (Setting setting in Settings)
+            {
+                if (found.Contains(setting.Key)) continue;
+                if (!first) missing.Append("\r\n");
+                missing.Append(SettingDocumentation(setting));
+                first = false;
+            }
             if (!PreviewOnly)
             {
                 if (migrate)
@@ -160,101 +257,40 @@ partial class GearBackup
 
     static void SaveConfig(Config config, string path)
     {
-        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-            { "BackupFolder", config.BackupFolder }, { "SourceFolder", config.SourceFolder }, { "Profile", config.Profile },
-            { "Mode", config.Mode.ToString().ToLowerInvariant() }, { "Verify", config.Verify ? "yes" : "no" },
-            { "Thorough", config.Thorough ? "yes" : "no" }, { "Preview", config.Preview ? "yes" : "no" },
-            { "HardLinks", config.HardLinks ? "yes" : "no" }, { "Device", config.Device },
-            { "PointInTimeHistory", config.PointInTimeHistory ? "yes" : "no" },
-            { "Recovery", config.Recovery ? "yes" : "no" }, { "RecoveryFolder", config.RecoveryFolder },
-            { "KeepBackups", config.KeepBackups.ToString(System.Globalization.CultureInfo.InvariantCulture) },
-            { "KeepOldVersions", config.KeepOldVersions.ToString(System.Globalization.CultureInfo.InvariantCulture) },
-            { "MaxNameLength", config.MaxNameLength.ToString(System.Globalization.CultureInfo.InvariantCulture) }, { "Eject", config.Eject.ToString().ToLowerInvariant() }
-        };
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var text = new StringBuilder();
         if (File.Exists(path)) foreach (string line in File.ReadAllLines(path))
         {
             string trimmed = line.Trim();
             int equals = trimmed.IndexOf('=');
-            string key = equals < 0 ? "" : trimmed.Substring(0, equals).Trim();
-            string value;
-            if (!trimmed.StartsWith(";") && !trimmed.StartsWith("#") && values.TryGetValue(key, out value))
+            Setting setting = equals < 0 || trimmed.StartsWith(";") || trimmed.StartsWith("#") ? null : FindSetting(trimmed.Substring(0, equals).Trim());
+            if (setting != null)
             {
-                text.Append(key).Append('=').Append(value).AppendLine();
-                found.Add(key);
+                text.Append(setting.Key).Append('=').Append(setting.Get(config)).AppendLine();
+                found.Add(setting.Key);
             }
             else text.AppendLine(line);
         }
-        foreach (string[] setting in SettingDocs)
-            if (!found.Contains(setting[0])) text.Append(setting[0]).Append('=').Append(values[setting[0]]).AppendLine();
+        foreach (Setting setting in Settings)
+            if (!found.Contains(setting.Key)) text.Append(setting.Key).Append('=').Append(setting.Get(config)).AppendLine();
         AtomicText(path, text.ToString());
     }
 
-    // Applies one key=value. An invalid value prints a warning and keeps the default.
+    // Applies one key=value. An invalid value prints a warning and keeps the current value; an empty one
+    // keeps it too, except for paths and names, where empty means "none". Unknown keys are ignored.
     static void ApplySetting(Config config, string key, string value)
     {
-        string lower = value.ToLowerInvariant();
-        int number;
-        switch (key.ToLowerInvariant())
-        {
-            case "recovery":
-            case "thorough":
-            case "preview":
-            case "hardlinks":
-            case "pointintimehistory":
-                bool enabled;
-                if (lower == "yes" || lower == "true" || lower == "1" || lower == "on") enabled = true;
-                else if (lower == "no" || lower == "false" || lower == "0" || lower == "off") enabled = false;
-                else { WarnSetting(key, value, "yes or no"); return; }
-                if (key.Equals("recovery", StringComparison.OrdinalIgnoreCase)) config.Recovery = enabled;
-                else if (key.Equals("thorough", StringComparison.OrdinalIgnoreCase)) config.Thorough = enabled;
-                else if (key.Equals("hardlinks", StringComparison.OrdinalIgnoreCase)) config.HardLinks = enabled;
-                else if (key.Equals("pointintimehistory", StringComparison.OrdinalIgnoreCase)) config.PointInTimeHistory = enabled;
-                else config.Preview = enabled;
-                return;
-            case "device":
-                if (lower == "auto" || Devices.Find(lower) != null) config.Device = lower;
-                else WarnSetting(key, value, "auto or " + string.Join(", ", Array.ConvertAll(Devices.All, d => d.Id)));
-                return;
-            case "recoveryfolder": config.RecoveryFolder = ExpandPath(value); return;
-            case "sourcefolder": config.SourceFolder = ExpandPath(value); return;
-            case "profile":
-                if (value.Length > 0) ValidateProfile(value);
-                config.Profile = value; return;
-            case "backupfolder":
-                if (value.Length > 0) config.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value));
-                return;
-            case "mode":
-                if (lower == "ask") config.Mode = BackupMode.Ask;
-                else if (lower == "full") config.Mode = BackupMode.Full;
-                else if (lower == "incremental") config.Mode = BackupMode.Incremental;
-                else if (value.Length > 0) WarnSetting(key, value, "ask, full or incremental");
-                return;
-            case "verify":
-                if (lower == "yes" || lower == "true" || lower == "1" || lower == "on") config.Verify = true;
-                else if (lower == "no" || lower == "false" || lower == "0" || lower == "off") config.Verify = false;
-                else if (value.Length > 0) WarnSetting(key, value, "yes or no");
-                return;
-            case "keepbackups":
-                if (int.TryParse(value, out number) && number >= 0) config.KeepBackups = number;
-                else if (value.Length > 0) WarnSetting(key, value, "a number, 0 = keep all");
-                return;
-            case "eject":
-                if (lower == "no") config.Eject = EjectMode.No;
-                else if (lower == "ask") config.Eject = EjectMode.Ask;
-                else if (lower == "yes") config.Eject = EjectMode.Yes;
-                else if (value.Length > 0) WarnSetting(key, value, "no, ask or yes");
-                return;
-            case "keepoldversions":
-                if (int.TryParse(value, out number) && number >= 0) config.KeepOldVersions = number;
-                else if (value.Length > 0) WarnSetting(key, value, "a number, 0 = keep all");
-                return;
-            case "maxnamelength":
-                if (int.TryParse(value, out number) && number >= 0) config.MaxNameLength = number;
-                else if (value.Length > 0) WarnSetting(key, value, "a number, 0 = don't check");
-                return;
-        }
+        Setting setting = FindSetting(key);
+        if (setting == null || (value.Length == 0 && !setting.AppliesEmpty)) return;
+        string expected = setting.Set(config, value);
+        if (expected != null) WarnSetting(key, value, expected);
+    }
+
+    // Null when `value` is valid for the setting, otherwise what was expected.
+    static string CheckSettingValue(Setting setting, string value)
+    {
+        if (value.Length == 0) return setting.AppliesEmpty || setting.Key == "BackupFolder" ? null : "a value";
+        return setting.Set(new Config(), value);
     }
 
     static void WarnSetting(string key, string value, string expected)

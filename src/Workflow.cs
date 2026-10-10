@@ -115,46 +115,24 @@ partial class GearBackup
         return false;
     }
 
-    // The folder to back up or restore to: SourceFolder if set, otherwise a detected device, otherwise a
-    // path typed by the user. pnpId is set only for a detected drive (needed to eject it), and device
-    // says which kind of device the source is. For an MTP device the path is its mirror and `mtp` is set:
-    // the caller must call SyncMtpSource before backing it up. Null if cancelled.
-    static string SelectSource(Config config, out string pnpId, out DeviceProfile device, out MtpSource mtp)
+    // The CLI's source: SourceFolder if set, otherwise a detected device, otherwise a path typed by the
+    // user. Null if cancelled. An MTP device's mirror isn't read yet: RunPrepared syncs it.
+    static SourceChoice SelectSource(Config config)
     {
-        pnpId = null;
-        mtp = null;
-        DeviceProfile detected = null;
-        string source = config.SourceFolder;
-        if (source.Length == 0)
+        if (config.SourceFolder.Length > 0) return new SourceChoice { Path = config.SourceFolder };
+        SourceChoice found = null;
+        try { found = DetectSource(); }
+        catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); }
+        if (found != null)
         {
-            try
-            {
-                source = FindDevice(out detected, out pnpId);
-                if (source == null) mtp = FindMtpSource();
-            }
-            catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); source = null; }
-            if (mtp != null)
-            {
-                // Not read yet: the caller syncs the mirror once it knows a backup is wanted.
-                detected = mtp.Device;
-                source = mtp.Mirror;
-                Directory.CreateDirectory(source);
-                OperationOutput.WriteLine("  " + mtp.Device.Name + " found over MTP (" + mtp.Info.FriendlyName + ", serial " + mtp.Info.Serial + ").");
-                if (mtp.Device == Devices.X100VI)
-                    OperationOutput.WriteLine("  Camera connection: " + FujiModeName(FujiSettingsMode(mtp.Info)) + ".");
-            }
-            else if (source == null)
-            {
-                OperationOutput.WriteLine("  No " + Devices.Names + " detected. Select an SD card in a reader or a folder instead.");
-                source = ExpandPath(AskText("Source path (Enter = cancel):"));
-            }
+            if (found.Mtp != null)
+                OperationOutput.WriteLine("  " + found.Mtp.Device.Name + " found over MTP (" + found.Mtp.Info.FriendlyName + ", serial " + found.Mtp.Info.Serial + ").");
+            if (found.CameraMode != null) OperationOutput.WriteLine("  Camera connection: " + found.CameraMode + ".");
+            return found;
         }
-        device = DeviceFor(config, detected, source);
-        if (string.IsNullOrEmpty(source)) return null;
-        if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
-        source = Rooted(source);
-        RejectRootLinks(source);
-        return source;
+        OperationOutput.WriteLine("  No " + Devices.Names + " detected. Select an SD card in a reader or a folder instead.");
+        string typed = ExpandPath(AskText("Source path (Enter = cancel):"));
+        return typed.Length == 0 ? null : new SourceChoice { Path = typed };
     }
 
     static FileState CompareContent(FileInfo file, string target, bool thorough)

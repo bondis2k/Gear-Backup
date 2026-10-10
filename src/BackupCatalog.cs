@@ -1,3 +1,6 @@
+// What the Dashboard and Storage windows show: every backup in every configured backup location, with
+// its status, last check and how its space is used, plus ZIP archives and MTP mirrors. Storage cleanup
+// moves selected items to the Recycle Bin, after checking they haven't changed since the scan.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -6,6 +9,7 @@ using System.Text;
 
 partial class GearBackup
 {
+    // One backup folder as the Dashboard and Storage windows see it.
     internal sealed class CatalogBackup
     {
         public string Profile, History, Path, Status, CheckResult;
@@ -14,169 +18,240 @@ partial class GearBackup
         public bool Latest;
         public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }
     }
+
+    // Something Storage offers to recycle. Stamp records its state at scan time (see StorageStamp).
     internal sealed class StorageItem
     {
         public string Kind, Path, History, Backup, Stamp;
         public long Bytes;
         public bool Folder;
     }
+
     internal sealed class BackupCatalog
     {
         public readonly List<CatalogBackup> Backups = new List<CatalogBackup>();
         public readonly List<StorageItem> Cleanup = new List<StorageItem>();
+        // Locations, histories or backups that couldn't be read; the scan carries on without them.
         public readonly List<string> Warnings = new List<string>();
         public long ZipBytes, MirrorBytes, UniqueBytes;
+        // Each file's identity once counted, so hard-linked content counts once in UniqueBytes.
+        public readonly HashSet<string> Counted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
-    // Strict traversal includes metadata, but never follows a junction, symbolic link or hidden root redirection.
+    // Every file below root, including metadata, sorted by path; folders are added to `folders` when given.
+    // Never follows a junction or symbolic link: any link is an error.
     static List<FileInfo> StorageFiles(string root, List<DirectoryInfo> folders = null)
     {
         RejectRootLinks(root);
         var files = new List<FileInfo>();
-        var pending = new Stack<string>(); pending.Push(root);
+        var pending = new Stack<string>();
+        pending.Push(root);
         while (pending.Count > 0)
         {
             OperationContext.Current.CheckCancellation();
-            string directory = pending.Pop();
-            foreach (FileSystemInfo entry in new DirectoryInfo(directory).GetFileSystemInfos())
+            foreach (FileSystemInfo entry in new DirectoryInfo(pending.Pop()).GetFileSystemInfos())
             {
                 if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked storage item: " + entry.FullName);
-                if (entry is DirectoryInfo) { pending.Push(entry.FullName); if (folders != null) folders.Add((DirectoryInfo)entry); } else files.Add((FileInfo)entry);
+                if (entry is DirectoryInfo)
+                {
+                    pending.Push(entry.FullName);
+                    if (folders != null) folders.Add((DirectoryInfo)entry);
+                }
+                else files.Add((FileInfo)entry);
             }
         }
         files.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
         return files;
     }
+
+    // A fingerprint of an item's files and folders (names, sizes, times), to notice changes between the
+    // scan and the cleanup. It guards against changes; it is not an integrity checksum.
     static string StorageStamp(string path, bool folder, out long bytes)
     {
         RejectRootLinks(path);
-        bytes = 0;
-        var stamp = new StringBuilder();
         var directories = new List<DirectoryInfo>();
         var files = folder ? StorageFiles(path, directories) : new List<FileInfo> { new FileInfo(path) };
+        return StorageStamp(path, folder, files, directories, out bytes);
+    }
+
+    // The same stamp from a listing the caller already has, so a scan reads each tree once.
+    static string StorageStamp(string path, bool folder, List<FileInfo> files, List<DirectoryInfo> directories, out long bytes)
+    {
+        bytes = 0;
+        var stamp = new StringBuilder();
         foreach (FileInfo file in files)
         {
             if (!file.Exists) throw new IOException("Storage item disappeared: " + path);
             bytes += file.Length;
             stamp.Append(file.FullName).Append('\t').Append(file.Length).Append('\t').Append(file.LastWriteTimeUtc.Ticks).Append('\n');
         }
-        directories.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
-        foreach (DirectoryInfo directory in directories) stamp.Append(directory.FullName).Append('\t').Append(directory.LastWriteTimeUtc.Ticks).Append('\n');
+        var sorted = new List<DirectoryInfo>(directories);
+        sorted.Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.FullName, b.FullName));
+        foreach (DirectoryInfo directory in sorted)
+            stamp.Append(directory.FullName).Append('\t').Append(directory.LastWriteTimeUtc.Ticks).Append('\n');
         if (folder) stamp.Append(new DirectoryInfo(path).LastWriteTimeUtc.Ticks);
-        // This stamp guards changes since preview; it is not an integrity checksum.
-        using (var sha = System.Security.Cryptography.SHA256.Create()) return ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(stamp.ToString())));
+        using (var sha = System.Security.Cryptography.SHA256.Create())
+            return ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(stamp.ToString())));
     }
+
     static StorageItem MakeStorageItem(string kind, string path, string history, string backup, bool folder)
     {
         long bytes;
         string stamp = StorageStamp(path, folder, out bytes);
         return new StorageItem { Kind = kind, Path = path, History = history, Backup = backup, Folder = folder, Stamp = stamp, Bytes = bytes };
     }
+
+    static StorageItem MakeStorageItem(string kind, string path, string history, string backup, List<FileInfo> files, List<DirectoryInfo> directories)
+    {
+        long bytes;
+        string stamp = StorageStamp(path, true, files, directories, out bytes);
+        return new StorageItem { Kind = kind, Path = path, History = history, Backup = backup, Folder = true, Stamp = stamp, Bytes = bytes };
+    }
+
+    // Runs one part of a scan; if it fails, notes why and carries on (cancellation still stops the scan).
+    static void ScanPart(BackupCatalog catalog, string path, Action scan)
+    {
+        try { scan(); }
+        catch (Exception ex)
+        {
+            if (ex is OperationCanceledException) throw;
+            catalog.Warnings.Add(path + ": " + ex.Message);
+        }
+    }
+
+    static void CountUnique(BackupCatalog catalog, string path, long length, CatalogBackup row = null)
+    {
+        if (!catalog.Counted.Add(SharedFileId(path) ?? path)) return;
+        catalog.UniqueBytes += length;
+        if (row != null) row.UniqueBytes += length;
+    }
+
+    // Scans every configured backup location (the global one and those named in device/profile
+    // preferences) and the MTP mirrors. mirrorRoot is for tests.
     static BackupCatalog ScanBackupCatalog(Config config, string mirrorRoot = null)
     {
         var catalog = new BackupCatalog();
-        var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var seenHistories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string location in ConfiguredBackupLocations(config))
-        {
-            try
-            {
-                string root = HistoriesRoot(new Config { BackupFolder = location });
-                if (!Directory.Exists(root)) continue;
-                RejectRootLinks(root);
-                var histories = new List<string> { root };
-                string profiles = Path.Combine(root, "profiles");
-                if (Directory.Exists(profiles))
-                {
-                    RejectRootLinks(profiles);
-                    histories.AddRange(Directory.GetDirectories(profiles));
-                }
-                foreach (string history in histories)
-                {
-                    if (!seenHistories.Add(Rooted(history))) continue;
-                    try
-                    {
-                        RejectRootLinks(history);
-                        List<string> backups = ListBackups(history);
-                        for (int i = 0; i < backups.Count; i++)
-                        {
-                            string backup = backups[i];
-                            try
-                            {
-                                List<FileInfo> storedFiles = StorageFiles(backup);
-                                HashSet<string> oldVersionNames = KnownOldVersions(backup);
-                                var row = new CatalogBackup { Profile = history == root ? "Legacy backups" : Path.GetFileName(history),
-                                    History = history, Path = backup, Status = BackupStatus(backup), Latest = i == backups.Count - 1 };
-                                var versions = new List<string>();
-                                foreach (FileInfo file in storedFiles)
-                                {
-                                    string relative = file.FullName.Substring(Rooted(backup).Length);
-                                    if (AppIdentity.IsMetadataPath(file.FullName))
-                                    {
-                                        if (relative.IndexOf("\\objects\\", StringComparison.OrdinalIgnoreCase) >= 0) row.ObjectsBytes += file.Length;
-                                        else row.MetadataBytes += file.Length;
-                                    }
-                                    else if (IsBackupMetaFile(file.FullName)) row.MetadataBytes += file.Length;
-                                    else if (oldVersionNames.Contains(relative)) { row.VersionsBytes += file.Length; versions.Add(file.FullName); }
-                                    else row.FilesBytes += file.Length;
-                                    string id = SharedFileId(file.FullName) ?? file.FullName;
-                                    if (identities.Add(id)) { row.UniqueBytes += file.Length; catalog.UniqueBytes += file.Length; }
-                                }
-                                string successPath = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
-                                if (File.Exists(successPath))
-                                {
-                                    RejectRootLinks(successPath); DateTime date;
-                                    if (!DateTime.TryParseExact(File.ReadAllText(successPath).Trim(), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out date)) throw new IOException("Invalid last successful backup record.");
-                                    row.CompletedUtc = date.ToUniversalTime();
-                                }
-                                else if (row.Status == Status.Complete)
-                                {
-                                    string statusPath = Path.Combine(AppIdentity.MetadataRoot(backup), "status.txt");
-                                    row.CompletedUtc = File.GetLastWriteTimeUtc(statusPath);
-                                }
-                                ReadCheckRecord(row);
-                                catalog.Backups.Add(row);
-                                if (!row.Latest) catalog.Cleanup.Add(MakeStorageItem("Older backup", backup, history, backup, true));
-                                foreach (string version in versions) catalog.Cleanup.Add(MakeStorageItem("Old version", version, history, backup, false));
-                            }
-                            catch (Exception ex) { if (ex is OperationCanceledException) throw; catalog.Warnings.Add(backup + ": " + ex.Message); }
-                        }
-                        foreach (string zip in Directory.GetFiles(history, "*.zip"))
-                        {
-                            string name = Path.GetFileNameWithoutExtension(zip);
-                            DateTime date;
-                            if (name.Length < 10 || !DateTime.TryParseExact(name.Substring(0, 10), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date)) continue;
-                            var item = MakeStorageItem("ZIP", zip, history, null, false);
-                            catalog.ZipBytes += item.Bytes;
-                            if (identities.Add(SharedFileId(zip) ?? zip)) catalog.UniqueBytes += item.Bytes;
-                            catalog.Cleanup.Add(item);
-                        }
-                    }
-                    catch (Exception ex) { if (ex is OperationCanceledException) throw; catalog.Warnings.Add(history + ": " + ex.Message); }
-                }
-            }
-            catch (Exception ex) { if (ex is OperationCanceledException) throw; catalog.Warnings.Add(location + ": " + ex.Message); }
-        }
+            ScanPart(catalog, location, () => ScanLocation(catalog, location, seenHistories));
         string mirrors = mirrorRoot ?? MirrorRoot;
-        if (Directory.Exists(mirrors)) try
-        {
-            RejectRootLinks(mirrors);
-            foreach (string mirror in Directory.GetDirectories(mirrors))
-            {
-                try
-                {
-                    if (!Array.Exists(Devices.All, d => Path.GetFileName(mirror).StartsWith(d.Id + "-", StringComparison.OrdinalIgnoreCase))) continue;
-                    var item = MakeStorageItem("MTP mirror", mirror, mirrors, null, true);
-                    catalog.MirrorBytes += item.Bytes;
-                    foreach (FileInfo file in StorageFiles(mirror)) if (identities.Add(SharedFileId(file.FullName) ?? file.FullName)) catalog.UniqueBytes += file.Length;
-                    catalog.Cleanup.Add(item);
-                }
-                catch (Exception ex) { if (ex is OperationCanceledException) throw; catalog.Warnings.Add(mirror + ": " + ex.Message); }
-            }
-        }
-        catch (Exception ex) { if (ex is OperationCanceledException) throw; catalog.Warnings.Add(mirrors + ": " + ex.Message); }
+        if (Directory.Exists(mirrors)) ScanPart(catalog, mirrors, () => ScanMirrors(catalog, mirrors));
         return catalog;
     }
+
+    // A location's legacy history (backups directly under Gear Backups) and its profiles.
+    static void ScanLocation(BackupCatalog catalog, string location, HashSet<string> seenHistories)
+    {
+        string root = HistoriesRoot(new Config { BackupFolder = location });
+        if (!Directory.Exists(root)) return;
+        RejectRootLinks(root);
+        var histories = new List<string> { root };
+        string profiles = Path.Combine(root, "profiles");
+        if (Directory.Exists(profiles))
+        {
+            RejectRootLinks(profiles);
+            histories.AddRange(Directory.GetDirectories(profiles));
+        }
+        foreach (string history in histories)
+            if (seenHistories.Add(Rooted(history)))
+                ScanPart(catalog, history, () => ScanHistory(catalog, history, history == root ? "Legacy backups" : Path.GetFileName(history)));
+    }
+
+    // A history's backup folders and its ZIP archives. Every backup but the latest can be cleaned up.
+    static void ScanHistory(BackupCatalog catalog, string history, string profile)
+    {
+        RejectRootLinks(history);
+        List<string> backups = ListBackups(history);
+        for (int i = 0; i < backups.Count; i++)
+        {
+            string backup = backups[i];
+            bool latest = i == backups.Count - 1;
+            ScanPart(catalog, backup, () => ScanBackup(catalog, history, profile, backup, latest));
+        }
+        foreach (string zip in Directory.GetFiles(history, "*.zip"))
+        {
+            string name = Path.GetFileNameWithoutExtension(zip);
+            DateTime date;
+            if (name.Length < 10 || !DateTime.TryParseExact(name.Substring(0, 10), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
+                continue;
+            StorageItem item = MakeStorageItem(StorageKind.Zip, zip, history, null, false);
+            catalog.ZipBytes += item.Bytes;
+            CountUnique(catalog, zip, item.Bytes);
+            catalog.Cleanup.Add(item);
+        }
+    }
+
+    // One backup folder: its space by kind (current files, known old versions, history objects, other
+    // metadata), when it last succeeded, and its last integrity check.
+    static void ScanBackup(BackupCatalog catalog, string history, string profile, string backup, bool latest)
+    {
+        var folders = new List<DirectoryInfo>();
+        List<FileInfo> files = StorageFiles(backup, folders);
+        HashSet<string> oldVersionNames = KnownOldVersions(backup);
+        var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest };
+        var versions = new List<string>();
+        foreach (FileInfo file in files)
+        {
+            string relative = file.FullName.Substring(Rooted(backup).Length);
+            if (AppIdentity.IsMetadataPath(file.FullName))
+            {
+                if (relative.IndexOf("\\objects\\", StringComparison.OrdinalIgnoreCase) >= 0) row.ObjectsBytes += file.Length;
+                else row.MetadataBytes += file.Length;
+            }
+            else if (IsBackupMetaFile(file.FullName)) row.MetadataBytes += file.Length;
+            else if (oldVersionNames.Contains(relative))
+            {
+                row.VersionsBytes += file.Length;
+                versions.Add(file.FullName);
+            }
+            else row.FilesBytes += file.Length;
+            CountUnique(catalog, file.FullName, file.Length, row);
+        }
+        row.CompletedUtc = LastSuccess(backup, row.Status);
+        ReadCheckRecord(row);
+        catalog.Backups.Add(row);
+        if (!latest) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OlderBackup, backup, history, backup, files, folders));
+        foreach (string version in versions) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OldVersion, version, history, backup, false));
+    }
+
+    // When the backup last completed successfully: its own record, or for a complete backup made before
+    // those records existed, its status file's time. Null otherwise.
+    static DateTime? LastSuccess(string backup, string status)
+    {
+        string successPath = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
+        if (File.Exists(successPath))
+        {
+            RejectRootLinks(successPath);
+            DateTime date;
+            if (!DateTime.TryParseExact(File.ReadAllText(successPath).Trim(), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out date))
+                throw new IOException("Invalid last successful backup record.");
+            return date.ToUniversalTime();
+        }
+        if (status != Status.Complete) return null;
+        return File.GetLastWriteTimeUtc(Path.Combine(AppIdentity.MetadataRoot(backup), "status.txt"));
+    }
+
+    // The MTP mirrors of known devices; each can be recycled (the next backup downloads it again).
+    static void ScanMirrors(BackupCatalog catalog, string mirrors)
+    {
+        RejectRootLinks(mirrors);
+        foreach (string mirror in Directory.GetDirectories(mirrors))
+        {
+            if (!Array.Exists(Devices.All, d => Path.GetFileName(mirror).StartsWith(d.Id + "-", StringComparison.OrdinalIgnoreCase))) continue;
+            ScanPart(catalog, mirror, delegate {
+                RejectRootLinks(mirror);
+                var folders = new List<DirectoryInfo>();
+                List<FileInfo> files = StorageFiles(mirror, folders);
+                StorageItem item = MakeStorageItem(StorageKind.Mirror, mirror, mirrors, null, files, folders);
+                catalog.MirrorBytes += item.Bytes;
+                foreach (FileInfo file in files) CountUnique(catalog, file.FullName, file.Length);
+                catalog.Cleanup.Add(item);
+            });
+        }
+    }
+
+    // The latest integrity check of a backup, from last-check.txt ("Never checked" without one). A check
+    // older than the backup's status is marked as describing a previous state.
     static void ReadCheckRecord(CatalogBackup row)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(row.Path), "last-check.txt");
@@ -186,18 +261,24 @@ partial class GearBackup
         DateTime checkedUtc;
         if (lines.Length != 2 || !DateTime.TryParseExact(lines[0], "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out checkedUtc))
             throw new IOException("Invalid integrity check record.");
-        row.CheckedUtc = checkedUtc.ToUniversalTime(); row.CheckResult = lines[1];
+        row.CheckedUtc = checkedUtc.ToUniversalTime();
+        row.CheckResult = lines[1];
         string status = Path.Combine(AppIdentity.MetadataRoot(row.Path), "status.txt");
         if (File.Exists(status) && File.GetLastWriteTimeUtc(status) > row.CheckedUtc.Value) row.CheckResult += " (previous state)";
     }
+
     static void SaveCheckRecord(string backup, int ok, int damaged, int missing, int uncheckedFiles)
     {
         RejectRootLinks(backup);
         string result = damaged > 0 || missing > 0 ? "Problems found" : uncheckedFiles > 0 ? "Incomplete check" : "OK";
-        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "last-check.txt"); RejectRootLinks(path);
+        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "last-check.txt");
+        RejectRootLinks(path);
         AtomicText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + "\n" + result + "\n");
     }
-    // The caller supplies only items from a completed scan. Revalidate all candidates under locks before mutation.
+
+    // Moves the selected items to the Recycle Bin (or passes them to `recycle`, for tests). Only items from
+    // this catalog are accepted; under the locks of their histories, each is checked again (still inside its
+    // history, not the latest backup, unchanged since the scan) before anything is recycled.
     static int CleanupStorage(BackupCatalog catalog, List<StorageItem> selected, Action<StorageItem> recycle = null)
     {
         if (PreviewOnly) throw new IOException("Cleanup cannot run in preview-only mode.");
@@ -207,9 +288,11 @@ partial class GearBackup
             if (!catalog.Cleanup.Contains(item)) throw new IOException("Unrecognised cleanup item.");
             if (!items.Contains(item)) items.Add(item);
         }
+        // An item inside a selected folder goes with the folder.
         items.RemoveAll(item => items.Exists(parent => parent != item && parent.Folder && Within(item.Path, parent.Path)));
         var roots = new List<string>();
-        foreach (StorageItem item in items) if (!roots.Exists(r => Rooted(r) == Rooted(item.History))) roots.Add(item.History);
+        foreach (StorageItem item in items)
+            if (!roots.Exists(r => Rooted(r) == Rooted(item.History))) roots.Add(item.History);
         roots.Sort(StringComparer.OrdinalIgnoreCase);
         var locks = new List<IDisposable>();
         try
@@ -217,10 +300,13 @@ partial class GearBackup
             foreach (string root in roots) locks.Add(LockHistory(root));
             foreach (StorageItem item in items)
             {
-                if (!Within(item.Path, item.History) || Rooted(item.Path) == Rooted(item.History)) throw new IOException("Cleanup path escaped its storage root.");
-                if (item.Kind == "Older backup" && Rooted(item.Path) == Rooted(LatestBackup(item.History))) throw new IOException("The latest backup is protected.");
+                if (!Within(item.Path, item.History) || Rooted(item.Path) == Rooted(item.History))
+                    throw new IOException("Cleanup path escaped its storage root.");
+                if (item.Kind == StorageKind.OlderBackup && Rooted(item.Path) == Rooted(LatestBackup(item.History)))
+                    throw new IOException("The latest backup is protected.");
                 long bytes;
-                if (StorageStamp(item.Path, item.Folder, out bytes) != item.Stamp) throw new IOException("Storage changed since the preview. Refresh before cleanup: " + item.Path);
+                if (StorageStamp(item.Path, item.Folder, out bytes) != item.Stamp)
+                    throw new IOException("Storage changed since the preview. Refresh before cleanup: " + item.Path);
             }
             int removed = 0;
             foreach (StorageItem item in items)
@@ -235,14 +321,20 @@ partial class GearBackup
                 else Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.Path,
                     Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                 removed++;
-                if (item.Kind == "Old version" && Directory.Exists(item.Backup))
+                // A recycled old version leaves the backup's checksum list.
+                if (item.Kind == StorageKind.OldVersion && Directory.Exists(item.Backup))
                 {
                     Dictionary<string, string> sums = LoadChecksums(item.Backup);
-                    if (sums != null) { sums.Remove(item.Path.Substring(Rooted(item.Backup).Length)); WriteChecksums(item.Backup, sums); }
+                    if (sums == null) continue;
+                    sums.Remove(item.Path.Substring(Rooted(item.Backup).Length));
+                    WriteChecksums(item.Backup, sums);
                 }
             }
             return removed;
         }
-        finally { for (int i = locks.Count - 1; i >= 0; i--) locks[i].Dispose(); }
+        finally
+        {
+            for (int i = locks.Count - 1; i >= 0; i--) locks[i].Dispose();
+        }
     }
 }
