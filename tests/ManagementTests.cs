@@ -146,6 +146,13 @@ partial class GearBackup
             Assert(StorageStamp(item.Path, item.Folder, out bytes) == item.Stamp && bytes == item.Bytes,
                 "a stamp built from the scan's own listing matches a fresh one: " + item.Kind);
         }
+        StorageItem older = catalog.Cleanup.Find(i => i.Kind == StorageKind.OlderBackup);
+        string added = Path.Combine(older.Path, "Added folder");
+        long unused;
+        Directory.CreateDirectory(added);
+        Assert(StorageStamp(older.Path, true, out unused) != older.Stamp, "an added empty folder changes a backup's stamp");
+        Directory.Delete(added);
+        Assert(StorageStamp(older.Path, true, out unused) == older.Stamp, "removing it again restores the stamp");
         new IntegrityEngine().Run(new List<string> { latest.Path }, new OperationContext(new TestInteraction(), CancellationToken.None));
         catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); latest = catalog.Backups.Find(b => b.Latest);
         Assert(latest.CheckedUtc != null && latest.CheckResult == "OK", "completed checks persist their time and result");
