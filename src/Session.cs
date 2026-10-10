@@ -4,11 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     static string HistoriesRoot(Config config)
     {
-        return Path.Combine(config.BackupFolder, "M8 Backups");
+        return AppIdentity.ExistingFolder(config.BackupFolder, AppIdentity.BackupsFolderName, AppIdentity.Legacy.BackupsFolderName);
     }
 
     // Checks the source against the backup location and returns this source's history folder.

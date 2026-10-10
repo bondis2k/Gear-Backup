@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
-partial class M8Backup
+partial class GearBackup
 {
     // The date/time suffix added to old versions of updated files, e.g. "Song_2026-10-01_143000" or "..._2"
     static readonly Regex VersionSuffix = new Regex(@"_\d{4}-\d{2}-\d{2}_\d{6}(_\d+)?$");

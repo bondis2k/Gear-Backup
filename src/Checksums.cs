@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Same format as the sha256sum tool: "<64 hex digits>  <path with forward slashes>", one file per line.
     const string ChecksumFileName = "checksums.sha256";
@@ -12,9 +12,7 @@ partial class M8Backup
     // Files the program itself writes into a backup folder (not part of the M8's contents).
     static bool IsBackupMetaFile(string path)
     {
-        string normalized = path.Replace('/', '\\');
-        return normalized.EndsWith("\\.m8backup", StringComparison.OrdinalIgnoreCase) ||
-               normalized.IndexOf("\\.m8backup\\", StringComparison.OrdinalIgnoreCase) >= 0 || IsStatisticsFile(path) ||
+        return AppIdentity.IsMetadataPath(path) || IsStatisticsFile(path) ||
                Path.GetFileName(path).StartsWith(ChecksumFileName, StringComparison.OrdinalIgnoreCase);
     }
 

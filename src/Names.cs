@@ -1,6 +1,6 @@
 // Named values for things that used to be typed as text in several places, so a typo is now a
 // compile error instead of a silent bug.
-partial class M8Backup
+partial class GearBackup
 {
     // Progress stages the engines report to the front ends.
     internal static class Stage
@@ -19,7 +19,7 @@ partial class M8Backup
         }
     }
 
-    // A backup folder's status, stored in .m8backup\status.txt. The text values are what's on disk.
+    // A backup folder's status, stored in .gearbackup\status.txt. The text values are what's on disk.
     internal static class Status
     {
         public const string Incomplete = "incomplete", Complete = "complete", Failed = "failed";

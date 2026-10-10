@@ -1,10 +1,10 @@
 @echo off
-rem Builds M8Backup.exe from src\*.cs with the C# compiler that comes with Windows (.NET Framework 4).
+rem Builds GearBackup.exe from src\*.cs with the C# compiler that comes with Windows (.NET Framework 4).
 setlocal
 cd /d "%~dp0"
 set FW=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319
 set WINMD=%WINDIR%\System32\WinMetadata
-set OUT=M8Backup.exe
+set OUT=GearBackup.exe
 rem Optional second argument lets a build finish while the usual exe is running.
 if not "%~2"=="" set OUT=%~2
 

@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     internal sealed class DeviceProfile
     {
@@ -64,7 +64,7 @@ partial class M8Backup
         public static readonly DeviceProfile M8 = new DeviceProfile {
             Id = "m8", Name = "M8", UsbVendor = "VEN_M8", UsbModel = "M8", VolumeLabel = "M8",
             SongExtensions = new[] { ".m8s" }, SongsFolder = "Songs", BundlesFolder = "Bundles",
-            ReadSamplePaths = SamplePaths, IconName = "M8Backup" };
+            ReadSamplePaths = SamplePaths, IconName = "M8" };
 
         // The Teenage Engineering OP-1 Field. It connects only over MTP (shift + COM, then T4), as a portable
         // device "OP-1" with USB vendor 2367, holding synth, drum, tapes and mixdown folders. It has no song

@@ -7,7 +7,7 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 
-partial class M8Backup
+partial class GearBackup
 {
     enum FileState { New, Changed, Same }
 

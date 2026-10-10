@@ -15,14 +15,14 @@ class GuiTestRunner
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            M8Backup.RunGuiTests();
+            GearBackup.RunGuiTests();
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }
 
-partial class M8Backup
+partial class GearBackup
 {
     public static void RunGuiTests()
     {
@@ -34,6 +34,7 @@ partial class M8Backup
         using (var form = CreateGui(true))
         {
             form.Show();
+            Assert(form.Text == AppIdentity.Name, "GUI window uses the shared Gear Backup identity");
             var sourceBox = (TextBox)form.Controls.Find("SourceFolder", true)[0];
             var backupBox = (TextBox)form.Controls.Find("BackupFolder", true)[0];
             var mode = (ComboBox)form.Controls.Find("Operation", true)[0];
@@ -74,7 +75,7 @@ partial class M8Backup
             Assert(!cancel.Enabled && sourceBox.Enabled, "GUI reenables inputs after preview");
             start.PerformClick();
             DriveGui(form, state, "Complete", false);
-            string history = Path.Combine(backupBox.Text, "M8 Backups", "profiles", ProfileId(Rooted(source), ""));
+            string history = Path.Combine(backupBox.Text, "Gear Backups", "profiles", ProfileId(Rooted(source), ""));
             string backup = ListBackups(history)[0];
             Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI full backup executes shared engine");
             Assert(File.Exists(backup + ".zip"), "GUI full backup with the zip option saves a zip");

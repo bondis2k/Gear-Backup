@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Traverse user content without descending into the history object store.
     static IEnumerable<FileSystemInfo> BackupEntries(string root)

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     // A restore runs in two halves: RunSelected plans it (compares with the target, asks about differing
     // files, shows the preview), then Run carries out the approved plan.
@@ -26,7 +26,7 @@ partial class M8Backup
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = "M8 restore cancelled",
+                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " restore cancelled",
                         Summary = "Restore planning cancelled; target files were not changed.", Elapsed = timer.Elapsed };
                 }
             }
@@ -49,7 +49,7 @@ partial class M8Backup
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = "M8 restore cancelled",
+                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " restore cancelled",
                         Summary = "Restore cancelled. Completed files remain restored; staged copies were cleaned up.", Elapsed = timer.Elapsed };
                 }
             }
@@ -173,7 +173,7 @@ partial class M8Backup
             {
                 OperationContext.Current.Progress(Stage.Restoring, item.Relative, 0, 0);
                 string target = SafePath(targetRoot, item.Relative);
-                string temp = Path.Combine(Path.GetDirectoryName(target), ".m8restore-" + Guid.NewGuid().ToString("N") + ".tmp");
+                string temp = Path.Combine(Path.GetDirectoryName(target), ".gearrestore-" + Guid.NewGuid().ToString("N") + ".tmp");
                 try
                 {
                     // Planning already checked the content; the copy's checksum is compared below.
@@ -224,7 +224,7 @@ partial class M8Backup
             if (recovery != null) summary += " Recovery: " + recovery;
             OperationOutput.WriteLine("  " + summary);
             return new OperationResult { ExitCode = failed == 0 ? 0 : 2, Summary = summary,
-                Title = failed == 0 ? "M8 restore complete" : "M8 restore finished with errors" };
+                Title = AppIdentity.Name + (failed == 0 ? " restore complete" : " restore finished with errors") };
         }
     }
 

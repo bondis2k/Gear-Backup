@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-partial class M8Backup
+partial class GearBackup
 {
     // The full result, including whether the restore was cancelled. Title is null if nothing was done.
     static OperationResult RunRestore(string m8, List<string> backups, Config config)
@@ -149,7 +149,7 @@ partial class M8Backup
 
     static string RecoveryRoot(Config config)
     {
-        return config.RecoveryFolder.Length > 0 ? config.RecoveryFolder : Path.Combine(config.BackupFolder, "M8 Recovery");
+        return config.RecoveryFolder.Length > 0 ? config.RecoveryFolder : Path.Combine(config.BackupFolder, AppIdentity.RecoveryFolderName);
     }
 
     static void AssertTargetUnchanged(string target, string expected)
@@ -177,7 +177,7 @@ partial class M8Backup
         string space = CheckFreeSpace(root, needed);
         if (space != null) throw new IOException(space);
         Directory.CreateDirectory(folder);
-        AtomicText(Path.Combine(folder, ".m8backup", "recovery-status.txt"), "incomplete\n");
+        AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "recovery-status.txt"), "incomplete\n");
         var sums = new StringBuilder();
         foreach (string relative in paths)
         {
@@ -191,8 +191,8 @@ partial class M8Backup
                 "sha:" + hash != targetHashes[relative]) throw new IOException("Recovery source changed: " + relative);
             sums.Append(hash).Append("  ").Append(relative.Replace('\\', '/')).Append('\n');
         }
-        AtomicText(Path.Combine(folder, ".m8backup", "recovery-checksums.sha256"), sums.ToString());
-        AtomicText(Path.Combine(folder, ".m8backup", "recovery-status.txt"), "complete\nOriginal target: " + targetRoot + "\n");
+        AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "recovery-checksums.sha256"), sums.ToString());
+        AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "recovery-status.txt"), "complete\nOriginal target: " + targetRoot + "\n");
         OperationOutput.WriteLine("  Recovery copies saved to " + folder);
         return folder;
     }

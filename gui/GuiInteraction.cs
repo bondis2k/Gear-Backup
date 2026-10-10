@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     // The GUI's front end: questions become dialogs, output goes to the activity log, and progress to the
     // status area. Dialogs are shown on the UI thread; the operation itself runs on a worker thread.

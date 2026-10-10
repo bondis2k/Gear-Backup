@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-partial class M8Backup
+partial class GearBackup
 {
     // What the mirror needs from a device; MtpDevice provides it, and tests use a fake.
     internal interface IMtpSource
@@ -31,7 +31,8 @@ partial class M8Backup
 
     static string MirrorRoot
     {
-        get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "M8Backup", "Devices"); }
+        get { return Path.Combine(AppIdentity.ExistingFolder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            AppIdentity.DirectoryName, AppIdentity.Legacy.DirectoryName), "Devices"); }
     }
 
     // "<mirror root>\op1-field-L1PRC121". The folder name also becomes the backup history's profile name.
@@ -117,7 +118,7 @@ partial class M8Backup
             MtpObject item = download.Key;
             string path = download.Value;
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string temp = Path.Combine(Path.GetDirectoryName(path), ".m8download-" + Guid.NewGuid().ToString("N") + ".tmp");
+            string temp = Path.Combine(Path.GetDirectoryName(path), ".geardownload-" + Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
                 long before = done;
@@ -144,7 +145,7 @@ partial class M8Backup
             string relative = file.Substring(Rooted(mirror).Length);
             if (onDevice.Contains(relative)) continue;
             File.Delete(file);
-            if (!Path.GetFileName(file).StartsWith(".m8download-")) result.Removed++;
+            if (!Path.GetFileName(file).StartsWith(".geardownload-")) result.Removed++;
         }
         var folders = new List<string>(Directory.GetDirectories(mirror, "*", SearchOption.AllDirectories));
         folders.Sort((a, b) => b.Length.CompareTo(a.Length));

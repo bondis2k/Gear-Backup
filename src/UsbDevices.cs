@@ -11,7 +11,7 @@ using System.Threading;
 // Downloads) would be loaded. This makes every DllImport in the program load from System32 only.
 [assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
 
-partial class M8Backup
+partial class GearBackup
 {
     // Returns the drive of the first connected device that matches a known device profile, and which
     // device it is. pnpId is the disk's device instance ID, needed to eject it (null if found by label only).

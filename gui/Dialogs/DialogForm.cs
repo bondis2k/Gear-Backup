@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Base for the GUI's dialogs: a heading (the question), a content area, and Continue/Cancel buttons.
     abstract class DialogForm : Form
@@ -11,7 +11,7 @@ partial class M8Backup
         protected readonly FlowLayoutPanel buttons;
         protected DialogForm(string heading)
         {
-            Text = "M8 Backup"; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
+            Text = AppIdentity.Name; Font = new Font("Segoe UI", 10); BackColor = GuiTheme.Background;
             StartPosition = FormStartPosition.CenterParent; ShowInTaskbar = false; MinimizeBox = false; MaximizeBox = false;
             ClientSize = new Size(700, 430); MinimumSize = new Size(560, 300); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) Opacity = 0;

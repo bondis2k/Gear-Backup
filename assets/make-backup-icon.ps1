@@ -1,4 +1,4 @@
-# Draws the general M8 Backup icon (assets\Backup.ico and a 256px PNG) with System.Drawing: a teal memory
+# Draws the general Gear Backup icon (assets\Backup.ico and a 256px PNG) with System.Drawing: a teal memory
 # card with gold contacts and a smiling label, and the coral backup badge shared with the device icons.
 # It stands for any device with a card (synths, cameras, ...). It's the app's icon (exe,
 # window, taskbar) and the GUI header's picture until a device is detected.

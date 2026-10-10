@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Frontends supply decisions/output; engines never read the console themselves.
     // How the engines talk to a front end. The CLI implements it with the console (ConsoleInteraction),

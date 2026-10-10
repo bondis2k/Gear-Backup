@@ -1,19 +1,25 @@
-# M8 Backup — Manual
+# Gear Backup — Manual
 
-M8 Backup is a Windows program with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card. It also works with a card in a reader or a folder containing a copy of a card. It makes full or incremental backups, keeps dated snapshots, verifies copies, and restores all files, a bundle, a single file, or a song with its samples.
+Gear Backup is a Windows program with graphical and command-line interfaces for backing up the Dirtywave M8, Polyend Tracker Mini, Teenage Engineering OP-1 Field and OP-XY, Fujifilm X100VI, and local folders. It makes full or incremental backups, keeps dated snapshots, verifies copies, and offers restore choices suited to each device.
 
 Requires Windows 10 or 11 and the built-in .NET Framework. No installation or extra runtime is needed.
 
-Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `M8Backup.exe` before following the steps below.
+Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `GearBackup.exe` before following the steps below.
 
 ## Getting started
 
 1. Connect the M8 by USB and enable USB drive mode. Save your song first and leave the M8 idle while copying.
-2. Double-click `M8Backup.exe`.
+2. Double-click `GearBackup.exe`.
 3. Review the selected source and profile. If a backup exists, choose full backup, incremental backup, restore, or check. With no backup in the current profile, the program prepares a full backup.
 4. Review the file preview and press Y to proceed.
 
-The settings file is `M8Backup.ini` beside the executable. Missing options are added with their defaults and explanations on an ordinary run. A `--preview` run does not write settings or backups.
+The settings file is `GearBackup.ini` beside the executable. Missing options are added with their defaults and explanations on an ordinary run. A `--preview` run does not write settings or backups.
+
+### Upgrading from the previous name
+
+When `GearBackup.ini` is absent, the app reads the previous `M8Backup.ini` and creates the renamed settings file on an ordinary run, preserving preferences, comments and custom keys. Preview reads it without writing. An existing `GearBackup.ini` takes precedence; the original settings file is retained.
+
+New installations use `Gear Backups`, `.gearbackup` metadata, and `%LOCALAPPDATA%\GearBackup\Devices` mirrors. Existing `M8 Backups` histories, `.m8backup` metadata and `%LOCALAPPDATA%\M8Backup\Devices` mirrors are reused in place when their renamed counterparts do not exist. Old snapshots remain available for restore, incremental backup and integrity checks. Do not rename or remove their metadata folders. Explicit recovery locations stay as configured; the new default recovery folder is `Gear Recovery`.
 
 If no M8 is detected, enter a drive or folder path, such as `E:\` or `D:\M8Card`. Press Enter to cancel. You can also set `SourceFolder` or pass `--source`.
 
@@ -21,7 +27,7 @@ Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallba
 
 ## Graphical interface
 
-Run `build-gui.cmd --no-pause`, then open `M8Backup.GUI.exe`. The existing `M8Backup.exe` command-line interface remains available separately. Both executables use `M8Backup.ini` beside them and the same backup histories and file operations.
+Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `GearBackup.exe` command-line interface remains available separately. Both executables use `GearBackup.ini` beside them and the same backup histories and file operations.
 
 1. Select the card or source folder, or click **Detect device**. Leaving the source empty also attempts detection when starting a backup or restore: an M8 in USB disk mode, or an [OP-1 Field](#teenage-engineering-op-1-field) in MTP mode. The header shows the detected device's picture; it shows the general backup icon at startup and when no device is found.
 2. Select the backup location. An empty location uses the Windows Music folder. Leave Profile blank for automatic identity, or specify a named history.
@@ -45,7 +51,7 @@ The OP-1 Field is backed up as well as the M8. It has no USB disk mode: it conne
 
 How it works:
 
-- The device's files (`synth`, `drum`, `tapes`, `mixdown`) are first copied into a **local mirror**, `%LOCALAPPDATA%\M8Backup\Devices\op1-field-<serial>`. The mirror is then backed up like any other source, so history, checksums, checks, zips, `KeepBackups` and incremental backups all work as usual.
+- The device's files (`synth`, `drum`, `tapes`, `mixdown`) are first copied into a **local mirror**, `%LOCALAPPDATA%\GearBackup\Devices\op1-field-<serial>`. The mirror is then backed up like any other source, so history, checksums, checks, zips, `KeepBackups` and incremental backups all work as usual.
 - The mirror is kept between runs. Each run downloads only files whose size or date changed on the device, and removes files that were deleted there. An unchanged OP-1 Field takes a second or two to check.
 - The OP-1 Field gets its own backup history, `op1-field-<serial>`, separate from any M8.
 - **Nothing is ever written to the OP-1 Field.** Restoring to it isn't supported yet: the restore option isn't offered while it's the source, and asking for it explains what to do instead. Restore to a folder (set `SourceFolder`, or use `--source`, and `Device=op1-field`), then copy the files to the OP-1 Field with Explorer.
@@ -55,7 +61,7 @@ How it works:
 
 ## Teenage Engineering OP-XY
 
-The OP-XY works the same way as the [OP-1 Field](#teenage-engineering-op-1-field): it connects with MTP, is read into a local mirror (`%LOCALAPPDATA%\M8Backup\Devices\op-xy-<serial>`), gets its own history (`op-xy-<serial>`), and is never written to.
+The OP-XY works the same way as the [OP-1 Field](#teenage-engineering-op-1-field): it connects with MTP, is read into a local mirror (`%LOCALAPPDATA%\GearBackup\Devices\op-xy-<serial>`), gets its own history (`op-xy-<serial>`), and is never written to.
 
 1. Connect the OP-XY by USB-C, press **COM**, then **T4** to turn on MTP.
 2. Leave the source empty and start a backup. The program tells the OP-XY and the OP-1 Field apart by the name they report.
@@ -79,7 +85,7 @@ If a backup reports many files as *The device is not ready*, the Tracker has sto
 
 ## Fujifilm X100VI
 
-The X100VI connects over MTP like the [OP-1 Field](#teenage-engineering-op-1-field): its card has no drive letter, so it is read into a local mirror (`%LOCALAPPDATA%\M8Backup\Devices\x100vi-<serial>`), backed up from there into its own history (`x100vi-<serial>`), and never written to.
+The X100VI connects over MTP like the [OP-1 Field](#teenage-engineering-op-1-field): its card has no drive letter, so it is read into a local mirror (`%LOCALAPPDATA%\GearBackup\Devices\x100vi-<serial>`), backed up from there into its own history (`x100vi-<serial>`), and never written to.
 
 1. Turn the camera on and connect it by USB-C, with **Connection setting → USB setting** set to **USB card reader** (not webcam, tethered shooting or RAW conversion). Despite the name, Windows sees the camera as a portable device, not a drive.
 2. Leave the source empty and start a backup.
@@ -95,7 +101,7 @@ The mirror keeps a copy of the camera's card on the PC, so incremental backups o
 New backups are stored here:
 
 ```
-<BackupFolder>\M8 Backups\profiles\<profile>\<date>
+<BackupFolder>\Gear Backups\profiles\<profile>\<date>
 ```
 
 `BackupFolder` defaults to your Windows Music folder.
@@ -110,7 +116,7 @@ Profile=Studio M8
 
 Use different names for different cards or collections. A profile name can contain letters, digits, spaces, hyphens, and underscores, must start with a letter or digit, and can be up to 64 characters. Windows reserved names are rejected. An explicit profile deliberately overrides automatic separation: do not reuse it for unrelated cards.
 
-Restore and check offer a history selector, including existing backups directly under `M8 Backups` as **Legacy backups**. They are not moved or silently combined with new profiles. `--profile` selects the history directly for checks; restore still allows choosing another history, such as when replacing a failed card.
+Restore and check offer a history selector, including existing backups directly under `Gear Backups` as **Legacy backups**. They are not moved or silently combined with new profiles. `--profile` selects the history directly for checks; restore still allows choosing another history, such as when replacing a failed card.
 
 ## Full and incremental backup
 
@@ -122,11 +128,11 @@ Restore and check offer a history selector, including existing backups directly 
 
 Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\m8-card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
 
-- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. Because a zip is made to be shared, its copy of the statistics hides where things are on this PC: the backup folder appears as `<this backup>` and your user folder (`C:\Users\<name>`) as `%USERPROFILE%`. The statistics file in the backup folder keeps the full paths. The `.m8backup` history store is left out; it's only useful to this program and would double the size.
+- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256` and the statistics file. Because a zip is made to be shared, its copy of the statistics hides where things are on this PC: the backup folder appears as `<this backup>` and your user folder (`C:\Users\<name>`) as `%USERPROFILE%`. The statistics file in the backup folder keeps the full paths. The `.gearbackup` history store is left out; it's only useful to this program and would double the size.
 - It's written under a temporary name and renamed when complete, so a zip that exists is never half-written.
 - The free-space check reserves room for it (up to the card's size, as WAV samples barely compress).
 - It's skipped, with a note, for incremental backups and resumes, and when any file failed to back up. If the zip itself can't be saved, the backup still counts as complete but the run ends with exit code 2.
-- The option applies to that run only; it isn't saved in `M8Backup.ini`. Deleting old backups with `KeepBackups` leaves their zip files in place.
+- The option applies to that run only; it isn't saved in `GearBackup.ini`. Deleting old backups with `KeepBackups` leaves their zip files in place.
 
 Both modes preserve empty folders. Copies are hashed with SHA-256. With `Verify=yes`, each new copy is read back and compared; a checksum mismatch retries once. Ordinary copy errors are reported and other files continue. If the source's size or modified time changes during copying, that copy fails rather than claiming a stable result.
 
@@ -175,7 +181,7 @@ Each new backup has one of these statuses:
 
 When the latest backup is incomplete or failed, choose **Resume**, **New full backup**, or **Cancel**. Resume uses the selected `Thorough` comparison, repairs partial or missing copies it detects, and refreshes checksum records. Use `Thorough=yes` to detect partial/corrupt copies that retain the correct size and time. It resumes against the source as it exists now; it cannot reconstruct unsaved files or a previous source state that was never copied.
 
-With `Verify=yes`, existing copies that fail their recorded checksum are preserved under `.m8backup\quarantine` rather than presented as valid old versions. Changed copies from an interrupted run without a recorded checksum are also quarantined. Quarantine is excluded from normal restore and integrity lists; inspect those files manually if needed.
+With `Verify=yes`, existing copies that fail their recorded checksum are preserved under `.gearbackup\quarantine` rather than presented as valid old versions. Changed copies from an interrupted run without a recorded checksum are also quarantined. Quarantine is excluded from normal restore and integrity lists; inspect those files manually if needed.
 
 Older completed snapshots remain selectable even if the latest incremental run failed. Browsing the current files of an incomplete or legacy backup requires an explicit acknowledgement of its status.
 
@@ -184,10 +190,10 @@ Older completed snapshots remain selectable even if the latest incremental run f
 Every successful backup run saves a dated manifest under:
 
 ```
-<backup>\.m8backup\snapshots\<timestamp>.manifest
+<backup>\.gearbackup\snapshots\<timestamp>.manifest
 ```
 
-The manifest records file membership, hashes, sizes, timestamps, and empty folders. File contents are retained separately in `.m8backup\objects`, keyed by SHA-256. Identical contents share an object within that backup folder, so successive snapshots only need additional objects for new contents. This protects earlier snapshots when browsable files are renamed, updated, or pruned.
+The manifest records file membership, hashes, sizes, timestamps, and empty folders. File contents are retained separately in `.gearbackup\objects`, keyed by SHA-256. Identical contents share an object within that backup folder, so successive snapshots only need additional objects for new contents. This protects earlier snapshots when browsable files are renamed, updated, or pruned.
 
 **Storage:** the first snapshot adds a separate history copy of each unique file's contents, alongside the normal browsable backup. Plan for up to roughly twice the card's data for a first full backup. Objects are shared within one backup folder, not between separate full backups. The free-space check includes missing history objects.
 
@@ -195,13 +201,13 @@ The manifest records file membership, hashes, sizes, timestamps, and empty folde
 
 Space planning reuses hashes already available from thorough comparison or existing checksum records. For contents whose hashes are not yet known, it reserves their full size without reading them just to estimate space. This estimate can exceed the eventual requirement when identical contents share an object. Copying still generates SHA-256 identities, and optional read-back verification still runs when enabled. A shared existing history object is verified once per backup run.
 
-`KeepOldVersions` limits only browsable dated copies. Snapshot history and its objects remain until the whole backup folder is removed. Existing backups gain history only from subsequent successful runs; earlier states cannot be reconstructed retroactively. Keep the entire backup folder, including `.m8backup`, when moving it to another disk.
+`KeepOldVersions` limits only browsable dated copies. Snapshot history and its objects remain until the whole backup folder is removed. Existing backups gain history only from subsequent successful runs; earlier states cannot be reconstructed retroactively. Keep the entire backup folder, including `.gearbackup`, when moving it to another disk.
 
 Fast comparison has the same limitations for snapshot content as for ordinary incremental copying. Choose `Thorough=yes` when capturing edits that may preserve size and time.
 
 ## Restore
 
-Start with menu option 3 or `M8Backup.exe --restore`.
+Start with menu option 3 or `GearBackup.exe --restore`.
 
 1. Select a target card/folder and a backup history.
 2. Select a backup folder. Its completion status is displayed.
@@ -244,9 +250,9 @@ Files considered unchanged by the selected `Thorough` comparison are skipped. If
 
 With `Verify=yes`, every selected file with a stored checksum is checked before target changes; a mismatch aborts the plan. With `Verify=no`, checksum comparisons are skipped. Missing files and size mismatches still abort the plan. Files in legacy backups without checksums can be copied but have no historical integrity guarantee.
 
-Restored files are staged beside the destination under a unique `.m8restore-*.tmp` name. Replacements use Windows' file-replacement operation rather than deleting the destination first. If the filesystem cannot support replacement, that file fails and its existing copy is retained. A normal failure removes the temporary file. An abruptly stopped process can leave a dot-prefixed temporary file; rerunning restore uses a fresh temporary name.
+Restored files are staged beside the destination under a unique `.gearrestore-*.tmp` name. Replacements use Windows' file-replacement operation rather than deleting the destination first. If the filesystem cannot support replacement, that file fails and its existing copy is retained. A normal failure removes the temporary file. An abruptly stopped process can leave a dot-prefixed temporary file; rerunning restore uses a fresh temporary name.
 
-Replacement also uses a transient `.m8rollback-*.tmp` copy of the original on the target volume. It is removed after a successful replacement and used to restore the original name if replacement fails. This is separate from optional persistent PC recovery: `Recovery=no` still uses replacement rollback. If interrupted or rollback itself fails, keep any remaining rollback file until you have checked its contents. This follows [Windows ReplaceFile failure handling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).
+Replacement also uses a transient `.gearrollback-*.tmp` copy of the original on the target volume. It is removed after a successful replacement and used to restore the original name if replacement fails. This is separate from optional persistent PC recovery: `Recovery=no` still uses replacement rollback. If interrupted or rollback itself fails, keep any remaining rollback file until you have checked its contents. This follows [Windows ReplaceFile failure handling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).
 
 The working-space estimate includes added files, growth of replacements, and staging space. With recovery on the same volume, it also reserves space for all recovery copies before starting.
 
@@ -265,14 +271,14 @@ To save the target's existing files before replacing or removing them:
 
 ```ini
 Recovery=yes
-RecoveryFolder=D:\M8 Recovery
+RecoveryFolder=D:\Gear Recovery
 ```
 
-With `RecoveryFolder=` empty, the location is `<BackupFolder>\M8 Recovery`. Environment variables work, for example `%USERPROFILE%\Documents\M8 Recovery`.
+With `RecoveryFolder=` empty, the location is `<BackupFolder>\Gear Recovery`. Environment variables work, for example `%USERPROFILE%\Documents\Gear Recovery`.
 
 Each restore makes a distinct dated recovery folder and preserves original relative paths. **All recovery copies must finish before any target files or folders are changed.** They are also read back and checksum-verified when `Verify=yes`. An inaccessible destination, insufficient space, or a failed recovery copy cancels the restore. The recovery folder and target must not contain one another. Files considered unchanged or only being added need no recovery copy.
 
-Recovery metadata is under `.m8backup`: `recovery-status.txt` records completion and the original target; `recovery-checksums.sha256` records the copied file hashes. Copy recovered files back to their original card paths when needed. Recovery folders are separate from normal backup histories and are not automatically pruned or offered in the backup selector.
+Recovery metadata is under `.gearbackup`: `recovery-status.txt` records completion and the original target; `recovery-checksums.sha256` records the copied file hashes. Copy recovered files back to their original card paths when needed. Recovery folders are separate from normal backup histories and are not automatically pruned or offered in the backup selector.
 
 ## Preview
 
@@ -286,7 +292,7 @@ When an incremental backup has no new or changed files to copy, it skips the Pro
 
 ## Checking backups
 
-Run `M8Backup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder. With `HardLinks=yes`, an object that is the same file on disk as a backup file already checked in that run isn't read a second time.
+Run `GearBackup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder. With `HardLinks=yes`, an object that is the same file on disk as a backup file already checked in that run isn't read a second time.
 
 Missing or damaged objects and malformed manifests are reported. Backups without a checksum list offer to create one from their current contents; that establishes a future baseline, not proof that those files were originally undamaged.
 
@@ -330,7 +336,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 | `MaxNameLength` | `64` | Warn about longer file/folder names; 0 disables length warnings. |
 | `Eject` | `no` | `no`, `ask`, or `yes`. |
 | `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
-| `RecoveryFolder` | empty | Defaults to `<BackupFolder>\M8 Recovery`. |
+| `RecoveryFolder` | empty | Defaults to `<BackupFolder>\Gear Recovery`. |
 | `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
 | `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP); or name it: `m8`, `op1-field`, `op-xy`, `tracker-mini` or `x100vi`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
 | `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
@@ -341,17 +347,17 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 ## Command line and exit codes
 
 ```
-M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
+GearBackup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 ```
 
 Examples:
 
 ```
-M8Backup.exe --source E:\ --profile "Studio M8"
-M8Backup.exe --source D:\M8Card --preview
-M8Backup.exe --source E:\ --zip
-M8Backup.exe --restore --source E:\ --preview
-M8Backup.exe --check --profile "Studio M8" --no-pause
+GearBackup.exe --source E:\ --profile "Studio M8"
+GearBackup.exe --source D:\M8Card --preview
+GearBackup.exe --source E:\ --zip
+GearBackup.exe --restore --source E:\ --preview
+GearBackup.exe --check --profile "Studio M8" --no-pause
 ```
 
 | Exit code | Meaning |
@@ -364,22 +370,23 @@ Unknown arguments and missing argument values are errors. The program remains in
 
 ## Building and testing
 
-Run `build.cmd --no-pause` to build `M8Backup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
+Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
 
-Run `build-gui.cmd --no-pause` to build `M8Backup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. To build under another name while the GUI is running, use `build-gui.cmd --no-pause M8Backup.GUI.updated.exe`.
+Run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
 
-If `M8Backup.exe` is running and Windows locks it, use `build.cmd --no-pause M8Backup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
+If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. It uses the same INI beside it. Close the running program before replacing the usual executable.
 
-Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `M8_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. `tests\HelperTests.cs` adds focused tests for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
+Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. `tests\HelperTests.cs` adds focused tests for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 
-The source uses a partial `M8Backup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the CLI frontend, and `GuiInteraction` supplies Windows Forms dialogs, marshals decisions to the UI thread, and batches progress/log updates. Each synchronous operation activates its context on its worker thread. Both frontends hold the history lock around mutations.
+The source uses a partial `GearBackup` container for shared helpers and models. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the CLI frontend, and `GuiInteraction` supplies Windows Forms dialogs, marshals decisions to the UI thread, and batches progress/log updates. Each synchronous operation activates its context on its worker thread. Both frontends hold the history lock around mutations.
 
 Backup file traversal skips metadata folders before descending into them, so normal browsing, checksum-list writing, and retention do not scan history objects as user files.
 
 | File | Responsibility |
 |---|---|
+| `AppIdentity.cs` | Shared product identity, storage names and compatibility with earlier settings and histories. |
 | `Program.cs` | CLI arguments, source selection and menu. |
 | `Session.cs` | Workflow steps shared by the CLI and GUI: history per source, check target, history lock, resume question, same-device check before ejecting. |
 | `Config.cs` | INI defaults and parsing. |

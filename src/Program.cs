@@ -1,18 +1,18 @@
-// Finds a Dirtywave M8 connected in USB disk mode and backs up its SD card
-// to <BackupFolder>\M8 Backups\profiles\<profile>\<date>, or incrementally into the latest existing backup,
-// or restores a backup (or a single file) to the M8. Settings are in M8Backup.ini next to the exe.
-// Afterwards it offers to eject the M8 via a Windows notification.
+// Finds a supported USB-drive or MTP device and backs up its content
+// to <BackupFolder>\Gear Backups\profiles\<profile>\<date>, or incrementally into the latest existing backup,
+// or restores a backup to a selected card or folder. Settings are in GearBackup.ini next to the exe.
+// Afterwards it offers to eject supported USB-drive devices via a Windows notification.
 //
-// Usage: M8Backup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
+// Usage: GearBackup.exe [--restore | --check] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
 // Build: build.cmd
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-partial class M8Backup
+partial class GearBackup
 {
-    const string AppId = "Dirtywave.M8Backup";
+    const string AppId = AppIdentity.NotificationId;
 
     static int Main(string[] args)
     {
@@ -64,7 +64,7 @@ partial class M8Backup
     static int Run(bool restore, bool check, string[] args)
     {
         OperationOutput.WriteLine();
-        OperationOutput.WriteLine("  M8 Backup");
+        OperationOutput.WriteLine("  " + AppIdentity.Name);
         OperationOutput.WriteLine("  ----------------------------------------");
 
         Config config = LoadConfig();

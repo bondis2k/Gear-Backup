@@ -1,4 +1,4 @@
-# M8 Backup
+# Gear Backup
 
 A Windows tool with graphical and command-line interfaces for backing up and restoring a Dirtywave M8 SD card, a card reader, or a local copy of the card. It also backs up the Polyend Tracker Mini, and over MTP the Teenage Engineering OP-1 Field and OP-XY and the Fujifilm X100VI camera.
 
@@ -14,23 +14,25 @@ For the graphical interface:
 
 ```cmd
 build-gui.cmd --no-pause
-M8Backup.GUI.exe
+GearBackup.GUI.exe
 ```
 
 For the command-line interface:
 
 ```cmd
 build.cmd --no-pause
-M8Backup.exe
+GearBackup.exe
 ```
 
 You can also specify the card or folder:
 
 ```cmd
-M8Backup.exe --source E:\
+GearBackup.exe --source E:\
 ```
 
-Configure backup locations and options in `M8Backup.ini`. SHA-256 comparison (`Thorough`), automatic integrity verification (`Verify`), and recovery copies (`Recovery`) default to `no`. Change previews default to `yes`; incremental backups with no file changes skip the proceed prompt.
+Configure backup locations and options in `GearBackup.ini`. SHA-256 comparison (`Thorough`), automatic integrity verification (`Verify`), and recovery copies (`Recovery`) default to `no`. Change previews default to `yes`; incremental backups with no file changes skip the proceed prompt.
+
+Existing settings and backup histories from the previous app name remain usable; see the manual's upgrade notes. New backups use `Gear Backups` and `.gearbackup` metadata.
 
 Executable builds are ignored by Git; build from source locally. See [MANUAL.md](MANUAL.md) for all settings, restore options, and command-line arguments.
 

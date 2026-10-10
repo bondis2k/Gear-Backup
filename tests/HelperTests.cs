@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-partial class M8Backup
+partial class GearBackup
 {
     static void TestHelpers(string root)
     {
@@ -30,6 +30,69 @@ partial class M8Backup
         RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
         RunTest("History names per device", () => TestProfileNames(dir));
         RunTest("X100VI: photos", () => TestX100VI(dir));
+        RunTest("Gear Backup identity and upgrade compatibility", () => TestIdentityUpgrade(Folder(root, "identity-upgrade")));
+    }
+
+    static void TestIdentityUpgrade(string root)
+    {
+        string settings = Folder(root, "settings");
+        string oldIni = Path.Combine(settings, AppIdentity.Legacy.ConfigFileName);
+        string newIni = Path.Combine(settings, AppIdentity.ConfigFileName);
+        Put(oldIni, "; " + AppIdentity.Legacy.Name + " settings\n; keep this comment\nProfile=Studio M8\nVerify=yes\nCustomKey=preserved\n");
+        Config loaded = null;
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
+            loaded = LoadConfig(settings);
+        Assert(loaded.Profile == "Studio M8" && loaded.Verify && !File.Exists(newIni),
+            "preview reads old settings without writing a renamed file");
+        WithUi(() => loaded = LoadConfig(settings));
+        string migrated = File.ReadAllText(newIni);
+        Assert(loaded.Profile == "Studio M8" && loaded.Verify && !loaded.Thorough && !loaded.Recovery,
+            "settings migration preserves preferences and default-off options");
+        Assert(migrated.Contains("; Gear Backup settings") && migrated.Contains("; keep this comment") &&
+            migrated.Contains("CustomKey=preserved") && File.Exists(oldIni), "migration preserves custom settings and the original INI");
+        Put(newIni, "Profile=New settings\nVerify=no\n");
+        WithUi(() => loaded = LoadConfig(settings));
+        Assert(loaded.Profile == "New settings" && !loaded.Verify, "renamed settings take precedence over the old INI");
+
+        Fixture f = BackedUpCard(Folder(root, "fixture"), false);
+        string oldRoot = Path.Combine(root, AppIdentity.Legacy.BackupsFolderName);
+        string history = Path.Combine(oldRoot, "profiles", "studio");
+        Directory.CreateDirectory(Path.GetDirectoryName(history));
+        Directory.Move(f.History, history);
+        string backup = ListBackups(history)[0];
+        Directory.Move(Path.Combine(backup, AppIdentity.MetadataFolderName), Path.Combine(backup, AppIdentity.Legacy.MetadataFolderName));
+        foreach (string manifest in Directory.GetFiles(SnapshotRoot(backup), "*.manifest"))
+            File.WriteAllText(manifest, File.ReadAllText(manifest).Replace(AppIdentity.SnapshotHeader, AppIdentity.Legacy.SnapshotHeader));
+        var config = new Config { BackupFolder = root, Profile = "studio", Preview = false, Thorough = true, Verify = true };
+        Assert(HistoriesRoot(config) == oldRoot && HistoryFor(config, f.Source) == history, "an existing history is reused in place");
+        Assert(BackupStatus(backup) == Status.Complete && LatestSnapshot(backup).Files.Count == f.First.Files.Count,
+            "old status files, manifests and objects remain readable");
+        Assert(CurrentBackup(backup).Files.Count == f.First.Files.Count, "old metadata is excluded from browsable content");
+        OperationResult updated = null;
+        WithUi(() => updated = BackupWithLock(f.Source, history, true, config));
+        Assert(updated.ExitCode == 0 && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == 2,
+            "incremental backup continues the old history and publishes a new snapshot");
+        string target = Rooted(Folder(root, "restored"));
+        Snapshot snapshot = LatestSnapshot(backup);
+        OperationResult restored = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, 'a', null, false,
+            config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Assert(restored.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "AAAA",
+            "snapshots from an existing history restore correctly");
+        Assert(new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(new TestInteraction(), CancellationToken.None)).ExitCode == 0,
+            "integrity checks work across old and new snapshot headers");
+        string zipPath = null;
+        WithUi(() => zipPath = ZipBackup(backup));
+        using (var zip = new System.IO.Compression.ZipArchive(File.OpenRead(zipPath), System.IO.Compression.ZipArchiveMode.Read))
+            Assert(!new List<System.IO.Compression.ZipArchiveEntry>(zip.Entries).Exists(e =>
+                e.FullName.StartsWith(AppIdentity.Legacy.MetadataFolderName) || e.FullName.StartsWith(AppIdentity.MetadataFolderName)),
+                "ZIP exports exclude both metadata directory names");
+        string fresh = Folder(root, "fresh");
+        Assert(HistoriesRoot(new Config { BackupFolder = fresh }) == Path.Combine(fresh, AppIdentity.BackupsFolderName),
+            "fresh installations use the new backup directory");
+        string localData = Folder(root, "local-data");
+        Directory.CreateDirectory(Path.Combine(localData, AppIdentity.Legacy.DirectoryName, "Devices"));
+        Assert(AppIdentity.ExistingFolder(localData, AppIdentity.DirectoryName, AppIdentity.Legacy.DirectoryName) ==
+            Path.Combine(localData, AppIdentity.Legacy.DirectoryName), "existing MTP mirror folders are reused");
     }
 
     // An MTP device in memory: files are path -> content, with a date per file. Counts downloads.
@@ -111,7 +174,7 @@ partial class M8Backup
         Throws(() => WithUi(() => SyncMirror(device, mirror)), "an incomplete download is an error");
         device.ShortBy = 0;
         Assert(File.ReadAllText(Path.Combine(mirror, @"synth\slots\1\lullaby.aif")) == "AIFF-1-EDITED" &&
-            Directory.GetFiles(mirror, ".m8download-*", SearchOption.AllDirectories).Length == 0,
+            Directory.GetFiles(mirror, ".geardownload-*", SearchOption.AllDirectories).Length == 0,
             "a failed download keeps the previous mirror copy and leaves no partial file");
 
         var cts = new CancellationTokenSource();
@@ -120,7 +183,7 @@ partial class M8Backup
         using (new OperationContext(new TestInteraction(), cts.Token).Activate())
             try { SyncMirror(device, mirror); } catch (OperationCanceledException) { cancelled = true; }
         device.OnDownload = null;
-        Assert(cancelled && Directory.GetFiles(mirror, ".m8download-*", SearchOption.AllDirectories).Length == 0, "cancelling a sync leaves no partial file");
+        Assert(cancelled && Directory.GetFiles(mirror, ".geardownload-*", SearchOption.AllDirectories).Length == 0, "cancelling a sync leaves no partial file");
 
         var info = new MtpDeviceInfo { InstanceId = @"USB\VID_2367&PID_0102\L1PRC121", FriendlyName = "OP-1" };
         Assert(info.Serial == "L1PRC121" && info.InterfacePath == @"\\?\usb#vid_2367&pid_0102#l1prc121#{6ac27878-a6fa-4155-ba85-f98f491d4f33}",
@@ -537,7 +600,7 @@ partial class M8Backup
         Assert(SongName(@"Songs\Live\Jam.m8s") == @"Live\Jam" && SongName(@"Bundles\b\x.m8s") == @"Bundles\b\x",
             "song display names drop the Songs folder and extension");
         Assert(IsStatisticsFile(@"x\backup-statistics_2026.txt") && !IsStatisticsFile(@"x\backup-statistics.log"), "statistics files recognised");
-        Assert(IsBackupMetaFile(@"b\.m8backup\objects\abc") && IsBackupMetaFile(@"b\checksums.sha256.tmp") && !IsBackupMetaFile(@"b\Songs\a.m8s"),
+        Assert(IsBackupMetaFile(@"b\.gearbackup\objects\abc") && IsBackupMetaFile(@"b\checksums.sha256.tmp") && !IsBackupMetaFile(@"b\Songs\a.m8s"),
             "program metadata recognised; card files are not metadata");
 
         string hash = new string('a', 64);
@@ -571,7 +634,7 @@ partial class M8Backup
         Assert(SafePath(safeRoot, "Songs/a.m8s") == Path.Combine(safeRoot, @"Songs\a.m8s"), "forward slashes are accepted");
         foreach (string bad in new[] { @"..\x", @"Songs\..\..\x", @"C:\x", @"\x", "a:stream", @"Songs\.", @"Songs\a.", @"Songs\a ", @"Songs\\a", "" })
             Throws(() => SafePath(safeRoot, bad), "unsafe relative path rejected: [" + bad + "]");
-        Assert(!Within(@"C:\Music\M8 Backups2", @"C:\Music\M8 Backups") && Within(@"C:\Music\M8 Backups\x", @"C:\Music\M8 Backups"),
+        Assert(!Within(@"C:\Music\Gear Backups2", @"C:\Music\Gear Backups") && Within(@"C:\Music\Gear Backups\x", @"C:\Music\Gear Backups"),
             "a folder with a longer name isn't inside a similarly named one");
         Assert(Rooted(@"C:\Music\") == Rooted(@"C:\Music") && Rooted(@"C:\Music").EndsWith(@"\"), "rooted paths end with exactly one backslash");
         Put(Path.Combine(safeRoot, "blocker"), "file");
@@ -747,7 +810,7 @@ partial class M8Backup
         Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Legacy, "backups without a status file are legacy");
 
         var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
-        Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "M8 Backups", "card")), "a source inside the backup location is rejected");
+        Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "Gear Backups", "card")), "a source inside the backup location is rejected");
         Throws(() => HistoryFor(new Config { BackupFolder = Path.Combine(dir, "outer", "inner") }, Path.Combine(dir, "outer")),
             "a backup location inside the source is rejected");
     }

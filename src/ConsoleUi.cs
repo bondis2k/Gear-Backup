@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 
-partial class M8Backup
+partial class GearBackup
 {
     static readonly Option Yes = new Option('y', "Yes"), No = new Option('n', "No");
 

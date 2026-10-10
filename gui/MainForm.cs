@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-partial class M8Backup
+partial class GearBackup
 {
     sealed class MainForm : Form
     {
@@ -35,7 +35,7 @@ partial class M8Backup
         public MainForm(bool designPreview)
         {
             runner = new GuiOperationRunner(this);
-            Text = "M8 Backup";
+            Text = AppIdentity.Name;
             // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
             // assets\Backup.ico); only the header picture changes when a device is detected.
             try { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
@@ -96,10 +96,10 @@ partial class M8Backup
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.Controls.Add(deviceImage, 0, 0);
             var branding = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            var title = GuiTheme.Label("M8 Backup", 25, GuiTheme.Ink); title.Font = new Font("Segoe UI", 25, FontStyle.Bold);
+            var title = GuiTheme.Label(AppIdentity.Name, 25, GuiTheme.Ink); title.Font = new Font("Segoe UI", 25, FontStyle.Bold);
             title.Margin = new Padding(0, 0, 0, 0);
             branding.Controls.Add(title);
-            branding.Controls.Add(GuiTheme.Label("Your music. Safely kept.", 10, GuiTheme.Muted));
+            branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
             header.Controls.Add(branding, 1, 0);
             settings.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             header.Controls.Add(settings, 2, 0);
@@ -294,7 +294,7 @@ partial class M8Backup
                 using (var dialog = new SettingsDialog(next))
                     if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 SaveConfig(next);
-                config = next; status.Text = "Settings saved"; detail.Text = "Saved to M8Backup.ini for both interfaces.";
+                config = next; status.Text = "Settings saved"; detail.Text = "Saved to " + AppIdentity.ConfigFileName + " for both interfaces.";
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }

@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-partial class M8Backup
+partial class GearBackup
 {
     // One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
     // the size, times and checksum it had when backed up. Hash is null for older backups without one.
@@ -27,22 +27,22 @@ partial class M8Backup
     // break the tab-separated format.
     static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
     static string Decode(string value) { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
-    static string SnapshotRoot(string backup) { return Path.Combine(backup, ".m8backup", "snapshots"); }
+    static string SnapshotRoot(string backup) { return Path.Combine(AppIdentity.MetadataRoot(backup), "snapshots"); }
     static string ObjectPath(string backup, string hash)
     {
         if (!ValidHash(hash)) throw new IOException("Invalid snapshot checksum.");
-        return SafePath(Path.Combine(backup, ".m8backup", "objects"), hash);
+        return SafePath(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"), hash);
     }
 
     // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
-    // Manifest format (.m8backup\snapshots\<time>.manifest), one entry per line, tab-separated:
-    //   M8SNAPSHOT  1                                        header and format version
+    // Manifest format (.gearbackup\snapshots\<time>.manifest), one entry per line, tab-separated:
+    //   GEARSNAPSHOT  1                                        header and format version
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
-    // The file's content is stored once in .m8backup\objects\<sha256>.
+    // The file's content is stored once in .gearbackup\objects\<sha256>.
     static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
     {
-        var rows = new StringBuilder("M8SNAPSHOT\t1\n");
+        var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string folder in scan.Folders)
             rows.Append("D\t").Append(Encode(folder.Substring(source.Length))).Append('\n');
@@ -95,7 +95,8 @@ partial class M8Backup
     static Snapshot ReadSnapshot(string backup, string manifest)
     {
         string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
-        if (rows.Length == 0 || rows[0] != "M8SNAPSHOT\t1") throw new IOException("Unsupported snapshot format.");
+        if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
+            throw new IOException("Unsupported snapshot format.");
         var result = new Snapshot { Name = Path.GetFileNameWithoutExtension(manifest) };
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 1; i < rows.Length; i++)

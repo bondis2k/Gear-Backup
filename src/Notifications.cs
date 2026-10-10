@@ -5,7 +5,7 @@ using Microsoft.Win32;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 
-partial class M8Backup
+partial class GearBackup
 {
     // Shows the final notification and handles ejecting, depending on the Eject setting:
     // "no" = just the summary, "ask" = "Eject M8" / "Not now" buttons, "yes" = eject straight away.
@@ -48,7 +48,7 @@ partial class M8Backup
     static void RegisterAppId()
     {
         using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Classes\AppUserModelId\" + AppId))
-            key.SetValue("DisplayName", "M8 Backup");
+            key.SetValue("DisplayName", AppIdentity.Name);
     }
 
     // Shows a toast. With askEject, it has "Eject M8" / "Not now" buttons and waits for the answer:
@@ -74,7 +74,7 @@ partial class M8Backup
             doc.LoadXml(xml);
             var toast = new ToastNotification(doc);
             toast.Tag = askEject ? "ask-eject" : "status";
-            toast.Group = "m8";
+            toast.Group = AppIdentity.DirectoryName;
             if (!askEject)
             {
                 ToastNotificationManager.CreateToastNotifier(AppId).Show(toast);

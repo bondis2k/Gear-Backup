@@ -1,4 +1,4 @@
-# M8 Backup — Features
+# Gear Backup — Features
 
 A one-line summary of each feature. See [MANUAL.md](MANUAL.md) for details and settings.
 
@@ -55,9 +55,9 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 
 ## Interfaces
 
-- **Graphical app** — `M8Backup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
-- **Command-line app** — `M8Backup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
-- **Shared engine** — both apps use the same backup, restore and check code and the same `M8Backup.ini`.
+- **Graphical app** — `GearBackup.GUI.exe` with source and backup folder pickers, an operation list, a preview button, progress, and an activity log.
+- **Command-line app** — `GearBackup.exe` with a numbered menu and options for scripting (`--restore`, `--check`, `--source`, `--profile`, `--zip`, `--preview`, `--no-pause`).
+- **Shared engine** — both apps use the same backup, restore and check code and the same `GearBackup.ini`.
 - **App icon** — a general backup icon (a memory card with a backup badge, for any device) for both programs, the window and the taskbar.
 
 ## Sources
@@ -130,7 +130,7 @@ Every feature in the sections after **Devices** works for all of them, unless ma
 
 - **Keep the last N backups** — moves older backup folders to the Recycle Bin, after asking (`KeepBackups`).
 - **Keep the last N old versions** — limits dated old versions per file, moving extras to the Recycle Bin (`KeepOldVersions`).
-- **Self-documenting settings** — `M8Backup.ini` is created with every option explained, and new options are added automatically.
+- **Self-documenting settings** — `GearBackup.ini` is created with every option explained, and new options are added automatically.
 
 ## Development
 
