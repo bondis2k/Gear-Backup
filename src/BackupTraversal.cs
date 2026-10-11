@@ -1,11 +1,13 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using static GearBackup;
+using static Checksums;
 
-partial class GearBackup
+static class BackupTraversal
 {
     // Traverse user content without descending into the history object store.
-    static IEnumerable<FileSystemInfo> BackupEntries(string root)
+    internal static IEnumerable<FileSystemInfo> BackupEntries(string root)
     {
         foreach (FileSystemInfo entry in new DirectoryInfo(root).EnumerateFileSystemInfos())
         {
@@ -18,7 +20,7 @@ partial class GearBackup
                 foreach (FileSystemInfo child in BackupEntries(entry.FullName)) yield return child;
         }
     }
-    static List<string> BackupFiles(string root)
+    internal static List<string> BackupFiles(string root)
     {
         var files = new List<string>();
         foreach (FileSystemInfo entry in BackupEntries(root)) if (entry is FileInfo) files.Add(entry.FullName);

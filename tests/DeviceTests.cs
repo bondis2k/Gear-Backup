@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using static FileCopy;
 using static PathSafety;
+using static Snapshots;
 
 partial class GearBackup
 {

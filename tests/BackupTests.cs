@@ -8,6 +8,9 @@ using System.Text;
 using System.Threading;
 using static FileCopy;
 using static PathSafety;
+using static BackupTraversal;
+using static Checksums;
+using static Snapshots;
 
 partial class GearBackup
 {

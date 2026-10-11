@@ -5,21 +5,24 @@ using System.IO;
 using System.Text;
 using static FileCopy;
 using static PathSafety;
+using static GearBackup;
+using static BackupTraversal;
+using static Snapshots;
 
-partial class GearBackup
+static class Checksums
 {
     // Same format as the sha256sum tool: "<64 hex digits>  <path with forward slashes>", one file per line.
-    const string ChecksumFileName = "checksums.sha256";
+    internal const string ChecksumFileName = "checksums.sha256";
 
     // Files the program itself writes into a backup folder (not part of the M8's contents).
-    static bool IsBackupMetaFile(string path)
+    internal static bool IsBackupMetaFile(string path)
     {
         return AppIdentity.IsMetadataPath(path) || IsStatisticsFile(path) ||
                Path.GetFileName(path).StartsWith(ChecksumFileName, StringComparison.OrdinalIgnoreCase);
     }
 
     // Reads a backup's checksum list: relative path (with backslashes) -> checksum. Null if it has none.
-    static Dictionary<string, string> LoadChecksums(string folder)
+    internal static Dictionary<string, string> LoadChecksums(string folder)
     {
         string file = Path.Combine(folder, ChecksumFileName);
         if (!File.Exists(file)) return null;
@@ -40,7 +43,7 @@ partial class GearBackup
 
     // Writes the checksum list for every file now in the folder. Checksums in `known` are used as they are;
     // any other file is read and hashed. Returns the number of files listed.
-    static int WriteChecksums(string folder, Dictionary<string, string> known)
+    internal static int WriteChecksums(string folder, Dictionary<string, string> known)
     {
         List<string> files = BackupFiles(folder);
         var text = new StringBuilder();
@@ -66,7 +69,7 @@ partial class GearBackup
 
     // Lets the user pick one backup, or all of them (the last entry), and checks them against their
     // checksum lists. Used by both the CLI and the GUI. Title is null if nothing was checked.
-    static OperationResult RunCheck(List<string> backups)
+    internal static OperationResult RunCheck(List<string> backups)
     {
         if (backups.Count == 0)
         {
@@ -91,18 +94,9 @@ partial class GearBackup
         return new IntegrityEngine().Run(toCheck, OperationContext.Current);
     }
 
-    // Returns the exit code; title/summary are for the final notification (null if nothing was done).
-    static int CheckBackups(List<string> backups, out string title, out string summary)
-    {
-        OperationResult result = RunCheck(backups);
-        title = result.Title;
-        summary = result.Summary;
-        return result.ExitCode;
-    }
-
     // verifiedLinks (optional) collects the hard-linked files found OK, so CheckSnapshots can skip
     // reading the same content again.
-    static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_,
+    internal static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_,
                             Dictionary<string, string> verifiedLinks = null)
     {
         OperationOutput.WriteLine("  " + Path.GetFileName(backup));

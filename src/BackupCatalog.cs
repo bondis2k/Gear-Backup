@@ -10,6 +10,8 @@ using System.Text;
 using Microsoft.Win32.SafeHandles;
 using static FileCopy;
 using static PathSafety;
+using static Checksums;
+using static VersionCatalog;
 
 partial class GearBackup
 {

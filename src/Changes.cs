@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
+using static BackupTraversal;
 
 partial class GearBackup
 {

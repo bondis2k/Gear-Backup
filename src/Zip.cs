@@ -6,6 +6,8 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
+using static BackupTraversal;
+using static Checksums;
 
 partial class GearBackup
 {

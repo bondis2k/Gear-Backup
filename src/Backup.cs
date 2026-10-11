@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using static BackupTraversal;
+using static Checksums;
 
 partial class GearBackup
 {
@@ -36,7 +38,7 @@ partial class GearBackup
         return candidate;
     }
 
-    static bool IsOldVersion(string path)
+    internal static bool IsOldVersion(string path)
     {
         return VersionSuffix.IsMatch(Path.GetFileNameWithoutExtension(path));
     }
@@ -109,7 +111,7 @@ partial class GearBackup
         return moved;
     }
 
-    static bool IsStatisticsFile(string path)
+    internal static bool IsStatisticsFile(string path)
     {
         string name = Path.GetFileName(path);
         return name.StartsWith("backup-statistics", StringComparison.OrdinalIgnoreCase) &&
@@ -166,7 +168,7 @@ partial class GearBackup
         OperationOutput.WriteLine();
     }
 
-    class ScanResult
+    internal class ScanResult
     {
         public List<FileInfo> Files = new List<FileInfo>();
         public List<string> Folders = new List<string>();

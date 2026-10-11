@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Xml;
+using static Checksums;
 
 partial class GearBackup
 {

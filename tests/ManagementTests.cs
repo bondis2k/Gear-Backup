@@ -5,6 +5,9 @@ using System.Text;
 using System.Threading;
 using static FileCopy;
 using static PathSafety;
+using static Checksums;
+using static Snapshots;
+using static VersionCatalog;
 
 partial class GearBackup
 {

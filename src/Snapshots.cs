@@ -6,8 +6,12 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
+using static GearBackup;
+using static BackupTraversal;
+using static Checksums;
+using static VersionCatalog;
 
-partial class GearBackup
+static class Snapshots
 {
     // One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
     // the size, times and checksum it had when backed up. Hash is null for older backups without one.
@@ -25,17 +29,17 @@ partial class GearBackup
         public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
-    static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
+    internal static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
     // Paths are stored Base64-encoded in manifests, so tabs or other odd characters in a name can't
     // break the tab-separated format.
-    static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
-    static string Decode(string value)
+    internal static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
+    internal static string Decode(string value)
     {
         try { return Encoding.UTF8.GetString(Convert.FromBase64String(value)); }
         catch (FormatException ex) { throw new IOException("Invalid encoded snapshot path.", ex); }
     }
-    static string SnapshotRoot(string backup) { return Path.Combine(AppIdentity.MetadataRoot(backup), "snapshots"); }
-    static string ObjectPath(string backup, string hash)
+    internal static string SnapshotRoot(string backup) { return Path.Combine(AppIdentity.MetadataRoot(backup), "snapshots"); }
+    internal static string ObjectPath(string backup, string hash)
     {
         if (!ValidHash(hash)) throw new IOException("Invalid snapshot checksum.");
         return SafePath(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"), hash);
@@ -47,7 +51,7 @@ partial class GearBackup
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
     // The file's content is stored once in .gearbackup\objects\<sha256>.
-    static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
+    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
     {
         var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -103,7 +107,7 @@ partial class GearBackup
 
     // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
     // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
-    static Snapshot ReadSnapshot(string backup, string manifest)
+    internal static Snapshot ReadSnapshot(string backup, string manifest)
     {
         CheckRecordSize(manifest, ListRecordLimit, "Snapshot manifest");
         string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
@@ -147,7 +151,7 @@ partial class GearBackup
     }
 
     // Lets the user pick a saved point in time, newest first. Null means "use the current backup files".
-    static Snapshot ChooseSnapshot(string backup)
+    internal static Snapshot ChooseSnapshot(string backup)
     {
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return null;
@@ -163,7 +167,7 @@ partial class GearBackup
 
     // The backup folder's files as they are now, as a snapshot. Checksums come from checksums.sha256
     // where available.
-    static Snapshot CurrentBackup(string backup)
+    internal static Snapshot CurrentBackup(string backup)
     {
         var result = new Snapshot { Name = "current backup files", OldVersions = KnownOldVersions(backup) };
         Dictionary<string, string> sums = LoadChecksums(backup);
@@ -195,7 +199,7 @@ partial class GearBackup
     }
 
     // Checks every history object referenced by any manifest in this backup; each object once.
-    static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
+    internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
                                Dictionary<string, string> verifiedLinks = null)
     {
         string root = SnapshotRoot(backup);
