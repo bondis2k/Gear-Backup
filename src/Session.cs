@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static PathSafety;
+using static Backups;
+using static RestoreFlow;
 
 partial class GearBackup
 {

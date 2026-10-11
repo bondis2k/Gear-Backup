@@ -9,7 +9,7 @@ partial class GearBackup
     static readonly Option Yes = new Option('y', "Yes"), No = new Option('n', "No");
 
     // Asks a question with a fixed set of answers; returns the chosen option's key.
-    static char Ask(string question, params Option[] options)
+    internal static char Ask(string question, params Option[] options)
     {
         OperationContext.Current.CheckCancellation();
         char answer = OperationContext.Current.Interaction.Choose(question, options);
@@ -32,7 +32,7 @@ partial class GearBackup
     }
 
     // Free text such as a search or a path; null when cancelled.
-    static string AskText(string question)
+    internal static string AskText(string question)
     {
         OperationContext.Current.CheckCancellation();
         string answer = OperationContext.Current.Interaction.AskText(question);
@@ -192,7 +192,7 @@ partial class GearBackup
 
     }
 
-    static void PrintProgress(long processedBytes, long totalBytes, int done, int total, long copiedBytes)
+    internal static void PrintProgress(long processedBytes, long totalBytes, int done, int total, long copiedBytes)
     {
         OperationContext.Current.Progress(Stage.BackupCopy, "", processedBytes, totalBytes, done, total);
     }
@@ -206,7 +206,7 @@ partial class GearBackup
         return unit == 0 ? bytes + " B" : string.Format("{0:N1} {1}", size, units[unit]);
     }
 
-    static string FormatTime(TimeSpan t)
+    internal static string FormatTime(TimeSpan t)
     {
         if (t.TotalMinutes >= 1) return string.Format("{0}m {1}s", (int)t.TotalMinutes, t.Seconds);
         return string.Format("{0:N1}s", t.TotalSeconds);

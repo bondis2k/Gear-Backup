@@ -4,24 +4,26 @@ using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
 using static BackupTraversal;
+using static GearBackup;
+using static Backups;
 
-partial class GearBackup
+static class ChangeSummary
 {
-    class Changes
+    internal class Changes
     {
         public bool HasBaseline;
         public int TotalSongs, OtherNew, OtherChanged;
         public List<string> NewSongs = new List<string>(), EditedSongs = new List<string>(), RemovedSongs = new List<string>();
     }
 
-    static bool IsSong(string path)
+    internal static bool IsSong(string path)
     {
         return CurrentDevice.IsSong(path);
     }
 
     // "Songs\Live\Jam.m8s" -> "Live\Jam" (the device's songs folder is left out). Where each song is a
     // folder: "Projects\User\Jam\project.mt" -> "User\Jam".
-    static string SongName(string relative)
+    internal static string SongName(string relative)
     {
         string name = CurrentDevice.SongIsFolder ? Path.GetDirectoryName(relative)
             : Path.Combine(Path.GetDirectoryName(relative), Path.GetFileNameWithoutExtension(relative));
@@ -30,7 +32,7 @@ partial class GearBackup
     }
 
     // Songs are counted by name, so files that share one (a photo's JPG and RAF, "DSCF0689") are one song.
-    static Changes FindChanges(ScanResult scan, string source, FileState[] states, string baseline)
+    internal static Changes FindChanges(ScanResult scan, string source, FileState[] states, string baseline)
     {
         var changes = new Changes { HasBaseline = baseline != null };
         var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -77,7 +79,7 @@ partial class GearBackup
         return list;
     }
 
-    static void WriteChanges(TextWriter report, Changes changes, string baseline)
+    internal static void WriteChanges(TextWriter report, Changes changes, string baseline)
     {
         // A device without song files (e.g. the OP-1 Field) only gets file counts.
         if (CurrentDevice.SongExtensions.Length == 0)
@@ -115,7 +117,7 @@ partial class GearBackup
     }
 
     // For the notification, e.g. " Songs: 2 new (Jam, Idea7), 1 edited (Track01)."
-    static string ShortSongSummary(Changes changes)
+    internal static string ShortSongSummary(Changes changes)
     {
         if (!changes.HasBaseline) return "";
         if (CurrentDevice.SongExtensions.Length == 0)
@@ -133,7 +135,7 @@ partial class GearBackup
         return word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word.Substring(1);
     }
 
-    static string FirstNames(List<string> names)
+    internal static string FirstNames(List<string> names)
     {
         var shown = new List<string>();
         for (int i = 0; i < names.Count && i < 3; i++) shown.Add(Path.GetFileName(names[i]));
@@ -142,7 +144,7 @@ partial class GearBackup
 
     // Flags names the M8 may not show or load properly: characters outside plain ASCII, very long names,
     // and names starting or ending with a space.
-    static List<string> CheckNames(ScanResult scan, string source, int maxLength)
+    internal static List<string> CheckNames(ScanResult scan, string source, int maxLength)
     {
         var paths = new List<string>(scan.Folders);
         foreach (FileInfo f in scan.Files) paths.Add(f.FullName);

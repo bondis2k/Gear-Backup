@@ -5,11 +5,15 @@ using System.Text;
 using static FileCopy;
 using static PathSafety;
 using static Snapshots;
+using static GearBackup;
+using static Backups;
+using static ChangeSummary;
+using static SampleDependencies;
 
-partial class GearBackup
+static class RestoreFlow
 {
     // The full result, including whether the restore was cancelled. Title is null if nothing was done.
-    static OperationResult RunRestore(string m8, List<string> backups, Config config, Config global = null)
+    internal static OperationResult RunRestore(string m8, List<string> backups, Config config, Config global = null)
     {
         if (backups.Count == 0) { OperationOutput.WriteLine("  No backups found."); return new OperationResult { ExitCode = 1 }; }
         var choices = new List<string>(backups);
@@ -79,7 +83,7 @@ partial class GearBackup
     }
 
     // Returns the exit code; title/summary are for the final notification (null if nothing was done).
-    static int Restore(string m8, List<string> backups, Config config, out string title, out string summary)
+    internal static int Restore(string m8, List<string> backups, Config config, out string title, out string summary)
     {
         OperationResult result = RunRestore(m8, backups, config);
         title = result.Title;
@@ -91,7 +95,7 @@ partial class GearBackup
     // than when it was backed up.
     // A camera's photos going back onto a memory card (a drive root) are almost always a mistake, so this
     // explains why and asks first. True to go ahead.
-    static bool ConfirmRestoreTarget(string backup, string target)
+    internal static bool ConfirmRestoreTarget(string backup, string target)
     {
         DeviceProfile from = BackupDevice(backup);
         if (from == null || from.RestoreWarning == null || Rooted(target) != Rooted(Path.GetPathRoot(Rooted(target)))) return true;
@@ -100,7 +104,7 @@ partial class GearBackup
     }
 
     // The restore choices a device supports: bundles and song-with-samples only where it has them.
-    static Option[] RestoreModes(DeviceProfile device)
+    internal static Option[] RestoreModes(DeviceProfile device)
     {
         var modes = new List<Option> { new Option(RestoreMode.All, "All files") };
         if (device.BundlesFolder != null) modes.Add(new Option(RestoreMode.Bundle, "Bundle"));
@@ -118,14 +122,14 @@ partial class GearBackup
             throw new IOException("Backup file is damaged: " + item.Relative);
     }
 
-    static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough)
+    internal static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough)
     {
         return EntryMatchesTarget(item, target, thorough, null);
     }
 
     // Whether the file on the target already equals the backup's, so restoring it can be skipped.
     // plannedFingerprint lets a checksum taken during planning be reused instead of reading the file again.
-    static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough, string plannedFingerprint)
+    internal static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough, string plannedFingerprint)
     {
         var info = new FileInfo(target);
         if (!info.Exists || info.Length != item.Size) return false;
@@ -142,7 +146,7 @@ partial class GearBackup
 
     // A short description of a target file's state, to notice if it changes between the preview and the
     // copy: "sha:<checksum>" or "meta:<size>:<modified ticks>". Null if the file doesn't exist.
-    static string Fingerprint(string path, bool checksum)
+    internal static string Fingerprint(string path, bool checksum)
     {
         var info = new FileInfo(path);
         if (!info.Exists) return null;
@@ -151,7 +155,7 @@ partial class GearBackup
 
     // Space needed on the target: new files, growth of replaced files, and room for the largest replaced
     // file, because each replacement briefly exists twice (new copy written before the old one goes).
-    static long RestoreSpaceNeeded(string targetRoot, List<RestoreEntry> copies)
+    internal static long RestoreSpaceNeeded(string targetRoot, List<RestoreEntry> copies)
     {
         long needed = 0, largest = 0;
         foreach (RestoreEntry item in copies)
@@ -163,12 +167,12 @@ partial class GearBackup
         return needed + largest;
     }
 
-    static string RecoveryRoot(Config config)
+    internal static string RecoveryRoot(Config config)
     {
         return config.RecoveryFolder.Length > 0 ? config.RecoveryFolder : Path.Combine(config.BackupFolder, AppIdentity.RecoveryFolderName);
     }
 
-    static void AssertTargetUnchanged(string target, string expected)
+    internal static void AssertTargetUnchanged(string target, string expected)
     {
         string current = Fingerprint(target, expected != null && expected.StartsWith("sha:", StringComparison.Ordinal));
         if (current != expected) throw new IOException("Target changed since the preview: " + target);
@@ -177,7 +181,7 @@ partial class GearBackup
     // Recovery=yes: copies every target file the restore will replace or remove to a dated folder on the
     // PC first. Returns that folder, or null when there's nothing to save. Any failure here stops the
     // restore before the target is touched.
-    static string SaveRecovery(string targetRoot, List<RestoreEntry> copies, List<string> removals,
+    internal static string SaveRecovery(string targetRoot, List<RestoreEntry> copies, List<string> removals,
         Dictionary<string, string> targetHashes, Config config)
     {
         if (!config.Recovery) return null;
@@ -213,7 +217,7 @@ partial class GearBackup
         return folder;
     }
 
-    static void ExecuteRestore(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
+    internal static void ExecuteRestore(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
         List<string> extraFolders, Dictionary<string, string> targetHashes, Config config, out string title, out string summary)
     {
         OperationResult result = new RestoreEngine().Run(targetRoot, copies, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);

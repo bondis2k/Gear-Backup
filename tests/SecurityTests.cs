@@ -7,6 +7,8 @@ using System.Threading;
 using static FileCopy;
 using static PathSafety;
 using static Snapshots;
+using static Backups;
+using static SampleDependencies;
 
 partial class GearBackup
 {

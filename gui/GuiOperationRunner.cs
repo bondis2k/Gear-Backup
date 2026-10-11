@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using static PathSafety;
 using static Checksums;
+using static Backups;
+using static RestoreFlow;
 
 partial class GearBackup
 {

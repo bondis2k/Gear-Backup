@@ -11,6 +11,8 @@ using static PathSafety;
 using static BackupTraversal;
 using static Checksums;
 using static Snapshots;
+using static Backups;
+using static RestoreFlow;
 
 partial class GearBackup
 {

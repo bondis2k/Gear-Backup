@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using static Snapshots;
 using static VersionCatalog;
+using static RestoreFlow;
 
 partial class GearBackup
 {

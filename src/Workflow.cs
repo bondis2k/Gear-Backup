@@ -7,10 +7,11 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
+using static Backups;
 
 partial class GearBackup
 {
-    static bool PreviewOnly
+    internal static bool PreviewOnly
     {
         get { return OperationContext.Current.PreviewOnly; }
         set { OperationContext.Current.PreviewOnly = value; }
@@ -182,7 +183,7 @@ partial class GearBackup
         return typed.Length == 0 ? null : new SourceChoice { Path = typed };
     }
 
-    static FileState CompareContent(FileInfo file, string target, bool thorough)
+    internal static FileState CompareContent(FileInfo file, string target, bool thorough)
     {
         string sourceHash;
         return CompareContent(file, target, thorough, out sourceHash);
@@ -190,7 +191,7 @@ partial class GearBackup
 
     // Thorough: compare SHA-256 of both files (sourceHash returns the source's, to reuse). Otherwise
     // size and modified time, as Compare does.
-    static FileState CompareContent(FileInfo file, string target, bool thorough, out string sourceHash)
+    internal static FileState CompareContent(FileInfo file, string target, bool thorough, out string sourceHash)
     {
         sourceHash = null;
         if (!thorough) return Compare(file, target);
@@ -202,7 +203,7 @@ partial class GearBackup
     }
 
     // True when the operation should go ahead: approved, and not just a --preview.
-    static bool ShowPlan(string label, List<string> lines, long bytes, Config config, Dictionary<string, long> fileSizes = null)
+    internal static bool ShowPlan(string label, List<string> lines, long bytes, Config config, Dictionary<string, long> fileSizes = null)
     {
         OperationContext.Current.CheckCancellation();
         bool approved = OperationContext.Current.Interaction.ReviewPlan(new OperationPlan {
@@ -212,7 +213,7 @@ partial class GearBackup
     }
 
     // root\name, or root\name_2, name_3, ... if that folder already exists.
-    static string UniqueFolder(string root, string name)
+    internal static string UniqueFolder(string root, string name)
     {
         string path = Path.Combine(root, name);
         for (int n = 2; Directory.Exists(path); n++) path = Path.Combine(root, name + "_" + n);
@@ -243,7 +244,7 @@ partial class GearBackup
         finally { if (created) TryDelete(temp); }
     }
 
-    static void ReplaceSafely(string staged, string target)
+    internal static void ReplaceSafely(string staged, string target)
     {
         // ReplaceFile can lose the old name on certain failures without a backup argument.
         // Keep a transient on-volume rollback file even when optional PC recovery is off.
@@ -284,7 +285,7 @@ partial class GearBackup
         return File.ReadAllText(path).Trim();
     }
 
-    static void SetBackupStatus(string folder, string status)
+    internal static void SetBackupStatus(string folder, string status)
     {
         AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt"), status + "\n");
     }
