@@ -15,8 +15,6 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ### Fixed
 - Switching between the Restore and Backup tabs no longer makes the window flicker. The window now holds its repainting while the new tab is arranged and paints once, which cut the number of pictures shown during a switch from about 9 to 2 or 3.
-
-### Fixed
 - The **Browse…** buttons (restore destination, source folder, backup and recovery locations, per-device settings and the X100VI settings folder) open a folder picker that follows the colour theme, instead of the light-only Windows folder dialog. It shows your folders and drives as a tree with an editable path, and a **New folder…** button where a new folder makes sense. The **Open XML** file chooser is still the standard Windows one.
 
 ## [0.9.3] - 2026-10-11
