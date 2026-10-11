@@ -131,7 +131,7 @@ partial class GearBackup
 
     // The device whose history a backup belongs to, from the history's name ("x100vi-<serial>",
     // "m8-card-1A2B3C4D"); null for a named profile or a legacy history.
-    static DeviceProfile HistoryDevice(string backup)
+    internal static DeviceProfile HistoryDevice(string backup)
     {
         string history = Path.GetFileName(Path.GetDirectoryName(Rooted(backup).TrimEnd('\\')));
         foreach (DeviceProfile device in Devices.All)

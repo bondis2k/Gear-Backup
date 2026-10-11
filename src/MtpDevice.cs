@@ -10,8 +10,10 @@ using System.IO;
 using System.Management;
 using System.Runtime.InteropServices;
 using CT = System.Runtime.InteropServices.ComTypes;
+using static GearBackup;
+using static MtpMirror;
 
-partial class GearBackup
+static class PortableDevices
 {
     [StructLayout(LayoutKind.Sequential)]
     internal struct PropertyKey
@@ -22,7 +24,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("625e2df8-6392-4cf0-9ad1-3cfa5f17775c"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPortableDevice
+    internal interface IPortableDevice
     {
         void Open([MarshalAs(UnmanagedType.LPWStr)] string pnpDeviceId, [MarshalAs(UnmanagedType.IUnknown)] object clientInfo);
         void SendCommand(uint flags, IntPtr parameters, out IntPtr results);
@@ -36,7 +38,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("6a96ed84-7c73-4480-9938-bf5af477d426"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPortableDeviceContent
+    internal interface IPortableDeviceContent
     {
         void EnumObjects(uint flags, [MarshalAs(UnmanagedType.LPWStr)] string parentObjectId, IntPtr filter, out IEnumPortableDeviceObjectIDs objects);
         void Properties(out IPortableDeviceProperties properties);
@@ -52,7 +54,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("10ece955-cf41-4728-bfa0-41eedf1bbf19"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IEnumPortableDeviceObjectIDs
+    internal interface IEnumPortableDeviceObjectIDs
     {
         [PreserveSig] int Next(uint count, [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] IntPtr[] objectIds, out uint fetched);
         void Skip(uint count);
@@ -62,7 +64,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("7f6d695c-03df-4439-a809-59266beee3a6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPortableDeviceProperties
+    internal interface IPortableDeviceProperties
     {
         void GetSupportedProperties([MarshalAs(UnmanagedType.LPWStr)] string objectId, out IntPtr keys);
         void GetPropertyAttributes([MarshalAs(UnmanagedType.LPWStr)] string objectId, ref PropertyKey key, out IntPtr attributes);
@@ -73,7 +75,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("fd8878ac-d841-4d17-891c-e6829cdb6934"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPortableDeviceResources
+    internal interface IPortableDeviceResources
     {
         void GetSupportedResources([MarshalAs(UnmanagedType.LPWStr)] string objectId, out IntPtr keys);
         void GetResourceAttributes([MarshalAs(UnmanagedType.LPWStr)] string objectId, ref PropertyKey key, out IntPtr attributes);
@@ -84,7 +86,7 @@ partial class GearBackup
     }
 
     [ComImport, Guid("6848f6f2-3155-4f86-b6f5-263eeeab3143"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IPortableDeviceValues
+    internal interface IPortableDeviceValues
     {
         void GetCount(out uint count);
         void GetAt(uint index, ref PropertyKey key, IntPtr value);
@@ -143,7 +145,7 @@ partial class GearBackup
 
     // An OLE date from a device; DateTime.MinValue ("no date") for a value that isn't a valid date,
     // so one odd file doesn't stop the whole listing.
-    static DateTime OleDate(double value)
+    internal static DateTime OleDate(double value)
     {
         if (double.IsNaN(value) || value < -657435.0 || value > 2958465.99999999) return DateTime.MinValue;
         try { return DateTime.FromOADate(value); }
@@ -164,7 +166,7 @@ partial class GearBackup
     }
 
     // Connected portable (MTP) devices whose USB instance ID contains usbVendorId, e.g. "VID_2367".
-    static List<MtpDeviceInfo> FindMtpDevices(string usbVendorId)
+    internal static List<MtpDeviceInfo> FindMtpDevices(string usbVendorId)
     {
         var found = new List<MtpDeviceInfo>();
         using (var search = new ManagementObjectSearcher("SELECT DeviceID, Name, PNPClass FROM Win32_PnPEntity WHERE PNPClass = 'WPD'"))

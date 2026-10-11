@@ -6,6 +6,9 @@ using System.IO;
 using static PathSafety;
 using static Backups;
 using static RestoreFlow;
+using static FujiSettings;
+using static MtpMirror;
+using static UsbDevices;
 
 partial class GearBackup
 {
@@ -87,13 +90,13 @@ partial class GearBackup
         }
     }
 
-    static OperationResult BackupFolderCancelled()
+    internal static OperationResult BackupFolderCancelled()
     {
         return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
     }
 
     // Ask before the history lock or MTP sync creates anything for a backup. A preview stays read-only.
-    static bool EnsureBackupFolder(Config config)
+    internal static bool EnsureBackupFolder(Config config)
     {
         string folder = Path.GetFullPath(config.BackupFolder);
         RejectRootLinks(folder);
@@ -107,7 +110,7 @@ partial class GearBackup
         return true;
     }
 
-    static string HistoriesRoot(Config config)
+    internal static string HistoriesRoot(Config config)
     {
         return AppIdentity.ExistingFolder(config.BackupFolder, AppIdentity.BackupsFolderName, AppIdentity.Legacy.BackupsFolderName);
     }
@@ -135,12 +138,12 @@ partial class GearBackup
     }
 
     // Locks a history against a second writer; a preview changes nothing, so it takes no lock.
-    static IDisposable LockUnlessPreview(string history)
+    internal static IDisposable LockUnlessPreview(string history)
     {
         return PreviewOnly ? null : LockHistory(history);
     }
 
-    static string LatestBackup(string history)
+    internal static string LatestBackup(string history)
     {
         List<string> backups = ListBackups(history);
         return backups.Count == 0 ? null : backups[backups.Count - 1];

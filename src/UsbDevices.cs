@@ -5,17 +5,18 @@ using System.Management;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using static GearBackup;
 
 // Windows looks for a DLL in the program's own folder first. cfgmgr32.dll isn't one of the "known DLLs"
 // Windows always takes from System32, so without this a cfgmgr32.dll planted next to the exe (e.g. in
 // Downloads) would be loaded. This makes every DllImport in the program load from System32 only.
 [assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
 
-partial class GearBackup
+static class UsbDevices
 {
     // Returns the drive of the first connected device that matches a known device profile, and which
     // device it is. pnpId is the disk's device instance ID, needed to eject it (null if found by label only).
-    static string FindDevice(out DeviceProfile device, out string pnpId)
+    internal static string FindDevice(out DeviceProfile device, out string pnpId)
     {
         device = null;
         pnpId = null;
@@ -67,7 +68,7 @@ partial class GearBackup
 
     // Asks Windows to safely remove the M8 (same as "Safely Remove Hardware").
     // Returns null on success, otherwise the reason it failed.
-    static string EjectDrive(string pnpId)
+    internal static string EjectDrive(string pnpId)
     {
         if (pnpId == null) return "the " + CurrentDevice.Name + " was found by drive label only, so it can't be ejected automatically.";
 

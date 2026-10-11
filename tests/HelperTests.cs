@@ -11,6 +11,7 @@ using static Checksums;
 using static Snapshots;
 using static Backups;
 using static ChangeSummary;
+using static BackupZip;
 
 partial class GearBackup
 {

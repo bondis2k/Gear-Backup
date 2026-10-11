@@ -6,8 +6,11 @@ using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
 using static PathSafety;
+using static GearBackup;
+using static FujiSettings;
+using static PortableDevices;
 
-partial class GearBackup
+static class MtpMirror
 {
     // What the mirror needs from a device; MtpDevice provides it, and tests use a fake.
     internal interface IMtpSource
@@ -37,14 +40,14 @@ partial class GearBackup
         public Func<bool> ReadSettingsMode = null;
     }
 
-    static string MirrorRoot
+    internal static string MirrorRoot
     {
         get { return Path.Combine(AppIdentity.ExistingFolder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             AppIdentity.DirectoryName, AppIdentity.Legacy.DirectoryName), "Devices"); }
     }
 
     // "<mirror root>\op1-field-L1PRC121". The folder name also becomes the backup history's profile name.
-    static string MirrorFolder(DeviceProfile device, MtpDeviceInfo info)
+    internal static string MirrorFolder(DeviceProfile device, MtpDeviceInfo info)
     {
         var serial = new System.Text.StringBuilder();
         foreach (char c in info.Serial) if (char.IsLetterOrDigit(c) || c == '-' || c == '_') serial.Append(c);
@@ -52,7 +55,7 @@ partial class GearBackup
     }
 
     // The first connected MTP device that matches a device profile, or null.
-    static MtpSource FindMtpSource()
+    internal static MtpSource FindMtpSource()
     {
         foreach (DeviceProfile profile in Devices.All)
         {
@@ -64,7 +67,7 @@ partial class GearBackup
         return null;
     }
 
-    static string MtpRestoreUnsupported(DeviceProfile device)
+    internal static string MtpRestoreUnsupported(DeviceProfile device)
     {
         if (device.RestoreWarning != null)
             return "Restoring to the " + device.Name + " isn't offered. " + device.RestoreWarning +
@@ -75,7 +78,7 @@ partial class GearBackup
     }
 
     // Brings the device's mirror up to date and returns its path, ready to be backed up.
-    static string SyncMtpSource(MtpSource mtp)
+    internal static string SyncMtpSource(MtpSource mtp)
     {
         if (mtp.Device == Devices.X100VI && (mtp.ReadSettingsMode != null ? mtp.ReadSettingsMode() : FujiSettingsMode(mtp.Info)))
             throw new IOException("The X100VI is in settings mode. Choose Back up X100VI settings (CLI: --camera-settings), or select USB card reader on the camera to back up photos.");
@@ -100,7 +103,7 @@ partial class GearBackup
     // changed, and removes files and folders that are no longer on the device. Names from the device
     // go through SafePath, so a strange name can't write outside the mirror; such items are skipped.
     // Nothing is ever written to the device.
-    static MirrorResult SyncMirror(IMtpSource source, string mirror)
+    internal static MirrorResult SyncMirror(IMtpSource source, string mirror)
     {
         var result = new MirrorResult();
         Directory.CreateDirectory(mirror);

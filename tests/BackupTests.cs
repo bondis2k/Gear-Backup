@@ -13,6 +13,7 @@ using static Checksums;
 using static Snapshots;
 using static Backups;
 using static RestoreFlow;
+using static BackupZip;
 
 partial class GearBackup
 {

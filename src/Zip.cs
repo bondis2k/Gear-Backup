@@ -9,12 +9,13 @@ using static FileCopy;
 using static BackupTraversal;
 using static Checksums;
 using static Backups;
+using static GearBackup;
 
-partial class GearBackup
+static class BackupZip
 {
     // "<history>\2026-10-10.zip" for the backup folder "<history>\2026-10-10" (_2, _3, ... if taken).
     // Kept beside the folder, not inside it, so restores and checks never treat it as card content.
-    static string ZipPathFor(string backup)
+    internal static string ZipPathFor(string backup)
     {
         string folder = backup.TrimEnd('\\');
         string parent = Path.GetDirectoryName(folder), name = Path.GetFileName(folder);
@@ -102,7 +103,7 @@ partial class GearBackup
     }
 
     // Zip files can only store dates from 1980 to 2107; undated M8 files (1601) get 1 January 1980.
-    static DateTimeOffset ZipTime(DateTime local)
+    internal static DateTimeOffset ZipTime(DateTime local)
     {
         return local.Year < 1980 || local.Year > 2107 ? new DateTime(1980, 1, 1) : local;
     }

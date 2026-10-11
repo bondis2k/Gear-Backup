@@ -9,6 +9,7 @@ using static VersionCatalog;
 using static GearBackup;
 using static Backups;
 using static ChangeSummary;
+using static BackupZip;
 
 internal sealed class BackupEngine
 {

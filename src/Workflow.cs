@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
 using static Backups;
+using static MtpMirror;
 
 partial class GearBackup
 {
@@ -17,7 +18,7 @@ partial class GearBackup
         set { OperationContext.Current.PreviewOnly = value; }
     }
     // Profile names become folder names, so they're limited to safe characters.
-    static void ValidateProfile(string name)
+    internal static void ValidateProfile(string name)
     {
         if (!Regex.IsMatch(name, @"^[A-Za-z0-9][A-Za-z0-9 _-]{0,63}$") || name.EndsWith(" ") ||
             Regex.IsMatch(name, @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", RegexOptions.IgnoreCase))
@@ -86,7 +87,7 @@ partial class GearBackup
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern bool GetVolumeInformationW(string rootPath, StringBuilder volumeName, int volumeNameSize,
+    internal static extern bool GetVolumeInformationW(string rootPath, StringBuilder volumeName, int volumeNameSize,
         out uint serialNumber, out uint maxComponentLength, out uint fileSystemFlags, StringBuilder fileSystemName, int fileSystemNameSize);
 
     // Lets the user pick one of the histories that has backups: each profile, plus backups made before
@@ -292,7 +293,7 @@ partial class GearBackup
 
     // Holds .history.lock open without sharing, so a second program or window can't write to the same
     // history at the same time. Windows releases it when the stream is disposed or the process ends.
-    static FileStream LockHistory(string root)
+    internal static FileStream LockHistory(string root)
     {
         RejectRootLinks(root);
         Directory.CreateDirectory(root);

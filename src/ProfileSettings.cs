@@ -126,7 +126,7 @@ partial class GearBackup
 
     // The global backup location plus every other location named in the overrides, so the dashboard and
     // checks can find histories wherever a device or profile stores them.
-    static List<string> ConfiguredBackupLocations(Config config)
+    internal static List<string> ConfiguredBackupLocations(Config config)
     {
         var locations = new List<string> { config.BackupFolder };
         foreach (var section in ReadProfileSettings(config).Values)
