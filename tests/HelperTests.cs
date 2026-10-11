@@ -609,4 +609,38 @@ partial class Tests
         using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
             Assert(CurrentDevice == Devices.M8 && !PreviewOnly, "a new operation starts with the default device and no preview");
     }
+
+    // Histories are shown by readable names, or a nickname kept in the history folder.
+    static void TestHistoryNames(string root)
+    {
+        var expected = new Dictionary<string, string> {
+            { "m8-card-DCE92C2E", "M8 · card DCE92C2E" }, { "tracker-mini-card-1A2B3C4D", "Tracker Mini · card 1A2B3C4D" },
+            { "op-xy-XXYWV10D", "OP-XY · XXYWV10D" }, { "op1-field-L1PRC121", "OP-1 Field · L1PRC121" },
+            { "x100vi-5935373130312602043CD31016B488", "X100VI · photos" }, { "x100vi-settings-5935373130312602043CD31016B488", "X100VI · settings" },
+            { "m8-folder-0123456789abcdef", "M8 · folder 0123" }, { "Studio", "Studio" }, { "m8-test", "m8-test" }, { "Studio-settings", "Studio-settings" } };
+        foreach (var pair in expected)
+            Assert(HistoryNames.AutomaticName(pair.Key) == pair.Value, "automatic name of " + pair.Key + ": " + HistoryNames.AutomaticName(pair.Key));
+
+        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-card-DCE92C2E");
+        Directory.CreateDirectory(Path.Combine(history, "2026-10-01"));
+        Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E" && HistoryNames.Nickname(history) == null, "without a nickname the automatic name is shown");
+        HistoryNames.SetNickname(history, "  Studio card  ");
+        Assert(HistoryNames.DisplayName(history) == "Studio card", "a nickname replaces the automatic name");
+        Assert(ListBackups(history).Count == 1 && Directory.Exists(history), "a nickname leaves the history folder and its backups as they are");
+        Throws(() => HistoryNames.SetNickname(history, "two" + Environment.NewLine + "lines"), "a nickname with a line break is refused");
+        Throws(() => HistoryNames.SetNickname(history, new string('x', HistoryNames.MaxNickname + 1)), "an overlong nickname is refused");
+        Assert(HistoryNames.DisplayName(history) == "Studio card", "a refused nickname leaves the current one");
+
+        var offered = new List<string>();
+        var ui = new TestInteraction { OnChooseItem = (q, items) => { offered.AddRange(items); return 0; } };
+        using (new OperationContext(ui, CancellationToken.None).Activate()) ChooseHistory(config, null);
+        Assert(offered.Count == 1 && offered[0] == "Studio card — " + history, "history pickers show the nickname with the folder: " + string.Join(" | ", offered.ToArray()));
+        BackupCatalog catalog;
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) catalog = StorageCatalog.ScanDashboardCatalog(config);
+        Assert(catalog.Backups.Count == 1 && catalog.Backups[0].Profile == "Studio card", "Dashboard and Storage show the nickname");
+
+        HistoryNames.SetNickname(history, "");
+        Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E", "clearing the nickname brings back the automatic name");
+    }
 }

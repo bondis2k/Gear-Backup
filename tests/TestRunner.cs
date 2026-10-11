@@ -161,6 +161,7 @@ partial class Tests
         RunTest("MTP: values from a faulty device", TestMtpDeviceValues);
         RunTest("Named values: statuses, stages, modes, kinds", TestNamedValues);
         RunTest("Operation context: no hidden context, scoped devices", () => TestOperationContext(Folder(root, "operation-context")));
+        RunTest("History names and nicknames", () => TestHistoryNames(Folder(root, "history-names")));
         RunTest("Security: record reads and writes check links", () => TestRecordAccess(Folder(root, "record-access")));
         RunTest("Verification hash at chunk boundaries", () => TestHashFromDisk(Folder(root, "hash-from-disk")));
         RunTest("Storage cleanup updates checksum lists once", () => TestCleanupChecksums(Folder(root, "cleanup-checksums")));

@@ -11,10 +11,17 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   Space usage and Cleanup; MTP mirrors belong to the device they were read from, and changing the
   device clears checked cleanup items so nothing hidden from view is recycled.
 - **View recipes** in Storage, working on the backup selected in Space usage.
+- Backup histories are shown by readable names ("M8 · card DCE92C2E", "X100VI · photos", "X100VI · settings")
+  in Dashboard, Storage, settings and the restore/check pickers (GUI and CLI), instead of folder IDs.
+- **Rename…** in Dashboard and Storage gives a history a nickname (e.g. "Studio card"), stored with its
+  backups; the folder on disk keeps its name.
 - The main window remembers its position, size and maximized state (`GearBackup.Window.ini` beside
   `GearBackup.ini`) and opens there next time; it opens centred if that place is no longer on a screen.
 
 ### Changed
+- "Profiles" are now called what they are: the main window's field is **Backup name (optional)**, which
+  starts a separate history, and the **Profiles** window is **Device & backup settings**. `GearBackup.ini`,
+  `GearBackup.Profiles.ini` and `--profile` are unchanged.
 - Color themes are listed as **Original**, **Original (dark)**, **Retro**, and **Original** is now the
   default for new settings. `Manual.html` is the Original-themed manual.
 - **More options** in the main window always starts collapsed. The summary line under the buttons
@@ -22,6 +29,12 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **View recipes** in the Dashboard is greyed out unless the selected backup holds saved X100VI recipes.
 - The **X100VI recipes** link was removed from the main window; open recipes from a settings backup
   in Dashboard or Storage (the viewer can still open any folder or XML export).
+- Storage's **Cleanup** tab describes each item in plain words ("Older backup · M8 · card … · date",
+  "Downloaded device copy · X100VI · photos") with an **If removed** column, a **Remove** tick column, a running
+  selection total, and **Preview cleanup** available only once something is ticked. MTP mirrors are called
+  downloaded device copies.
+- Dashboard and Storage start filtered to the device detected in the main window (if it has anything to
+  show), instead of All devices.
 - Tool windows and dialogs open centred on the main window instead of the screen.
 - Dashboard reads only health metadata, about 1.8× faster; sizes and cleanup are in Storage. Copying
   and hashing reuse buffers, and unchanged backups without history skip redundant checksum and

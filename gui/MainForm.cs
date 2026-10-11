@@ -29,7 +29,7 @@ internal sealed class MainForm : Form
     readonly Label deviceConnection = GuiTheme.Label("", 10, GuiTheme.Muted);
     readonly Button openFolder = GuiTheme.Button("Open backup folder", false);
     readonly Button dashboard = GuiTheme.GhostButton("Dashboard"), storage = GuiTheme.GhostButton("Storage"),
-        profiles = GuiTheme.GhostButton("Profiles");
+        profiles = GuiTheme.GhostButton("Device && backup settings");
     Button sourceBrowse;
     string outputFolder;
     readonly System.Diagnostics.Stopwatch elapsed = new System.Diagnostics.Stopwatch();
@@ -81,7 +81,7 @@ internal sealed class MainForm : Form
         detail.Name = "OperationDetail";
         counts.Visible = false; metrics.Visible = false;
         source.AccessibleName = "Source folder"; backupFolder.AccessibleName = "Backup location";
-        profile.AccessibleName = "Backup profile"; operation.AccessibleName = "Operation"; log.AccessibleName = "Activity log";
+        profile.AccessibleName = "Backup name"; operation.AccessibleName = "Operation"; log.AccessibleName = "Activity log";
 
         BuildLayout();
         Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -127,7 +127,7 @@ internal sealed class MainForm : Form
         hints.SetToolTip(detect, "Detect a connected device (Ctrl+D)");
         hints.SetToolTip(settings, "Preferences (Ctrl+,)"); hints.SetToolTip(cancel, "Cancel safely (Esc)");
         hints.SetToolTip(help, "Open the manual (F1)");
-        hints.SetToolTip(profile, "Leave blank to keep separate histories automatically for each card or folder.");
+        hints.SetToolTip(profile, "Leave blank: each card, folder or device keeps its own history automatically.\nA name keeps backups in a separate history under that name, e.g. for a second project on the same card.");
         // Closing while an operation runs cancels it first; CompleteOperation closes the window once it stops.
         FormClosing += delegate(object sender, FormClosingEventArgs e) {
             if (runner.IsBusy) { e.Cancel = true; closeAfterCancel = true; RequestCancel(); }
@@ -182,7 +182,7 @@ internal sealed class MainForm : Form
         for (int i = 0; i < 6; i++) fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         sourceBrowse = AddPath(fields, 0, sourceCaption, source, false); sourceBrowse.AccessibleName = "Browse source or restore destination";
         AddPath(fields, 2, FieldLabel("Backup location"), backupFolder, true);
-        var profileLabel = FieldLabel("Profile  ·  leave blank for automatic card identity");
+        var profileLabel = FieldLabel("Backup name (optional)  ·  starts a separate history; leave blank to use the device's own");
         fields.Controls.Add(profileLabel, 0, 4); fields.SetColumnSpan(profileLabel, 3);
         var profileField = new FieldPanel(profile) { Dock = DockStyle.Fill, Margin = Padding.Empty };
         fields.Controls.Add(profileField, 0, 5); fields.SetColumnSpan(profileField, 3);
@@ -349,7 +349,7 @@ internal sealed class MainForm : Form
         optionsExpanded = expanded;
         optionalFields.Visible = expanded;
         optionsToggle.Text = expanded ? "Fewer options ▴" : "More options ▾";
-        optionsToggle.AccessibleDescription = expanded ? "Source, destination, profile and zip options expanded" : "Show source, destination, profile and zip options";
+        optionsToggle.AccessibleDescription = expanded ? "Source, destination, backup name and zip options expanded" : "Show source, destination, backup name and zip options";
     }
     void RefreshDestinationSummary()
     {
@@ -368,8 +368,8 @@ internal sealed class MainForm : Form
         string sourceFolder = source.Text.Trim();
         string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
             : (Selected == GuiOperation.Restore ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
-        destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   Profile: " + profile.Text.Trim() : "");
-        hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or profile in More options. Device/profile preferences can override the location.");
+        destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   Backup name: " + profile.Text.Trim() : "");
+        hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or the backup name in More options. Device & backup settings can override the location.");
     }
     public void SelectCameraSettings() { operation.SelectedIndex = (int)GuiOperation.CameraSettings; }
     GuiOperation Selected { get { return (GuiOperation)operation.SelectedIndex; } }
@@ -535,7 +535,8 @@ internal sealed class MainForm : Form
         {
             Config options = CaptureConfig();
             // Saved X100VI recipes open from a settings backup's row in Dashboard or Storage (View recipes).
-            using (Form dialog = choice < 2 ? (Form)new CatalogDialog(this, options, choice == 1) : new ProfileSettingsDialog(this, options))
+            // Dashboard and Storage start filtered to the device detected here, if any.
+            using (Form dialog = choice < 2 ? (Form)new CatalogDialog(this, options, choice == 1, null, displayedDevice) : new ProfileSettingsDialog(this, options))
                 dialog.ShowDialog(this);
             RefreshDestinationSummary();
         }

@@ -45,7 +45,7 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
     bool loading;
 
     public ProfileSettingsDialog(MainForm owner, Config options)
-        : base(owner, "Profiles", "Set preferences for a device or one backup profile. Leave “Use default” checked for settings you don't need to change.")
+        : base(owner, "Device & backup settings", "Set preferences for a device, or for one backup history. Leave “Use default” checked for settings you don't need to change.")
     {
         config = options;
         saved = ReadProfileSettings(config);
@@ -69,7 +69,7 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
             catch (IOException) { continue; }
             foreach (string history in Directory.GetDirectories(directory))
             {
-                AddProfile(Path.GetFileName(history));
+                AddProfile(Path.GetFileName(history), HistoryNames.DisplayName(history));
                 // A history that can't be read (linked, damaged record) just has no known device.
                 DeviceProfile device = null;
                 try { string backup = LatestBackup(history); if (backup != null) device = BackupDevice(backup); }
@@ -92,11 +92,11 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
         selector.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 64));
         selector.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         selector.Controls.Add(GuiTheme.Label("What would you like to edit?", 9, GuiTheme.Muted), 0, 0);
-        selector.Controls.Add(GuiTheme.Label("Choose a device or profile", 9, GuiTheme.Muted), 1, 0);
+        selector.Controls.Add(GuiTheme.Label("Choose a device or backup history", 9, GuiTheme.Muted), 1, 0);
         GuiTheme.StyleComboBox(kind); GuiTheme.StyleComboBox(scope);
-        kind.Items.AddRange(new object[] { "Settings for a device", "Settings for one backup profile" });
+        kind.Items.AddRange(new object[] { "Settings for a device", "Settings for one backup history" });
         selector.Controls.Add(kind, 0, 1); selector.Controls.Add(scope, 1, 1);
-        var create = GuiTheme.Button("New profile…", false); create.Name = "NewProfile";
+        var create = GuiTheme.Button("New backup name…", false); create.Name = "NewProfile";
         create.Click += delegate { CreateProfile(); };
         selector.Controls.Add(create, 2, 1);
         content.Controls.Add(selector, 0, 0);
@@ -124,10 +124,13 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
         kind.SelectedIndex = config.Profile.Length > 0 ? 1 : 0;
     }
 
-    void AddProfile(string name)
+    // A backup history's settings, listed by its readable name (or nickname); the key keeps the folder
+    // name, which is what GearBackup.Profiles.ini and the CLI use.
+    void AddProfile(string name, string label = null)
     {
-        if (!scopes.Exists(item => item.Key.Equals("profile:" + name, StringComparison.OrdinalIgnoreCase)))
-            scopes.Add(new ScopeChoice { Key = "profile:" + name, Label = name });
+        ScopeChoice existing = scopes.Find(item => item.Key.Equals("profile:" + name, StringComparison.OrdinalIgnoreCase));
+        if (existing == null) scopes.Add(new ScopeChoice { Key = "profile:" + name, Label = label ?? HistoryNames.AutomaticName(name) });
+        else if (label != null) existing.Label = label;
     }
     void PopulateScopes()
     {
@@ -138,9 +141,10 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
         loading = false;
         int selected = 0;
         if (kind.SelectedIndex == 1)
-            for (int i = 0; i < scope.Items.Count; i++) if (((ScopeChoice)scope.Items[i]).Label == config.Profile) selected = i;
+            for (int i = 0; i < scope.Items.Count; i++)
+                if (((ScopeChoice)scope.Items[i]).Key.Equals("profile:" + config.Profile, StringComparison.OrdinalIgnoreCase)) selected = i;
         if (scope.Items.Count > 0) scope.SelectedIndex = selected;
-        else { tabs.Enabled = false; applies.Text = "No backup profiles yet. Click New profile to create one."; Notice.Text = "Device settings apply to all backups from that device. A profile changes settings for one backup history."; }
+        else { tabs.Enabled = false; applies.Text = "No backup histories yet. Back up a device first, or click New backup name."; Notice.Text = "Device settings apply to all backups from that device. Settings for one backup history change them for that history only."; }
     }
     Config InheritedSettings(string name)
     {
@@ -179,7 +183,7 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
             AddField(pages[section], setting, inherited, value, custom);
         }
         applies.Text = current.StartsWith("device:", StringComparison.OrdinalIgnoreCase)
-            ? "Applies to backups from " + ((ScopeChoice)scope.SelectedItem).Label + ". Defaults come from Settings. A backup profile can change them further."
+            ? "Applies to backups from " + ((ScopeChoice)scope.SelectedItem).Label + ". Defaults come from Settings. Settings for one backup history can change them further."
             : "Applies only to “" + ((ScopeChoice)scope.SelectedItem).Label + "”. Defaults come from the device when known, otherwise Settings.";
         loading = false;
         Notice.Text = "Change the settings you need, then click Save changes. Your choices are shared with the CLI.";
@@ -300,19 +304,20 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
             if (dialog.ShowDialog(this) != DialogResult.OK) return;
             RememberDraft(); AddProfile(name.Text.Trim());
             if (kind.SelectedIndex != 1) kind.SelectedIndex = 1; else PopulateScopes();
-            for (int i = 0; i < scope.Items.Count; i++) if (((ScopeChoice)scope.Items[i]).Label.Equals(name.Text.Trim(), StringComparison.OrdinalIgnoreCase)) scope.SelectedIndex = i;
+            for (int i = 0; i < scope.Items.Count; i++)
+                if (((ScopeChoice)scope.Items[i]).Key.Equals("profile:" + name.Text.Trim(), StringComparison.OrdinalIgnoreCase)) scope.SelectedIndex = i;
         }
     }
     internal Form CreateProfilePrompt()
     {
-        var dialog = new Form { Text = "New backup profile", StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(430, 170),
+        var dialog = new Form { Text = "New backup name", StartPosition = FormStartPosition.CenterParent, ClientSize = new Size(430, 170),
             Font = Font, BackColor = GuiTheme.Background, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false };
         if (GuiHeadless) dialog.Opacity = 0;
-        var label = GuiTheme.Label("Name this backup profile", 10, GuiTheme.Ink); label.Location = new Point(20, 20);
+        var label = GuiTheme.Label("Name for a separate backup history", 10, GuiTheme.Ink); label.Location = new Point(20, 20);
         var name = new TextBox { Name = "NewProfileName", Location = new Point(20, 50), Width = 390 };
-        var add = GuiTheme.Button("Create profile", true); add.Location = new Point(250, 100);
+        var add = GuiTheme.Button("Create", true); add.Location = new Point(250, 100);
         var cancel = GuiTheme.Button("Cancel", false); cancel.Location = new Point(120, 100); cancel.DialogResult = DialogResult.Cancel;
-        add.Click += delegate { try { ValidateProfile(name.Text.Trim()); dialog.DialogResult = DialogResult.OK; } catch (Exception ex) { MessageBox.Show(dialog, ex.Message, "Choose a profile name"); } };
+        add.Click += delegate { try { ValidateProfile(name.Text.Trim()); dialog.DialogResult = DialogResult.OK; } catch (Exception ex) { MessageBox.Show(dialog, ex.Message, "Choose a backup name"); } };
         dialog.Controls.AddRange(new Control[] { label, name, add, cancel }); dialog.AcceptButton = add; dialog.CancelButton = cancel;
         GuiTheme.ApplyTo(dialog);
         return dialog;

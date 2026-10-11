@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using static StorageCatalog;
+using static PathSafety;
 using static ConsoleUi;
 using static Workflow;
 
@@ -16,21 +17,27 @@ internal sealed class CatalogDialog : ToolsDialog
     readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
     readonly DataGridView cleanup = ToolGrid("CleanupItems");
     BackupCatalog catalog;
-    Button viewRecipes;
+    Button viewRecipes, renameHistory, previewCleanup;
+    readonly Label cleanupSelection = GuiTheme.Label("", 10, GuiTheme.Ink);
     // Device filter on both windows: "All devices", then each device that has histories (or, on Storage,
     // an MTP mirror), and "Unknown device" for histories made before backups recorded their device.
     readonly ComboBox deviceFilter = new ComboBox { AccessibleName = "Device", DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
     const string AllDevices = "All devices", UnknownDevice = "Unknown device";
     bool fillingDevices;
+    // The device detected in the main window, chosen in the filter when the window first fills (if it
+    // has anything to show); after that the filter keeps whatever the user picks.
+    string startDevice;
 
-    // `initial` shows an existing scan (tests); otherwise the window scans when it opens.
-    public CatalogDialog(MainForm owner, Config options, bool storageMode, BackupCatalog initial = null)
+    // `initial` shows an existing scan (tests); otherwise the window scans when it opens. `device` is the
+    // device detected in the main window, if any, which the filter starts on.
+    public CatalogDialog(MainForm owner, Config options, bool storageMode, BackupCatalog initial = null, DeviceProfile device = null)
         : base(owner, storageMode ? "Storage" : "Dashboard", storageMode
             ? "See what uses space and review cleanup before recycling items."
             : "Backup health across your devices and profiles. Backups older than 7 days are marked overdue.")
     {
         config = options;
         storage = storageMode;
+        startDevice = device == null ? null : device.Name;
         grid = ToolGrid(storage ? "StorageTable" : "DashboardTable");
         deviceFilter.Name = storage ? "StorageDevice" : "DashboardDevice";
         GuiTheme.StyleComboBox(deviceFilter);
@@ -40,10 +47,21 @@ internal sealed class CatalogDialog : ToolsDialog
         if (storage) BuildStorage(owner);
         else BuildDashboard(owner);
         ToolButton("Refresh", "RefreshCatalog", RefreshCatalog);
+        // Opens the selected backup's folder, or on Storage's Cleanup tab the selected item's folder.
         ToolButton("Open folder", "OpenCatalogFolder", delegate {
-            CatalogBackup row = SelectedBackup();
-            if (row != null && Directory.Exists(row.Path))
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(row.Path) { UseShellExecute = true });
+            string folder = null;
+            if (storage && tabs.SelectedIndex == 1)
+            {
+                var item = cleanup.CurrentRow == null ? null : cleanup.CurrentRow.Tag as StorageItem;
+                if (item != null) folder = item.Folder ? item.Path : Path.GetDirectoryName(item.Path);
+            }
+            else
+            {
+                CatalogBackup row = SelectedBackup();
+                if (row != null) folder = row.Path;
+            }
+            if (folder != null && Directory.Exists(folder))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(folder) { UseShellExecute = true });
         });
         if (initial != null) Populate(initial);
         else Shown += delegate { RefreshCatalog(); };
@@ -56,21 +74,99 @@ internal sealed class CatalogDialog : ToolsDialog
         var usage = new TabPage("Space usage");
         var clean = new TabPage("Cleanup");
         usage.Controls.Add(grid);
-        clean.Controls.Add(cleanup);
+        clean.Controls.Add(BuildCleanupPage());
         tabs.TabPages.Add(usage);
         tabs.TabPages.Add(clean);
         SetContent(WithDeviceFilter(GuiTheme.Tabbed(tabs)));
-        // Only the Select column can be changed; nothing is selected at first.
+        previewCleanup = ToolButton("Preview cleanup", "PreviewCleanup", ReviewCleanup, true);
+        AddRecipesButton(owner);
+        // View recipes and Rename work on Space usage; Open folder on whichever tab is showing.
+        tabs.SelectedIndexChanged += delegate { UpdateRecipesButton(); };
+        UpdateCleanupSelection();
+    }
+
+    // The Cleanup tab: what can go, in plain words, what removing it means, and what's selected so far.
+    // Only the Remove column can be changed; nothing is selected at first.
+    Control BuildCleanupPage()
+    {
+        var page = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, ColumnCount = 1, Margin = Padding.Empty };
+        page.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        page.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        page.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        Label intro = GuiTheme.Label("Move items you no longer need to the Recycle Bin to free space. Nothing is removed until you review " +
+            "and confirm, and the latest backup of each history is always kept.", 9, GuiTheme.Muted);
+        intro.Name = "CleanupIntro";
+        intro.Margin = new Padding(4, 6, 4, 8);
+        page.SizeChanged += delegate { intro.MaximumSize = new System.Drawing.Size(Math.Max(100, page.ClientSize.Width - 8), 0); };
+        page.Controls.Add(intro, 0, 0);
         cleanup.ReadOnly = false;
-        cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Select", FillWeight = 15 });
-        foreach (string column in new[] { "Kind", "Size", "Location" })
+        cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Remove", FillWeight = 22, MinimumWidth = 70 });
+        foreach (string column in new[] { "Item", "Size", "If removed", "Location" })
         {
             int i = cleanup.Columns.Add(column, column);
             cleanup.Columns[i].ReadOnly = true;
         }
-        cleanup.Columns["Location"].FillWeight = 280;
-        ToolButton("Preview cleanup", "PreviewCleanup", ReviewCleanup, true);
-        AddRecipesButton(owner);
+        cleanup.Columns["Item"].FillWeight = 220;
+        cleanup.Columns["Size"].FillWeight = 45;
+        cleanup.Columns["If removed"].FillWeight = 130;
+        cleanup.Columns["Location"].FillWeight = 110;
+        // Long item names wrap instead of being cut off; the row grows to fit.
+        cleanup.Columns["Item"].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        // Ticking a box takes effect at once, so the selection total and Preview cleanup follow it.
+        cleanup.CurrentCellDirtyStateChanged += delegate { if (cleanup.IsCurrentCellDirty) cleanup.CommitEdit(DataGridViewDataErrorContexts.Commit); };
+        cleanup.CellValueChanged += delegate { UpdateCleanupSelection(); };
+        cleanup.Dock = DockStyle.Fill;
+        page.Controls.Add(cleanup, 0, 1);
+        cleanupSelection.Name = "CleanupSelection";
+        cleanupSelection.Margin = new Padding(4, 8, 4, 0);
+        page.Controls.Add(cleanupSelection, 0, 2);
+        return page;
+    }
+
+    void UpdateCleanupSelection()
+    {
+        if (!storage) return;
+        List<StorageItem> selected = SelectedCleanup();
+        long bytes = 0;
+        foreach (StorageItem item in selected) bytes += item.Bytes;
+        cleanupSelection.Text = selected.Count == 0 ? "Nothing selected. Tick the items you want to remove."
+            : selected.Count + (selected.Count == 1 ? " item" : " items") + " selected · " + FormatSize(bytes);
+        previewCleanup.Enabled = selected.Count > 0;
+    }
+
+    // A cleanup item in plain words, with the history it belongs to, and what removing it means.
+    string CleanupItemText(StorageItem item)
+    {
+        if (item.Kind == StorageKind.Mirror)
+            return "Downloaded device copy · " + HistoryNames.AutomaticName(Path.GetFileName(item.Path.TrimEnd('\\')));
+        string history = HistoryLabel(item.History);
+        if (item.Kind == StorageKind.OlderBackup) return "Older backup · " + history + " · " + Path.GetFileName(item.Path.TrimEnd('\\'));
+        if (item.Kind == StorageKind.Zip) return "ZIP copy · " + history + " · " + Path.GetFileNameWithoutExtension(item.Path);
+        if (item.Kind == StorageKind.OldVersion && item.Backup != null && item.Path.StartsWith(Rooted(item.Backup), StringComparison.OrdinalIgnoreCase))
+            return "Old version of a file · " + history + " · " + item.Path.Substring(Rooted(item.Backup).Length);
+        return item.Kind + " · " + history;
+    }
+
+    // What removing an item means: short for the table, with the full explanation as its tooltip.
+    static string CleanupEffect(StorageItem item, bool full = false)
+    {
+        if (item.Kind == StorageKind.Mirror)
+            return full ? "A temporary copy of the device made before each backup. Your backups are not affected; it is downloaded again at the next backup."
+                : "Downloaded again next backup";
+        if (item.Kind == StorageKind.OlderBackup)
+            return full ? "This backup date can no longer be restored. Newer backups of this history, including the latest, are kept."
+                : "Can't restore this date anymore";
+        if (item.Kind == StorageKind.Zip)
+            return full ? "Only the extra ZIP file is removed; the backup folder it was made from stays." : "Backup folder stays";
+        return full ? "This earlier version of the file can no longer be restored; the current file stays." : "Can't restore this version anymore";
+    }
+
+    // A history's name as the lists show it (its nickname or readable name).
+    string HistoryLabel(string history)
+    {
+        CatalogBackup row = catalog == null ? null : catalog.Backups.Find(b => string.Equals(b.History, history, StringComparison.OrdinalIgnoreCase));
+        return row != null ? row.Profile : HistoryNames.DisplayName(history);
     }
 
     void BuildDashboard(MainForm owner)
@@ -96,14 +192,45 @@ internal sealed class CatalogDialog : ToolsDialog
             if (row == null || !RecipeViewerDialog.HasRecipes(row.Path)) return;
             using (var viewer = new RecipeViewerDialog(owner, row.Path)) viewer.ShowDialog(this);
         });
+        renameHistory = ToolButton("Rename…", "RenameHistory", RenameHistory);
         grid.CurrentCellChanged += delegate { UpdateRecipesButton(); };
         UpdateRecipesButton();
     }
 
+    // Also enables Rename for a selected history that can have a nickname (not the legacy one). On Storage
+    // both act on Space usage, so they are greyed out while Cleanup is showing.
     void UpdateRecipesButton()
     {
-        CatalogBackup row = SelectedBackup();
+        CatalogBackup row = storage && tabs.SelectedIndex == 1 ? null : SelectedBackup();
         viewRecipes.Enabled = row != null && RecipeViewerDialog.HasRecipes(row.Path);
+        renameHistory.Enabled = row != null && Renamable(row);
+    }
+
+    static bool Renamable(CatalogBackup row)
+    {
+        return Path.GetFileName(Path.GetDirectoryName(row.History.TrimEnd('\\'))).Equals("profiles", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Gives the selected backup's history a nickname, shown in every list instead of its automatic name.
+    // The folder on disk keeps its name; an empty nickname goes back to the automatic name.
+    void RenameHistory()
+    {
+        CatalogBackup row = SelectedBackup();
+        if (row == null || !Renamable(row)) return;
+        string automatic = HistoryNames.AutomaticName(Path.GetFileName(row.History.TrimEnd('\\')));
+        using (var dialog = new SearchDialog("Rename backup history",
+            "Shown instead of “" + automatic + "” in every list. Leave empty to use that name again; the folder on disk keeps its name."))
+        {
+            dialog.Input.Name = "HistoryNickname";
+            dialog.Input.Text = HistoryNames.Nickname(row.History) ?? "";
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+            HistoryNames.SetNickname(row.History, dialog.Input.Text);
+        }
+        string name = HistoryNames.DisplayName(row.History);
+        foreach (CatalogBackup backup in catalog.Backups)
+            if (string.Equals(backup.History, row.History, StringComparison.OrdinalIgnoreCase)) backup.Profile = name;
+        Populate(catalog);
+        Notice.Text = "Renamed to “" + name + "”.";
     }
 
     // The window's content with the Device filter above it.
@@ -174,16 +301,17 @@ internal sealed class CatalogDialog : ToolsDialog
             if (!VisibleFor(itemDevice(item))) continue;
             if (item.Kind == StorageKind.Zip) zipBytes += item.Bytes;
             if (item.Kind == StorageKind.Mirror) mirrorBytes += item.Bytes;
-            int i = cleanup.Rows.Add(false, item.Kind, FormatSize(item.Bytes), item.Path);
+            int i = cleanup.Rows.Add(false, CleanupItemText(item), FormatSize(item.Bytes), CleanupEffect(item), item.Path);
             cleanup.Rows[i].Tag = item;
+            cleanup.Rows[i].Cells["If removed"].ToolTipText = CleanupEffect(item, true);
+            cleanup.Rows[i].Cells["Location"].ToolTipText = item.Path;
         }
         grid.Rows.Add("ZIP archives", FormatSize(zipBytes));
-        grid.Rows.Add("MTP mirrors", FormatSize(mirrorBytes));
+        grid.Rows.Add("Downloaded device copies", FormatSize(mirrorBytes));
+        UpdateCleanupSelection();
         bool filtered = (deviceFilter.SelectedItem as string ?? AllDevices) != AllDevices;
-        Notice.Text = "Unique stored file content" + (filtered ? " (all devices)" : "") + ": " + FormatSize(value.UniqueBytes) +
-            ". Hard links counted once; allocation, compression and " +
-            "Recycle Bin excluded. Cleanup sizes are logical and may share content. Recycling does not free disk space until the Recycle Bin " +
-            "is emptied. Latest backups and individual history objects are protected. Removing a mirror requires downloading it again.";
+        Notice.Text = "Backups use " + FormatSize(value.UniqueBytes) + (filtered ? " in total across all devices" : " in total") +
+            " (files kept more than once through hard links are counted once). Space is freed when you empty the Recycle Bin.";
     }
 
     // Each history's device: its latest backup's, as on the Dashboard.
@@ -236,6 +364,11 @@ internal sealed class CatalogDialog : ToolsDialog
         foreach (DeviceProfile device in Devices.All)
             if (present.Contains(device)) names.Add(device.Name);
         if (present.Contains(null)) names.Add(UnknownDevice);
+        if (startDevice != null)
+        {
+            if (names.Contains(startDevice)) selected = startDevice;
+            startDevice = null;
+        }
         fillingDevices = true;
         try
         {
@@ -284,7 +417,7 @@ internal sealed class CatalogDialog : ToolsDialog
             bytes += item.Bytes;
             sizes[item.Path] = item.Bytes;
         }
-        var plan = new OperationPlan { Label = "Move these selected items to the Recycle Bin? Mirrors will need to be downloaded again.",
+        var plan = new OperationPlan { Label = "Move these items to the Recycle Bin? Downloaded device copies are downloaded again at the next backup.",
             Actions = lines, Bytes = bytes, FileSizes = sizes, ShowDetails = true };
         using (var preview = new PreviewDialog(plan))
             if (preview.ShowDialog(this) != DialogResult.OK) return;

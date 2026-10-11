@@ -151,7 +151,7 @@ static class Workflow
         var labels = new List<string>();
         foreach (string history in roots)
             labels.Add((Path.GetFileName(Path.GetDirectoryName(history)).Equals("profiles", StringComparison.OrdinalIgnoreCase)
-                ? Path.GetFileName(history) : "Legacy backups") + " — " + history +
+                ? HistoryNames.DisplayName(history) : "Legacy backups") + " — " + history +
                 (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
         int pick = AskItem("Choose a backup history.", labels);
         return pick == 0 ? null : roots[pick - 1];

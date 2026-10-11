@@ -212,7 +212,7 @@ static class StorageCatalog
         }
         foreach (string history in histories)
             if (seenHistories.Add(Rooted(history)))
-                ScanPart(catalog, history, () => ScanHistory(catalog, history, history == root ? "Legacy backups" : Path.GetFileName(history)));
+                ScanPart(catalog, history, () => ScanHistory(catalog, history, history == root ? "Legacy backups" : HistoryNames.DisplayName(history)));
     }
 
     // A history's backup folders and its ZIP archives. Every backup but the latest can be cleaned up.

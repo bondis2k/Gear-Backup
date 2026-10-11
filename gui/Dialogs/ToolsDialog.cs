@@ -46,7 +46,7 @@ internal abstract class ToolsDialog : Form
         ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
-        var titleLabel = new Label { Text = title, AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(17), Margin = new Padding(0, 0, 0, 4) };
+        var titleLabel = new Label { Text = title, UseMnemonic = false, AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(17), Margin = new Padding(0, 0, 0, 4) };
         var heading = GuiTheme.Label(description, 10, GuiTheme.Muted);
         heading.MaximumSize = new Size(940, 0);
         top.Controls.Add(titleLabel);
