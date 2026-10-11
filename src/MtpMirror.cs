@@ -15,8 +15,7 @@ static class MtpMirror
 {
     internal static string MirrorRoot
     {
-        get { return Path.Combine(AppIdentity.ExistingFolder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            AppIdentity.DirectoryName, AppIdentity.Legacy.DirectoryName), "Devices"); }
+        get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppIdentity.DirectoryName, "Devices"); }
     }
 
     // "<mirror root>\op1-field-L1PRC121". The folder name also becomes the backup history's profile name.

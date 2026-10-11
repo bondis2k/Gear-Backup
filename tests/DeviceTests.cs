@@ -278,8 +278,8 @@ partial class Tests
         // Photos going back onto the camera: refused over USB with the reason, and confirmed onto a card.
         Assert(MtpRestoreUnsupported(camera).Contains("rarely put back on a camera") && !MtpRestoreUnsupported(Devices.OPXY).Contains("rarely"),
             "restoring to the camera explains why it isn't offered");
-        Assert(HistoryDevice(backup) == camera && HistoryDevice(Path.Combine(dir, "card-1234ABCD", "2026-01-01")) == null,
-            "a backup's device comes from its history's name");
+        Assert(BackupDevice(backup) == camera && BackupDevice(Path.Combine(dir, "x100vi-test", "2026-01-01")) == null,
+            "backup device identity requires its explicit metadata record");
         string folder = Rooted(Path.Combine(dir, "photos-out"));
         TestInteraction asked = WithUi(() => Assert(ConfirmRestoreTarget(backup, folder), "restoring photos to a folder needs no confirmation"));
         Assert(asked.Questions.Count == 0, "no question for a folder");
@@ -294,34 +294,22 @@ partial class Tests
         Assert(asked.Questions.Count == 0, "no question for the M8");
     }
 
-    // Histories are named per device, and older histories keep working.
+    // Device/source pairs are independent; history names do not migrate or infer another device.
     static void TestProfileNames(string dir)
     {
-        string source = Rooted(Path.Combine(dir, "named-source"));
-        Directory.CreateDirectory(source);
-        string key = SourceKey(source);
-        string profiles = Path.Combine(dir, "named-histories", "profiles");
+        string source = Rooted(Path.Combine(dir, "named-source")); Directory.CreateDirectory(source);
+        string key = SourceKey(source), profiles = Folder(dir, "named-histories");
+        string old = Folder(profiles, key);
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini }.Activate())
         {
             Assert(key.StartsWith("folder-") && ProfileId(source, "") == "tracker-mini-" + key, "a history name starts with its device");
-            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key), "a new source gets a device-named history");
-
-            // A history from before device names is renamed, but not by a preview.
-            string old = Path.Combine(profiles, key, "2026-01-01");
-            Directory.CreateDirectory(old);
-            OperationContext.Current.PreviewOnly = true;
-            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, key), "a preview uses the old history without renaming it");
-            OperationContext.Current.PreviewOnly = false;
-            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key) &&
-                Directory.Exists(Path.Combine(profiles, "tracker-mini-" + key, "2026-01-01")) && !Directory.Exists(Path.Combine(profiles, key)),
-                "an old history is renamed to the device-named one");
-            Assert(((TestInteraction)OperationContext.Current.Interaction).Output.ToString().Contains("renamed to tracker-mini-" + key), "the rename is reported");
-
-            Assert(ProfileFolder(profiles, source, "studio") == Path.Combine(profiles, "studio"), "a named profile is used as it is");
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key), "unprefixed histories are not reused");
+            Assert(Directory.Exists(old), "history selection never renames an existing folder");
+            Directory.CreateDirectory(Path.Combine(profiles, "tracker-mini-" + key));
+            Assert(ProfileFolder(profiles, source, "studio") == Path.Combine(profiles, "studio"), "a named profile is used directly");
         }
-        // The same card taken for another device keeps its one history.
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
-            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "tracker-mini-" + key), "a source keeps its history under another device's name");
+            Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "m8-" + key), "another device has its own source history");
     }
 
     static void TestOp1FieldBackup(string dir)

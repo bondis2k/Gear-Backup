@@ -47,6 +47,13 @@ partial class Tests
         RunTest("Security: restore folder changed after preview", () => TestRestoreFolderSubstitution(dir));
         RunTest("Security: statistics hard links", () => TestStatisticsHardLink(dir));
         RunTest("Security: ZIP metadata symbolic links", () => TestZipMetadataLinks(dir));
+        RunTest("SQLite: backup inventory and check results", () => TestBackupDatabase(dir));
+        RunTest("SQLite: rebuild, interruption and links", () => TestBackupDatabaseSafety(dir));
+        RunTest("SQLite: primary incremental inventory and recovery", () => TestIncrementalInventory(dir));
+        RunTest("SQLite: device-filtered full and individual restores", () => TestRestoreCatalog(dir));
+        RunTest("Single store: incremental points and restore", () => TestSingleContentStore(dir));
+        RunTest("Named full backup sets and incremental selection", () => TestBackupSetNames(dir));
+        RunTest("Single store: interrupted publication and migration", () => TestSingleContentStoreSafety(dir));
         RunTest("Console questions", TestConsoleQuestions);
         RunTest("Device profiles", () => TestDevices(dir));
         RunTest("OP-1 Field: MTP mirror", () => TestMtpMirror(dir));
@@ -57,7 +64,7 @@ partial class Tests
         RunTest("History names per device", () => TestProfileNames(dir));
         RunTest("X100VI: photos", () => TestX100VI(dir));
         RunTest("X100VI: settings capture and selector safety", () => TestFujiSettings(Folder(dir, "fuji-settings")));
-        RunTest("Gear Backup identity and upgrade compatibility", () => TestIdentityUpgrade(Folder(root, "identity-upgrade")));
+        RunTest("Gear Backup current format", () => TestCurrentIdentity(Folder(root, "current-identity")));
     }
 
     static void TestSettingsLocations(string root)
@@ -65,121 +72,46 @@ partial class Tests
         string app = Folder(root, "installed"), roaming = Path.Combine(root, "roaming");
         string destination = Path.Combine(roaming, AppIdentity.DirectoryName);
         Put(Path.Combine(app, AppIdentity.InstalledMarker), "installed");
-        string ini = Path.Combine(app, AppIdentity.ConfigFileName), profiles = Path.Combine(app, AppIdentity.ProfileConfigFileName);
-        string globalText = "; keep comments\nProfile=Studio\nTheme=original-dark\nCustomKey=keep\n";
-        string profileText = "; keep profile comments\n[profile:Studio]\nVerify=yes\n";
-        Put(ini, globalText); Put(profiles, profileText);
+        Put(Path.Combine(app, AppIdentity.ConfigFileName), "Profile=OldLocation\nTheme=original-dark\n");
+        Put(Path.Combine(app, AppIdentity.ProfileConfigFileName), "[profile:OldLocation]\nVerify=yes\n");
         Config loaded = null;
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
         {
             loaded = LoadApplicationConfig(app, roaming);
-            Assert(loaded.Profile == "Studio" && loaded.Theme == "original-dark" && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
-                "installed preview reads both previous INI files");
+            Assert(loaded.Profile == "" && loaded.Theme != "original-dark", "installed preview ignores settings beside the executable");
             Assert(!Directory.Exists(roaming), "preview creates no AppData folder or settings");
         }
         WithUi(() => loaded = LoadApplicationConfig(app, roaming));
-        Assert(loaded.SettingsDirectory == destination && loaded.Theme == "original-dark", "installed settings move to the roaming folder");
-        Assert(File.ReadAllText(Path.Combine(destination, AppIdentity.ConfigFileName)).Contains(globalText.TrimEnd()), "migration preserves global comments and unknown keys");
-        Assert(File.ReadAllText(ProfileSettingsPath(loaded)) == profileText && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
-            "profile migration preserves the complete file and preferences");
-        Assert(File.ReadAllText(ini) == globalText && File.ReadAllText(profiles) == profileText, "migration keeps originals unchanged");
-        loaded.Theme = "original";
+        Assert(loaded.SettingsDirectory == destination && File.Exists(Path.Combine(destination, AppIdentity.ConfigFileName)), "installed settings are created in AppData");
+        Assert(loaded.Profile == "" && !File.Exists(ProfileSettingsPath(loaded)), "no executable-folder settings are migrated");
+        loaded.Profile = "Studio"; loaded.Theme = "original-dark";
         WithUi(() => SaveConfig(loaded));
+        Put(ProfileSettingsPath(loaded), "[profile:Studio]\nVerify=yes\n");
         WithUi(() => loaded = LoadApplicationConfig(app, roaming));
-        Assert(loaded.Theme == "original", "existing roaming settings win over old copies beside the app");
-        Assert(File.ReadAllText(ini) == globalText, "saving installed settings does not change the executable-folder INI");
-        Put(ProfileSettingsPath(loaded), "[profile:Studio]\nVerify=no\n");
-        WithUi(() => loaded = LoadApplicationConfig(app, roaming));
-        Assert(!ResolveProfileSettings(loaded, "m8", "Studio").Verify, "existing roaming profile preferences are not overwritten by migration");
-        File.Delete(Path.Combine(destination, AppIdentity.ProfileConfigFileName));
-        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
-        {
-            loaded = LoadApplicationConfig(app, roaming);
-            Assert(loaded.Theme == "original" && ResolveProfileSettings(loaded, "m8", "Studio").Verify,
-                "preview supports partly migrated settings without replacing newer global settings");
-            Assert(!File.Exists(ProfileSettingsPath(loaded)), "preview does not migrate a missing profile file");
-        }
+        Assert(loaded.Profile == "Studio" && loaded.Theme == "original-dark" && ResolveProfileSettings(loaded, "m8", "Studio").Verify, "installed global and profile settings reload from AppData");
+        Assert(File.ReadAllText(Path.Combine(app, AppIdentity.ConfigFileName)).Contains("OldLocation"), "saving installed settings leaves unrelated executable-folder files untouched");
         string portable = Folder(root, "portable"); Put(Path.Combine(portable, AppIdentity.ConfigFileName), "Theme=retro\n");
         WithUi(() => loaded = LoadApplicationConfig(portable, roaming));
-        Assert(loaded.SettingsDirectory == portable && loaded.Theme == "retro", "portable and local builds keep independent settings beside the exe");
-        string legacyApp = Folder(root, "legacy-app"), legacyRoaming = Path.Combine(root, "legacy-roaming");
-        Put(Path.Combine(legacyApp, AppIdentity.InstalledMarker), "installed");
-        Put(Path.Combine(legacyApp, AppIdentity.Legacy.ConfigFileName), "Verify=yes\n");
-        WithUi(() => loaded = LoadApplicationConfig(legacyApp, legacyRoaming));
-        Assert(loaded.Verify && File.Exists(Path.Combine(loaded.SettingsDirectory, AppIdentity.ConfigFileName)), "legacy installed INI migrates to the current AppData file");
+        Assert(loaded.SettingsDirectory == portable && loaded.Theme == "retro", "portable settings remain beside the executable");
     }
 
-    static void TestIdentityUpgrade(string root)
+    static void TestCurrentIdentity(string root)
     {
         string settings = Folder(root, "settings");
-        string oldIni = Path.Combine(settings, AppIdentity.Legacy.ConfigFileName);
-        string newIni = Path.Combine(settings, AppIdentity.ConfigFileName);
-        Put(oldIni, "; " + AppIdentity.Legacy.Name + " settings\n; keep this comment\nProfile=Studio M8\nVerify=yes\nCustomKey=preserved\n");
+        Put(Path.Combine(settings, "M8Backup.ini"), "Profile=FormerProduct\nVerify=yes\n");
         Config loaded = null;
-        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
-            loaded = LoadConfig(settings);
-        Assert(loaded.Profile == "Studio M8" && loaded.Verify && !File.Exists(newIni),
-            "preview reads old settings without writing a renamed file");
         WithUi(() => loaded = LoadConfig(settings));
-        string migrated = File.ReadAllText(newIni);
-        Assert(loaded.Profile == "Studio M8" && loaded.Verify && !loaded.Thorough && !loaded.Recovery,
-            "settings migration preserves preferences and default-off options");
-        Assert(migrated.Contains("; Gear Backup settings") && migrated.Contains("; keep this comment") &&
-            migrated.Contains("CustomKey=preserved") && File.Exists(oldIni), "migration preserves custom settings and the original INI");
-        Put(newIni, "Profile=New settings\nVerify=no\n");
-        WithUi(() => loaded = LoadConfig(settings));
-        Assert(loaded.Profile == "New settings" && !loaded.Verify, "renamed settings take precedence over the old INI");
-
-        Fixture f = BackedUpCard(Folder(root, "fixture"), false);
-        string oldRoot = Path.Combine(root, AppIdentity.Legacy.BackupsFolderName);
-        string history = Path.Combine(oldRoot, "profiles", "studio");
-        Directory.CreateDirectory(Path.GetDirectoryName(history));
-        // Windows scanners can briefly hold freshly written fixture files open. Allow a bounded
-        // retry for access/sharing errors; persistent locks still fail the compatibility test.
-        for (int attempt = 0; ; attempt++)
-        {
-            try { Directory.Move(f.History, history); break; }
-            catch (IOException ex)
-            {
-                int error = ex.HResult & 0xffff;
-                if (attempt >= 20 || (error != 5 && error != 32)) throw;
-                Thread.Sleep(100);
-            }
-        }
-        string backup = ListBackups(history)[0];
-        Directory.Move(Path.Combine(backup, AppIdentity.MetadataFolderName), Path.Combine(backup, AppIdentity.Legacy.MetadataFolderName));
-        foreach (string manifest in Directory.GetFiles(SnapshotRoot(backup), "*.manifest"))
-            File.WriteAllText(manifest, File.ReadAllText(manifest).Replace(AppIdentity.SnapshotHeader, AppIdentity.Legacy.SnapshotHeader));
-        var config = new Config { BackupFolder = root, Profile = "studio", Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
-        Assert(HistoriesRoot(config) == oldRoot && HistoryFor(config, f.Source) == history, "an existing history is reused in place");
-        Assert(BackupStatus(backup) == Status.Complete && LatestSnapshot(backup).Files.Count == f.First.Files.Count,
-            "old status files, manifests and objects remain readable");
-        Assert(CurrentBackup(backup).Files.Count == f.First.Files.Count, "old metadata is excluded from browsable content");
-        OperationResult updated = null;
-        WithUi(() => updated = BackupWithLock(f.Source, history, true, config));
-        Assert(updated.ExitCode == 0 && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == 2,
-            "incremental backup continues the old history and publishes a new snapshot");
-        string target = Rooted(Folder(root, "restored"));
-        Snapshot snapshot = LatestSnapshot(backup);
-        OperationResult restored = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false,
-            config, new OperationContext(new TestInteraction(), CancellationToken.None));
-        Assert(restored.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "AAAA",
-            "snapshots from an existing history restore correctly");
-        Assert(new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(new TestInteraction(), CancellationToken.None)).ExitCode == 0,
-            "integrity checks work across old and new snapshot headers");
-        string zipPath = null;
-        WithUi(() => zipPath = ZipBackup(backup));
-        using (var zip = new System.IO.Compression.ZipArchive(File.OpenRead(zipPath), System.IO.Compression.ZipArchiveMode.Read))
-            Assert(!new List<System.IO.Compression.ZipArchiveEntry>(zip.Entries).Exists(e =>
-                e.FullName.StartsWith(AppIdentity.Legacy.MetadataFolderName) || e.FullName.StartsWith(AppIdentity.MetadataFolderName)),
-                "ZIP exports exclude both metadata directory names");
-        string fresh = Folder(root, "fresh");
-        Assert(HistoriesRoot(new Config { BackupFolder = fresh }) == Path.Combine(fresh, AppIdentity.BackupsFolderName),
-            "fresh installations use the new backup directory");
-        string localData = Folder(root, "local-data");
-        Directory.CreateDirectory(Path.Combine(localData, AppIdentity.Legacy.DirectoryName, "Devices"));
-        Assert(AppIdentity.ExistingFolder(localData, AppIdentity.DirectoryName, AppIdentity.Legacy.DirectoryName) ==
-            Path.Combine(localData, AppIdentity.Legacy.DirectoryName), "existing MTP mirror folders are reused");
+        Assert(loaded.Profile == "" && !loaded.Verify, "former product settings are ignored");
+        Assert(File.Exists(Path.Combine(settings, AppIdentity.ConfigFileName)), "only the current settings file is created");
+        string backup = Folder(root, "backup");
+        Directory.CreateDirectory(Path.Combine(backup, ".m8backup"));
+        Assert(AppIdentity.MetadataRoot(backup) == Path.Combine(backup, ".gearbackup"), "only current metadata paths are used");
+        string old = Folder(root, "M8 Backups");
+        Assert(HistoriesRoot(new Config { BackupFolder = root }) == Path.Combine(root, "Gear Backups"), "former backup roots are ignored");
+        string manifest = Path.Combine(root, "former.manifest");
+        Put(manifest, "M8SNAPSHOT\t1\n");
+        Throws(() => ReadSnapshot(backup, manifest), "former snapshot headers are rejected");
+        Assert(!AppIdentity.IsMetadataPath(Path.Combine(backup, ".m8backup", "data.txt")), "former folder names have no special meaning");
     }
 
     // Runs action against the real console front end with scripted input; returns what it printed.
@@ -499,7 +431,7 @@ partial class Tests
         WithUi(() => { answer = ConfirmResume(backup, true, config); }, 'c');
         Assert(answer == null, "Cancel returns no choice");
         Assert(ConfirmResume(null, true, config) == true, "with no backup yet, nothing is asked");
-        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Legacy, "backups without a status file are legacy");
+        Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Unknown, "missing status metadata is unknown");
 
         var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
         Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "Gear Backups", "card")), "a source inside the backup location is rejected");
@@ -572,8 +504,8 @@ partial class Tests
         Assert(Status.FromText("complete") == Status.Complete && Status.FromText("failed").Unfinished && Status.FromText("incomplete").Unfinished,
             "known status texts read back as the same statuses");
         Status unknown = Status.FromText("paused by a newer version");
-        Assert(unknown.ToString() == "paused by a newer version" && unknown != Status.Complete && !unknown.Unfinished,
-            "an unknown status keeps its text and is neither complete nor unfinished");
+        Assert(unknown == Status.Unknown && unknown != Status.Complete && !unknown.Unfinished,
+            "unrecognized status metadata is classified as unknown");
         Assert(Status.Complete.ToString() == "complete" && Stage.SavingHistory.ToString() == "Saving history" &&
             StorageKind.OlderBackup.ToString() == "Older backup", "values print the text they always had");
         Assert(RestoreMode.FromKey('p') == RestoreMode.ProjectFolder && RestoreMode.FromKey('x') == null && RestoreMode.All.Key == 'a',

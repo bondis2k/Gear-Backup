@@ -82,7 +82,7 @@ static class Checksums
         var newestFirst = new List<string>(backups);
         newestFirst.Reverse();
         var labels = new List<string>();
-        foreach (string backup in newestFirst) labels.Add(Path.GetFileName(backup) + " [" + BackupStatus(backup) + "]");
+        foreach (string backup in newestFirst) labels.Add(BackupSetNames.Label(backup) + " [" + BackupStatus(backup) + "]");
         labels.Add("All " + newestFirst.Count + " backups in this history");
         int pick = AskItem("Check which backup?", labels);
         if (pick == 0)
@@ -98,7 +98,7 @@ static class Checksums
     // verifiedLinks (optional) collects the hard-linked files found OK, so CheckSnapshots can skip
     // reading the same content again.
     internal static void CheckBackup(string backup, ref int ok, ref int damaged, ref int missing, ref int unchecked_,
-                            Dictionary<string, string> verifiedLinks = null)
+                            Dictionary<string, string> verifiedLinks = null, List<CatalogVerification> catalogResults = null)
     {
         OperationOutput.WriteLine("  " + Path.GetFileName(backup));
         Dictionary<string, string> sums = LoadChecksums(backup);
@@ -136,6 +136,7 @@ static class Checksums
             {
                 missing++;
                 problems.Add("missing: " + entry.Key);
+                if (catalogResults != null) catalogResults.Add(new CatalogVerification { Path = entry.Key, ExpectedHash = entry.Value, Result = "missing" });
                 continue;
             }
             doneBytes += new FileInfo(path).Length;
@@ -154,6 +155,8 @@ static class Checksums
                 damaged++;
                 if (hash != null) problems.Add("damaged: " + entry.Key);
             }
+            if (catalogResults != null) catalogResults.Add(new CatalogVerification { Path = entry.Key, ExpectedHash = entry.Value,
+                ObservedHash = hash, Result = hash == null ? "unreadable" : hash == entry.Value ? "ok" : "damaged" });
             OperationContext.Current.Progress(Stage.CheckingBackup, entry.Key, doneBytes, totalBytes, done, sums.Count);
         }
         OperationOutput.WriteLine();

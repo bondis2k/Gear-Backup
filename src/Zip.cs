@@ -29,6 +29,7 @@ static class BackupZip
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
     internal static string ZipBackup(string backup)
     {
+        if (ContentStoreBackup.IsSingle(backup)) return ZipContentStore(backup);
         RejectRootLinks(backup);
         var entries = new List<FileSystemInfo>(BackupEntries(backup));
         foreach (string path in Directory.GetFiles(backup))
@@ -94,6 +95,48 @@ static class BackupZip
             TryDelete(temp);
             throw;
         }
+    }
+
+    // Export a single store as ordinary files; no duplicate on-disk backup tree is needed first.
+    static string ZipContentStore(string backup)
+    {
+        var snapshot = ContentStoreBackup.Current(backup);
+        string path = ZipPathFor(backup), temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        RejectRootLinks(path);
+        bool created = false;
+        try
+        {
+            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                created = true;
+                using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
+                {
+                    var buffer = new byte[65536]; var sums = new StringBuilder(); int count = 0;
+                    foreach (string folder in snapshot.Folders) zip.CreateEntry(folder.Replace('\\', '/') + "/");
+                    foreach (var item in snapshot.Files)
+                    {
+                        OperationContext.Current.CheckCancellation();
+                        PathSafety.RejectRootLinks(item.StoredPath);
+                        if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size) throw new IOException("Stored content is missing or damaged: " + item.Relative);
+                        string name = item.Relative.Replace('\\', '/');
+                        var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
+                        entry.LastWriteTime = ZipTime(new DateTime(item.ModifiedTicks, DateTimeKind.Utc).ToLocalTime());
+                        using (var from = new FileStream(item.StoredPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        using (var to = entry.Open())
+                        {
+                            int read; while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
+                            { OperationContext.Current.CheckCancellation(); to.Write(buffer, 0, read); }
+                        }
+                        sums.Append(item.Hash).Append("  ").Append(name).Append('\n');
+                        OperationContext.Current.Progress(Stage.Zipping, item.Relative, 0, 0, ++count, snapshot.Files.Count);
+                    }
+                    using (var writer = new StreamWriter(zip.CreateEntry(ChecksumFileName).Open(), new UTF8Encoding(false))) writer.Write(sums.ToString());
+                }
+            }
+            OperationContext.Current.CheckCancellation();
+            RejectRootLinks(path); File.Move(temp, path); return path;
+        }
+        finally { if (created) TryDelete(temp); }
     }
 
     // A zip is made to be shared, so its copy of the statistics hides where things are on this PC:

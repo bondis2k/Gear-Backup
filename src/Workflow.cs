@@ -59,43 +59,17 @@ static class Workflow
             return "folder-" + ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(normalized.ToUpperInvariant()))).Substring(0, 16);
     }
 
-    // The history folder for a source under profiles. A card keeps one history whatever it's taken for:
-    // an existing history of the same card or folder under another device's name is used as it is, and
-    // one from before histories were named per device ("card-1A2B3C4D") is renamed to the new name
-    // (except in a preview, which changes nothing).
+    // Each device/source pair has its own history. A named profile uses the requested name directly.
     internal static string ProfileFolder(string profiles, string source, string requested)
     {
-        string id = ProfileId(source, requested);
-        string folder = Path.Combine(profiles, id);
-        string normalized = Rooted(source);
-        if (requested.Length > 0 || Directory.Exists(folder) || !Directory.Exists(profiles) ||
-            (Within(normalized, MirrorRoot) && Rooted(normalized) != Rooted(MirrorRoot)))
-            return folder;
-        string key = SourceKey(normalized);
-        foreach (DeviceProfile device in Devices.All)
-        {
-            string other = Path.Combine(profiles, device.Id + "-" + key);
-            if (Directory.Exists(other)) return other;
-        }
-        string old = Path.Combine(profiles, key);
-        if (!Directory.Exists(old)) return folder;
-        if (PreviewOnly) return old;
-        try
-        {
-            Directory.Move(old, folder);
-            OperationOutput.WriteLine("  History " + key + " renamed to " + id + ".");
-            return folder;
-        }
-        catch (IOException) { return old; }           // e.g. open in Explorer or locked by another backup
-        catch (UnauthorizedAccessException) { return old; }
+        return Path.Combine(profiles, ProfileId(source, requested));
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     internal static extern bool GetVolumeInformationW(string rootPath, StringBuilder volumeName, int volumeNameSize,
         out uint serialNumber, out uint maxComponentLength, out uint fileSystemFlags, StringBuilder fileSystemName, int fileSystemNameSize);
 
-    // Lets the user pick one of the histories that has backups: each profile, plus backups made before
-    // profiles existed ("Legacy backups", directly under Gear Backups). Null when cancelled.
+    // Lets the user pick a profile history containing backups. Null when cancelled.
     internal static string ChooseHistory(string root, string preferred)
     {
         var roots = new List<string>();
@@ -133,7 +107,6 @@ static class Workflow
             foreach (string dir in Directory.GetDirectories(profiles))
                 if (ListBackups(dir).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(dir))) roots.Add(dir);
         }
-        if (ListBackups(root).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(root))) roots.Add(root);
     }
 
     internal static string ChooseHistory(Config config, string preferred)
@@ -150,8 +123,7 @@ static class Workflow
         if (roots.Count == 0) return fallback;
         var labels = new List<string>();
         foreach (string history in roots)
-            labels.Add((Path.GetFileName(Path.GetDirectoryName(history)).Equals("profiles", StringComparison.OrdinalIgnoreCase)
-                ? HistoryNames.DisplayName(history) : "Legacy backups") + " — " + history +
+            labels.Add(HistoryNames.DisplayName(history) + " — " + history +
                 (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
         int pick = AskItem("Choose a backup history.", labels);
         return pick == 0 ? null : roots[pick - 1];
@@ -159,7 +131,6 @@ static class Workflow
 
     internal static bool HasHistory(string root)
     {
-        if (ListBackups(root).Count > 0) return true;
         string profiles = Path.Combine(root, "profiles");
         if (Directory.Exists(profiles))
             foreach (string dir in Directory.GetDirectories(profiles)) if (ListBackups(dir).Count > 0) return true;
@@ -276,11 +247,11 @@ static class Workflow
     }
 
     // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
-    // Backups made before status files existed report Status.Legacy.
+    // Missing status metadata is reported as unknown.
     internal static Status BackupStatus(string folder)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt");
-        if (!File.Exists(path)) return Status.Legacy;
+        if (!File.Exists(path)) return Status.Unknown;
         return Status.FromText(Records.ReadText(path, Records.SmallLimit, "Backup status record").Trim());
     }
 

@@ -76,9 +76,15 @@ static class Program
         OperationOutput.WriteLine("  ----------------------------------------");
 
         Config config = LoadConfig();
+        string rebuildCatalog = null;
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--source" || args[i] == "--profile")
+            if (args[i] == "--rebuild-catalog")
+            {
+                if (++i >= args.Length) throw new ArgumentException("Missing backup folder for --rebuild-catalog.");
+                rebuildCatalog = args[i];
+            }
+            else if (args[i] == "--source" || args[i] == "--profile")
             {
                 string key = args[i];
                 if (++i >= args.Length) throw new ArgumentException("Missing value for " + key);
@@ -89,6 +95,19 @@ static class Program
                 throw new ArgumentException("Unknown argument: " + args[i]);
         }
         if (restore && check) throw new ArgumentException("Choose --restore or --check, not both.");
+        if (rebuildCatalog != null)
+        {
+            if (restore || check || Array.IndexOf(args, "--camera-settings") >= 0 || Array.IndexOf(args, "--source") >= 0 ||
+                Array.IndexOf(args, "--profile") >= 0 || Array.IndexOf(args, "--zip") >= 0)
+                throw new ArgumentException("--rebuild-catalog accepts only a backup folder, --preview and --no-pause.");
+            string backup = Path.GetFullPath(rebuildCatalog).TrimEnd('\\');
+            PathSafety.RejectRootLinks(backup);
+            if (!Directory.Exists(backup)) throw new IOException("Backup folder does not exist: " + backup);
+            if (PreviewOnly) { OperationOutput.WriteLine("  Would rebuild " + BackupDatabase.CatalogPath(backup) + " from existing checksum lists and manifests."); return 0; }
+            using (LockHistory(Path.GetDirectoryName(backup))) BackupDatabase.Rebuild(backup);
+            OperationOutput.WriteLine("  Catalog rebuilt: " + BackupDatabase.CatalogPath(backup));
+            return 0;
+        }
         if (Array.IndexOf(args, "--camera-settings") >= 0)
         {
             if (restore || check || Array.IndexOf(args, "--source") >= 0)

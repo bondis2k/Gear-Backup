@@ -13,15 +13,15 @@ using static Workflow;
 using static FolderPicker;
 using static GearGui;
 
-internal sealed class MainForm : Form
+internal sealed partial class MainForm : Form
 {
     Config config;
     readonly TextBox source = new TextBox(), backupFolder = new TextBox(), profile = new TextBox();
-    readonly ComboBox operation = new ComboBox();
+    GuiOperation selectedOperation = GuiOperation.FullBackup;
     // Only for full backups; not saved in the settings, so it's a per-run choice like the CLI's --zip.
     readonly CheckBox zip = new CheckBox { Text = "Also save as zip", AutoSize = true, Name = "ZipBackup" };
     readonly Button start = GuiTheme.Button("Back up", true), preview = GuiTheme.Button("Preview", false),
-        cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.GhostButton("Settings"), detect = GuiTheme.Button("Detect device", false),
+        cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.GhostButton("Settings"), detect = GuiTheme.Button("Detect device", true),
         about = GuiTheme.GhostButton("About"), help = GuiTheme.GhostButton("Help");
     readonly RichTextBox log = new RichTextBox();
     readonly Label sourceCaption = GuiTheme.Label("", 9, GuiTheme.Muted), deviceName = GuiTheme.Label("No device detected", 10, GuiTheme.Muted),
@@ -34,16 +34,19 @@ internal sealed class MainForm : Form
     string outputFolder;
     readonly System.Diagnostics.Stopwatch elapsed = new System.Diagnostics.Stopwatch();
     OperationProgress latestProgress;
+    bool operationProgressActive;
     readonly ToolTip hints = new ToolTip();
     readonly Label status = new Label { Text = "Ready", AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(16), Margin = new Padding(0, 0, 12, 4) }, detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
     readonly GuiProgressBar progress = new GuiProgressBar();
-    // The detected device's picture in the header; see ShowDevice.
+    // The detected device's picture on the Device tab; see ShowDevice.
     readonly PictureBox deviceImage = new PictureBox { Name = "DeviceImage", Size = new Size(88, 88),
         SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 16, 0) };
     readonly CardPanel inputs = new CardPanel();
     readonly Button optionsToggle = GuiTheme.GhostButton("More options ▾");
     readonly Label destinationSummary = new Label { Name = "BackupDestinationSummary", AutoEllipsis = true, Dock = DockStyle.Top, Height = 28, ForeColor = GuiTheme.Muted };
     TableLayoutPanel optionalFields;
+    Label profileLabel;
+    FieldPanel profileField;
     bool optionsExpanded;
     DeviceProfile displayedDevice;
     // Worker threads add log text and progress here; the display timer moves them into the window every
@@ -70,7 +73,7 @@ internal sealed class MainForm : Form
         AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
         if (GuiHeadless) { Opacity = 0; ShowInTaskbar = false; }
         source.Name = "SourceFolder"; backupFolder.Name = "BackupFolder"; profile.Name = "Profile";
-        operation.Name = "Operation"; start.Name = "StartOperation"; preview.Name = "PreviewOperation";
+        start.Name = "StartOperation"; preview.Name = "PreviewOperation";
         cancel.Name = "CancelOperation"; status.Name = "OperationStatus";
         about.Name = "AboutApplication";
         settings.Name = "OpenSettings";
@@ -81,7 +84,7 @@ internal sealed class MainForm : Form
         detail.Name = "OperationDetail";
         counts.Visible = false; metrics.Visible = false;
         source.AccessibleName = "Source folder"; backupFolder.AccessibleName = "Backup location";
-        profile.AccessibleName = "Backup name"; operation.AccessibleName = "Operation"; log.AccessibleName = "Activity log";
+        profile.AccessibleName = "History name"; log.AccessibleName = "Activity log";
 
         BuildLayout();
         Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -100,7 +103,8 @@ internal sealed class MainForm : Form
         ShowDevice(null);
         source.Text = designPreview ? "" : config.SourceFolder;
         backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
-        operation.SelectedIndex = (int)(config.Mode == BackupMode.Incremental ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup);
+        selectedOperation = config.Mode == BackupMode.Incremental ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup;
+        InitializeWorkflow();
         start.Click += delegate { StartOperation(false); };
         preview.Click += delegate { StartOperation(true); };
         cancel.Click += delegate { RequestCancel(); };
@@ -108,10 +112,10 @@ internal sealed class MainForm : Form
         settings.Click += delegate { EditSettings(); };
         about.Click += delegate { using (var dialog = new AboutDialog()) dialog.ShowDialog(this); };
         help.Click += delegate { OpenManual(); };
-        operation.SelectedIndexChanged += delegate { RefreshOperationControls(); };
-        source.TextChanged += delegate { ShowDevice(null); RefreshDestinationSummary(); };
-        backupFolder.TextChanged += delegate { RefreshDestinationSummary(); };
-        profile.TextChanged += delegate { RefreshDestinationSummary(); };
+        source.TextChanged += delegate { backupSetSource = null; ShowDevice(null); RefreshDestinationSummary(); RefreshBackupSets(); };
+        restoreDestination.TextChanged += delegate { RefreshDestinationSummary(); };
+        backupFolder.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); RefreshRestoreBackups(); };
+        profile.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); };
         optionsToggle.Click += delegate { SetOptionsExpanded(!optionsExpanded); };
         openFolder.Click += delegate { OpenOutputFolder(); };
         dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles";
@@ -134,6 +138,7 @@ internal sealed class MainForm : Form
         };
         displayTimer.Tick += delegate { DrainDisplay(); };
         displayTimer.Start();
+        Shown += delegate { RefreshRestoreBackups(); };
         FormClosed += delegate { displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
     }
 
@@ -147,13 +152,20 @@ internal sealed class MainForm : Form
         Controls.Add(viewport); viewport.Controls.Add(layout);
         layout.Dock = DockStyle.Top; layout.Height = ClientSize.Height;
         layout.MinimumSize = new Size(0, 580);
-        viewport.Resize += delegate { layout.Height = Math.Max(layout.MinimumSize.Height, viewport.ClientSize.Height); };
+        bool sizingLayout = false;
+        Action sizeLayout = delegate {
+            if (sizingLayout) return;
+            sizingLayout = true;
+            try { layout.Height = Math.Max(layout.MinimumSize.Height, viewport.ClientSize.Height); }
+            finally { sizingLayout = false; }
+        };
+        viewport.Resize += delegate { sizeLayout(); };
+        viewport.Layout += delegate { sizeLayout(); };
 
         var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, Margin = new Padding(0, 0, 0, 18), BackColor = GuiTheme.Background, Padding = new Padding(12) };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.Controls.Add(deviceImage, 0, 0);
         var branding = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         var title = GuiTheme.Label(AppIdentity.Name, 22, GuiTheme.Accent);
         title.Font = GuiTheme.Heading(22);
@@ -161,8 +173,6 @@ internal sealed class MainForm : Form
         branding.Controls.Add(title);
         branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
         deviceName.Margin = new Padding(0, 0, 0, 0);
-        branding.Controls.Add(deviceName);
-        branding.Controls.Add(deviceConnection);
         header.Controls.Add(branding, 1, 0);
         var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
         headerActions.Controls.Add(help); headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
@@ -182,36 +192,35 @@ internal sealed class MainForm : Form
         for (int i = 0; i < 6; i++) fields.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         sourceBrowse = AddPath(fields, 0, sourceCaption, source, false); sourceBrowse.AccessibleName = "Browse source or restore destination";
         AddPath(fields, 2, FieldLabel("Backup location"), backupFolder, true);
-        var profileLabel = FieldLabel("Backup name (optional)  ·  starts a separate history; leave blank to use the device's own");
+        profileLabel = FieldLabel("History name (optional)  ·  groups backups separately; leave blank to use the device's own");
         fields.Controls.Add(profileLabel, 0, 4); fields.SetColumnSpan(profileLabel, 3);
-        var profileField = new FieldPanel(profile) { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        profileField = new FieldPanel(profile) { Dock = DockStyle.Fill, Margin = Padding.Empty };
         fields.Controls.Add(profileField, 0, 5); fields.SetColumnSpan(profileField, 3);
         zip.Margin = new Padding(0, 12, 0, 0); fields.Controls.Add(zip, 0, 6); fields.SetColumnSpan(zip, 3);
-        layout.Controls.Add(inputs, 0, 1);
+        layout.Controls.Add(BuildWorkflowTabs(), 0, 1);
 
         var actions = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 5, Padding = new Padding(0, 0, 0, 12), Margin = Padding.Empty };
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
         for (int i = 0; i < 3; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        operation.DropDownStyle = ComboBoxStyle.DropDownList; operation.Dock = DockStyle.Fill;
-        GuiTheme.StyleComboBox(operation); operation.Font = GuiTheme.Font(10.5f);
-        // In the order of GuiOperation: the selected index is the operation.
-        operation.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Restore files", "Check backups", "Back up X100VI settings" });
-        operation.SelectedIndex = 0; operation.Margin = new Padding(16, 5, 16, 0);
         zip.ForeColor = GuiTheme.Ink;
-        actions.Controls.Add(detect, 0, 0); actions.Controls.Add(operation, 1, 0);
-        actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0); actions.Controls.Add(cancel, 4, 0);
+        actions.Controls.Add(BuildOperationSelectors(), 0, 0);
+        actions.Controls.Add(BuildBackupSetField(), 1, 0);
+        actions.Controls.Add(BuildRestoreBackupField(), 1, 0);
+        preview.Anchor = start.Anchor = AnchorStyles.Bottom;
+        actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0);
         cancel.Enabled = false; cancel.Visible = false;
         inputLayout.Controls.Add(actions, 0, 0);
-        inputLayout.Controls.Add(destinationSummary, 0, 1);
+        inputLayout.Controls.Add(BuildRestoreDetails(), 0, 1);
+        inputLayout.Controls.Add(destinationSummary, 0, 2);
         optionsToggle.Name = "ToggleBackupOptions"; optionsToggle.Margin = new Padding(0, 4, 0, 4);
-        inputLayout.Controls.Add(optionsToggle, 0, 2);
-        inputLayout.Controls.Add(fields, 0, 3);
+        inputLayout.Controls.Add(optionsToggle, 0, 3);
+        inputLayout.Controls.Add(fields, 0, 4);
 
         var state = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 5, Margin = new Padding(0, 0, 0, 14), BackColor = GuiTheme.Background, Padding = new Padding(12) };
         for (int i = 0; i < 5; i++) state.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         var resultHeader = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
-        resultHeader.Controls.Add(status); openFolder.Visible = false; resultHeader.Controls.Add(openFolder);
+        resultHeader.Controls.Add(status); openFolder.Visible = false; resultHeader.Controls.Add(openFolder); resultHeader.Controls.Add(cancel);
         state.Controls.Add(resultHeader, 0, 0);
         state.Controls.Add(counts, 0, 1); detail.AutoSize = false; detail.Height = 28; detail.Dock = DockStyle.Top; detail.AutoEllipsis = true;
         state.Controls.Add(detail, 0, 2); state.Controls.Add(metrics, 0, 3);
@@ -236,6 +245,7 @@ internal sealed class MainForm : Form
         log.BackColor = GuiTheme.Surface; log.ForeColor = GuiTheme.Ink; log.Font = new Font("Consolas", 9.5f);
         log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 2); activity.SetColumnSpan(log, 2);
         activityCard.Controls.Add(activity); layout.Controls.Add(activityCard, 0, 3);
+        RefreshWorkflowLayout();
 
     }
 
@@ -253,10 +263,11 @@ internal sealed class MainForm : Form
         fields.Controls.Add(label, 0, row); fields.SetColumnSpan(label, 3);
         var field = new FieldPanel(text) { Dock = DockStyle.Fill };
         fields.Controls.Add(field, 0, row + 1);
+        if (text == source) sourceField = field;
         var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(110, 36);
         fields.Controls.Add(browse, 1, row + 1);
         browse.AccessibleName = destination ? "Browse backup location" : "Browse source folder";
-        browse.Click += delegate { BrowseFolder(this, text, destination || Selected == GuiOperation.Restore,
+        browse.Click += delegate { BrowseFolder(this, text == source && Selected == GuiOperation.Restore ? restoreDestination : text, destination || Selected == GuiOperation.Restore,
             destination ? "Choose the backup location" : Selected == GuiOperation.Restore ? "Choose the restore destination" : "Choose the card or source folder"); };
         return browse;
     }
@@ -299,7 +310,7 @@ internal sealed class MainForm : Form
             log.SelectionStart = log.TextLength; log.ScrollToCaret();
         }
         RefreshProgressMetrics();
-        if (value == null) return;
+        if (value == null || !operationProgressActive) return;
         if (runner.CancellationRequested) return;
         latestProgress = value; RefreshProgressMetrics();
         status.Text = value.Stage.ToString();
@@ -318,38 +329,59 @@ internal sealed class MainForm : Form
         Config copy = config.Clone();
         copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
             ? DefaultBackupFolder() : ExpandPath(backupFolder.Text);
-        copy.SourceFolder = forOperation && (Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings) ? "" : ExpandPath(source.Text);
+        copy.SourceFolder = forOperation && (Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings) ? "" :
+            ExpandPath(forOperation && Selected == GuiOperation.Restore ? restoreDestination.Text : source.Text);
         copy.Profile = profile.Text.Trim();
         copy.Zip = zip.Checked && ZipApplies;
         if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
+        if (forOperation && Selected == GuiOperation.Restore) copy.RestoreSelection = CaptureRestoreSelection();
+        if (forOperation && Selected == GuiOperation.FullBackup) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
+        if (forOperation && Selected == GuiOperation.IncrementalBackup)
+        {
+            var item = incrementalBackup.SelectedItem as BackupSetItem;
+            if (loadingBackupSets || item == null) throw new IOException("Choose a full backup to update. Detect the device or choose a source first.");
+            copy.IncrementalBackup = item.Path;
+        }
         return copy;
     }
     void RefreshOperationControls()
     {
+        RefreshBackupSetField();
+        RefreshRestoreControls();
         bool checking = Selected == GuiOperation.Check, restoring = Selected == GuiOperation.Restore, cameraSettings = Selected == GuiOperation.CameraSettings;
         sourceCaption.Text = cameraSettings ? "X100VI · USB RAW CONV./BACKUP RESTORE · C1–C7 and shooting settings" :
             checking ? "Source not needed · select backups from the backup location" :
             restoring ? "Restore destination · folder or connected card" : "Source folder · leave blank to detect a device";
-        source.AccessibleName = restoring ? "Restore destination" : "Source folder";
+        source.AccessibleName = "Source folder";
         sourceBrowse.AccessibleName = restoring ? "Browse restore destination" : "Browse source folder";
-        source.Enabled = sourceBrowse.Enabled = detect.Enabled = !checking && !cameraSettings && !runner.IsBusy;
+        source.Enabled = sourceBrowse.Enabled = !checking && !cameraSettings && !runner.IsBusy;
+        restoreDestination.Enabled = !runner.IsBusy;
+        detect.Enabled = !runner.IsBusy;
         start.Text = restoring ? "Restore" : checking ? "Check" : "Back up";
         preview.Enabled = !checking && !runner.IsBusy;
         zip.Enabled = ZipApplies && !runner.IsBusy;
-        if (restoring) SetOptionsExpanded(true);
+        zip.Visible = !restoring && !checking;
+        optionsToggle.Visible = profileLabel.Visible = profileField.Visible = !restoring && !checking;
+        sourceBrowse.Visible = !checking;
+        RefreshSourceField(restoring);
+        if (restoring || checking) SetOptionsExpanded(true);
+        else if (!checking) SetOptionsExpanded(backupOptionsExpanded);
         RefreshDestinationSummary();
         if (!elapsed.IsRunning && status.Text == "Ready")
-            detail.Text = restoring ? "Choose a restore destination in More options, then Restore." :
+            detail.Text = restoring ? "Detect a device, then choose its backup and a restore destination." :
                 checking ? "Check saved backups without connecting a device." :
                 cameraSettings ? "Connect X100VI in settings mode, then Back up." :
-                "Connect your device, click Detect device, then Back up.";
+                "Detect your device on the Device tab, then open Backup.";
+        RefreshRestoreActionState();
     }
     void SetOptionsExpanded(bool expanded)
     {
+        if (Selected != GuiOperation.Restore && Selected != GuiOperation.Check) backupOptionsExpanded = expanded;
         optionsExpanded = expanded;
         optionalFields.Visible = expanded;
         optionsToggle.Text = expanded ? "Fewer options ▴" : "More options ▾";
-        optionsToggle.AccessibleDescription = expanded ? "Source, destination, backup name and zip options expanded" : "Show source, destination, backup name and zip options";
+        optionsToggle.AccessibleDescription = expanded ? "Source, destination, history name and zip options expanded" : "Show source, destination, history name and zip options";
+        RefreshWorkflowLayout();
     }
     void RefreshDestinationSummary()
     {
@@ -365,14 +397,20 @@ internal sealed class MainForm : Form
         }
         catch (Exception) { /* Keep partially edited paths visible; validation happens when starting. */ }
         // A source folder set in More options replaces device detection, so it's shown even while collapsed.
-        string sourceFolder = source.Text.Trim();
+        string sourceFolder = (Selected == GuiOperation.Restore ? restoreDestination : source).Text.Trim();
         string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
             : (Selected == GuiOperation.Restore ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
-        destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   Backup name: " + profile.Text.Trim() : "");
-        hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or the backup name in More options. Device & backup settings can override the location.");
+        destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   History name: " + profile.Text.Trim() : "");
+        hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or the history name in More options. Device & backup settings can override the location.");
     }
-    public void SelectCameraSettings() { operation.SelectedIndex = (int)GuiOperation.CameraSettings; }
-    GuiOperation Selected { get { return (GuiOperation)operation.SelectedIndex; } }
+    public void SelectCameraSettings()
+    {
+        if (!cameraSettingsAvailable) return;
+        bool previous = synchronizingNavigation; synchronizingNavigation = true;
+        try { SelectOperation(GuiOperation.CameraSettings, false); backupMode.SelectedIndex = 2; }
+        finally { synchronizingNavigation = previous; }
+    }
+    GuiOperation Selected { get { return selectedOperation; } }
     // A zip is made of a full backup, including a camera-settings snapshot.
     bool ZipApplies { get { return Selected == GuiOperation.FullBackup || Selected == GuiOperation.CameraSettings; } }
     void RefreshProgressMetrics()
@@ -416,9 +454,9 @@ internal sealed class MainForm : Form
         if (keyData == Keys.Escape && runner.IsBusy) { RequestCancel(); return true; }
         if (!runner.IsBusy)
         {
-            if (keyData == (Keys.Control | Keys.Enter)) { start.PerformClick(); return true; }
-            if (keyData == (Keys.Control | Keys.P)) { preview.PerformClick(); return true; }
-            if (keyData == (Keys.Control | Keys.D)) { detect.PerformClick(); return true; }
+            if (keyData == (Keys.Control | Keys.Enter)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; start.PerformClick(); return true; }
+            if (keyData == (Keys.Control | Keys.P)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; preview.PerformClick(); return true; }
+            if (keyData == (Keys.Control | Keys.D)) { workflowTabs.SelectedIndex = 0; detect.PerformClick(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { settings.PerformClick(); return true; }
         }
         return base.ProcessCmdKey(ref msg, keyData);
@@ -426,7 +464,10 @@ internal sealed class MainForm : Form
     void SetBusy(bool busy)
     {
         optionalFields.Enabled = !busy; optionsToggle.Enabled = !busy; detect.Enabled = !busy;
-        operation.Enabled = !busy; start.Enabled = !busy; settings.Enabled = !busy;
+        start.Enabled = !busy; settings.Enabled = !busy;
+        workflowTabs.Enabled = !busy; backupMode.Enabled = restoreMode.Enabled = !busy;
+        backupSetField.Enabled = !busy;
+        restoreBackupField.Enabled = restoreDetails.Enabled = !busy;
         preview.Enabled = !busy && Selected != GuiOperation.Check; cancel.Enabled = busy;
         cancel.Visible = busy;
         zip.Enabled = !busy && ZipApplies;
@@ -452,12 +493,17 @@ internal sealed class MainForm : Form
 
     public void SetDetectedSource(string found) { source.Text = found; }
 
-    // Shows a detected device's picture in the header; null shows the general backup picture (at
+    // Shows a detected device's picture on the Device tab; null shows the general backup picture (at
     // startup, and when detection finds nothing). The window and taskbar icon never change. A device
     // without a picture, or a build without the embedded pictures, keeps what's shown.
-    public void ShowDevice(DeviceProfile device, string mode = null)
+    public void ShowDevice(DeviceProfile device, string mode = null, bool cameraSettingsMode = false)
     {
         displayedDevice = device;
+        restoreContextKey = null;
+        RefreshRestoreBackups();
+        UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);
+        deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also choose a local source folder on the Backup tab." :
+            "Click Detect device to refresh storage and connection details.";
         RefreshDestinationSummary();
         deviceName.Text = device == null ? "No device detected" : device.Name + " · detected";
         deviceName.Font = device == null ? GuiTheme.Font(10) : GuiTheme.Heading(17);
@@ -490,6 +536,7 @@ internal sealed class MainForm : Form
     }
     public void PrepareOperation()
     {
+        operationProgressActive = true;
         lock (queueLock) { pendingLog.Length = 0; pendingProgress = null; }
         SetBusy(true);
         counts.Text = ""; counts.Visible = false; openFolder.Visible = false; outputFolder = null; latestProgress = null; elapsed.Restart();
@@ -497,7 +544,9 @@ internal sealed class MainForm : Form
     }
     public void CompleteOperation(OperationResult result, bool previewOnly)
     {
+        operationProgressActive = false;
         elapsed.Stop();
+        if (!previewOnly && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.IncrementalBackup || Selected == GuiOperation.CameraSettings)) restoreContextKey = null;
         SetBusy(false);
         status.Text = result.Cancelled ? "Cancelled" : result.ExitCode != 0 ? "Needs attention" : previewOnly ? "Preview complete" : "Complete";
         status.ForeColor = result.ExitCode != 0 ? GuiTheme.Danger : GuiTheme.Ink;
@@ -525,6 +574,7 @@ internal sealed class MainForm : Form
             config = next; status.Text = "Settings saved"; detail.Text = "Saved to " + AppIdentity.ConfigFileName + " for both interfaces.";
             GuiTheme.ApplyTheme(config.Theme, this);
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
+            restoreContextKey = null; RefreshRestoreBackups();
             RefreshDestinationSummary();
         }
         catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); }

@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using static PathSafety;
 using static AppSettings;
 using static Workflow;
 
@@ -20,31 +19,12 @@ static class SettingsLocation
             return LoadConfig(executableDirectory);
 
         string settingsDirectory = Path.Combine(roamingDirectory, AppIdentity.DirectoryName);
-        if (!PreviewOnly)
-        {
-            Directory.CreateDirectory(settingsDirectory);
-            foreach (string name in new[] { AppIdentity.ConfigFileName, AppIdentity.ProfileConfigFileName, AppIdentity.Legacy.ConfigFileName })
-            {
-                string source = Path.Combine(executableDirectory, name), destination = Path.Combine(settingsDirectory, name);
-                if (File.Exists(source) && !File.Exists(destination))
-                {
-                    RejectRootLinks(source);
-                    File.Copy(source, destination, false);
-                }
-            }
-        }
-        // Preview can read previous settings without creating directories or migrating files.
-        return LoadConfig(settingsDirectory, executableDirectory);
+        if (!PreviewOnly) Directory.CreateDirectory(settingsDirectory);
+        return LoadConfig(settingsDirectory);
     }
 
     internal static string SettingsReadPath(Config config, string name)
     {
-        string path = Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), name);
-        if (!File.Exists(path) && config.PreviousSettingsDirectory != null)
-        {
-            string previous = Path.Combine(config.PreviousSettingsDirectory, name);
-            if (File.Exists(previous)) return previous;
-        }
-        return path;
+        return Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), name);
     }
 }

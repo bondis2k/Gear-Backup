@@ -96,7 +96,7 @@ static class Session
 
     internal static string HistoriesRoot(Config config)
     {
-        return AppIdentity.ExistingFolder(config.BackupFolder, AppIdentity.BackupsFolderName, AppIdentity.Legacy.BackupsFolderName);
+        return Path.Combine(config.BackupFolder, AppIdentity.BackupsFolderName);
     }
 
     // Checks the source against the backup location and returns this source's history folder.
@@ -156,6 +156,13 @@ static class Session
         using (LockUnlessPreview(history))
         {
             string previous = LatestBackup(history);
+            if (incremental && config.IncrementalBackup != null)
+            {
+                previous = Path.GetFullPath(config.IncrementalBackup);
+                if (!ListBackups(history).Exists(path => Rooted(path) == Rooted(previous)))
+                    throw new IOException("The selected backup no longer exists in this history. Choose a full backup again.");
+                RejectRootLinks(previous);
+            }
             if (previous == null) OperationOutput.WriteLine("  First backup for this profile: creating a full backup.");
             bool? choice = ConfirmResume(previous, incremental && previous != null, config);
             if (choice == null) return new OperationResult { Cancelled = true, Summary = "Backup cancelled." };

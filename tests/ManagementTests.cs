@@ -154,7 +154,7 @@ partial class Tests
         Assert(catalog.Backups.TrueForAll(b => b.Device == Devices.M8), "the catalog records each backup's device for the Dashboard filter");
         string damagedRecord = Path.Combine(root, "other", "profiles", "op-xy-ABC", "2026-10-01");
         Put(Path.Combine(AppIdentity.MetadataRoot(damagedRecord), "device.txt"), new string('x', 200));
-        Assert(CatalogDevice(damagedRecord) == Devices.OPXY, "a damaged device record falls back to the history's name instead of hiding the backup");
+        Assert(CatalogDevice(damagedRecord) == null, "a damaged device record does not infer identity from the history name");
         CatalogBackup old = catalog.Backups.Find(b => !b.Latest), latest = catalog.Backups.Find(b => b.Latest);
         Assert(old.FilesBytes == 6 && old.VersionsBytes == 4 && old.ObjectsBytes == 10, "storage separates current files, old versions and snapshot contents");
         Assert(catalog.ZipBytes == 3 && catalog.MirrorBytes == 5 && catalog.UniqueBytes > 0, "storage includes ZIP archives and local MTP mirrors");
@@ -286,24 +286,13 @@ partial class Tests
         BackupCatalog withRecord = ManagementFixture(root, out config);
         CatalogBackup old = withRecord.Backups.Find(b => !b.Latest);
         WithUi(() => {
-            // Manifest names read without disk checks match the full reader's.
-            foreach (string manifest in Directory.GetFiles(SnapshotRoot(old.Path), "*.manifest"))
-            {
-                var full = ReadSnapshot(old.Path, manifest).Files.ConvertAll(f => f.Relative);
-                Assert(string.Join("|", SnapshotFileNames(manifest).ToArray()) == string.Join("|", full.ToArray()), "manifest names match the full reader");
-            }
-            string bad = Path.Combine(root, "bad.manifest");
-            Put(bad, AppIdentity.SnapshotHeader + "\nF\tonly-two");
-            Throws(() => SnapshotFileNames(bad), "a damaged manifest is still refused");
-
-            // Without the old-version record (older backups), snapshots identify the same old versions.
             HashSet<string> recorded = KnownOldVersions(old.Path);
+            Assert(recorded.Count == 1, "retained versions come from the explicit record");
             File.Delete(Path.Combine(AppIdentity.MetadataRoot(old.Path), "old-versions.txt"));
-            HashSet<string> fromSnapshots = KnownOldVersions(old.Path);
-            Assert(recorded.Count == 1 && fromSnapshots.SetEquals(recorded), "old versions are found from snapshots without the record");
+            Assert(KnownOldVersions(old.Path).Count == 0, "missing version records never trigger file or manifest inference");
         });
         CatalogBackup rescanned = ScanBackupCatalog(config, Path.Combine(root, "mirrors")).Backups.Find(b => !b.Latest);
-        Assert(rescanned.VersionsBytes == old.VersionsBytes && rescanned.FilesBytes == old.FilesBytes, "the scan reports the same sizes without the record");
+        Assert(rescanned.VersionsBytes == 0 && rescanned.FilesBytes == old.FilesBytes + old.VersionsBytes, "unrecorded dated files remain user content");
 
         // Hard links share one identity; separate files don't, even with the same content.
         string folder = Folder(root, "identities");

@@ -69,7 +69,7 @@ internal sealed class CatalogDialog : ToolsDialog
 
     void BuildStorage(MainForm owner)
     {
-        foreach (string column in new[] { "Profile / backup", "Current files", "Old versions", "History objects", "Metadata", "Unique content", "Location" })
+        foreach (string column in new[] { "Profile / backup", "Current files", "Old versions", "Content store / history", "Metadata", "Unique content", "Location" })
             grid.Columns.Add(column, column);
         var usage = new TabPage("Space usage");
         var clean = new TabPage("Cleanup");
@@ -197,7 +197,7 @@ internal sealed class CatalogDialog : ToolsDialog
         UpdateRecipesButton();
     }
 
-    // Also enables Rename for a selected history that can have a nickname (not the legacy one). On Storage
+    // Also enables Rename for a selected profile history. On Storage
     // both act on Space usage, so they are greyed out while Cleanup is showing.
     void UpdateRecipesButton()
     {

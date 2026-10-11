@@ -65,11 +65,16 @@ static class AppSettings
                   ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
                   "; Leave it empty to use %USERPROFILE%\\Backup. Environment variables work,\r\n" +
                   "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" },
+        YesNo("SingleContentStore", "Single content store", c => c.SingleContentStore, (c, v) => c.SingleContentStore = v,
+            "; SingleContentStore: yes = store each distinct file content once and save a restore point for every backup run.\r\n" +
+            "; Restore through the app; there is no separate browsable copy. Start with a full backup.\r\n" +
+            "; Existing incremental backups retain their original storage layout. Default no.\r\n"),
         YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
             "; PointInTimeHistory: yes = save restorable snapshots and a history content store.\r\n" +
             "; no (default) = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
             "; Old file versions and separate full backups are still kept according to their retention settings.\r\n" +
-            "; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\n"),
+            "; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\n" +
+            "; Ignored with SingleContentStore=yes: that mode always saves restore points.\r\n"),
         YesNo("HardLinks", "Hard-linked history", c => c.HardLinks, (c, v) => c.HardLinks = v,
             "; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n" +
             "; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n" +
@@ -161,16 +166,13 @@ static class AppSettings
         return LoadApplicationConfig(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     }
 
-    internal static Config LoadConfig(string directory, string previousDirectory = null)
+    internal static Config LoadConfig(string directory)
     {
-        var config = new Config { SettingsDirectory = directory, PreviousSettingsDirectory = previousDirectory };
+        var config = new Config { SettingsDirectory = directory };
         string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
-        string legacyFile = SettingsReadPath(config, AppIdentity.Legacy.ConfigFileName);
         try
         {
-            string currentFile = SettingsReadPath(config, AppIdentity.ConfigFileName);
-            bool migrate = !File.Exists(currentFile) && File.Exists(legacyFile);
-            string readFile = migrate ? legacyFile : currentFile;
+            string readFile = configFile;
             bool exists = File.Exists(readFile);
             var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (exists)
@@ -198,22 +200,7 @@ static class AppSettings
             }
             if (!PreviewOnly)
             {
-                if (migrate)
-                {
-                    // Preserve values and comments; only update product names in comment lines.
-                    var text = new StringBuilder();
-                    foreach (string line in Records.ReadLines(readFile, Records.SettingsLimit, "Settings file"))
-                    {
-                        string trimmed = line.TrimStart();
-                        text.AppendLine(trimmed.StartsWith(";") || trimmed.StartsWith("#")
-                            ? line.Replace(AppIdentity.Legacy.DirectoryName, AppIdentity.DirectoryName)
-                                  .Replace(AppIdentity.Legacy.Name, AppIdentity.Name)
-                                  .Replace(AppIdentity.Legacy.RecoveryFolderName, AppIdentity.RecoveryFolderName) : line);
-                    }
-                    text.Append(missing);
-                    AtomicText(configFile, text.ToString());
-                }
-                else if (missing.Length > 0) File.AppendAllText(configFile, missing.ToString());
+                if (missing.Length > 0) File.AppendAllText(configFile, missing.ToString());
             }
         }
         catch (Exception ex)
@@ -292,13 +279,16 @@ internal class Config
     public bool Preview = true;
     public bool HardLinks = false;  // share history content with the backup files (NTFS)
     public bool PointInTimeHistory = false; // opt in to snapshots and their content store
+    public bool SingleContentStore = false; // snapshots backed by one immutable content store
     public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
     public string Theme = "original"; // global GUI colour palette
     public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
     public Config Clone() { return (Config)MemberwiseClone(); }
+    internal string FullBackupName { get; set; }
+    internal string IncrementalBackup { get; set; }
+    internal RestoreRequest RestoreSelection { get; set; }
     internal string SettingsDirectory { get; set; }
-    internal string PreviousSettingsDirectory { get; set; }
 }
 
 // One setting: its INI key, the explanation written into GearBackup.ini when it's missing, and how its

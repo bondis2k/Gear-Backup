@@ -11,24 +11,12 @@ using static DeviceSelection;
 
 static class DeviceSelection
 {
-    // The device whose history a backup belongs to, from the history's name ("x100vi-<serial>",
-    // "m8-card-1A2B3C4D"); null for a named profile or a legacy history.
-    internal static DeviceProfile HistoryDevice(string backup)
-    {
-        string history = Path.GetFileName(Path.GetDirectoryName(Rooted(backup).TrimEnd('\\')));
-        foreach (DeviceProfile device in Devices.All)
-            if (history.StartsWith(device.Id + "-", StringComparison.OrdinalIgnoreCase)) return device;
-        return null;
-    }
-
-    // New backups remember their device even with a custom profile name. Older automatic histories
-    // can still identify it through their name; unknown legacy histories use the caller's fallback.
-    // A device this version doesn't know (a backup from a newer version) is treated like no record.
+    // Device identity comes only from the backup's explicit metadata, independently of its folder name.
     internal static DeviceProfile BackupDevice(string backup)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt");
-        if (!File.Exists(path)) return HistoryDevice(backup);
-        return Devices.Find(Records.ReadText(path, Records.DeviceLimit, "Backup device record").Trim()) ?? HistoryDevice(backup);
+        if (!File.Exists(path)) return null;
+        return Devices.Find(Records.ReadText(path, Records.DeviceLimit, "Backup device record").Trim());
     }
 
     // The device the current operation works with (set by the front end once the source is known).

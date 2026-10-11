@@ -52,9 +52,7 @@ partial class Tests
     }
     static Snapshot LatestSnapshot(string backup)
     {
-        string[] manifests = Directory.GetFiles(SnapshotRoot(backup), "*.manifest");
-        Array.Sort(manifests, StringComparer.Ordinal);
-        return ReadSnapshot(backup, manifests[manifests.Length - 1]);
+        return ReadSnapshot(backup, RestorePointNames.OrderedManifests(backup)[0]);
     }
     static Dictionary<string, string> TargetHashes(string target, List<RestoreEntry> copies, List<string> removals)
     {
