@@ -523,6 +523,8 @@ partial class Tests
                 }
                 for (int i = 0; i < 20; i++) { Application.DoEvents(); System.Threading.Thread.Sleep(20); }
                 Assert(table.Rows.Count > 0 && !notice.Text.StartsWith("Working"), "the " + window + " scans in the background and fills its table");
+                if (!storageMode) Assert(Convert.ToString(table.Rows[0].Cells[5].Value) == "See Storage",
+                    "Dashboard metadata scan directs users to Storage instead of displaying zero sizes");
                 Assert(mainStatus.Text == statusBefore && !mainStatus.Text.Contains("Scanning"),
                     "a " + window + " scan leaves the main window's status alone: " + mainStatus.Text);
             }

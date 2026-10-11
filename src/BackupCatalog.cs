@@ -180,14 +180,20 @@ static class StorageCatalog
 
     // Scans every configured backup location (the global one and those named in device/profile
     // preferences) and the MTP mirrors. mirrorRoot is for tests.
-    internal static BackupCatalog ScanBackupCatalog(Config config, string mirrorRoot = null)
+    internal static BackupCatalog ScanDashboardCatalog(Config config)
     {
-        var catalog = new BackupCatalog();
+        return ScanBackupCatalog(config, null, false);
+    }
+
+    internal static BackupCatalog ScanBackupCatalog(Config config, string mirrorRoot = null, bool storageDetails = true)
+    {
+        OperationContext.Current.CheckCancellation();
+        var catalog = new BackupCatalog { StorageDetails = storageDetails };
         var seenHistories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (string location in ConfiguredBackupLocations(config))
             ScanPart(catalog, location, () => ScanLocation(catalog, location, seenHistories));
         string mirrors = mirrorRoot ?? MirrorRoot;
-        if (Directory.Exists(mirrors)) ScanPart(catalog, mirrors, () => ScanMirrors(catalog, mirrors));
+        if (storageDetails && Directory.Exists(mirrors)) ScanPart(catalog, mirrors, () => ScanMirrors(catalog, mirrors));
         return catalog;
     }
 
@@ -220,6 +226,7 @@ static class StorageCatalog
             bool latest = i == backups.Count - 1;
             ScanPart(catalog, backup, () => ScanBackup(catalog, history, profile, backup, latest));
         }
+        if (!catalog.StorageDetails) return;
         foreach (string zip in Directory.GetFiles(history, "*.zip"))
         {
             string name = Path.GetFileNameWithoutExtension(zip);
@@ -237,6 +244,17 @@ static class StorageCatalog
     // metadata), when it last succeeded, and its last integrity check.
     static void ScanBackup(BackupCatalog catalog, string history, string profile, string backup, bool latest)
     {
+        OperationContext.Current.CheckCancellation();
+        if (!catalog.StorageDetails)
+        {
+            RejectRootLinks(backup);
+            var metadata = new CatalogBackup { Profile = profile, History = history, Path = backup,
+                Status = BackupStatus(backup), Latest = latest, Device = CatalogDevice(backup) };
+            metadata.CompletedUtc = LastSuccess(backup, metadata.Status);
+            ReadCheckRecord(metadata);
+            catalog.Backups.Add(metadata);
+            return;
+        }
         var folders = new List<DirectoryInfo>();
         List<FileInfo> files = StorageFiles(backup, folders);
         HashSet<string> oldVersionNames = KnownOldVersions(backup);
@@ -456,6 +474,7 @@ internal sealed class StorageItem
 
 internal sealed class BackupCatalog
 {
+    public bool StorageDetails = true;
     public readonly List<CatalogBackup> Backups = new List<CatalogBackup>();
     public readonly List<StorageItem> Cleanup = new List<StorageItem>();
     // Locations, histories or backups that couldn't be read; the scan carries on without them.

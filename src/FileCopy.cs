@@ -163,8 +163,10 @@ static class FileCopy
     {
         using (HashAlgorithm sha = NewSha256())
         {
-            byte[] current = new byte[ChunkSize], spare = new byte[ChunkSize];
             long total = input.CanSeek ? input.Length : 0, done = 0;
+            bool small = input.CanSeek && input.Length - input.Position <= 65536;
+            OperationContext context = OperationContext.Current;
+            byte[] current = context.RentBuffer(small), spare = small ? null : context.RentBuffer(false);
             Task<int> pending = null;
             try
             {
@@ -173,15 +175,14 @@ static class FileCopy
                 {
                     OperationContext.Current.CheckCancellation();
                     byte[] next = spare;
-                    pending = Task.Factory.StartNew(() => ReadChunk(input, next));
+                    if (!small) pending = Task.Factory.StartNew(() => ReadChunk(input, next));
                     sha.TransformBlock(current, 0, read, null, 0);
                     output.Write(current, 0, read);
                     done += read;
                     OperationContext.Current.Progress(Stage.Copying, label, done, total);
-                    read = Result(pending);
+                    read = small ? ReadChunk(input, current) : Result(pending);
                     pending = null;
-                    spare = current;
-                    current = next;
+                    if (!small) { spare = current; current = next; }
                 }
                 sha.TransformFinalBlock(current, 0, 0);
                 return ToHex(sha.Hash);
@@ -190,6 +191,8 @@ static class FileCopy
             {
                 // Never leave a read running after the streams close (e.g. when cancelled or a write fails).
                 if (pending != null) try { pending.Wait(); } catch (Exception) { }
+                context.ReturnBuffer(current);
+                context.ReturnBuffer(spare);
             }
         }
     }
@@ -217,17 +220,22 @@ static class FileCopy
     {
         OperationContext.Current.CheckCancellation();
         using (HashAlgorithm sha = NewSha256())
-        using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20, FileOptions.SequentialScan))
+        using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
         {
-            var buffer = new byte[ChunkSize];
-            int read;
-            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+            OperationContext context = OperationContext.Current;
+            byte[] buffer = context.RentBuffer(input.Length <= 65536);
+            try
             {
-                sha.TransformBlock(buffer, 0, read, null, 0);
-                OperationContext.Current.Progress(Stage.Hashing, path, input.Position, input.Length);
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    sha.TransformBlock(buffer, 0, read, null, 0);
+                    context.Progress(Stage.Hashing, path, input.Position, input.Length);
+                }
+                sha.TransformFinalBlock(buffer, 0, 0);
+                return ToHex(sha.Hash);
             }
-            sha.TransformFinalBlock(buffer, 0, 0);
-            return ToHex(sha.Hash);
+            finally { context.ReturnBuffer(buffer); }
         }
     }
 
@@ -254,28 +262,32 @@ static class FileCopy
                                                 OpenExisting, FlagNoBuffering | FlagSequentialScan, IntPtr.Zero))
         {
             if (file.IsInvalid) return HashFile(path);
-            IntPtr rawCurrent = Marshal.AllocHGlobal(ChunkSize + 4096), rawSpare = Marshal.AllocHGlobal(ChunkSize + 4096);
+            long total = new FileInfo(path).Length, done = 0;
+            bool small = total <= 65536;
+            int readSize = small ? 65536 : ChunkSize;
+            OperationContext context = OperationContext.Current;
+            byte[] buffer = context.RentBuffer(small);
+            IntPtr rawCurrent = IntPtr.Zero, rawSpare = IntPtr.Zero;
             Task<int> pending = null;
             try
             {
+                rawCurrent = Marshal.AllocHGlobal(readSize + 4096);
+                if (!small) rawSpare = Marshal.AllocHGlobal(readSize + 4096);
                 IntPtr current = Aligned(rawCurrent), spare = Aligned(rawSpare);
-                var buffer = new byte[ChunkSize];
-                long total = new FileInfo(path).Length, done = 0;
                 using (HashAlgorithm sha = NewSha256())
                 {
-                    int read = ReadUnbuffered(file, current);
+                    int read = ReadUnbuffered(file, current, readSize);
                     while (read > 0)
                     {
                         IntPtr next = spare;
-                        pending = Task.Factory.StartNew(() => ReadUnbuffered(file, next));
+                        if (!small) pending = Task.Factory.StartNew(() => ReadUnbuffered(file, next, readSize));
                         Marshal.Copy(current, buffer, 0, read);
                         sha.TransformBlock(buffer, 0, read, null, 0);
                         done += read;
                         OperationContext.Current.Progress(Stage.Verifying, path, done, total);
-                        read = Result(pending);
+                        read = small ? ReadUnbuffered(file, current, readSize) : Result(pending);
                         pending = null;
-                        spare = current;
-                        current = next;
+                        if (!small) { spare = current; current = next; }
                     }
                     if (read < 0) return HashFile(path);
                     sha.TransformFinalBlock(buffer, 0, 0);
@@ -288,6 +300,7 @@ static class FileCopy
                 if (pending != null) try { pending.Wait(); } catch (Exception) { }
                 Marshal.FreeHGlobal(rawCurrent);
                 Marshal.FreeHGlobal(rawSpare);
+                context.ReturnBuffer(buffer);
             }
         }
     }
@@ -295,10 +308,10 @@ static class FileCopy
     static IntPtr Aligned(IntPtr raw) { return new IntPtr((raw.ToInt64() + 4095) & ~4095L); }
 
     // One unbuffered chunk: the bytes read, 0 at the end of the file, or -1 when Windows refuses the read.
-    static int ReadUnbuffered(SafeFileHandle file, IntPtr buffer)
+    static int ReadUnbuffered(SafeFileHandle file, IntPtr buffer, int readSize)
     {
         int read;
-        return ReadFile(file, buffer, ChunkSize, out read, IntPtr.Zero) ? read : -1;
+        return ReadFile(file, buffer, readSize, out read, IntPtr.Zero) ? read : -1;
     }
 
     // Returns an error message if the drive holding `path` has less than `needed` bytes free, otherwise null.

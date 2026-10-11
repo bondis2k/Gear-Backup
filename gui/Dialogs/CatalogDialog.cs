@@ -106,7 +106,7 @@ internal sealed class CatalogDialog : ToolsDialog
         return grid.CurrentRow == null ? null : grid.CurrentRow.Tag as CatalogBackup;
     }
 
-    void RefreshCatalog() { Work(() => ScanBackupCatalog(config), Populate); }
+    void RefreshCatalog() { Work(() => storage ? ScanBackupCatalog(config) : ScanDashboardCatalog(config), Populate); }
 
     internal void Populate(BackupCatalog value)
     {
@@ -157,11 +157,11 @@ internal sealed class CatalogDialog : ToolsDialog
                 : successful == null || DateTime.UtcNow - successful.Value > TimeSpan.FromDays(7) ? "Overdue" : "Up to date";
             if (latest.CheckResult.StartsWith("Problems found", StringComparison.Ordinal)) attention = "Check problems";
             int i = grid.Rows.Add(latest.Profile, CatalogDate(successful), latest.Status, CatalogDate(latest.CheckedUtc), latest.CheckResult,
-                FormatSize(bytes), attention, latest.History);
+                value.StorageDetails ? FormatSize(bytes) : "See Storage", attention, latest.History);
             grid.Rows[i].Tag = latest;
         }
         Notice.Text = "Last check refers to the latest backup folder. Older backups remain available through Restore. " +
-            "Stored sizes are logical file sizes. Refresh after a backup or integrity check.";
+            "Open Storage for detailed sizes. Refresh after a backup or integrity check.";
     }
 
     // The devices that have histories in this scan. The current choice is kept when it still exists.

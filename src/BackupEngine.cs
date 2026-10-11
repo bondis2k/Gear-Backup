@@ -87,6 +87,7 @@ internal sealed class BackupRun
     readonly SortedDictionary<string, long[]> perFolder = new SortedDictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
     // Checksums for the backup's checksum list; an incremental run starts from the existing list
     Dictionary<string, string> sums;
+    Dictionary<string, string> previousSums;
     HashSet<string> knownVersions;
     Changes changes;
     string checksumStatus;
@@ -111,6 +112,15 @@ internal sealed class BackupRun
             WriteColored("  " + pathProblem, ConsoleColor.Red);
             summary = pathProblem;
             return 1;
+        }
+        if (CanFinishUnchanged())
+        {
+            unchanged = scan.Files.Count;
+            RecordSuccess();
+            title = AppIdentity.Name + " complete";
+            summary = "No new or changed files. " + unchanged.ToString("N0") + " unchanged; backup is up to date.";
+            OperationOutput.WriteLine("  " + summary);
+            return 0;
         }
         if (!CheckSpace()) return 1;
         if (!Approve()) return 0;
@@ -219,7 +229,7 @@ internal sealed class BackupRun
 
         resuming = incremental && Status.Unfinished(BackupStatus(dest));
         states = new FileState[scan.Files.Count];
-        Dictionary<string, string> oldSums = previous == null ? null : LoadChecksums(previous);
+        Dictionary<string, string> oldSums = previousSums = previous == null ? null : LoadChecksums(previous);
         var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // HardLinks=yes on NTFS: the history store shares the backup files' content instead of copying it.
         linkedHistory = config.PointInTimeHistory && config.HardLinks && SupportsHardLinks(backupRoot);
@@ -269,6 +279,40 @@ internal sealed class BackupRun
         if (spaceError == null) return true;
         WriteColored("  " + spaceError, ConsoleColor.Red);
         return false;
+    }
+
+    // Only the ordinary completed, history-free case can skip housekeeping. A missing checksum,
+    // source deletion, new folder, resume, retention request or snapshot request takes the normal path.
+    bool CanFinishUnchanged()
+    {
+        if (!incremental || PreviewOnly || resuming || plan.Count != 0 || config.PointInTimeHistory ||
+            config.KeepBackups > 0 || config.KeepOldVersions > 0 || config.Zip ||
+            BackupStatus(dest) != Status.Complete || previousSums == null || previousSums.Count != scan.Files.Count)
+            return false;
+        string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
+        RejectRootLinks(devicePath);
+        if (!File.Exists(devicePath) || new FileInfo(devicePath).Length > 128 ||
+            File.ReadAllText(devicePath).Trim() != CurrentDevice.Id) return false;
+        foreach (FileInfo file in scan.Files)
+        {
+            OperationContext.Current.CheckCancellation();
+            if (!previousSums.ContainsKey(Relative(file))) return false;
+        }
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (string folder in scan.Folders)
+        {
+            if (!Directory.Exists(SafePath(dest, folder.Substring(source.Length)))) return false;
+            folders.Add(folder.Substring(source.Length));
+        }
+        // A lightweight inventory check still detects manual additions and deleted empty folders.
+        // It does not sort files, hash them, or build cleanup/history records.
+        int rootLength = PathSafety.Rooted(dest).Length;
+        foreach (FileSystemInfo entry in BackupTraversal.BackupEntries(dest))
+        {
+            string relative = entry.FullName.Substring(rootLength);
+            if (entry is DirectoryInfo ? !folders.Contains(relative) : !previousSums.ContainsKey(relative)) return false;
+        }
+        return true;
     }
 
     bool Approve()
@@ -470,17 +514,20 @@ internal sealed class BackupRun
         };
         report.Write();
         SetBackupStatus(dest, failed == 0 ? Status.Complete : Status.Failed);
-        if (failed == 0)
-        {
-            try
-            {
-                string successPath = Path.Combine(AppIdentity.MetadataRoot(dest), "last-success.txt"); RejectRootLinks(successPath);
-                AtomicText(successPath, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { OperationOutput.WriteLine("  Could not save dashboard completion time: " + ex.Message); }
-        }
+        if (failed == 0) RecordSuccess();
         WriteColored("  " + report.StatusText, failed == 0 ? ConsoleColor.Green : ConsoleColor.Yellow);
         OperationOutput.WriteLine();
+    }
+
+    void RecordSuccess()
+    {
+        try
+        {
+            string successPath = Path.Combine(AppIdentity.MetadataRoot(dest), "last-success.txt");
+            RejectRootLinks(successPath);
+            AtomicText(successPath, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { OperationOutput.WriteLine("  Could not save dashboard completion time: " + ex.Message); }
     }
 }

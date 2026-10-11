@@ -245,6 +245,8 @@ Restore and check offer a history selector, including existing backups directly 
 
 **Incremental:** add and update files in the latest backup of the current profile. Changed files keep their previous browsable copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`. Deleted source files remain in the browsable backup. When point-in-time history is enabled, a dated snapshot separately records which files actually existed during this run.
 
+An unchanged incremental backup of a completed, history-free backup updates its Dashboard success time without rewriting checksums or generating another statistics report. It still checks file/folder inventories. Missing metadata, manual additions, source deletions, changed folders, unfinished backups, enabled history or retention settings use normal housekeeping. This shortcut does not replace **Check backups** for detecting damaged content.
+
 ### Zip copy of a full backup
 
 Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\m8-card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
@@ -479,7 +481,7 @@ The GUI's **Dashboard**, **Storage**, **Profiles**, and **X100VI recipes** butto
 
 ### Backup dashboard
 
-**Dashboard** groups backups by profile across the current backup location and every location specified in device/profile overrides. It shows the last successful backup time, the latest folder's completion status, its last integrity check and result, and total stored logical size. **Overdue** means the last successful backup is more than seven days old. Failed or incomplete backups and failed integrity checks are marked for attention.
+**Dashboard** groups backups by profile across the current backup location and every location specified in device/profile overrides. It shows the last successful backup time, the latest folder's completion status, and its last integrity check and result. It reads small health records without scanning all backup files; the size column directs you to **Storage** for detailed totals. **Overdue** means the last successful backup is more than seven days old. Failed or incomplete backups and failed integrity checks are marked for attention.
 
 Use the **Device** list above the table to show only one device's profiles; it starts at **All devices** and lists the devices that have backups. Each profile belongs to the device its latest backup was made from. Profiles from backups made before Gear Backup recorded the device are listed under **Unknown device** unless their automatic name (such as `m8-card-…`) identifies it.
 
@@ -608,6 +610,8 @@ Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. E
 Safety tests also cover linked mirror roots, broken junctions, file symbolic links, MTP disconnection during a partial transfer, preservation of extra files after a partially failed exact restore, and malformed snapshot manifests. The file symbolic-link test needs Windows Developer Mode or symbolic-link privilege (for example, an elevated test session). Without it, that test reports `SKIP` with the reason and is excluded from the passed-test count; junction tests and other safety tests still run. A passing summary with a skip does not mean every link case was verified.
 
 Both suites also run automatically on GitHub for every pull request and every push to `main` (`.github\workflows\tests.yml`), on a Windows runner; a failed run keeps its test folders as a downloadable artifact for a week.
+
+For performance measurements, run `pwsh -File benchmarks\run-benchmarks.ps1 -Iterations 5`. It measures small-file and large-file full backups, unchanged incrementals, disk verification, and Dashboard/Storage scans against generated fixtures. `-SourceRef <commit-or-tag>` measures an earlier version without changing the working tree. See `benchmarks\README.md` in the source repository for CSV comparison and measurement limits. Correctness tests in `PerformanceTests.cs` cover metadata-only scans, unchanged-backup fallbacks, and reusable copy/hash buffers.
 
 Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
 

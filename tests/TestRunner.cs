@@ -148,6 +148,9 @@ partial class Tests
         RunTest("History lock", () => TestHistoryLock(Folder(root, "lock")));
         RunTest("Engine operations", () => TestEngineOperations(Folder(root, "engine")));
         RunTest("Optimizations", () => TestOptimizations(Folder(root, "optimizations")));
+        RunTest("Dashboard metadata scan", () => TestDashboardMetadata(Folder(root, "dashboard-metadata")));
+        RunTest("Unchanged incremental housekeeping", () => TestUnchangedHousekeeping(Folder(root, "unchanged-housekeeping")));
+        RunTest("Reusable copy and hash buffers", () => TestReusableBuffers(Folder(root, "reusable-buffers")));
         RunTest("Backup without point-in-time history", () => TestWithoutHistory(Folder(root, "without-history")));
         RunTest("Device and profile preferences", () => TestProfilePreferences(Folder(root, "profile-preferences")));
         RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
