@@ -213,7 +213,7 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
         {
             var path = new TextBox { Text = value, Dock = DockStyle.Fill };
             var browse = GuiTheme.Button("Browse…", false); browse.Dock = DockStyle.Right; browse.Width = 100;
-            browse.Click += delegate { using (var picker = new FolderBrowserDialog { Description = "Choose " + setting.Label.ToLowerInvariant() }) if (picker.ShowDialog(this) == DialogResult.OK) path.Text = picker.SelectedPath; };
+            browse.Click += delegate { using (var picker = new FolderPickerDialog("Choose " + setting.Label.ToLowerInvariant(), System.IO.Directory.Exists(path.Text) ? path.Text : null, true)) if (picker.ShowDialog(this) == DialogResult.OK) path.Text = picker.SelectedPath; };
             editorRow.Controls.Add(browse); editor = path;
         }
         else
