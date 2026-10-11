@@ -77,15 +77,23 @@ partial class Tests
         public TestSkippedException(string reason) : base(reason) { }
     }
 
-    // Runs one test. A failure is recorded and the next test still runs. The global test state a test
-    // may change (preview mode, console input) is reset afterwards so it can't leak into the next one.
+    // Runs test code that calls core helpers directly, as an operation would. GUI tests use it for
+    // their own setup; window code gets no such context, so a window that needs one fails there.
+    static T InOperation<T>(Func<T> action)
+    {
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) return action();
+    }
+
+    // Runs one test. A failure is recorded and the next test still runs. Each test runs in its own
+    // operation context (console prompts and output, as the CLI has), so preview mode, the device and
+    // caches start fresh; console input is reset afterwards so it can't leak into the next test.
     static void RunTest(string name, Action test)
     {
         int before = assertions;
         TextReader input = Console.In;
         try
         {
-            test();
+            using (new OperationContext(new ConsoleInteraction(), CancellationToken.None).Activate()) test();
             results.Add(string.Format("  ok    {0} ({1} checks)", name, assertions - before));
         }
         catch (TestSkippedException ex)
@@ -103,11 +111,7 @@ partial class Tests
                 if (!frame.Contains(".Assert(") && !frame.Contains(".Throws(")) { where = frame.Trim(); break; }
             results.Add(string.Format("  FAIL  {0}\n          {1}\n          {2}", name, reason, where));
         }
-        finally
-        {
-            PreviewOnly = false;
-            Console.SetIn(input);
-        }
+        finally { Console.SetIn(input); }
     }
 
     // Prints every test's result and returns the exit code. Fixtures are removed only when everything passed.
@@ -156,6 +160,7 @@ partial class Tests
         RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
         RunTest("MTP: values from a faulty device", TestMtpDeviceValues);
         RunTest("Named values: statuses, stages, modes, kinds", TestNamedValues);
+        RunTest("Operation context: no hidden context, scoped devices", () => TestOperationContext(Folder(root, "operation-context")));
         RunTest("Security: record reads and writes check links", () => TestRecordAccess(Folder(root, "record-access")));
         RunTest("Verification hash at chunk boundaries", () => TestHashFromDisk(Folder(root, "hash-from-disk")));
         RunTest("Storage cleanup updates checksum lists once", () => TestCleanupChecksums(Folder(root, "cleanup-checksums")));

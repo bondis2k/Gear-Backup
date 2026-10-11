@@ -26,15 +26,14 @@ static class RestoreFlow
         int pick = AskItem("Restore from which backup?", labels);
         if (pick == 0) return new OperationResult();
         string backup = choices[pick - 1];
-        DeviceProfile previousDevice = CurrentDevice;
-        try
+        // The backup's own device decides the restore choices and preferences; the source's device
+        // comes back afterwards.
+        using (OperationContext.Current.UseDevice(BackupDevice(backup) ?? CurrentDevice))
         {
-            OperationContext.Current.Device = BackupDevice(backup) ?? previousDevice;
             if (global != null)
                 config = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(Path.GetDirectoryName(backup)));
             return RestoreSelectedBackup(m8, backup, config);
         }
-        finally { OperationContext.Current.Device = previousDevice; }
     }
 
     static OperationResult RestoreSelectedBackup(string m8, string backup, Config config)
