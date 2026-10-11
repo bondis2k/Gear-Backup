@@ -53,6 +53,7 @@ partial class Tests
         RunTest("SQLite: device-filtered full and individual restores", () => TestRestoreCatalog(dir));
         RunTest("Single store: incremental points and restore", () => TestSingleContentStore(dir));
         RunTest("Named full backup sets and incremental selection", () => TestBackupSetNames(dir));
+        RunTest("Named incremental backups", () => TestIncrementalBackupNames(dir));
         RunTest("Single store: interrupted publication and migration", () => TestSingleContentStoreSafety(dir));
         RunTest("Console questions", TestConsoleQuestions);
         RunTest("Device profiles", () => TestDevices(dir));

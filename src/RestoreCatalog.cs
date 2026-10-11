@@ -67,7 +67,9 @@ internal static class RestoreCatalog
             foreach (string name in data.RestorePoints)
             {
                 if (name == "current") throw new IOException("invalid saved restore point name");
-                grouped.Add(name, new Snapshot { Name = name, TakenUtc = data.PointTimes[name] });
+                string customName;
+                data.PointNames.TryGetValue(name, out customName);
+                grouped.Add(name, new Snapshot { Name = name, TakenUtc = data.PointTimes[name], CustomName = customName });
             }
             foreach (var entry in data.Files)
             {
@@ -121,7 +123,7 @@ internal static class RestoreCatalog
             if (!kinds.TryGetValue(name, out kind) || (kind != "full" && kind != "incremental")) throw new IOException("Missing or invalid restore point kind.");
             set.Points.Add(new RestorePoint { Id = name, Snapshot = grouped[name], Label = kind == "full"
                 ? "Full backup · " + grouped[name].TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
-                : "Incremental · " + name });
+                : "Incremental · " + (grouped[name].CustomName == null ? "" : grouped[name].CustomName + " · ") + name });
         }
         set.Points.Add(new RestorePoint { Id = "current", Snapshot = grouped["current"], Label = names.Count == 0 ? "Latest backup files (no saved restore points)" : "Current backup files" });
     }

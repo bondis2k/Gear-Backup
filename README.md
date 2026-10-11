@@ -4,7 +4,7 @@ Back up your music gear, camera and local folders on Windows. Gear Backup provid
 
 Make full or incremental backups, review changes before copying, and restore the files you need. Optional point-in-time history lets you return to an earlier state; turn it off when you prefer a smaller backup of the current files.
 
-[User manual](MANUAL.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
+[User manual](MANUAL.md) · [FAQ](FAQ.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
 
 Before version 1.0.0, only the current settings and backup formats are supported. No automatic migration or compatibility with earlier formats is provided.
 
@@ -115,3 +115,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
 The suites use isolated temporary fixtures and hidden GUI windows. They cover backup, restore, history, integrity, profiles, storage management and recipe parsing without writing to connected devices. Hardware behavior still needs testing with the relevant device.
 
 Repeatable [performance benchmarks](benchmarks/README.md) measure file copying, verification, unchanged incrementals and catalog scans, with elapsed time and managed allocation recorded to CSV.
+
+## License
+
+Gear Backup is free software, released under the [GNU General Public License, version 3](LICENSE) (GPL-3.0). Copyright (C) 2026 Thomas Bondal.
+
+You can use, study, share and change it. If you distribute a changed version, you must do so under the same license and make its source code available. The program comes with no warranty; see the [full license text](LICENSE) for the details.

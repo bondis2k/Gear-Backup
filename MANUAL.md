@@ -320,7 +320,7 @@ Older completed snapshots remain selectable even if the latest incremental run f
 
 There are two ways to keep earlier states: a single content store, or history alongside browsable backup files.
 
-Incremental restore points use `yyyy-MM-dd_HH.mm.ss` names, for example `2026-10-11_14.32.08`. If that name already exists within the selected full backup, a numbered suffix such as `_2` preserves both runs. Full capture dates are stored separately in `.taken` metadata and SQLite, so Restore defaults to the latest run across days and midnight, independently of source-file dates. The GUI displays the selected point's full capture date below the selector.
+Incremental restore points use `yyyy-MM-dd_HH.mm.ss` names, for example `2026-10-11_14.32.08`. On the Backup tab, an incremental backup can also be given a name (up to 80 characters, optional); the Restore tab then lists it as `Incremental · Studio jam · 2026-10-11_14.32.08`. The name is saved with the restore point (a `.name` file beside its manifest) and shown only when a point is kept: with the content-store layout, or with **Save point-in-time history** on. If that name already exists within the selected full backup, a numbered suffix such as `_2` preserves both runs. Full capture dates are stored separately in `.taken` metadata and SQLite, so Restore defaults to the latest run across days and midnight, independently of source-file dates. The GUI displays the selected point's full capture date below the selector.
 
 ### Single content store
 

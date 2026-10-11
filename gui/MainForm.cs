@@ -338,6 +338,7 @@ internal sealed partial class MainForm : Form
         if (forOperation && Selected == GuiOperation.FullBackup) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
         if (forOperation && Selected == GuiOperation.IncrementalBackup)
         {
+            copy.IncrementalBackupName = BackupSetNames.Validate(incrementalName.Text);
             var item = incrementalBackup.SelectedItem as BackupSetItem;
             if (loadingBackupSets || item == null) throw new IOException("Choose a full backup to update. Detect the device or choose a source first.");
             copy.IncrementalBackup = item.Path;

@@ -13,7 +13,7 @@ internal sealed class AboutDialog : Form
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false; MaximizeBox = false; ShowInTaskbar = false;
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(440, 235);
+        ClientSize = new Size(440, 285);
         if (GuiHeadless) Opacity = 0;
         var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24),
             FlowDirection = FlowDirection.TopDown, WrapContents = false };
@@ -22,6 +22,9 @@ internal sealed class AboutDialog : Form
         version.Name = "ApplicationVersion";
         layout.Controls.Add(version);
         layout.Controls.Add(GuiTheme.Label("Backup and restore for your music gear and camera.", 10, GuiTheme.Muted));
+        var licence = GuiTheme.Label("Free software under the GNU General Public License, version 3.", 9, GuiTheme.Muted);
+        licence.Name = "ApplicationLicense";
+        layout.Controls.Add(licence);
         var close = GuiTheme.Button("Close", true);
         close.DialogResult = DialogResult.OK;
         layout.Controls.Add(close);

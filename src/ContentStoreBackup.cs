@@ -29,11 +29,11 @@ internal sealed class ContentStoreBackup
         if (mode != "single") throw new IOException("Unknown backup storage mode.");
         return true;
     }
-    internal static Snapshot Current(string backup)
+    internal static Snapshot Current(string backup, ObjectChecks objects = null)
     {
         string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");
         string name = Records.ReadText(pointer, Records.SmallLimit, "Current restore point").Trim();
-        return ReadSnapshot(backup, SafePath(SnapshotRoot(backup), name + ".manifest"));
+        return ReadSnapshot(backup, SafePath(SnapshotRoot(backup), name + ".manifest"), objects);
     }
     sealed class PlannedFile
     {
@@ -52,6 +52,7 @@ internal sealed class ContentStoreBackup
         OperationOutput.WriteLine("  " + (incremental ? "Updating" : "Creating") + " single content store: " + backup);
         OperationOutput.WriteLine("  A restore point is saved for this backup run. Files are restored through Gear Backup.");
         CatalogData indexed = incremental ? BackupDatabase.TryIncrementalInventory(backup) : null;
+        var store = new ObjectChecks(backup);
         Snapshot current = null;
         if (indexed != null)
         {
@@ -63,11 +64,11 @@ internal sealed class ContentStoreBackup
                 {
                     if (entry.Result == "damaged") throw new IOException("Damaged stored content: " + entry.Path + ". Repair this backup before updating it.");
                     current.Files.Add(new RestoreEntry { Relative = entry.Path, Hash = entry.Hash, Size = entry.Size,
-                        ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks, StoredPath = ObjectPath(backup, entry.Hash) });
+                        ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks, StoredPath = store.PathOf(entry.Hash) });
                 }
             }
         }
-        else if (incremental && File.Exists(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"))) current = Current(backup);
+        else if (incremental && File.Exists(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"))) current = Current(backup, store);
         var old = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
         if (current != null) foreach (var item in current.Files) old.Add(item.Relative, item);
         var scan = new ScanResult(); CollectFiles(source, scan);
@@ -84,15 +85,14 @@ internal sealed class ContentStoreBackup
         {
             OperationContext.Current.CheckCancellation();
             string relative = file.FullName.Substring(source.Length);
-            SafePath(backup, relative); // Validate logical names even though no browsable files are created.
+            CheckedPath(backup, relative); // Validate logical names even though no browsable files are created.
             names.Add(relative); sizes[relative] = file.Length;
             logicalBytes += file.Length;
             RestoreEntry prior;
             var planned = new PlannedFile { Source = file, Relative = relative, Size = file.Length,
                 Modified = file.LastWriteTimeUtc.Ticks, Created = file.CreationTimeUtc.Ticks };
-            if (old.TryGetValue(relative, out prior) && prior.Size == file.Length && File.Exists(prior.StoredPath))
+            if (old.TryGetValue(relative, out prior) && prior.Size == file.Length && store.Present(prior.Hash))
             {
-                RejectRootLinks(prior.StoredPath);
                 if (new FileInfo(prior.StoredPath).Length != prior.Size) throw new IOException("Damaged stored content: " + relative);
                 bool hashCompare = config.Thorough || !UsableFileTime(file.LastWriteTimeUtc) || !UsableFileTime(new DateTime(prior.ModifiedTicks, DateTimeKind.Utc));
                 if (hashCompare)
@@ -115,7 +115,7 @@ internal sealed class ContentStoreBackup
             { string relative = folder.Substring(source.Length); if (!folders.Remove(relative)) actions.Add("New folder: " + relative); }
             foreach (string folder in folders) actions.Add("Removed folder from new restore point: " + folder);
         }
-        foreach (string folder in scan.Folders) SafePath(backup, folder.Substring(source.Length));
+        foreach (string folder in scan.Folders) CheckedPath(backup, folder.Substring(source.Length));
         string free = CheckFreeSpace(history, needed + (config.Zip && !incremental ? logicalBytes + logicalBytes / 100 + 65536 : 0) + 1024 * 1024);
         if (free != null) return new OperationResult { ExitCode = 1, Summary = free };
         if (PreviewOnly || actions.Count != 0)
@@ -143,7 +143,7 @@ internal sealed class ContentStoreBackup
                 if (!item.Source.Exists || item.Source.Length != item.Size || item.Source.LastWriteTimeUtc.Ticks != item.Modified)
                     throw new IOException("Source changed since the preview: " + item.Relative);
                 RejectRootLinks(item.Source.FullName);
-                string hash = item.KnownHash, obj = hash == null ? null : ObjectPath(backup, hash);
+                string hash = item.KnownHash, obj = hash == null ? null : store.PathOf(hash);
                 if (obj == null || !File.Exists(obj))
                 {
                     string objects = Path.Combine(AppIdentity.MetadataRoot(backup), "objects");
@@ -153,7 +153,7 @@ internal sealed class ContentStoreBackup
                     {
                         string copiedHash = CopyFile(item.Source, temp, config.Verify);
                         if (hash != null && copiedHash != hash) throw new IOException("Source checksum changed since the preview: " + item.Relative);
-                        hash = copiedHash; obj = ObjectPath(backup, hash);
+                        hash = copiedHash; obj = store.PathOf(hash);
                         if (File.Exists(obj))
                         {
                             if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
@@ -179,7 +179,7 @@ internal sealed class ContentStoreBackup
                     .Append('\t').Append(item.CreatedTicks.ToString(CultureInfo.InvariantCulture)).Append('\n');
             manifest = SafePath(SnapshotRoot(backup), snapshot.Name + ".manifest");
             AtomicText(manifest, rows.ToString());
-            RestorePointNames.SaveMetadata(backup, snapshot.Name, started, incremental);
+            RestorePointNames.SaveMetadata(backup, snapshot.Name, started, incremental, incremental ? config.IncrementalBackupName : null);
             AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"), snapshot.Name + "\n");
             committed = true;
             SetBackupStatus(backup, Status.Complete);
@@ -206,7 +206,7 @@ internal sealed class ContentStoreBackup
             {
                 try
                 {
-                    foreach (string path in new[] { manifest, Path.ChangeExtension(manifest, ".kind"), Path.ChangeExtension(manifest, ".taken") })
+                    foreach (string path in new[] { manifest, Path.ChangeExtension(manifest, ".kind"), Path.ChangeExtension(manifest, ".taken"), Path.ChangeExtension(manifest, ".name") })
                     { RejectRootLinks(path); TryDelete(path); }
                 }
                 catch (Exception ex) { OperationOutput.WriteLine("  Could not remove unpublished restore point: " + ex.Message); }

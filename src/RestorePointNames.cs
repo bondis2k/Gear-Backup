@@ -25,11 +25,26 @@ internal static class RestorePointNames
         }
     }
 
-    internal static void SaveMetadata(string backup, string name, DateTime started, bool incremental)
+    internal static void SaveMetadata(string backup, string name, DateTime started, bool incremental, string customName = null)
     {
         string root = Snapshots.SnapshotRoot(backup);
         Workflow.AtomicText(SafePath(root, name + ".kind"), incremental ? "incremental" : "full");
         Workflow.AtomicText(SafePath(root, name + ".taken"), started.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
+        customName = BackupSetNames.Validate(customName);
+        if (customName.Length != 0) Workflow.AtomicText(SafePath(root, name + ".name"), customName);
+    }
+
+    // The name the user gave a restore point (shown beside its date and time), or null when it has none.
+    internal static string ReadName(string backup, string name)
+    {
+        string path = SafePath(Snapshots.SnapshotRoot(backup), name + ".name");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            string text = BackupSetNames.Validate(Records.ReadText(path, Records.SmallLimit, "Restore point name"));
+            return text.Length == 0 ? null : text;
+        }
+        catch (ArgumentException) { return null; } // an unusable name only falls back to the date and time
     }
 
     internal static DateTime TakenUtc(string backup, string name)

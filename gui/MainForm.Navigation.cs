@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 // Device discovery is separate from the two workflows. The operation selectors share the runner's
@@ -15,6 +16,45 @@ internal sealed partial class MainForm
     Control workflowHost, deviceOverview;
     bool synchronizingNavigation, backupOptionsExpanded, sizingWorkflow;
     bool cameraSettingsAvailable;
+    int redrawFreezes;
+    RedrawFreeze tabSwitchFreeze;
+
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
+
+    // Switching tabs moves panels, shows and hides controls and resizes the tab area, and each step would
+    // repaint the window on its own, which shows as flicker. While this is held the window keeps its
+    // current picture and lays everything out at once; it is painted a single time when released.
+    sealed class RedrawFreeze : IDisposable
+    {
+        const int SetRedraw = 0x000B;
+        readonly MainForm form;
+        bool active;
+        internal RedrawFreeze(MainForm form)
+        {
+            this.form = form;
+            if (!form.IsHandleCreated) return;
+            active = true;
+            if (form.redrawFreezes++ != 0) return;
+            form.SuspendLayout();
+            SendMessage(form.Handle, SetRedraw, IntPtr.Zero, IntPtr.Zero);
+        }
+        public void Dispose()
+        {
+            if (!active) return;
+            active = false;
+            if (--form.redrawFreezes != 0) return;
+            form.ResumeLayout(true);
+            SendMessage(form.Handle, SetRedraw, (IntPtr)1, IntPtr.Zero);
+            form.Invalidate(true);
+        }
+    }
+
+    void ReleaseTabSwitch()
+    {
+        RedrawFreeze freeze = tabSwitchFreeze;
+        tabSwitchFreeze = null;
+        if (freeze != null) freeze.Dispose();
+    }
 
     Control BuildWorkflowTabs()
     {
@@ -43,17 +83,28 @@ internal sealed partial class MainForm
         deviceCard.Controls.Add(information, 1, 0);
         workflowTabs.TabPages[0].Controls.Add(deviceCard);
         workflowTabs.TabPages[1].Controls.Add(inputs);
+        // The tab control shows the new (still empty) page before our handler can move the inputs onto it, so the
+        // window stops painting as soon as a switch is requested and paints once when the new page is ready.
+        workflowTabs.Selecting += delegate {
+            if (tabSwitchFreeze != null) return;
+            tabSwitchFreeze = new RedrawFreeze(this);
+            BeginInvoke(new Action(ReleaseTabSwitch)); // never leave the window frozen if no change follows
+        };
         workflowTabs.SelectedIndexChanged += delegate {
-            if (synchronizingNavigation) return;
-            if (workflowTabs.SelectedIndex != 0)
+            try
             {
-                workflowTabs.SelectedTab.Controls.Add(inputs);
-                SelectOperation(workflowTabs.SelectedIndex == 2 ? (restoreMode.SelectedIndex == 2 ? GuiOperation.Check : GuiOperation.Restore)
-                    : (backupMode.SelectedIndex == 2 ? GuiOperation.CameraSettings : backupMode.SelectedIndex == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup), false);
-                backupMode.Visible = workflowTabs.SelectedIndex == 1;
-                restoreMode.Visible = workflowTabs.SelectedIndex == 2;
+                if (synchronizingNavigation) return;
+                if (workflowTabs.SelectedIndex != 0)
+                {
+                    workflowTabs.SelectedTab.Controls.Add(inputs);
+                    SelectOperation(workflowTabs.SelectedIndex == 2 ? (restoreMode.SelectedIndex == 2 ? GuiOperation.Check : GuiOperation.Restore)
+                        : (backupMode.SelectedIndex == 2 ? GuiOperation.CameraSettings : backupMode.SelectedIndex == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup), false);
+                    backupMode.Visible = workflowTabs.SelectedIndex == 1;
+                    restoreMode.Visible = workflowTabs.SelectedIndex == 2;
+                }
+                RefreshWorkflowLayout();
             }
-            RefreshWorkflowLayout();
+            finally { ReleaseTabSwitch(); }
         };
         workflowHost = GuiTheme.Tabbed(workflowTabs);
         workflowHost.Dock = DockStyle.Top; workflowHost.Margin = Padding.Empty;
@@ -115,9 +166,12 @@ internal sealed partial class MainForm
     internal void SelectOperation(GuiOperation value, bool navigate = true)
     {
         if (value == GuiOperation.CameraSettings && !cameraSettingsAvailable) value = GuiOperation.FullBackup;
-        selectedOperation = value;
-        if (navigate) SynchronizeOperationTab();
-        RefreshOperationControls();
+        using (new RedrawFreeze(this))
+        {
+            selectedOperation = value;
+            if (navigate) SynchronizeOperationTab();
+            RefreshOperationControls();
+        }
     }
 
     void UpdateCameraSettingsAvailability(bool available)

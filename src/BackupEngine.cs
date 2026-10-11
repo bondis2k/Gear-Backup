@@ -25,7 +25,7 @@ internal sealed class BackupEngine
             {
                 context.OverallProgressOnly = !incremental;
                 context.CheckCancellation();
-                if (!incremental) BackupSetNames.Validate(config.FullBackupName);
+                BackupSetNames.Validate(incremental ? config.IncrementalBackupName : config.FullBackupName);
                 source = Rooted(source);
                 backupRoot = Path.GetFullPath(backupRoot);
                 if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
@@ -482,7 +482,7 @@ internal sealed class BackupRun
                     string rel = Relative(f);
                     if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
                 }
-                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory, incremental);
+                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory, incremental, incremental ? config.IncrementalBackupName : null);
             }
             catch (Exception ex)
             {

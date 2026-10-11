@@ -85,6 +85,13 @@ partial class Tests
     static void TestSingleContentStoreSafety(string dir)
     {
         Assert(new Config().SingleContentStore, "new full backups use a single content store by default");
+        {
+            string checkRoot = Folder(dir, "object-checks"), good = new string('a', 64);
+            var objects = new ObjectChecks(checkRoot);
+            Assert(!objects.Present(good) && objects.PathOf(good).EndsWith(good), "object checks name a stored object by its checksum alone");
+            Throws(() => objects.PathOf(@"..\outside"), "object checks refuse a name that is not a checksum");
+            Throws(() => objects.PathOf(new string('A', 64)), "object checks accept lower-case hexadecimal checksums only");
+        }
         string root = Folder(dir, "single-safety"), source = Folder(root, "source"), history = Path.Combine(root, "history");
         Put(Path.Combine(source, "one.txt"), "ONE"); Put(Path.Combine(source, "two.txt"), "TWO");
         var config = new Config { SingleContentStore = true, Preview = false };

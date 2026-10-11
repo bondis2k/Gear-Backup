@@ -17,7 +17,12 @@ using static Snapshots;
 
 static class Snapshots
 {
-    internal static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
+    internal static bool ValidHash(string hash)
+    {
+        if (hash == null || hash.Length != 64) return false;
+        foreach (char c in hash) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+        return true;
+    }
     // Paths are stored Base64-encoded in manifests, so tabs or other odd characters in a name can't
     // break the tab-separated format.
     internal static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value)); }
@@ -39,7 +44,7 @@ static class Snapshots
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
     // The file's content is stored once in .gearbackup\objects\<sha256>.
-    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false)
+    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false, string customName = null)
     {
         var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -90,14 +95,17 @@ static class Snapshots
         }
         string name = RestorePointNames.Create(backup, started, incremental);
         AtomicText(Path.Combine(SnapshotRoot(backup), name + ".manifest"), rows.ToString());
-        RestorePointNames.SaveMetadata(backup, name, started, incremental);
+        RestorePointNames.SaveMetadata(backup, name, started, incremental, customName);
         OperationOutput.WriteLine("  Point-in-time snapshot saved: " + name);
     }
 
     // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
     // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
-    internal static Snapshot ReadSnapshot(string backup, string manifest)
+    internal static Snapshot ReadSnapshot(string backup, string manifest, ObjectChecks objects = null)
     {
+        // Checked once for the whole manifest (and, when given, shared by every manifest of a backup).
+        RejectRootLinks(backup);
+        objects = objects ?? new ObjectChecks(backup);
         string[] rows = Records.ReadLines(manifest, Records.ListLimit, "Snapshot manifest");
         if (rows.Length == 0 || rows[0] != AppIdentity.SnapshotHeader)
             throw new IOException("Unsupported snapshot format.");
@@ -108,7 +116,7 @@ static class Snapshots
             string[] parts = rows[i].Split('\t');
             if (parts.Length < 2) throw new IOException("Invalid snapshot row.");
             string relative = Decode(parts[1]).Replace('/', '\\');
-            SafePath(backup, relative);
+            CheckedPath(backup, relative);
             if (!names.Add(relative)) throw new IOException("Duplicate snapshot path: " + relative);
             if (parts[0] == "D" && parts.Length == 2) result.Folders.Add(relative);
             else if (parts[0] == "F" && parts.Length == 6)
@@ -120,7 +128,8 @@ static class Snapshots
                     size < 0 || modified < 0 || modified > DateTime.MaxValue.Ticks || created < 0 || created > DateTime.MaxValue.Ticks)
                     throw new IOException("Invalid snapshot metadata.");
                 result.Files.Add(new RestoreEntry { Relative = relative, Hash = parts[2], Size = size,
-                    ModifiedTicks = modified, CreatedTicks = created, StoredPath = ObjectPath(backup, parts[2]) });
+                    ModifiedTicks = modified, CreatedTicks = created, StoredPath = objects.PathOf(parts[2]) });
+                objects.Present(parts[2]); // refuses a linked content object
             }
             else throw new IOException("Invalid snapshot row.");
         }
@@ -136,6 +145,7 @@ static class Snapshots
             }
         }
         result.TakenUtc = RestorePointNames.TakenUtc(backup, result.Name);
+        result.CustomName = RestorePointNames.ReadName(backup, result.Name);
         return result;
     }
 
@@ -150,7 +160,8 @@ static class Snapshots
         foreach (string file in files)
         {
             string name = Path.GetFileNameWithoutExtension(file);
-            names.Add(name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            string custom = RestorePointNames.ReadName(backup, name);
+            names.Add((custom == null ? "" : custom + " · ") + name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         }
         int pick = AskItem("Restore from which saved point in time?", names,
             ContentStoreBackup.IsSingle(backup) ? "Latest restore point" : "Current backup files (no snapshot)");
@@ -242,7 +253,41 @@ internal class Snapshot
 {
     public string Name;
     public DateTime TakenUtc;
+    public string CustomName; // optional name the user gave this restore point
     public List<RestoreEntry> Files = new List<RestoreEntry>();
     public List<string> Folders = new List<string>();
     public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+}
+
+// The content objects of one backup's store. A restore point can name thousands of them, and every saved
+// point repeats the same names, so each object is looked at once per instance: the store's folder is
+// checked for links once and each object file once. Use one instance per operation, never across them.
+internal sealed class ObjectChecks
+{
+    readonly string root;
+    readonly Dictionary<string, bool> present = new Dictionary<string, bool>(StringComparer.Ordinal);
+
+    internal ObjectChecks(string backup)
+    {
+        root = Path.GetFullPath(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"));
+        PathSafety.RejectRootLinks(root);
+    }
+
+    // Where the content with this checksum is stored; the checksum alone names the file.
+    internal string PathOf(string hash)
+    {
+        if (!Snapshots.ValidHash(hash)) throw new IOException("Invalid snapshot checksum.");
+        return Path.Combine(root, hash);
+    }
+
+    // Whether the object exists. A linked object is refused.
+    internal bool Present(string hash)
+    {
+        bool found;
+        if (present.TryGetValue(hash, out found)) return found;
+        var info = new FileInfo(PathOf(hash));
+        if (info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked paths are not supported: " + info.FullName);
+        present[hash] = info.Exists;
+        return info.Exists;
+    }
 }

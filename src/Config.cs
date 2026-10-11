@@ -286,6 +286,7 @@ internal class Config
 
     public Config Clone() { return (Config)MemberwiseClone(); }
     internal string FullBackupName { get; set; }
+    internal string IncrementalBackupName { get; set; }
     internal string IncrementalBackup { get; set; }
     internal RestoreRequest RestoreSelection { get; set; }
     internal string SettingsDirectory { get; set; }
