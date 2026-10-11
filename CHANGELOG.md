@@ -6,6 +6,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-11
+
 ### Added
 - Device-filtered Restore tab with SQL-backed full/incremental restore-point selection, latest defaults and a checked folder/file browser. Saved runs record whether they came from a full or incremental backup; restores revalidate device, inventory and selections under the history lock. Exact restore remains optional.
 - SQLite-first incremental inventory for both storage layouts, with current-row queries, stale/incomplete inventory detection, recovery-record fallbacks, live browsable-file checks and automatic catalog repair after successful fallback runs.
@@ -135,7 +137,8 @@ First release of Gear Backup.
 - Graphical and command-line interfaces, Setup and Portable packages, and an illustrated offline
   manual in three themes (Original, Original (dark), Retro).
 
-[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.0A...v0.9.1
 [0.9.0A]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.0...v0.9.0A
