@@ -4,6 +4,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using static FileCopy;
+using static PathSafety;
 
 partial class GearBackup
 {
@@ -28,11 +30,11 @@ partial class GearBackup
         public MtpDeviceInfo Info;
         public string Mirror;
         // Opens the device for reading; null means the real device (tests supply a fake).
-        public Func<IMtpSource> Open;
+        public Func<IMtpSource> Open = null;
         // Asks whether the X100VI is in settings mode; null means asking the real camera (tests supply an
         // answer). Asked right before every sync, not taken from detection: the camera can be switched
         // while a menu waits, and a sync in settings mode would see no photos and empty the mirror.
-        public Func<bool> ReadSettingsMode;
+        public Func<bool> ReadSettingsMode = null;
     }
 
     static string MirrorRoot

@@ -1,28 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using static GearBackup;
 
-partial class GearBackup
+static class PathSafety
 {
-    static string ExpandPath(string value)
+    internal static string ExpandPath(string value)
     {
         return string.IsNullOrWhiteSpace(value) ? "" : Path.GetFullPath(Environment.ExpandEnvironmentVariables(value));
     }
 
     // The full path with exactly one trailing backslash, so paths compare reliably as folder prefixes.
-    static string Rooted(string path)
+    internal static string Rooted(string path)
     {
         return Path.GetFullPath(path).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
     }
 
     // True if path is parent itself or inside it.
-    static bool Within(string path, string parent)
+    internal static bool Within(string path, string parent)
     {
         return Rooted(path).StartsWith(Rooted(parent), StringComparison.OrdinalIgnoreCase);
     }
 
     // Never allow manifest/checksum entries to escape the selected backup or target.
-    static string SafePath(string root, string relative)
+    internal static string SafePath(string root, string relative)
     {
         RejectRootLinksOnce(root);
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
@@ -38,7 +39,7 @@ partial class GearBackup
     }
 
     // Fails when a file sits where one of path's parent folders must be created.
-    static void CheckParents(string root, string path)
+    internal static void CheckParents(string root, string path)
     {
         string parent = Path.GetDirectoryName(path);
         while (parent != null && Within(parent, root))
@@ -80,7 +81,7 @@ partial class GearBackup
     }
 
     // Rejects path if it or any folder above it, up to the drive root, is a link.
-    static void RejectRootLinks(string path)
+    internal static void RejectRootLinks(string path)
     {
         string current = Path.GetFullPath(path).TrimEnd('\\', '/');
         while (!string.IsNullOrEmpty(current))

@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
+using static FileCopy;
 
 partial class GearBackup
 {
