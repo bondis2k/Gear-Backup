@@ -91,6 +91,18 @@ internal sealed class OperationContext
     // Folders already found not to be links during this operation, so path checks
     // don't repeat the same file-system lookups for every file.
     public readonly HashSet<string> VerifiedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    // Buffers belong to this operation, never to another worker or thread. Rent separately so a
+    // nested operation (for example from a progress callback) cannot overwrite an active copy.
+    readonly Stack<byte[]> smallBuffers = new Stack<byte[]>(), largeBuffers = new Stack<byte[]>();
+    internal byte[] RentBuffer(bool small)
+    {
+        var pool = small ? smallBuffers : largeBuffers;
+        return pool.Count == 0 ? new byte[small ? 65536 : FileCopy.ChunkSize] : pool.Pop();
+    }
+    internal void ReturnBuffer(byte[] buffer)
+    {
+        if (buffer != null) (buffer.Length == 65536 ? smallBuffers : largeBuffers).Push(buffer);
+    }
     // The console context made on first use, which lives as long as its thread.
     internal bool Fallback;
     // Histories found in each set of backup locations, so an unreachable location (a disconnected

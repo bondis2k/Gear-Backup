@@ -103,6 +103,8 @@ For media, Gear Backup copies `DCIM`, preserves camera-reported capture times an
 
 ## Profiles and backup management
 
+Dashboard uses a metadata-only scan for backup health, success times, integrity results and device filters. Detailed size accounting, hard-link identities and cleanup scans run in Storage. Unchanged completed backups without history or retention avoid redundant checksum/statistics writes while still checking file/folder inventories and updating the Dashboard success time.
+
 Automatic profiles separate histories by source: card volume identity, folder path or MTP device identity. A card can retain its history after a reader or drive-letter change. Named profiles provide an explicit history name.
 
 Restore and check history selection covers all configured backup locations, with location labels distinguishing profiles that share a name.
