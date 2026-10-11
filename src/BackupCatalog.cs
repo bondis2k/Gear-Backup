@@ -16,6 +16,7 @@ partial class GearBackup
     {
         public string Profile, History, Path, Status, CheckResult;
         public DateTime? CompletedUtc, CheckedUtc;
+        public DeviceProfile Device;    // the device it was made from; null when unknown (older backups)
         public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
         public bool Latest;
         public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }
@@ -258,7 +259,8 @@ partial class GearBackup
         var folders = new List<DirectoryInfo>();
         List<FileInfo> files = StorageFiles(backup, folders);
         HashSet<string> oldVersionNames = KnownOldVersions(backup);
-        var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest };
+        var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest,
+            Device = CatalogDevice(backup) };
         Dictionary<string, string> identities = FileIdentities(backup, files);
         var versions = new List<string>();
         foreach (FileInfo file in files)
@@ -283,6 +285,18 @@ partial class GearBackup
         catalog.Backups.Add(row);
         if (!latest) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OlderBackup, backup, history, backup, files, folders));
         foreach (string version in versions) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OldVersion, version, history, backup, false));
+    }
+
+    // The backup's device for the Dashboard's filter. A damaged device record only loses the filter
+    // (the history's name may still tell), not the backup's row.
+    static DeviceProfile CatalogDevice(string backup)
+    {
+        try { return BackupDevice(backup); }
+        catch (Exception ex)
+        {
+            if (!(ex is IOException || ex is UnauthorizedAccessException)) throw;
+            return HistoryDevice(backup);
+        }
     }
 
     // When the backup last completed successfully: its own record, or for a complete backup made before

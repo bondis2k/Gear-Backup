@@ -134,6 +134,10 @@ partial class GearBackup
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
         Assert(catalog.Warnings.Count == 0 && catalog.Backups.Count == 2, "catalog discovers dated backups without warnings");
+        Assert(catalog.Backups.TrueForAll(b => b.Device == Devices.M8), "the catalog records each backup's device for the Dashboard filter");
+        string damagedRecord = Path.Combine(root, "other", "profiles", "op-xy-ABC", "2026-10-01");
+        Put(Path.Combine(AppIdentity.MetadataRoot(damagedRecord), "device.txt"), new string('x', 200));
+        Assert(CatalogDevice(damagedRecord) == Devices.OPXY, "a damaged device record falls back to the history's name instead of hiding the backup");
         CatalogBackup old = catalog.Backups.Find(b => !b.Latest), latest = catalog.Backups.Find(b => b.Latest);
         Assert(old.FilesBytes == 6 && old.VersionsBytes == 4 && old.ObjectsBytes == 10, "storage separates current files, old versions and snapshot contents");
         Assert(catalog.ZipBytes == 3 && catalog.MirrorBytes == 5 && catalog.UniqueBytes > 0, "storage includes ZIP archives and local MTP mirrors");
