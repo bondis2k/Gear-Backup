@@ -13,6 +13,10 @@ using static FujiRecipes;
 using static FujiSettings;
 using static MtpMirror;
 using static StorageCatalog;
+using static AppSettings;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {

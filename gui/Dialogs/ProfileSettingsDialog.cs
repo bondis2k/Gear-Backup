@@ -4,6 +4,11 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 using static PathSafety;
+using static AppSettings;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {

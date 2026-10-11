@@ -10,6 +10,9 @@ using static Backups;
 using static RestoreFlow;
 using static FujiSettings;
 using static UsbDevices;
+using static ConsoleUi;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {
@@ -61,7 +64,7 @@ partial class GearBackup
         public void DetectSource()
         {
             RunWorker(delegate(OperationContext context) {
-                SourceChoice found = GearBackup.DetectSource();
+                SourceChoice found = Session.DetectSource();
                 context.CheckCancellation();
                 ShowDetected(found);
                 if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
@@ -102,7 +105,7 @@ partial class GearBackup
             SourceChoice chosen;
             if (options.SourceFolder.Length == 0)
             {
-                chosen = GearBackup.DetectSource();
+                chosen = Session.DetectSource();
                 ShowDetected(chosen);
                 if (chosen == null) throw new IOException("Choose a source folder, or connect the " + Devices.Names + ".");
             }

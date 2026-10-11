@@ -6,6 +6,7 @@ using static PathSafety;
 using static Snapshots;
 using static GearBackup;
 using static RestoreFlow;
+using static DeviceSelection;
 
 static class SampleDependencies
 {

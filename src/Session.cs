@@ -9,33 +9,18 @@ using static RestoreFlow;
 using static FujiSettings;
 using static MtpMirror;
 using static UsbDevices;
+using static GearBackup;
+using static ConsoleUi;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Workflow;
+using static Session;
 
-partial class GearBackup
+static class Session
 {
-    // Where an operation's files come from (or, for a restore, go to).
-    internal sealed class SourceChoice
-    {
-        public string Path;             // the drive or folder; for an MTP device, its mirror
-        public string PnpId;            // set only for a detected drive, which can then be ejected
-        public DeviceProfile Detected;  // the detected device; null for a folder chosen by hand
-        public MtpSource Mtp;           // set for an MTP device, whose mirror is synced before a backup
-        public string CameraMode;       // the X100VI's connection mode, read once at detection
-        public bool CameraSettingsMode;
-    }
-
-    // A source with everything both front ends work out the same way: its device, its preferences
-    // (global, then device, then profile) and its history.
-    internal sealed class PreparedSource
-    {
-        public SourceChoice Source;
-        public string Path, Histories, History;
-        public DeviceProfile Device;
-        public Config Global, Config;
-    }
-
     // The first connected supported device: a USB drive, otherwise an MTP device (whose mirror folder
     // is created). Null when none is connected.
-    static SourceChoice DetectSource()
+    internal static SourceChoice DetectSource()
     {
         DeviceProfile device;
         string pnp;
@@ -54,7 +39,7 @@ partial class GearBackup
     }
 
     // Checks the source and works out its device, preferences and history. Sets the current device.
-    static PreparedSource PrepareSource(Config global, SourceChoice choice)
+    internal static PreparedSource PrepareSource(Config global, SourceChoice choice)
     {
         if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
         string path = Rooted(choice.Path);
@@ -69,7 +54,7 @@ partial class GearBackup
     // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
     // device's mirror is synced first, under the lock of the folder holding the mirrors (MirrorRoot),
     // which storage cleanup also takes before recycling a mirror.
-    static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
+    internal static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
     {
         MtpSource mtp = prepared.Source.Mtp;
         if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
@@ -116,7 +101,7 @@ partial class GearBackup
     }
 
     // Checks the source against the backup location and returns this source's history folder.
-    static string HistoryFor(Config config, string source)
+    internal static string HistoryFor(Config config, string source)
     {
         string histories = HistoriesRoot(config);
         if (Within(histories, source) || Within(source, histories))
@@ -125,7 +110,7 @@ partial class GearBackup
     }
 
     // The history to check: the named profile, or one the user picks. Null when cancelled.
-    static string HistoryToCheck(Config config)
+    internal static string HistoryToCheck(Config config)
     {
         string histories = HistoriesRoot(config);
         if (config.Profile.Length == 0) return ChooseHistory(config, null);
@@ -151,7 +136,7 @@ partial class GearBackup
 
     // When the latest backup didn't finish, asks whether to resume it. Returns the incremental choice
     // to use (unchanged if the latest backup is fine), or null when the user cancels.
-    static bool? ConfirmResume(string previous, bool incremental, Config config)
+    internal static bool? ConfirmResume(string previous, bool incremental, Config config)
     {
         if (previous == null) return incremental;
         string status = BackupStatus(previous);
@@ -167,7 +152,7 @@ partial class GearBackup
     // Runs a backup while holding the history lock. The latest backup is read under the lock, so a
     // backup finished by another window in the meantime is seen. `incremental` is the user's choice;
     // it's ignored when there's no backup yet.
-    static OperationResult BackupWithLock(string source, string history, bool incremental, Config config)
+    internal static OperationResult BackupWithLock(string source, string history, bool incremental, Config config)
     {
         using (LockUnlessPreview(history))
         {
@@ -181,7 +166,7 @@ partial class GearBackup
 
     // The M8 can be unplugged or get another drive letter while a window stays open. Only eject a
     // device that still owns this source; returns null when it does, otherwise the reason.
-    static string ConfirmSameDevice(string source, string pnpId)
+    internal static string ConfirmSameDevice(string source, string pnpId)
     {
         try
         {
@@ -194,4 +179,25 @@ partial class GearBackup
         }
         catch (Exception ex) { return "Could not confirm the device for ejection: " + ex.Message; }
     }
+}
+
+// Where an operation's files come from (or, for a restore, go to).
+internal sealed class SourceChoice
+{
+    public string Path;             // the drive or folder; for an MTP device, its mirror
+    public string PnpId;            // set only for a detected drive, which can then be ejected
+    public DeviceProfile Detected;  // the detected device; null for a folder chosen by hand
+    public MtpSource Mtp;           // set for an MTP device, whose mirror is synced before a backup
+    public string CameraMode;       // the X100VI's connection mode, read once at detection
+    public bool CameraSettingsMode;
+}
+
+// A source with everything both front ends work out the same way: its device, its preferences
+// (global, then device, then profile) and its history.
+internal sealed class PreparedSource
+{
+    public SourceChoice Source;
+    public string Path, Histories, History;
+    public DeviceProfile Device;
+    public Config Global, Config;
 }

@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using static GearBackup;
+using static DeviceSelection;
 
 // Windows looks for a DLL in the program's own folder first. cfgmgr32.dll isn't one of the "known DLLs"
 // Windows always takes from System32, so without this a cfgmgr32.dll planted next to the exe (e.g. in

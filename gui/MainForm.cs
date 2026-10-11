@@ -5,6 +5,10 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
+using static AppSettings;
+using static ConsoleUi;
+using static ProfileSettings;
+using static Workflow;
 
 partial class GearBackup
 {

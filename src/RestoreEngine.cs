@@ -7,6 +7,8 @@ using static Snapshots;
 using static GearBackup;
 using static Backups;
 using static RestoreFlow;
+using static ConsoleUi;
+using static Workflow;
 
 // A restore runs in two halves: RunSelected plans it (compares with the target, asks about differing
 // files, shows the preview), then Run carries out the approved plan.

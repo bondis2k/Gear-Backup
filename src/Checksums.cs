@@ -9,6 +9,8 @@ using static GearBackup;
 using static BackupTraversal;
 using static Snapshots;
 using static Backups;
+using static ConsoleUi;
+using static Workflow;
 
 static class Checksums
 {

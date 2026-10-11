@@ -15,6 +15,10 @@ using static VersionCatalog;
 using static Backups;
 using static GearBackup;
 using static MtpMirror;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 static class StorageCatalog
 {

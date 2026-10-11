@@ -9,8 +9,13 @@ using static FileCopy;
 using static PathSafety;
 using static Backups;
 using static MtpMirror;
+using static GearBackup;
+using static ConsoleUi;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Session;
 
-partial class GearBackup
+static class Workflow
 {
     internal static bool PreviewOnly
     {
@@ -30,7 +35,7 @@ partial class GearBackup
     // ("m8-card-1A2B3C4D"), so the same SD card keeps its history in another reader or drive letter. A
     // folder gets a short hash of its full path ("m8-folder-..."). A mirrored MTP device is named by its
     // mirror folder ("op1-field-L1PRC121"). A named Profile setting overrides all of these.
-    static string ProfileId(string source, string requested)
+    internal static string ProfileId(string source, string requested)
     {
         if (requested.Length > 0) { ValidateProfile(requested); return requested; }
         string normalized = Rooted(source);
@@ -41,7 +46,7 @@ partial class GearBackup
 
     // What identifies a drive or folder, without the device: "card-1A2B3C4D" or "folder-<hash>". Before
     // histories were named per device, this alone was the history's name.
-    static string SourceKey(string normalized)
+    internal static string SourceKey(string normalized)
     {
         if (normalized == Rooted(Path.GetPathRoot(normalized)))
         {
@@ -59,7 +64,7 @@ partial class GearBackup
     // an existing history of the same card or folder under another device's name is used as it is, and
     // one from before histories were named per device ("card-1A2B3C4D") is renamed to the new name
     // (except in a preview, which changes nothing).
-    static string ProfileFolder(string profiles, string source, string requested)
+    internal static string ProfileFolder(string profiles, string source, string requested)
     {
         string id = ProfileId(source, requested);
         string folder = Path.Combine(profiles, id);
@@ -92,7 +97,7 @@ partial class GearBackup
 
     // Lets the user pick one of the histories that has backups: each profile, plus backups made before
     // profiles existed ("Legacy backups", directly under Gear Backups). Null when cancelled.
-    static string ChooseHistory(string root, string preferred)
+    internal static string ChooseHistory(string root, string preferred)
     {
         var roots = new List<string>();
         CollectHistories(root, roots);
@@ -101,7 +106,7 @@ partial class GearBackup
 
     // The histories with backups in every configured location. Looked up once per operation; callers
     // get their own copy of the list.
-    static List<string> AvailableHistories(Config config)
+    internal static List<string> AvailableHistories(Config config)
     {
         List<string> locations = ConfiguredBackupLocations(config);
         OperationContext context = OperationContext.Current;
@@ -132,7 +137,7 @@ partial class GearBackup
         if (ListBackups(root).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(root))) roots.Add(root);
     }
 
-    static string ChooseHistory(Config config, string preferred)
+    internal static string ChooseHistory(Config config, string preferred)
     {
         var roots = AvailableHistories(config);
         if (preferred != null && ListBackups(preferred).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(preferred)))
@@ -153,7 +158,7 @@ partial class GearBackup
         return pick == 0 ? null : roots[pick - 1];
     }
 
-    static bool HasHistory(string root)
+    internal static bool HasHistory(string root)
     {
         if (ListBackups(root).Count > 0) return true;
         string profiles = Path.Combine(root, "profiles");
@@ -162,11 +167,11 @@ partial class GearBackup
         return false;
     }
 
-    static bool HasHistory(Config config) { return AvailableHistories(config).Count > 0; }
+    internal static bool HasHistory(Config config) { return AvailableHistories(config).Count > 0; }
 
     // The CLI's source: SourceFolder if set, otherwise a detected device, otherwise a path typed by the
     // user. Null if cancelled. An MTP device's mirror isn't read yet: RunPrepared syncs it.
-    static SourceChoice SelectSource(Config config)
+    internal static SourceChoice SelectSource(Config config)
     {
         if (config.SourceFolder.Length > 0) return new SourceChoice { Path = config.SourceFolder };
         SourceChoice found = null;

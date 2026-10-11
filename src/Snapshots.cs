@@ -12,6 +12,8 @@ using static Checksums;
 using static VersionCatalog;
 using static Backups;
 using static RestoreFlow;
+using static ConsoleUi;
+using static Workflow;
 
 static class Snapshots
 {

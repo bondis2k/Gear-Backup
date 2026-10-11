@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using static BackupTraversal;
 using static Checksums;
 using static GearBackup;
+using static ConsoleUi;
 
 static class Backups
 {

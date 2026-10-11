@@ -11,6 +11,10 @@ using static Backups;
 using static FujiSettings;
 using static MtpMirror;
 using static StorageCatalog;
+using static AppSettings;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 class GuiTestRunner
 {

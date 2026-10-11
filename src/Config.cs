@@ -7,50 +7,14 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using static PathSafety;
+using static GearBackup;
+using static ConsoleUi;
+using static SettingsLocation;
+using static Workflow;
+using static AppSettings;
 
-partial class GearBackup
+static class AppSettings
 {
-    internal class Config
-    {
-        public string BackupFolder = DefaultBackupFolder();
-        public BackupMode Mode = BackupMode.Ask;
-        public bool Verify = false;
-        public int KeepBackups = 0;     // 0 = keep all
-        public int MaxNameLength = 64;  // 0 = don't check
-        public EjectMode Eject = EjectMode.No;
-        public int KeepOldVersions = 0; // 0 = keep all
-        public bool Recovery = false;
-        public string RecoveryFolder = "";
-        public string SourceFolder = "";
-        public string Profile = "";
-        public bool Thorough = false;
-        public bool Preview = true;
-        public bool HardLinks = false;  // share history content with the backup files (NTFS)
-        public bool PointInTimeHistory = false; // opt in to snapshots and their content store
-        public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
-        public string Theme = "retro"; // global GUI colour palette
-        public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
-
-        public Config Clone() { return (Config)MemberwiseClone(); }
-        internal string SettingsDirectory { get; set; }
-        internal string PreviousSettingsDirectory { get; set; }
-    }
-
-    // One setting: its INI key, the explanation written into GearBackup.ini when it's missing, and how its
-    // value is read and written. Preferences that can differ per device or profile have a Label, shown
-    // in the Profiles window.
-    internal sealed class Setting
-    {
-        public string Key, Doc, Label;
-        public string[] Choices;         // the allowed values of a yes/no or list setting; null otherwise
-        public bool Location;            // a folder, which the Profiles window can browse for
-        public bool AppliesEmpty;        // an empty value is applied (a path or name); otherwise it means "default"
-        public Func<Config, string> Get; // the value as written in the INI
-        // Applies a value; returns what was expected when the value isn't valid, otherwise null.
-        public Func<Config, string, string> Set;
-        public bool IsPreference { get { return Label != null; } }
-    }
-
     static Setting YesNo(string key, string label, Func<Config, bool> get, Action<Config, bool> set, string doc)
     {
         return new Setting { Key = key, Label = label, Doc = doc, Choices = new[] { "yes", "no" },
@@ -90,7 +54,7 @@ partial class GearBackup
     }
 
     // In the order explanations are added to a new GearBackup.ini; preferences are listed in the same order.
-    static readonly Setting[] Settings =
+    internal static readonly Setting[] Settings =
     {
         Choice("Theme", null, new[] { "original", "retro", "original-dark" }, c => c.Theme, (c, v) => c.Theme = v,
             "; Theme: GUI colour palette. original = light gray and teal; retro = teal, navy, gray and cream (default).\r\n" +
@@ -173,7 +137,7 @@ partial class GearBackup
                   "; or name it: m8, op1-field, op-xy, tracker-mini or x100vi. Matters for a card reader or folder.\r\n" },
     };
 
-    static Setting FindSetting(string key)
+    internal static Setting FindSetting(string key)
     {
         foreach (Setting setting in Settings)
             if (string.Equals(setting.Key, key, StringComparison.OrdinalIgnoreCase)) return setting;
@@ -186,19 +150,19 @@ partial class GearBackup
         return setting.Doc + setting.Key + "=" + setting.Get(new Config { BackupFolder = "" }) + "\r\n";
     }
 
-    static string DefaultBackupFolder()
+    internal static string DefaultBackupFolder()
     {
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
     }
 
     // Reads GearBackup.ini from the selected settings folder. Missing settings are appended with their default and
     // explanation, so the file always documents every option. A --preview run doesn't write the file.
-    static Config LoadConfig()
+    internal static Config LoadConfig()
     {
         return LoadApplicationConfig(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     }
 
-    static Config LoadConfig(string directory, string previousDirectory = null)
+    internal static Config LoadConfig(string directory, string previousDirectory = null)
     {
         var config = new Config { SettingsDirectory = directory, PreviousSettingsDirectory = previousDirectory };
         string configFile = Path.Combine(directory, AppIdentity.ConfigFileName);
@@ -261,13 +225,13 @@ partial class GearBackup
     }
 
     // Preserve comments and unrelated keys when the GUI saves shared preferences.
-    static void SaveConfig(Config config)
+    internal static void SaveConfig(Config config)
     {
         string path = Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), AppIdentity.ConfigFileName);
         SaveConfig(config, path);
     }
 
-    static void SaveConfig(Config config, string path)
+    internal static void SaveConfig(Config config, string path)
     {
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var text = new StringBuilder();
@@ -290,7 +254,7 @@ partial class GearBackup
 
     // Applies one key=value. An invalid value prints a warning and keeps the current value; an empty one
     // keeps it too, except for paths and names, where empty means "none". Unknown keys are ignored.
-    static void ApplySetting(Config config, string key, string value)
+    internal static void ApplySetting(Config config, string key, string value)
     {
         Setting setting = FindSetting(key);
         if (setting == null || (value.Length == 0 && !setting.AppliesEmpty)) return;
@@ -299,7 +263,7 @@ partial class GearBackup
     }
 
     // Null when `value` is valid for the setting, otherwise what was expected.
-    static string CheckSettingValue(Setting setting, string value)
+    internal static string CheckSettingValue(Setting setting, string value)
     {
         if (value.Length == 0) return setting.AppliesEmpty || setting.Key == "BackupFolder" ? null : "a value";
         return setting.Set(new Config(), value);
@@ -310,4 +274,45 @@ partial class GearBackup
         WriteColored("  " + AppIdentity.ConfigFileName + ": " + key + "=" + value + " isn't valid (expected " + expected + "), using the default.",
                      ConsoleColor.Yellow);
     }
+}
+
+internal class Config
+{
+    public string BackupFolder = DefaultBackupFolder();
+    public BackupMode Mode = BackupMode.Ask;
+    public bool Verify = false;
+    public int KeepBackups = 0;     // 0 = keep all
+    public int MaxNameLength = 64;  // 0 = don't check
+    public EjectMode Eject = EjectMode.No;
+    public int KeepOldVersions = 0; // 0 = keep all
+    public bool Recovery = false;
+    public string RecoveryFolder = "";
+    public string SourceFolder = "";
+    public string Profile = "";
+    public bool Thorough = false;
+    public bool Preview = true;
+    public bool HardLinks = false;  // share history content with the backup files (NTFS)
+    public bool PointInTimeHistory = false; // opt in to snapshots and their content store
+    public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
+    public string Theme = "retro"; // global GUI colour palette
+    public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
+
+    public Config Clone() { return (Config)MemberwiseClone(); }
+    internal string SettingsDirectory { get; set; }
+    internal string PreviousSettingsDirectory { get; set; }
+}
+
+// One setting: its INI key, the explanation written into GearBackup.ini when it's missing, and how its
+// value is read and written. Preferences that can differ per device or profile have a Label, shown
+// in the Profiles window.
+internal sealed class Setting
+{
+    public string Key, Doc, Label;
+    public string[] Choices;         // the allowed values of a yes/no or list setting; null otherwise
+    public bool Location;            // a folder, which the Profiles window can browse for
+    public bool AppliesEmpty;        // an empty value is applied (a path or name); otherwise it means "default"
+    public Func<Config, string> Get; // the value as written in the INI
+    // Applies a value; returns what was expected when the value isn't valid, otherwise null.
+    public Func<Config, string, string> Set;
+    public bool IsPreference { get { return Label != null; } }
 }

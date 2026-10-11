@@ -9,6 +9,10 @@ using static GearBackup;
 using static Backups;
 using static ChangeSummary;
 using static SampleDependencies;
+using static ConsoleUi;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Workflow;
 
 static class RestoreFlow
 {

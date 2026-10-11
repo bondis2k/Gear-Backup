@@ -1,10 +1,13 @@
 using System;
 using System.IO;
 using static PathSafety;
+using static GearBackup;
+using static AppSettings;
+using static Workflow;
 
-partial class GearBackup
+static class SettingsLocation
 {
-    static string DefaultSettingsDirectory()
+    internal static string DefaultSettingsDirectory()
     {
         string executableDirectory = AppDomain.CurrentDomain.BaseDirectory;
         return File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker))
@@ -12,7 +15,7 @@ partial class GearBackup
             : executableDirectory;
     }
 
-    static Config LoadApplicationConfig(string executableDirectory, string roamingDirectory)
+    internal static Config LoadApplicationConfig(string executableDirectory, string roamingDirectory)
     {
         if (!File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker)))
             return LoadConfig(executableDirectory);
@@ -35,7 +38,7 @@ partial class GearBackup
         return LoadConfig(settingsDirectory, executableDirectory);
     }
 
-    static string SettingsReadPath(Config config, string name)
+    internal static string SettingsReadPath(Config config, string name)
     {
         string path = Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), name);
         if (!File.Exists(path) && config.PreviousSettingsDirectory != null)

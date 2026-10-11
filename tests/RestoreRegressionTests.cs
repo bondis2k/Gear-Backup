@@ -5,6 +5,10 @@ using System.Threading;
 using static Snapshots;
 using static VersionCatalog;
 using static RestoreFlow;
+using static DeviceSelection;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {

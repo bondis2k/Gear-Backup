@@ -7,6 +7,8 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 using static GearBackup;
+using static ConsoleUi;
+using static DeviceSelection;
 
 static class FileCopy
 {
