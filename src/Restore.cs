@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using static FileCopy;
 using static PathSafety;
+using static Snapshots;
 
 partial class GearBackup
 {
@@ -109,7 +110,7 @@ partial class GearBackup
         return modes.ToArray();
     }
 
-    static void ValidateEntry(RestoreEntry item, bool verify = true)
+    internal static void ValidateEntry(RestoreEntry item, bool verify = true)
     {
         if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
             throw new IOException("Backup file is missing or truncated: " + item.Relative);

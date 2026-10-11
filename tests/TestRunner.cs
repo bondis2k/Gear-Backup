@@ -5,6 +5,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Threading;
 using static PathSafety;
+using static Snapshots;
 
 class TestRunner
 {

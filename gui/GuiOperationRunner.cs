@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static PathSafety;
+using static Checksums;
 
 partial class GearBackup
 {

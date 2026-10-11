@@ -124,7 +124,7 @@ partial class GearBackup
     }
 
     // Console-like output that goes to whichever front end is current.
-    static class OperationOutput
+    internal static class OperationOutput
     {
         public static void Write(string text) { OperationContext.Current.Interaction.Write(text); }
         public static void Write(string format, params object[] values) { Write(string.Format(format, values)); }

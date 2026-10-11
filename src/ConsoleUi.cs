@@ -17,13 +17,13 @@ partial class GearBackup
         return answer;
     }
 
-    static bool AskYesNo(string question)
+    internal static bool AskYesNo(string question)
     {
         return Ask(question, Yes, No) == 'y';
     }
 
     // Lets the user pick one of `items`; 1..items.Count, or 0 for noneLabel / Enter (see ChooseItem).
-    static int AskItem(string question, IList<string> items, string noneLabel = null)
+    internal static int AskItem(string question, IList<string> items, string noneLabel = null)
     {
         OperationContext.Current.CheckCancellation();
         int answer = OperationContext.Current.Interaction.ChooseItem(question, items, noneLabel);
@@ -212,7 +212,7 @@ partial class GearBackup
         return string.Format("{0:N1}s", t.TotalSeconds);
     }
 
-    static void WriteColored(string text, ConsoleColor color)
+    internal static void WriteColored(string text, ConsoleColor color)
     {
         OperationContext.Current.Interaction.WriteColored(text, color);
     }
