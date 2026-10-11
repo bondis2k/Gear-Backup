@@ -7,8 +7,8 @@ partial class GearBackup
     {
         public const string Name = "Gear Backup";
         // Display version supports suffixes; Windows binary metadata requires numbers.
-        public const string Version = "0.9.0A";
-        public const string BinaryVersion = "0.9.0.1";
+        public const string Version = "0.9.1";
+        public const string BinaryVersion = "0.9.1.0";
         public const string DirectoryName = "GearBackup";
         public const string ConfigFileName = DirectoryName + ".ini";
         public const string ProfileConfigFileName = DirectoryName + ".Profiles.ini";
