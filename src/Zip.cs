@@ -9,7 +9,6 @@ using static FileCopy;
 using static BackupTraversal;
 using static Checksums;
 using static Backups;
-using static GearBackup;
 
 static class BackupZip
 {

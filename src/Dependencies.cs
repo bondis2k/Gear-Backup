@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using static PathSafety;
 using static Snapshots;
-using static GearBackup;
 using static RestoreFlow;
 using static DeviceSelection;
 

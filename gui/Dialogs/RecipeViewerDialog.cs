@@ -4,7 +4,6 @@ using System.IO;
 using System.Windows.Forms;
 using static PathSafety;
 using static FujiRecipes;
-using static GearBackup;
 
 // Shows saved X100VI recipes (C1–C7) and shooting settings from a settings backup folder or one XML
 // export, with readable values next to the protocol numbers and raw bytes. Reads only; the camera

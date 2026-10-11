@@ -13,7 +13,7 @@ using static RestoreFlow;
 using static SampleDependencies;
 using static Workflow;
 
-partial class GearBackup
+partial class Tests
 {
     static void TestHistoricalRestore(string root)
     {

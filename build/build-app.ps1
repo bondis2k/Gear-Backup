@@ -31,7 +31,7 @@ if ($Target -eq 'GUI') {
         $arguments += "/resource:$($image.FullName),$($image.Name)"
     }
     $sources += @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'gui') -Filter '*.cs' -Recurse | ForEach-Object FullName)
-} else { $arguments += @('/target:exe', '/main:GearBackup') }
+} else { $arguments += @('/target:exe', '/main:Program') }
 & $compilerPath $arguments $sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($Target -eq 'GUI') {

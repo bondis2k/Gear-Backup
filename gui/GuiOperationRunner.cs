@@ -13,7 +13,6 @@ using static UsbDevices;
 using static ConsoleUi;
 using static Session;
 using static Workflow;
-using static GearBackup;
 
 // The main window's operations, in the order of its Operation list.
 internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings }

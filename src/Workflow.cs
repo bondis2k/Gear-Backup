@@ -9,7 +9,6 @@ using static FileCopy;
 using static PathSafety;
 using static Backups;
 using static MtpMirror;
-using static GearBackup;
 using static ConsoleUi;
 using static DeviceSelection;
 using static ProfileSettings;

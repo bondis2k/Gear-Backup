@@ -1,6 +1,5 @@
 using System.IO;
 using System.Windows.Forms;
-using static GearBackup;
 
 static class FolderPicker
 {

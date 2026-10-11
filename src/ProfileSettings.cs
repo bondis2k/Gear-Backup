@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using static PathSafety;
-using static GearBackup;
 using static AppSettings;
 using static DeviceSelection;
 using static SettingsLocation;

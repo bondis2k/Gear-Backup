@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using static ConsoleUi;
-using static GearBackup;
 
 // The GUI's front end: questions become dialogs, output goes to the activity log, and progress to the
 // main window's status area, or to `progress` for work started from a tool window, so that work never

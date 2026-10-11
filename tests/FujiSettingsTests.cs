@@ -8,7 +8,7 @@ using static Checksums;
 using static FujiSettings;
 using static Workflow;
 
-partial class GearBackup
+partial class Tests
 {
     static void TestFujiSettings(string root)
     {

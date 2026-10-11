@@ -19,7 +19,7 @@ using static Session;
 using static SettingsLocation;
 using static Workflow;
 
-partial class GearBackup
+partial class Tests
 {
     static void TestHelpers(string root)
     {

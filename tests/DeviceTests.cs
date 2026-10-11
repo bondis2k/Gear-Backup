@@ -18,7 +18,7 @@ using static DeviceSelection;
 using static Session;
 using static Workflow;
 
-partial class GearBackup
+partial class Tests
 {
     // An MTP device in memory: files are path -> content, with a date per file. Counts downloads.
     sealed class FakeMtpSource : IMtpSource

@@ -1,6 +1,5 @@
 using System.Drawing;
 using System.Windows.Forms;
-using static GearBackup;
 using static GearGui;
 
 // Base for the GUI's dialogs: a heading (the question), a content area, and Continue/Cancel buttons.

@@ -9,7 +9,6 @@ using static DeviceSelection;
 using static ProfileSettings;
 using static Session;
 using static Workflow;
-using static GearBackup;
 using static GearGui;
 
 internal sealed class ProfileSettingsDialog : ToolsDialog

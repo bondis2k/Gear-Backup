@@ -16,8 +16,9 @@ using static RestoreFlow;
 using static BackupZip;
 using static AppSettings;
 using static Workflow;
+using static Program;
 
-partial class GearBackup
+partial class Tests
 {
     // ---- Tests ----
 

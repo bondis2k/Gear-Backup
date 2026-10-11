@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
-using static GearBackup;
 
 // One button per option of a question, labelled with the option's label; the first is the main one.
 internal sealed class ChoiceDialog : DialogForm

@@ -5,22 +5,11 @@ using System.IO;
 using System.Text;
 using System.Xml;
 using static PathSafety;
-using static GearBackup;
 using static FujiSettings;
+using static FujiRecipes;
 
 static class FujiRecipes
 {
-    internal sealed class FujiRecipe
-    {
-        public string Model, Firmware, Serial, Section, Name;
-        public readonly List<FujiRecipeValue> Values = new List<FujiRecipeValue>();
-        public override string ToString() { return Section + (string.IsNullOrEmpty(Name) ? "" : " · " + Name); }
-    }
-    internal sealed class FujiRecipeValue
-    {
-        public string Name, Code, Raw, Display;
-        public int? Number;
-    }
     internal static FujiRecipe ReadFujiRecipe(string path)
     {
         RejectRootLinks(path);
@@ -120,4 +109,17 @@ static class FujiRecipes
         foreach (FujiRecipeValue value in recipe.Values) text.Append(value.Name).Append(": ").AppendLine(value.Display);
         return text.ToString();
     }
+}
+
+internal sealed class FujiRecipe
+{
+    public string Model, Firmware, Serial, Section, Name;
+    public readonly List<FujiRecipeValue> Values = new List<FujiRecipeValue>();
+    public override string ToString() { return Section + (string.IsNullOrEmpty(Name) ? "" : " · " + Name); }
+}
+
+internal sealed class FujiRecipeValue
+{
+    public string Name, Code, Raw, Display;
+    public int? Number;
 }

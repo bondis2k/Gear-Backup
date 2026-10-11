@@ -1,5 +1,4 @@
 using System.IO;
-using static GearBackup;
 
 // Product identity is separate from the profiles of the devices we back up.
 internal static class AppIdentity

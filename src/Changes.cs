@@ -4,19 +4,12 @@ using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
 using static BackupTraversal;
-using static GearBackup;
 using static Backups;
 using static DeviceSelection;
+using static ChangeSummary;
 
 static class ChangeSummary
 {
-    internal class Changes
-    {
-        public bool HasBaseline;
-        public int TotalSongs, OtherNew, OtherChanged;
-        public List<string> NewSongs = new List<string>(), EditedSongs = new List<string>(), RemovedSongs = new List<string>();
-    }
-
     internal static bool IsSong(string path)
     {
         return CurrentDevice.IsSong(path);
@@ -166,4 +159,11 @@ static class ChangeSummary
         }
         return warnings;
     }
+}
+
+internal class Changes
+{
+    public bool HasBaseline;
+    public int TotalSongs, OtherNew, OtherChanged;
+    public List<string> NewSongs = new List<string>(), EditedSongs = new List<string>(), RemovedSongs = new List<string>();
 }

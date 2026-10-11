@@ -9,7 +9,6 @@ using static AppSettings;
 using static ConsoleUi;
 using static ProfileSettings;
 using static Workflow;
-using static GearBackup;
 using static FolderPicker;
 using static GearGui;
 

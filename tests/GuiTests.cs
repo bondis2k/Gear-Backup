@@ -26,14 +26,14 @@ class GuiTestRunner
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            GearBackup.RunGuiTests();
+            Tests.RunGuiTests();
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }
 
-partial class GearBackup
+partial class Tests
 {
     public static void RunGuiTests()
     {

@@ -6,41 +6,13 @@ using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
 using static PathSafety;
-using static GearBackup;
 using static FujiSettings;
 using static PortableDevices;
 using static ConsoleUi;
+using static MtpMirror;
 
 static class MtpMirror
 {
-    // What the mirror needs from a device; MtpDevice provides it, and tests use a fake.
-    internal interface IMtpSource
-    {
-        List<MtpObject> ListAll();
-        void Download(MtpObject item, string to, Action<long> progress);
-    }
-
-    internal sealed class MirrorResult
-    {
-        public int Downloaded, Unchanged, Removed;
-        public long Bytes;
-        public readonly List<string> Skipped = new List<string>();
-    }
-
-    // A connected MTP device chosen as the source, and the local folder that mirrors it.
-    internal sealed class MtpSource
-    {
-        public DeviceProfile Device;
-        public MtpDeviceInfo Info;
-        public string Mirror;
-        // Opens the device for reading; null means the real device (tests supply a fake).
-        public Func<IMtpSource> Open = null;
-        // Asks whether the X100VI is in settings mode; null means asking the real camera (tests supply an
-        // answer). Asked right before every sync, not taken from detection: the camera can be switched
-        // while a menu waits, and a sync in settings mode would see no photos and empty the mirror.
-        public Func<bool> ReadSettingsMode = null;
-    }
-
     internal static string MirrorRoot
     {
         get { return Path.Combine(AppIdentity.ExistingFolder(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -234,4 +206,32 @@ static class MtpMirror
             }
         }
     }
+}
+
+// What the mirror needs from a device; MtpDevice provides it, and tests use a fake.
+internal interface IMtpSource
+{
+    List<MtpObject> ListAll();
+    void Download(MtpObject item, string to, Action<long> progress);
+}
+
+internal sealed class MirrorResult
+{
+    public int Downloaded, Unchanged, Removed;
+    public long Bytes;
+    public readonly List<string> Skipped = new List<string>();
+}
+
+// A connected MTP device chosen as the source, and the local folder that mirrors it.
+internal sealed class MtpSource
+{
+    public DeviceProfile Device;
+    public MtpDeviceInfo Info;
+    public string Mirror;
+    // Opens the device for reading; null means the real device (tests supply a fake).
+    public Func<IMtpSource> Open = null;
+    // Asks whether the X100VI is in settings mode; null means asking the real camera (tests supply an
+    // answer). Asked right before every sync, not taken from detection: the camera can be switched
+    // while a menu waits, and a sync in settings mode would see no photos and empty the mirror.
+    public Func<bool> ReadSettingsMode = null;
 }

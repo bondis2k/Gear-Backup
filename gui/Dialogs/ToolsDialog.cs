@@ -3,7 +3,6 @@ using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static GearBackup;
 using static GearGui;
 
 // The base of the tool windows (Dashboard, Storage, Profiles, X100VI recipes): the same layout and

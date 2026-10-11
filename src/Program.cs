@@ -17,11 +17,11 @@ using static AppSettings;
 using static ConsoleUi;
 using static Session;
 using static Workflow;
+using static Notifications;
 
-partial class GearBackup
+// Entry point of GearBackup.exe.
+static class Program
 {
-    const string AppId = AppIdentity.NotificationId;
-
     static int Main(string[] args)
     {
         bool pause = Array.IndexOf(args, "--no-pause") < 0;
@@ -69,7 +69,7 @@ partial class GearBackup
         return result;
     }
 
-    static int Run(bool restore, bool check, string[] args)
+    internal static int Run(bool restore, bool check, string[] args)
     {
         OperationOutput.WriteLine();
         OperationOutput.WriteLine("  " + AppIdentity.Name);

@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using static PathSafety;
-using static GearBackup;
 using static FolderPicker;
 using static GearGui;
 
