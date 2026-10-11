@@ -32,9 +32,8 @@ foreach ($theme in @('retro', 'original', 'original-dark')) {
     $themeCss = $themeStyles[$theme]
     if ($theme -ne 'retro') { $themeCss += "`n$modernStyles" }
     $themedBody = $manualBody
-    if ($theme -ne 'retro') {
-        $themedBody = [regex]::Replace($manualBody, 'assets/manual/(gui-[a-z-]+)\.png', "assets/manual/`$1-$theme.png")
-    }
+    # App screenshots deliberately use Original in every manual edition.
+    # Only the surrounding document adopts the requested appearance.
     $manualHtml = @"
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

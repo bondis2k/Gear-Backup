@@ -1,732 +1,382 @@
-# Gear Backup — Manual
+# Gear Backup Manual
 
-Gear Backup is a Windows program with graphical and command-line interfaces for backing up the Dirtywave M8, Polyend Tracker Mini, Teenage Engineering OP-1 Field and OP-XY, Fujifilm X100VI, and local folders. It makes full or incremental backups, keeps dated snapshots, verifies copies, and offers restore choices suited to each device.
+This manual describes Gear Backup 0.9.3 for Windows. Gear Backup saves device files, keeps backup history, checks integrity, and restores whole backups or selected files. The graphical app and command-line app use the same backup engine and settings.
 
-Requires Windows 10 or 11 and the built-in .NET Framework. No installation or extra runtime is needed.
-
-Executable builds are ignored by Git. If you downloaded or cloned the repository, run `build.cmd --no-pause` to create `GearBackup.exe` before following the steps below. If you have a setup executable, use the installation instructions below instead.
+All app pictures in this manual use **Original**, the default light gray and teal theme. They show example devices, paths, and backup data rather than a live connected device.
 
 ## Contents
 
-- [Installing Gear Backup](#installing-gear-backup)
-  - [Portable package](#portable-package)
 - [Getting started](#getting-started)
-  - [Current data format](#current-data-format)
+- [Installing and finding your files](#installing-and-finding-your-files)
+- [Connecting a device](#connecting-a-device)
 - [Graphical interface](#graphical-interface)
-- [Teenage Engineering OP-1 Field](#teenage-engineering-op-1-field)
-- [Teenage Engineering OP-XY](#teenage-engineering-op-xy)
-- [Polyend Tracker Mini](#polyend-tracker-mini)
-- [Fujifilm X100VI](#fujifilm-x100vi)
-  - [Recipes and shooting settings](#recipes-and-shooting-settings)
-- [Separate card and folder histories](#separate-card-and-folder-histories)
 - [Full and incremental backup](#full-and-incremental-backup)
-  - [Zip copy of a full backup](#zip-copy-of-a-full-backup)
-  - [Fast or thorough comparison](#fast-or-thorough-comparison)
-  - [Completion status and resume](#completion-status-and-resume)
-- [Point-in-time history](#point-in-time-history)
+- [Choosing how backups are stored](#choosing-how-backups-are-stored)
 - [Restore](#restore)
-  - [Restore modes](#restore-modes)
-  - [Song dependencies](#song-dependencies)
-  - [Merge versus exact snapshot](#merge-versus-exact-snapshot)
-  - [Overwrites and copy safety](#overwrites-and-copy-safety)
-  - [Optional recovery copies](#optional-recovery-copies)
-- [Preview](#preview)
-- [Checking backups](#checking-backups)
-- [Progress and cancellation](#progress-and-cancellation)
-- [Retention, statistics, and notifications](#retention-statistics-and-notifications)
-- [Dashboard, storage and settings tools](#dashboard-storage-and-settings-tools)
-  - [Backup dashboard](#backup-dashboard)
-  - [Storage manager and cleanup](#storage-manager-and-cleanup)
-  - [Backup histories, names and nicknames](#backup-histories-names-and-nicknames)
-  - [Device and backup settings](#device-and-backup-settings)
-  - [Readable X100VI recipes](#readable-x100vi-recipes)
+- [Checking and managing backups](#checking-and-managing-backups)
+- [X100VI settings and recipe viewer](#x100vi-settings-and-recipe-viewer)
+- [Settings and profiles](#settings-and-profiles)
 - [All INI settings](#all-ini-settings)
 - [Command line and exit codes](#command-line-and-exit-codes)
+- [Troubleshooting](#troubleshooting)
 - [Building and testing](#building-and-testing)
-
-## Installing Gear Backup
-
-Run `GearBackup-Setup-<version>.exe` and follow the wizard. It installs the GUI and CLI for the current Windows user without requesting administrator rights. The default installation folder is `%LOCALAPPDATA%\Programs\Gear Backup`. Keep this location or choose another installation folder. User settings are saved separately in `%APPDATA%\GearBackup`.
-
-The Start menu's **Gear Backup** folder contains the GUI, **Gear Backup (CLI)**, an offline illustrated **Gear Backup Manual**, and the uninstaller. A desktop shortcut is optional. The final wizard page can open the GUI; choose a source and backup location before starting a backup. Installing the application does not copy files from a device.
-
-The optional **Add CLI to PATH** checkbox is unchecked by default. Select it to add the installation folder to your Windows user's PATH, then open a new terminal to run `GearBackup.exe` from any folder. Upgrades remember the checkbox choice. Clearing it during an upgrade or uninstalling removes the entry added by the installer; an entry you already had is preserved. The portable package does not change PATH.
-
-Close both interfaces before running a newer installer. Installed settings are read only from `%APPDATA%\GearBackup\GearBackup.ini` and `%APPDATA%\GearBackup\GearBackup.Profiles.ini`. Files beside an installed executable are not imported. To transfer current-format settings from a portable copy, close the app and copy both INI files into `%APPDATA%\GearBackup`.
-
-Remove the application through Windows **Settings > Apps** or the Start menu uninstaller. Uninstall removes installed executables, documentation, and shortcuts; it keeps your generated INI settings, backups, recovery files, and local MTP mirrors. The remaining INI can be reused after reinstalling.
-
-Installer builds require Windows 10 or 11 and .NET Framework 4.6 or newer, normally included with Windows. A setup executable produced by the repository's build script is unsigned; publishing a signed installer requires a code-signing certificate.
-
-### Portable package
-
-Run `GearBackup-Portable-<version>.exe` to extract both executables and the offline illustrated manual into a writable folder. The default is a `Gear Backup` folder beside the package, but you can choose a different location or USB drive. It creates no Start menu or desktop shortcuts, uninstall entry, or uninstaller. Open `GearBackup.GUI.exe` or `GearBackup.exe` directly from that folder.
-
-The app creates `GearBackup.ini` beside the executables when it runs normally. To update the portable copy, close both interfaces and extract the new package into the same folder; existing settings and user files are left intact. You can move the whole folder to another Windows PC. Review the stored source and backup paths after moving it, since absolute paths and drive letters may differ.
-
-Portable packaging does not change the app's storage defaults: backups still default to `%USERPROFILE%\Backup`, and MTP mirrors still use `%LOCALAPPDATA%\GearBackup\Devices`. Set **Backup location** to a folder on your portable drive if you want the backups there. Deleting the extracted application folder removes the portable app; backups, recovery folders and PC mirrors are separate unless you deliberately placed them inside it.
 
 ## Getting started
 
-![Device connection guide: M8 and Tracker Mini use a USB drive or card reader; OP-1 Field, OP-XY and X100VI use an MTP mirror on the PC before backup.](assets/manual/device-connections.png)
+1. Open **Gear Backup** from the Start menu, or run `GearBackup.GUI.exe` from your portable folder.
+2. Connect your device in the mode listed under [Connecting a device](#connecting-a-device).
+3. On **Device**, click **Detect device**. Check the device name and connection mode.
+4. Open **Backup**, leave **Full backup** selected, and optionally enter a name such as `Live set`.
+5. Click **Back up**, review the planned changes, and accept them. If the backup location does not exist, the app asks whether to create it.
 
-The drive-based devices are copied directly. MTP devices first refresh a local PC mirror, which then becomes the backup source. A local folder can also be selected as the source. Each device or card normally gets its own history; see [separate card and folder histories](#separate-card-and-folder-histories).
+The default backup location is `%USERPROFILE%\Backup`. The default storage mode is a **single content store**: files are stored once within a backup set, and each successful backup run saves a restore point. Use the app to restore files; this mode does not create a separate folder of ordinary backup files.
 
-1. Connect your device using the mode described in its section below, or insert its card in a reader. For an M8, enable USB drive mode. Save any open project first and leave the device idle while copying.
-2. Double-click `GearBackup.exe`.
-3. Review the selected source and profile. If a backup exists, choose full backup, incremental backup, restore, or check. With no backup in the current profile, the program prepares a full backup.
-4. Review the file preview and press Y to proceed.
+For later backups, choose **Incremental backup** and select the full backup to update. This adds a restore point to that set while copying only new or changed content.
 
-The settings file is `GearBackup.ini` in `%APPDATA%\GearBackup` for an installed copy, or beside the executable for portable copies and local builds. Missing options are added with their defaults and explanations on an ordinary run. A `--preview` run does not write settings or backups.
+## Installing and finding your files
 
-### Current data format
+Gear Backup requires **Windows 10 or 11** and **.NET Framework 4.6 or newer**. The framework is normally included with Windows. SQLite support uses Windows' built-in library; a separate database installation is unnecessary.
 
-Before version 1.0.0, Gear Backup supports only the current settings and backup formats. Earlier formats are not migrated or read. Installed settings use `%APPDATA%\GearBackup`; portable settings stay beside the executables. Backup histories use `Gear Backups\profiles`, metadata uses `.gearbackup`, and MTP mirrors use `%LOCALAPPDATA%\GearBackup\Devices`.
+| Package | What it does |
+| --- | --- |
+| `GearBackup-Setup-<version>.exe` | Installs for the current Windows user, with Start menu shortcuts and an uninstall entry. |
+| `GearBackup-Portable-<version>.exe` | Extracts the app and manual into your chosen folder. No shortcuts, uninstall entry, or PATH change. |
 
+The normal installer offers optional **Create a desktop shortcut** and **Add CLI to PATH** checkboxes. Both start unchecked. If you enable PATH, open a new terminal before running `GearBackup.exe` by name.
 
-If no M8 is detected, enter a drive or folder path, such as `E:\` or `D:\M8Card`. Press Enter to cancel. You can also set `SourceFolder` or pass `--source`.
+| Item | Default location |
+| --- | --- |
+| Installed executables and offline manuals | `%LOCALAPPDATA%\Programs\Gear Backup\` |
+| Installed global settings | `%APPDATA%\GearBackup\GearBackup.ini` |
+| Installed device/profile preferences | `%APPDATA%\GearBackup\GearBackup.Profiles.ini` |
+| Portable/local-build settings | Beside the executables |
+| Backup root | `%USERPROFILE%\Backup\Gear Backups\profiles\` |
+| Recovery copies, when enabled | `<BackupFolder>\Gear Recovery\` |
+| Temporary working mirrors for MTP devices | `%LOCALAPPDATA%\GearBackup\Devices\` |
 
-Automatic detection finds a USB disk reporting an M8 vendor/model, with a fallback to a removable drive labelled M8. Drives selected manually are not automatically ejected.
+An installed copy is identified by `GearBackup.installed` beside its executables. It reads settings from AppData; it does not import INI files from the executable folder. The installer does not overwrite your personal INI files.
+
+**Help** opens the offline HTML manual matching your chosen appearance. `Manual.html` is the Original edition; `Manual-original-dark.html` and `Manual-retro.html` use the other document styles. App pictures remain in Original in every edition.
+
+## Connecting a device
+
+| Device | Connection for file backup | Restore guidance |
+| --- | --- | --- |
+| Dirtywave M8 | USB disk mode, or its SD card in a reader. | Restore to the connected drive/card or a PC folder. |
+| Polyend Tracker Mini | USB drive mode, or its SD card in a reader. | Restore to the drive/card or a PC folder. |
+| OP-1 Field | MTP mode: **shift + COM**, then **T4**. | Restore to a PC folder, then transfer files to the device with Explorer. |
+| OP-XY | MTP mode: **COM**, then **T4**. | Restore to a PC folder, then transfer files with Explorer. |
+| Fujifilm X100VI photos/videos | USB file-transfer mode (MTP), or the camera's SD card in a reader. | Restore to a PC folder for viewing/editing. Putting photos back on the card is usually unnecessary. |
+| Fujifilm X100VI recipes/settings | **USB RAW CONV./BACKUP RESTORE**. | Read and export saved recipes; the app does not write settings back to the camera. |
+
+You can also back up an ordinary local folder. Open **More options** on Backup and choose its source. For a card reader or folder, set the appropriate device type when automatic identification is insufficient. An unknown folder defaults to the M8 device profile.
+
+MTP devices have no drive letter. Before file backup, the app synchronizes their exposed files into a local mirror, then backs up that mirror. This temporary working copy uses additional PC space. It is separate from the backup's content store and can be removed through Storage after use.
+
+OP-XY backups contain content exposed over MTP; factory content that the device does not expose cannot be included. Camera file backups and camera settings backups are separate histories.
 
 ## Graphical interface
 
-Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `GearBackup.exe` command-line interface remains available separately. Both executables use `GearBackup.ini` beside them and the same backup histories and file operations.
+### Device tab
 
-![Gear Backup Device tab, with detection and shortcuts to the separate Backup and Restore tabs.](assets/manual/gui-main.png)
+Click **Detect device** before choosing an operation. The device card shows its name, icon, and connection mode. For USB drives, it can show capacity, used space, and free space. Available information depends on the connection; an MTP mirror's disk capacity is not presented as the device's capacity.
 
-*The window starts on Device. Backup and Restore have their own tabs; progress and activity remain visible underneath.*
+![Device tab with an example detected M8 in Original](assets/manual/current-device-original.png)
 
-1. Start on the **Device** tab. Connect your device and click **Detect device**. The overview shows its name, picture and connection/camera mode. For drive connections it also shows the volume label, total capacity, used/free space, filesystem and source path. MTP shows available device identity and backup scope; capacity is shown as unavailable rather than using the PC mirror's disk space. Detect again to refresh this information. M8 and Tracker Mini use USB drive mode; OP-1 Field, OP-XY and X100VI can use MTP.
-2. Open **Backup**, or click **Go to Backup**. Choose **Full backup** for a new copy or **Incremental backup** to update the full backup selected in the dropdown, then click **Back up**. With Full backup, enter an optional name between the backup type and Preview. With Incremental backup, select the full backup to update in that same position. Names identify individual full backup sets; dates and status distinguish duplicate names, and older unnamed backups display their dated folder names. The dropdown lists sets for the current source and history, newest first. The compact backup-location summary shows where backups are configured to go. Review changes when prompted. You can also click **Preview** for a plan without writing files. **Back up X100VI settings** appears only after detecting an X100VI in USB RAW CONV./BACKUP RESTORE mode; photo-transfer mode and other devices show only full and incremental backup.
+Use **Go to Backup** or **Go to Restore**, or click the corresponding tab. When an MTP device is detected, a previously entered USB source folder is cleared so the operation uses the detected device.
 
-**More options** exposes the source folder, backup location, **History name** and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave **History name** blank so each card, folder or device keeps its own history (see [Backup histories, names and nicknames](#backup-histories-names-and-nicknames)). An empty backup location uses `%USERPROFILE%\Backup`. The section starts collapsed; collapsing it preserves the values. While it is collapsed, the line under the buttons shows a source folder you set, the backup location and the profile, so saved selections stay visible.
+### Backup tab
 
-![Expanded More options showing the optional source folder, backup location, profile and zip controls.](assets/manual/gui-main-options.png)
+The main controls are **Type**, the backup name or full-backup selector, **Preview**, and **Back up**. **More options** reveals the source folder, backup location, history/profile name, and ZIP option. Normally, detection provides the source and you can leave the history name blank.
 
-Detect the device first, then open **Restore** and choose **Restore full backup** or **Restore individual files**. The backup dropdown lists only backups matching the identified device type, including histories at configured override locations. It defaults to the set with the most recent successful backup. The **Restore point** dropdown defaults to the latest saved run and lets you choose a full or incremental capture by its backup-run time. Older points without type metadata are labelled Saved run. If history was not retained, only the latest backup files are available. Choose the destination folder or card that receives files. With **Restore individual files**, click **Choose files…** and check folders or individual files in the browser. A checked folder includes its subtree, including empty folders; unchecking a child keeps the remaining selection. **Select all**, **Clear selection**, and **Use selection** control the checked items. Changing the backup or restore point clears that selection. Full restore merges by default; **Remove extra target files** is available for complete saved points and requires a separate removal confirmation. SQLite supplies the inventory and saved-run membership, with read-only recovery-record fallback if necessary. Restoring rechecks the device match and selected point before writing. This destination is separate from the Backup tab's source, and changing either preserves the other. **Check backups**, on the same tab, needs no source device. **Cancel** appears beside the shared operation status while work runs. Tabs and editable inputs are disabled until the operation stops.
+![Full backup controls in Original](assets/manual/current-backup-original.png)
 
-![Restore tab with its own destination and backup-location fields, separate from the backup source.](assets/manual/gui-restore.png)
+**Preview** shows the plan without carrying out the backup. Clicking **Back up** also requests approval when **Review changes before copying** is enabled, as it is by default. The review window supports searching and filtering the planned actions; unchanged files are excluded from the incremental action list.
 
-![Individual restore keeps the selected backup and point, with a Choose files button.](assets/manual/gui-restore-files.png)
+### Restore tab and activity
 
-![Checked folder and file browser, including an empty folder and selection controls.](assets/manual/gui-restore-browser.png)
+Restore offers **Restore full backup**, **Restore individual files**, and **Check backups**. The selected operation changes the controls shown. See [Restore](#restore) for the backup and restore-point selectors.
 
-In the GUI, incremental backup requires selecting an existing full backup. If none are listed, choose Full backup first. The CLI still creates a full backup if this profile has no backups yet. An incomplete or failed latest backup offers Resume, New full backup, or Cancel. An unchanged incremental run needs no acceptance prompt. Full backups show overall progress without individual file progress.
+The activity area records operation details. Progress, totals, elapsed time, and the final summary show the result. Full backups display overall progress rather than updating the display for every copied file. **Cancel** requests a safe stop; wait for the operation to finish stopping before disconnecting the device.
 
-The Device tab shows the detected device in a large highlighted label beside its picture, with the connection or camera mode underneath. Detecting an MTP device clears any previous USB source path and drive selection; the next backup uses the connected MTP device. Editing the source clears the detected indicator until the device is detected again. Progress and the activity log stay visible beneath the tabs. Progress shows the percentage and processed size when the current stage provides a total, plus elapsed time. Backup and restore completion shows copied, unchanged, removed and failed counts; **Open backup folder** or **Open restore folder** opens the result in Explorer. Integrity checks show their check summary and an action to open the selected backup location.
-
-![Detected OP-1 Field on the Device tab with its MTP connection and available backup information.](assets/manual/gui-detected-device.png)
-
-The change preview uses **Action**, **Path** and **Size** columns. Search paths with **Ctrl+F**, or filter additions, replacements, removals and unchanged entries. Removing a file or folder is highlighted. Filters only change which rows are displayed: **Proceed** applies the entire approved plan, including rows hidden by the current filter. An unchanged incremental backup still omits skipped files from its preview.
-
-![Gear Backup change preview with action, path and size columns, path search and action filters.](assets/manual/gui-preview.png)
-
-Restore opens dialogs for history, backup folder, saved snapshot/current files, and restore mode. All, bundle, single-file, dependent-sample, and merge/exact choices use the same rules described below. The current-files option is explicit in the snapshot selector; cancelling a dialog cancels the operation. Check backups needs no source card and lets you select a backup or all backups in a history.
-
-**Settings** groups preferences into **Backup**, **Restore**, **Device** and **Appearance** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, eject and theme preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
-
-In **Settings → Appearance**, choose **Original** for the light gray and teal palette (default), **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette. **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. On Windows 11, title bars, title text and borders match the selected palette, including Review changes and other dialogs. Original (dark) uses the matching charcoal title bar; supported earlier Windows versions use the standard dark title bar. App dialogs use the Gear Backup icon. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
-
-![Appearance settings with the Original, Original (dark) and Retro color theme selector.](assets/manual/gui-appearance.png)
-
-![Gear Backup Preferences dialog with verification, content comparison, preview, recovery location, retention and ejection settings.](assets/manual/gui-settings.png)
-
-*Settings with the default preferences. Save settings to use the same preferences in the GUI and CLI.*
-
-| GUI preference | INI setting | When to use it |
-|---|---|---|
-| **Color theme** (Appearance) | `Theme=original` / `Theme=original-dark` / `Theme=retro` | Choose the original, original dark or retro app palette. Default original. |
-| **Verify copied files** | `Verify=yes` | Read copied files back and check their recorded checksums. Off by default. |
-| **Compare file contents** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
-| **Review changes before copying** | `Preview=yes` | Review the planned actions before proceeding. On by default; unchanged incremental backups need no confirmation. |
-| **Keep recovery copies before restoring** | `Recovery=yes` | Preserve target files that will be replaced or removed. Off by default. **Recovery location** sets `RecoveryFolder`; blank uses the default location. |
-
-For a first backup, connect the device, click **Detect device**, choose **Full backup**, and click **Back up**. Use **Preview** first if you want to inspect the plan without copying. For later runs on the same card, choose **Incremental backup** to copy only additions and changes.
-
-Copying and checking run on a worker thread so the window stays responsive. **Cancel** requests safe cancellation. Closing a busy window requests cancellation and waits for cleanup before closing. Results and errors appear in the status area and activity log. Automatic ejection follows `Eject` only for a source identified through detection; cancellation does not trigger ejection.
-
-Click **About** in the header to see the installed application version. The same release version appears in the Windows executable properties and installer.
-
-Keyboard shortcuts: **Ctrl+Enter** starts the selected operation, **Ctrl+P** previews, **Ctrl+D** detects a device, **Ctrl+,** opens Settings, and **Esc** cancels an active operation or closes a dialog. **F1** or **Help** opens the matching offline themed manual in your default browser. Use **Tab** and **Shift+Tab** to move between controls. The GUI declares DPI awareness, uses adaptive layouts, and scrolls content when the window cannot fit the screen; settings pages also scroll when space is limited.
-
-## Teenage Engineering OP-1 Field
-
-The OP-1 Field is backed up as well as the M8. It has no USB disk mode: it connects with MTP (the protocol phones use), so Windows shows it in Explorer without a drive letter.
-
-1. Connect the OP-1 Field by USB-C, hold **shift** and press **COM**, then press **T4 (mtp)**.
-2. Leave the source empty (no `SourceFolder`) and start a backup. The program finds the OP-1 Field by its USB ID and reads it.
-
-How it works:
-
-- The device's files (`synth`, `drum`, `tapes`, `mixdown`) are first copied into a **local mirror**, `%LOCALAPPDATA%\GearBackup\Devices\op1-field-<serial>`. The mirror is then backed up like any other source, so history, checksums, checks, zips, `KeepBackups` and incremental backups all work as usual.
-- The mirror is kept between runs. Each run downloads only files whose size or date changed on the device, and removes files that were deleted there. An unchanged OP-1 Field takes a second or two to check.
-- The OP-1 Field gets its own backup history, `op1-field-<serial>`, separate from any M8.
-- **Nothing is ever written to the OP-1 Field.** Restoring to it isn't supported yet: the restore option isn't offered while it's the source, and asking for it explains what to do instead. Restore to a folder (set `SourceFolder`, or use `--source`, and `Device=op1-field`), then copy the files to the OP-1 Field with Explorer.
-- The OP-1 Field has no songs or bundles, so restores offer all files or a single file, summaries count files rather than songs, and there are no name warnings. Free space on the device isn't available over MTP.
-- File names from the device are checked before anything is written; a name that isn't valid on Windows is skipped with a warning.
-- The mirror holds one copy of the device's content (about 20 MB with the factory sounds; more with recorded tapes). Deleting it is safe: the next backup downloads everything again.
-
-## Teenage Engineering OP-XY
-
-The OP-XY works the same way as the [OP-1 Field](#teenage-engineering-op-1-field): it connects with MTP, is read into a local mirror (`%LOCALAPPDATA%\GearBackup\Devices\op-xy-<serial>`), gets its own history (`op-xy-<serial>`), and is never written to.
-
-1. Connect the OP-XY by USB-C, press **COM**, then **T4** to turn on MTP.
-2. Leave the source empty and start a backup. The program tells the OP-XY and the OP-1 Field apart by the name they report.
-
-What's backed up: `projects` (your projects as `.xy` files, the current `workspace.xy`, and the OP-XY's own automatic project backups under `projects\user\backups`), `samples\user` and `presets`. The OP-XY doesn't expose its factory sounds over MTP.
-
-Summaries list **projects** instead of songs: new, edited and removed `.xy` projects by name. The OP-XY's automatic project backups are backed up but not listed as projects. Restores offer all files or a single file. To restore, use a folder with `Device=op-xy`, then copy the files to the OP-XY with Explorer.
-
-If both an OP-1 Field and an OP-XY are connected, the OP-1 Field is found first; set `SourceFolder` to back up the other one's mirror, or connect one at a time.
-
-## Polyend Tracker Mini
-
-The Tracker Mini works like the M8: in USB drive mode its SD card appears as a drive (labelled `TRACKER_M`), which is detected automatically, backed up, restored to and ejected the same way. Its history is named after the card (`tracker-mini-card-<serial>`). A Tracker card in a card reader is recognised by the `trackerConfig` file at its top, so it gets the same history and project summaries.
-
-1. Connect the Tracker Mini by USB and turn on its USB drive mode (the card is unavailable on the Tracker while it is connected as a drive).
-2. Leave the source empty and start a backup.
-
-Each project is a folder, `Projects\<group>\<name>`, holding `project.mt` with the project's own patterns, instruments and samples; `Workspace` holds the project that is currently open. Summaries list **projects** by folder (`User\My Song`), and restores offer **P — Whole project folder** to bring back one project with everything in it. Everything else on the card (`Samples`, `Instruments`, `Patches`, `Recordings`, `Firmware` and so on) is backed up as well.
-
-If a backup reports many files as *The device is not ready*, the Tracker has stopped answering in USB drive mode: leave USB mode on the Tracker (or unplug it), reconnect, and run the backup again; it continues with what's missing.
-
-## Fujifilm X100VI
-
-The X100VI connects over MTP like the [OP-1 Field](#teenage-engineering-op-1-field): its card has no drive letter, so it is read into a local mirror (`%LOCALAPPDATA%\GearBackup\Devices\x100vi-<serial>`), backed up from there into its own history (`x100vi-<serial>`), and never written to.
-
-1. Turn the camera on and connect it by USB-C, with **Connection setting → USB setting** set to **USB card reader** (not webcam, tethered shooting or RAW conversion). Despite the name, Windows sees the camera as a portable device, not a drive.
-2. Leave the source empty and start a backup.
-
-What's backed up: everything in `DCIM`, photos as JPG, RAF (raw) and HIF (HEIF), and videos as MOV. The camera reports when each photo was taken, which the backup keeps as the file's date.
-
-Summaries list **photos and videos** by name (`100_FUJI\DSCF0689`); a shot saved as both JPG and RAF counts once. You can delete photos on the camera after a backup: they stay in the backup, listed as no longer on the X100VI. Restores offer all files or a single file, to a folder on your PC: browse to a folder in the app (or set `SourceFolder`) and restore. With the camera connected, restore isn't offered and explains why: photos rarely need to go back on a camera. Restoring an X100VI backup onto a memory card (for example the camera's card in a card reader) asks you to confirm first.
-
-The mirror keeps a copy of the camera's card on the PC, so incremental backups only download new photos; it takes as much space as the photos on the camera.
-
-### Recipes and shooting settings
-
-Choose **USB RAW CONV./BACKUP RESTORE** on the camera, then click **Detect device** on the Device tab. **Back up X100VI settings** becomes available on Backup. In the CLI, run:
-
-```cmd
-GearBackup.exe --camera-settings --no-pause
-```
-
-Close other camera applications first and leave the camera controls untouched during capture. **Detect device** shows **settings mode** or **photo-transfer mode** beside the X100VI name in the header and describes the mode in the result. It selects the settings operation when it finds the camera in settings mode. The source-folder field is unused; the backup location and optional profile still apply. Photo backups require **USB card reader** mode and explain this if the camera is in settings mode.
-
-This operation captures the names and 23 raw property values for **C1–C7**, plus the readable current shooting settings: image size/quality, dynamic range, film simulation, grain and color effects, white balance and shifts, tone, color, sharpness, noise reduction, clarity, lens modulation optimizer and color space. XML files retain numeric values and exact little-endian bytes; unavailable shooting properties are marked explicitly. Enum numbers are camera protocol values, not necessarily the numbers shown in camera menus.
-
-The camera's recipe read selector is temporarily changed to read each bank, then restored and checked. Shooting values are compared before and after capture. Cancel also restores the selector before stopping. If the camera disconnects and the selector cannot be restored, the operation reports the failure; reconnect and check the selected recipe before retrying.
-
-Each run makes a **new dated full backup**, with normal checksums, optional point-in-time history, verification, retention and optional ZIP. The automatic profile is `x100vi-settings-<serial>`, separate from photo backups. With a custom `Profile` such as `Studio`, settings go to `Studio-settings`, using `Studio`'s preferences, so they never mix with that profile's photo history. `Mode` and `SourceFolder` do not affect this operation. **Preview** captures the values and displays the file plan without saving a backup; temporary capture files are removed.
-
-This is **not a full-camera backup** or an X Acquire/Tether App settings file. Button assignments, network configuration and other setup menus are outside its scope. Gear Backup can restore the XML files to a PC folder for reference, but does **not** write settings back to the camera. Use Fujifilm's software for its native full settings backup/restore workflow. Direct capture was tested with an X100VI on firmware **1.32**.
-
-## Separate card and folder histories
-
-New backups are stored here:
-
-```
-<BackupFolder>\Gear Backups\profiles\<profile>\<date>
-```
-
-`BackupFolder` defaults to `%USERPROFILE%\Backup`.
-
-When you start a backup and the selected backup location does not exist, Gear Backup asks whether to create it. Choose **Yes** to create the folder and continue, or **No** to cancel. This also applies to device/profile destinations and X100VI settings backups. Previewing does not create folders or ask this question.
-
-With `Profile=` empty, each history's name starts with its device, so the M8's and the Tracker Mini's are easy to tell apart. A drive root then uses its Windows volume serial number, for example `m8-card-1234ABCD` or `tracker-mini-card-06FE6B87`. A folder uses an identity derived from its full path (`m8-folder-…`), and an MTP device its serial (`op-xy-XXYWV10D`).
-
-A card keeps one history: if it already has one under another device's name (for example after changing `Device`), that one is used. Histories from older versions, named `card-<serial>` or `folder-…` without a device, are renamed to the new name the next time that card or folder is backed up or restored (not by a preview). A card formatted again normally gets a new serial, and a folder moved to another path gets a new identity. If Windows cannot read a volume serial, the program falls back to a path identity. Set a named profile when automatic identity is unsuitable:
-
-```ini
-Profile=Studio M8
-```
-
-Use different names for different cards or collections. A profile name can contain letters, digits, spaces, hyphens, and underscores, must start with a letter or digit, and can be up to 64 characters. Windows reserved names are rejected. An explicit profile deliberately overrides automatic separation: do not reuse it for unrelated cards.
-
-Restore and check offer a history selector, including existing backups directly under `Gear Backups` as **Legacy backups**. They are not moved or silently combined with new profiles. `--profile` selects the history directly for checks; restore still allows choosing another history, such as when replacing a failed card.
+**Dashboard**, **Storage**, and **Device & backup settings** open management windows. **Open backup folder** or **Open restore folder** becomes available after an operation with an output location.
 
 ## Full and incremental backup
 
-**Full:** capture the card's user files into a new dated folder. If the date is already used, the time and fractional seconds are added to create a distinct folder. With [single content store](#single-content-store) enabled, this folder contains shared content and restore records instead of a browsable copy.
+### Full backup: start a separate set
 
-**Incremental:** add and update files in the latest backup of the current profile. In a single content store, add new content and record a complete new restore point. For browsable backups, changed files keep their previous copy under a dated name, such as `Songs\Jam_2026-10-01_143000.m8s`, and deleted source files remain. When point-in-time history is enabled, a dated snapshot separately records which files actually existed during this run.
+A full backup creates a new dated folder under the source's history. An optional name helps distinguish it in the app, for example `Before firmware update`. The display name does not replace the dated folder name.
 
-An unchanged incremental backup of a completed, history-free backup updates its Dashboard success time without rewriting checksums or generating another statistics report. It still checks file/folder inventories. Missing metadata, manual additions, source deletions, changed folders, unfinished backups, enabled history or retention settings use normal housekeeping. This shortcut does not replace **Check backups** for detecting damaged content.
+Each full backup is independent. Content is shared between restore points **inside one set**, not between separate full backups. Creating several full backups therefore uses more space even with a single content store.
 
-### Zip copy of a full backup
+With **Also save as zip**, a successful full backup additionally creates a ZIP beside the backup folder. It contains ordinary exported files, not the internal content-store history. It is useful for transfer or manual extraction; it uses extra space and does not preserve the set's restore points. Incremental backups do not update or create ZIP archives.
 
-Add `--zip` to the command line, or tick **Also save as zip** in the GUI, to also save a successful full backup as a zip file next to its folder, for example `...\profiles\m8-card-1A2B3C4D\2026-10-10.zip`. Handy for archiving or copying to cloud storage.
+### Incremental backup: update a chosen set
 
-- The zip holds the card's files and folders (empty ones included) plus `checksums.sha256`. Browsable backups also include their statistics file, with local paths hidden: the backup folder appears as `<this backup>` and your user folder (`C:\Users\<name>`) as `%USERPROFILE%`. A single content store exports its latest restore point directly. Internal `.gearbackup` metadata and stored objects are omitted from ZIPs.
-- It's written under a temporary name and renamed when complete, so a zip that exists is never half-written.
-- The free-space check reserves room for it (up to the card's size, as WAV samples barely compress).
-- It's skipped, with a note, for incremental backups and resumes, and when any file failed to back up. If the zip itself can't be saved, the backup still counts as complete but the run ends with exit code 2.
-- The option applies to that run only; it isn't saved in `GearBackup.ini`. Deleting old backups with `KeepBackups` leaves their zip files in place.
+1. Detect the device or choose its source folder.
+2. On Backup, select **Incremental backup**.
+3. Choose **Full backup to update**. The newest available set is initially selected.
+4. Optionally enter **Name for this incremental backup**.
+5. Click **Preview** to inspect changes, or **Back up** to run it.
 
-Both modes preserve empty folders. Copies are hashed with SHA-256. With `Verify=yes`, each new copy is read back and compared; a checksum mismatch retries once. Ordinary copy errors are reported and other files continue. If the source's size or modified time changes during copying, that copy fails rather than claiming a stable result.
+![Incremental backup controls in Original](assets/manual/current-incremental-original.png)
 
-The program skips computer-generated leftovers:
+The app uses the backup's SQLite inventory as the primary baseline. Normally, size and modified time determine whether a file changed, with a two-second tolerance for filesystem timestamp precision. Files without usable timestamps may require content comparison. Enable **Compare file contents** for SHA-256 comparison even when size and date match.
 
-- Names beginning with a dot, such as `.DS_Store`, `.Trashes`, and `.Trash-1000`.
-- `lost+found`, `FSCK0000.REC`-style files, and filenames ending in `~`.
-- `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, `System Volume Information`, and `$RECYCLE.BIN`.
+In the default single-store mode, every successful incremental run saves a restore point, even if no files changed. An unchanged run does not ask you to approve an empty list. Files deleted from the source disappear from the new point but remain recoverable from earlier points.
 
-Linked files and folders (Windows reparse points) are rejected. An unreadable source folder fails the scan; it is not silently treated as empty. The source and backup folder must not contain one another.
+An unnamed incremental point uses `yyyy-MM-dd_HH.mm.ss`, such as `2026-10-11_14.32.08`. Repeated names receive a numeric suffix. The app lists points using the recorded backup capture date and time, not source-file dates or the point name. A named point retains its recorded capture time as well.
 
-Windows limits a file path to 259 characters and a folder path to 247. Before copying, a backup checks every path it will create, including dated old versions and history objects; a restore checks every file and its temporary copy on the target. If one would be too long, the operation stops before changing anything and names the path. Choose a shorter backup location (for example `D:\Backups`) or restore destination, or shorten folder names on the source.
+Incremental backup retains the selected set's storage format. Changing the storage setting affects the **next full backup**, not an existing set.
 
-### Fast or thorough comparison
+## Choosing how backups are stored
 
-```ini
-Thorough=no
-```
+Choose the mode in **Settings → Backup** before starting a new full backup.
 
-The default comparison uses file size and modified time, allowing two seconds for FAT timestamps. This can miss an edit that leaves both unchanged.
+| Mode | Contents | History and space |
+| --- | --- | --- |
+| **Use a single content store** on (default) | One immutable content store and complete restore-point inventories. Restore/export through the app. | Each distinct file content is stored once per set. Every successful run creates a point. |
+| Single content store off; **Save point-in-time history** off | Ordinary browsable backup files, checksums, and catalog. | Incremental backup keeps dated copies of changed files. No complete historical snapshots. |
+| Single content store off; **Save point-in-time history** on | Ordinary files plus snapshots and a history content store. | Complete historical restore points, but separate history copies can substantially increase space. |
 
-Some M8/FAT files have no usable timestamp (Windows reports 1 January 1601). For those files, the program compares the actual bytes instead of the date. Identical undated files are skipped; same-size edits are still detected. This fallback also applies during restore and does not enable SHA-256 comparison. Copies with missing timestamps retain the destination filesystem's normal timestamps.
+In a single content store, **Save point-in-time history**, **Hard-linked history**, and **Old versions to keep** have no effect. All points remain until you remove the whole backup set. There is no individual restore-point pruning control.
 
-For SHA-256 comparison of all files, use:
+For browsable backups, changed files are retained under dated names. Source deletions do not remove the old files from the browsable backup. Without point-in-time history, this is accumulated file history rather than an exact record of the source at each run.
 
-```ini
-Thorough=yes
-```
+With browsable point-in-time history, `HardLinks=yes` can reduce duplication on NTFS. A hard link shares the same data with the ordinary backup file, so editing or damaging that file also affects its linked history. Other filesystems use copies. Hard links are off by default.
 
-Thorough mode compares content hashes. Identical contents can be skipped even when timestamps differ. The setting applies to backups, restores, and resume. With the default `Thorough=no`, those operations compare size and modified time, which can miss changes preserving both.
-
-A full backup copies every file anyway, so with `Thorough=yes` it doesn't hash the card beforehand: the content comparison for the change summary uses the checksums calculated while copying and the previous backup's `checksums.sha256`. The card is read once. Incremental backups and resume still hash both sides before copying, which also repairs a damaged copy in the backup.
-
-Automatic SHA-256 integrity comparison is independently controlled by `Verify=no` (the default). Set `Verify=yes` to check copied files, restore sources, snapshot objects, and recovery copies. Each copy is read back from the disk itself, bypassing Windows' file cache, so the check sees what was actually written rather than what is still in memory; file systems that don't allow this (some network shares) get a normal read-back.
-
-Copying reads the next 1 MB from the source while the current 1 MB is hashed and written, so the card and the backup drive work at the same time. This mainly helps when the backup drive is about as slow as the card, such as an external HDD or USB stick. Hashes are still generated for integrity records and history object identities when comparison is off. Selecting **Check backups** explicitly runs checksum checks regardless of either setting.
-
-### Completion status and resume
-
-Each new backup has one of these statuses:
-
-| Status | Meaning |
-|---|---|
-| `incomplete` | A run started but did not reach its final status, for example because the process stopped or USB was disconnected. |
-| `failed` | The run reached the end with file, history, or checksum-list failures. |
-| `complete` | The run finished with its files, checksum list and (when enabled) snapshot saved, using the selected verification settings. |
-| `unknown (missing or invalid status)` | Missing or invalid status metadata. |
-
-When the latest backup is incomplete or failed, choose **Resume**, **New full backup**, or **Cancel**. Resume uses the selected `Thorough` comparison, repairs partial or missing copies it detects, and refreshes checksum records. Use `Thorough=yes` to detect partial/corrupt copies that retain the correct size and time. It resumes against the source as it exists now; it cannot reconstruct unsaved files or a previous source state that was never copied.
-
-With `Verify=yes`, existing copies that fail their recorded checksum are preserved under `.gearbackup\quarantine` rather than presented as valid old versions. Changed copies from an interrupted run without a recorded checksum are also quarantined. Quarantine is excluded from normal restore and integrity lists; inspect those files manually if needed.
-
-Older completed snapshots remain selectable even if the latest incremental run failed. Browsing the current files of a backup with incomplete or unknown status requires an explicit acknowledgement of its status.
-
-## Point-in-time history
-
-There are two ways to keep earlier states: a single content store, or history alongside browsable backup files.
-
-Incremental restore points use `yyyy-MM-dd_HH.mm.ss` names, for example `2026-10-11_14.32.08`. On the Backup tab, an incremental backup can also be given a name (up to 80 characters, optional); the Restore tab then lists it as `Incremental · Studio jam · 2026-10-11_14.32.08`. The name is saved with the restore point (a `.name` file beside its manifest) and shown only when a point is kept: with the content-store layout, or with **Save point-in-time history** on. If that name already exists within the selected full backup, a numbered suffix such as `_2` preserves both runs. Full capture dates are stored separately in `.taken` metadata and SQLite, so Restore defaults to the latest run across days and midnight, independently of source-file dates. The GUI displays the selected point's full capture date below the selector.
-
-### Single content store
-
-Enable **Settings → Backup → Use a single content store**, or set:
-
-```ini
-SingleContentStore=yes
-```
-
-Start a **full backup** to create a set in this layout. Each distinct file content is stored once in `.gearbackup\objects`, identified by SHA-256. There is no separate copy of the current files. Each successful incremental run saves a manifest listing its complete file and folder membership, dated by when the backup was taken. An unchanged run saves a new point without copying content or asking to proceed. Original file dates are retained for restore, independently of the restore-point date.
-
-For example, a first backup containing 10 GB of unique content needs about 10 GB plus metadata. An incremental that adds 100 MB of new content needs about 100 MB more. Deleted files disappear from the new point but remain available in earlier points. Identical content, even under different filenames, shares one object.
-
-Use **Restore** to select a dated point; the default choice restores the latest point. ZIP export reconstructs ordinary files, empty folders and `checksums.sha256` directly from the latest point. **Check backups** verifies shared content, and the SQLite catalog indexes both current files and historical membership. Restore and catalog rebuilding use manifests, so SQLite corruption does not prevent recovery. The recipe viewer can open an X100VI settings backup in this layout.
-
-The store is shared within one backup set. A new full backup creates an independent set. All points and their objects remain until that set is removed; `KeepBackups` still controls full-set retention. `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` are ignored in this mode. Interrupted captures preserve previous points but may leave unreferenced objects occupying space. ZIPs and MTP mirrors still consume additional space.
-
-The option defaults to `no`. Existing browsable backups remain usable, and cannot be converted by an incremental run: start a new full backup. An existing single-store set continues using that layout even if the preference is later disabled. Keep the entire backup folder, including `.gearbackup`, when moving or copying it.
-
-### History alongside browsable files
-
-For browsable backups, point-in-time history is off by default (`PointInTimeHistory=no`) to save disk space. To keep restorable earlier states, open **Settings → Backup** and enable **Save point-in-time history**, or set this in `GearBackup.ini`:
-
-```ini
-PointInTimeHistory=yes
-```
-
-With history off, backups save the browsable files and checksum list without snapshot manifests or the extra content store. A fresh backup typically needs roughly half the space of a backup with copied history. Incremental backups, current-file restore, verification, integrity checks and ZIP creation still work; you cannot select a point in time from runs made with history off. `HardLinks` has no effect in this mode, and free-space planning excludes history objects.
-
-Changed files still keep dated old versions, deleted source files remain in the browsable backup, and each full backup still creates a separate folder. `KeepOldVersions` and `KeepBackups` control those copies independently; optional ZIPs also use extra space. Turning history off does not delete existing snapshots or objects. For the space saving on an existing history, start a new full backup with history off and manage older backup folders separately. Turning history back on captures subsequent runs; it cannot recreate snapshots for runs made while history was off.
-
-![Backup history example: the first snapshot contains Jam version 1 and Kick; after editing Jam and deleting Kick, the second snapshot contains only Jam version 2, while Kick remains in the browsable backup.](assets/manual/backup-history.png)
-
-*The illustration shows one full backup followed by an incremental run in the same backup folder. A new full backup creates a separate dated folder instead.*
-
-Choose a saved snapshot when you want the files that existed at a particular backup time. Browsing current backup files also exposes retained files that have since been deleted from the source, plus dated old versions of changed files. In the example, restoring snapshot 1 brings back the original song and sample; snapshot 2 selects only the edited song. Whether extra files already on the target are retained depends on [merge versus exact snapshot](#merge-versus-exact-snapshot).
-
-With history enabled, every successful backup run saves a dated manifest under:
-
-```
-<backup>\.gearbackup\snapshots\<timestamp>.manifest
-```
-
-The manifest records file membership, hashes, sizes, timestamps, and empty folders. File contents are retained separately in `.gearbackup\objects`, keyed by SHA-256. Identical contents share an object within that backup folder, so successive snapshots only need additional objects for new contents. This protects earlier snapshots when browsable files are renamed, updated, or pruned.
-
-**Storage:** the first snapshot adds a separate history copy of each unique file's contents, alongside the normal browsable backup. Plan for up to roughly twice the card's data for a first full backup. Objects are shared within one backup folder, not between separate full backups. The free-space check includes missing history objects.
-
-**Hard links (optional):** with `HardLinks=yes` and a backup folder on NTFS, history objects are hard links to the browsable backup files instead of copies: no extra space and no extra copying. The trade-off is that both names then refer to one copy on disk, so editing a backup file by hand, a tool rewriting it, or disk damage also changes the history; a check still detects it. The program itself never edits backup files in place. On FAT, exFAT and most network shares, or if linking fails, copies are used. The default is `HardLinks=no`.
-
-Space planning reuses hashes already available from thorough comparison or existing checksum records. For contents whose hashes are not yet known, it reserves their full size without reading them just to estimate space. This estimate can exceed the eventual requirement when identical contents share an object. Copying still generates SHA-256 identities, and optional read-back verification still runs when enabled. A shared existing history object is verified once per backup run.
-
-`KeepOldVersions` limits only browsable dated copies. Snapshot history and its objects remain until the whole backup folder is removed. Existing backups gain history only from subsequent successful runs; earlier states cannot be reconstructed retroactively. Keep the entire backup folder, including `.gearbackup`, when moving it to another disk.
-
-Fast comparison has the same limitations for snapshot content as for ordinary incremental copying. Choose `Thorough=yes` when capturing edits that may preserve size and time.
+**Backups to keep** limits full backup sets; **Old versions to keep** limits retained file versions in browsable mode. Zero means keep all. Retention runs after successful backups and asks before moving excess items to the Recycle Bin.
 
 ## Restore
 
-Start with menu option 3 or `GearBackup.exe --restore`.
+First detect a device so the Restore tab can list backups matching its **device type**. The list is not restricted to one physical unit's serial number. It includes matching histories at the current backup location and locations configured in device/profile preferences. The newest backup and its latest restore point are selected by default.
 
-1. Select a target card/folder and a backup history.
-2. Select a backup folder. Its completion status is displayed.
-3. Select a saved snapshot, or press Enter for the latest restore point (single store) or current backup files (browsable layout).
-4. Select one of the restore modes below.
-5. Review any overwrite choice and the file preview. Confirm to start.
+### Restore a full backup
 
-### Restore modes
+1. Select **Restore full backup**.
+2. Choose the named full backup set.
+3. Choose its full or incremental **Restore point**. Each point represents the complete file membership for that backup run, so you do not need to restore a chain of increments.
+4. Choose the **Restore destination**: a connected card/drive or an ordinary PC folder.
+5. Click **Preview**, or **Restore** and accept the reviewed changes.
 
-| Choice | What it restores |
-|---|---|
-| **A — All** | All files and empty folders in the snapshot. When browsing current files, metadata and recorded old versions are excluded. Genuine source files containing dates are kept. |
-| **B — Bundle** | One `Bundles\<name>` folder, including its project, samples, instruments, and empty subfolders. |
-| **P — Whole project folder** | Tracker Mini: one project folder, with its patterns, instruments and samples. |
-| **S — Single file** | Search by name/path and select one song, instrument, sample, or old version. |
-| **D — Song with dependent samples** | Select a song and include the sample paths referenced by its sampler instruments. |
+![Full restore and restore-point selection in Original](assets/manual/current-restore-original.png)
 
-Current-file restores use the backup's old-version registry, or snapshot evidence for older backups, to distinguish generated versions from real dated source filenames. Without that evidence, files are kept rather than classified by name alone. When browsing a recorded old version directly, choose its original or dated name.
+The default is a **merge**: files in the selected point are restored as needed, while other target files remain. **Remove extra target files** makes a full saved-point restore exact, removing files and empty folders absent from that point. It is available only when complete saved membership exists. Review its removal list carefully.
 
-Restore and check history pickers search the global backup destination and all destinations configured in device/profile preferences. History labels include their location so identical profile names can be distinguished.
+Enable **Keep recovery copies before restoring** under Settings → Restore if you want PC copies of files about to be overwritten or removed. Recovery is off by default. An enabled recovery copy that fails stops the restore before the associated target changes.
 
-Restore choices and device preferences follow the selected backup, including when restoring to a PC folder. Backups must record their device type explicitly in metadata; folder names are not used to infer device identity. Missing or invalid device metadata prevents restoration. Profile overrides take priority over device preferences.
+MTP device restores go to a PC folder; Gear Backup does not upload to the device. Restore an OP-1 Field or OP-XY backup to a folder and transfer the desired files with Explorer. The X100VI card warning explains why returning old photos to a camera card may be undesirable.
 
-### Song dependencies
+### Restore individual files or folders
 
-Dependency extraction supports the known **firmware-6 `.m8s` layout**. Files over 16 MB are refused without being read, since a real song is about 100 KB. It reads all sampler slots, including unused slots, and restores referenced samples at their original card paths. Songs already contain their instrument data; separate instrument preset exports are not dependencies of a song.
+1. Select **Restore individual files** and choose the backup and point.
+2. Click **Choose files…**.
+3. Tick the folders or files you want. Selecting a folder includes its descendants, including empty folders.
+4. Accept the selection, choose the destination, and preview or start the restore.
 
-Missing samples in the selected backup/snapshot are listed and cancel dependency restore. Unsupported firmware, malformed paths, or unknown instrument types are refused. Use a bundle or full restore for those files. Nothing in the song is rewritten, and this feature does not create or relocate bundles.
+![Individual restore controls in Original](assets/manual/current-restore-files-original.png)
 
-The implementation follows the format information in [pym8](https://github.com/jhw/pym8) and [m8-file-parser](https://github.com/Twinside/m8-file-parser). The M8's own Bundle command gathers a project, samples, and instruments, as described in the [Dirtywave operation manual](https://dirtywave.com/pages/resources-downloads).
+![Checkbox file and folder browser in Original](assets/manual/current-browser-original.png)
 
-### Merge versus exact snapshot
+Changing the backup or restore point clears the previous file selection. Individual restores do not remove unrelated target files.
 
-![Restore comparison: a snapshot has Jam version 1, while the target has Jam version 2 and Extra.wav. Merge restores Jam version 1 and keeps Extra.wav; exact restores Jam version 1 and removes Extra.wav after successful copying.](assets/manual/restore-modes.png)
+The CLI additionally offers device-specific choices: an M8 bundle, an M8 song with its referenced samples, and a Tracker Mini whole project folder. The GUI checkbox browser restores what you select; it does not automatically add sample dependencies when you tick a song.
 
-*Two alternative results for the same restore. The example assumes you choose to replace the changed song.*
+## Checking and managing backups
 
-When restoring all files from a dated snapshot, choose:
+### Integrity checks
 
-- **Merge:** restore its files while keeping extra files already on the card.
-- **Exact:** also remove extra user files that were not present in that snapshot, and remove extra folders if they become empty.
+On Restore, choose **Check backups** and click **Check**. This reads backup content and compares SHA-256 hashes against recorded checksums and snapshot manifests. It reports OK, damaged, missing, and unchecked content. Results are recorded for the dashboard and SQLite catalog.
 
-Exact removal is listed in the preview and requires a separate confirmation. If you choose to keep differing target files, exact removal is disabled. Extra files are removed only after all selected copies succeed. Ignored OS files/system folders are left alone; this is a restore of backed-up user content, not a byte-for-byte SD-card image.
+Three separate features use checksums:
 
-### Overwrites and copy safety
+| Feature | Purpose | Default |
+| --- | --- | --- |
+| **Compare file contents** (`Thorough`) | Decide whether source/target content changed, including files whose size and timestamp match. | Off |
+| **Verify copied files** (`Verify`) | Automatically read back copied data and check it during backup/restore. | Off |
+| **Check backups** | Explicitly verify saved backup content after the backup. | Run on demand |
 
-Files considered unchanged by the selected `Thorough` comparison are skipped. If files differ, choose to replace them, keep them and copy only missing files, or cancel. A warning identifies target files newer than the selected backup.
+Hashes are recorded during backup even when the two optional settings are off. SQLite is the primary inventory for incremental planning and restore selection; the independent checksum lists/manifests remain integrity and catalog-recovery records. A catalog entry alone does not prove that its content is undamaged: run a check to verify it.
 
-With `Verify=yes`, every selected file with a stored checksum is checked before target changes; a mismatch aborts the plan. With `Verify=no`, checksum comparisons are skipped. Missing files and size mismatches still abort the plan. Files added outside Gear Backup without recorded checksums have no historical integrity guarantee.
+### Dashboard
 
-Restored files are staged beside the destination under a unique `.gearrestore-*.tmp` name. Replacements use Windows' file-replacement operation rather than deleting the destination first. If the filesystem cannot support replacement, that file fails and its existing copy is retained. A normal failure removes the temporary file. An abruptly stopped process can leave a dot-prefixed temporary file; rerunning restore uses a fresh temporary name.
+**Dashboard** groups histories and shows their latest backup status and last check. Backups older than seven days are marked overdue; that label is a reminder, not evidence of damage. Filter by device, refresh the list, open a folder, check the latest backup, or rename a history's display label.
 
-Replacement also uses a transient `.gearrollback-*.tmp` copy of the original on the target volume. It is removed after a successful replacement and used to restore the original name if replacement fails. This is separate from optional persistent PC recovery: `Recovery=no` still uses replacement rollback. If interrupted or rollback itself fails, keep any remaining rollback file until you have checked its contents. This follows [Windows ReplaceFile failure handling](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew).
+### Storage and cleanup
 
-The working-space estimate includes added files, growth of replacements, and staging space. With recovery on the same volume, it also reserves space for all recovery copies before starting.
+**Storage → Space usage** separates current files, old versions, content/history, and metadata. Shared hard-linked content is counted by unique storage where possible. ZIP exports and MTP mirrors also use space.
 
-The target is checked again before replacement/removal. With `Thorough=no` this guard uses size and modified time; with `Thorough=yes` it uses SHA-256. `Verify` does not change this guard; it controls checksum checks of the backup files and copies. Detected changes stop replacement. This is not a transaction across the entire card: already completed file restores remain if a later file fails. Keep the card idle until completion.
+Under **Cleanup**, tick the items to remove, then click **Preview cleanup**. Nothing is selected initially. Review the effect before accepting; selected items are moved to the Recycle Bin after safety checks. Removing an entire set removes every restore point stored in it. Do not manually remove individual content objects: several points can reference the same object.
 
-### Optional recovery copies
+### Moving backups and repairing a catalog
 
-Recovery is **off by default**:
+Copy the **entire backup set**, including hidden `.gearbackup` metadata, to preserve its points and content. To keep automatic discovery, retain the `Gear Backups\profiles\<history>\<dated backup>` layout under your chosen backup location. Update the global or relevant profile backup location afterward.
 
-```ini
-Recovery=no
-RecoveryFolder=
+Each set contains `.gearbackup\catalog.sqlite`, with inventory, hashes, point membership, capture times, and check results. Damaged or missing catalogs can be rebuilt from the set's current-format records:
+
+```powershell
+.\GearBackup.exe --rebuild-catalog "D:\Backups\Gear Backups\profiles\Studio\2026-10-11" --no-pause
 ```
 
-To save the target's existing files before replacing or removing them:
+Add `--preview` to check the requested rebuild without writing it. Rebuilding recreates the index; it does not recover missing content or accept damaged content as a new baseline. Older pre-release layouts and names are not migrated automatically. Keep intact sets and their metadata together.
 
-```ini
-Recovery=yes
-RecoveryFolder=D:\Gear Recovery
-```
+## X100VI settings and recipe viewer
 
-With `RecoveryFolder=` empty, the location is `<BackupFolder>\Gear Recovery`. Environment variables work, for example `%USERPROFILE%\Documents\Gear Recovery`.
+For recipes, set the camera to **USB RAW CONV./BACKUP RESTORE**, connect one X100VI, and close other applications using it. Click Detect device. **Back up X100VI settings** appears in the Backup type list only when the detected camera is in this mode.
 
-Each restore makes a distinct dated recovery folder and preserves original relative paths. **All recovery copies must finish before any target files or folders are changed.** They are also read back and checksum-verified when `Verify=yes`. An inaccessible destination, insufficient space, or a failed recovery copy cancels the restore. The recovery folder and target must not contain one another. Files considered unchanged or only being added need no recovery copy.
+The capture saves **C1–C7** recipe XML files, **Shooting settings.xml**, and **About this backup.txt**, with camera model, firmware, serial, supported values, and capture information. It temporarily selects recipe banks while reading, then restores the selector and verifies the shooting values. Settings captures create separate full backups in a settings history.
 
-Recovery metadata is under `.gearbackup`: `recovery-status.txt` records completion and the original target; `recovery-checksums.sha256` records the copied file hashes. Copy recovered files back to their original card paths when needed. Recovery folders are separate from normal backup histories and are not automatically pruned or offered in the backup selector.
+This is a recipe and shooting-settings snapshot, not a complete camera-configuration export or a Fujifilm X Acquire backup. Gear Backup cannot apply the captured settings back to the camera.
 
-## Preview
+Select an eligible settings backup in Dashboard or Storage and click **View recipes**. The viewer presents decoded, readable settings such as film simulation, white balance shifts, grain, and tone values. You can select a recipe or current shooting settings, **Copy recipe**, or **Export text**. **Open backup folder** and **Open XML** also let you inspect a settings capture directly, including a single content-store backup.
 
-`Preview=yes` displays the file plan and asks before copying. Set `Preview=no` to suppress that general prompt. Restore overwrite choices, exact-removal confirmations, backup selection, and retention questions still apply.
+For photo/video backup, switch the camera back to USB file-transfer mode and detect it again. Settings mode is not a source for photo backup.
 
-Incremental backup previews list only new and changed files. Unchanged files are shown as a total count, without listing their names.
+## Settings and profiles
 
-When an incremental backup has no new or changed files to copy, it skips the Proceed prompt automatically. It still records the current snapshot membership when history is enabled, including deleted files and empty folders, and updates the backup status and statistics.
+**Settings** controls shared global preferences. Its tabs cover Backup, Restore, Device, and Appearance. Choose **Original**, **Original (dark)**, or **Retro** under Appearance; saving applies the theme and changes which offline manual Help opens.
 
-`--preview` displays the plan and exits without writing files. It can be combined with `--restore`. Selection questions remain so you can choose the intended operation. Preview reads and hashes files; it is not an unattended operation.
+![Global Backup settings with current defaults in Original](assets/manual/current-settings-original.png)
 
-## Checking backups
+**Device & backup settings** sets preferences for a device type or a named backup history. An inherited/default option uses the broader setting; a custom value overrides it. Priority is **global → device → profile**. Save changes to persist them; resetting preferences returns the selected scope to inheritance when saved.
 
-Run `GearBackup.exe --check` without connecting the M8, or choose menu option 4. Select a history, then one backup or all backups. This checks both the browsable files against `checksums.sha256` and the objects referenced by all saved snapshots. An object shared across snapshots is checked once per backup folder. With `HardLinks=yes`, an object that is the same file on disk as a backup file already checked in that run isn't read a second time.
+The optional **History name** field on Backup supplies the profile identity. Leave it empty for an automatic volume-serial or folder/device identity. Use a fixed name such as `Studio` when you want a stable history across card readers or source paths. Allowed profile characters are letters, digits, spaces, hyphens, and underscores.
 
-Missing or damaged objects and malformed manifests are reported. Backups without a checksum list offer to create one from their current contents; that establishes a future baseline, not proof that those files were originally undamaged.
-
-Folders in a history that are links (junctions) are never treated as backups, so they're never used for an incremental backup, offered for restore or checks, or offered for deletion by `KeepBackups`. The program loads the Windows DLLs it calls only from System32, so a DLL with the same name placed next to the exe is ignored.
-
-MTP mirror sync refuses linked files or folders, including stale junctions that are no longer on the device. It checks the mirror before syncing and again before cleanup. If a linked-path error appears, remove the link from the PC mirror and retry. Settings and backup metadata are written through unique, exclusively created temporary files; a pre-existing `<filename>.tmp` is never used or overwritten.
-
-Checksum files use the standard `sha256sum` format with forward slashes. Checksum and manifest paths are validated to prevent paths escaping the selected backup/target. The files are integrity baselines, not signed authenticity records.
-
-## Progress and cancellation
-
-The console reports progress during scanning, planning, hashing, copying, saving history, recovery, and integrity checks. Interactive progress updates are throttled; redirected output retains the regular messages and statistics without continuous progress lines.
-
-Full backups show overall copy progress and stage labels, without individual file paths or per-file progress. The acceptance preview and any errors still list relevant files.
-
-Press **Ctrl+C** to request cancellation. The program checks between files and during copy/hash/byte-comparison loops. A blocking filesystem or device operation may need to return before cancellation can take effect.
-
-Cancelled backups keep completed copies and leave an interrupted run marked `incomplete` so it can be resumed. A cancelled changed-file copy restores its previous browsable backup copy when cleanup succeeds. Already completed snapshots remain available. Cancelling after the backup has completed, such as during retention questions, leaves that completed status intact.
-
-Cancelled restores clean up the staged copy and retain its existing target file. Files already restored remain restored; cancellation stops further copying and removal. Recovery copies must still finish before any target changes. A cancelled integrity check reports cancellation rather than treating unchecked files as valid or damaged. Cancellation does not automatically eject the M8.
-
-The backup statistics duration includes scanning, planning, copying, snapshot creation, and saving checksum records. It excludes time waiting for plan acceptance and subsequent report writing or retention prompts. The average speed uses copied data divided by that duration.
-
-## Retention, statistics, and notifications
-
-`KeepBackups=N` offers to move excess older backup folders of the current profile to the Recycle Bin after a successful backup. This removes each folder's snapshots too. `KeepBackups=0` keeps all.
-
-`KeepOldVersions=N` offers to move excess browsable dated versions of each file to the Recycle Bin after a successful incremental run. `KeepOldVersions=0` keeps all. Snapshot contents are retained separately. Files that also exist on the source under their dated names are not pruned.
-
-Every backup writes statistics with copied/unchanged files, song changes, skipped leftovers, data volume, speed, warnings, failures, and free space. Incremental reports use distinct timestamps so successive reports are retained.
-
-The CLI uses Windows notifications to summarize backup, restore, or check results; the GUI shows results in its window. `Eject=no` leaves the M8 connected, `Eject=ask` asks in a notification/console or GUI dialog, and `Eject=yes` requests safe removal. Automatic ejection only applies to a device identified through the M8 USB detection path.
-
-## Dashboard, storage and settings tools
-
-The GUI's **Dashboard**, **Storage** and **Device & backup settings** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
-
-### Backup dashboard
-
-**Dashboard** groups backups by profile across the current backup location and every location specified in device/profile overrides. It shows the last successful backup time, the latest folder's completion status, and its last integrity check and result. It reads small health records without scanning all backup files; the size column directs you to **Storage** for detailed totals. **Overdue** means the last successful backup is more than seven days old. Failed or incomplete backups and failed integrity checks are marked for attention.
-
-Use the **Device** list above the table to show only one device's profiles; it lists the devices that have backups. It starts on the device detected in the main window, if that device has backups, otherwise on **All devices**. Each profile belongs to the device its latest backup was made from. Profiles from backups made before Gear Backup recorded the device are listed under **Unknown device** unless their automatic name (such as `m8-card-…`) identifies it.
-
-Select a row to **Check latest backup**, **Open folder**, or **View recipes**. **View recipes** is available only when the selected backup holds saved X100VI recipes (a camera-settings backup); otherwise it is greyed out. Use **Refresh** after operations in other windows or applications. Dashboard scanning runs in the background; closing the window cancels it. Unavailable locations or linked content are reported rather than followed, so a scan with warnings may not include all stored data.
-
-New successful backups record their completion time separately, preserving the last success if a later incremental run fails. Completed integrity checks save a small result record beside backup metadata; cancellation does not overwrite the unfinished backup's record. Checks from before this feature appear as **Never checked** until run again. Creating a checksum baseline for an older backup is marked **Incomplete check**, since there was no prior checksum list to verify its current files against. A check older than a subsequent backup run is labelled **previous state**, since it does not verify that newer state. For older complete backups without a completion record, the status file's timestamp is used.
-
-### Storage manager and cleanup
-
-**Storage → Space usage** lists current files, known old versions, history objects and metadata per backup, plus ZIP archives and local MTP mirrors. The **unique stored file content** total counts hard-linked files only once. This is file content size, not allocated disk usage: cluster sizes, compression, sparse-file allocation and the Recycle Bin are excluded. Per-category sizes and cleanup preview sizes are logical; hard-linked categories may share content.
-
-Use the **Device** list above the tabs to show one device's storage; like the Dashboard's, it starts on the device detected in the main window, otherwise on **All devices**. Backups, their old versions and their profile's ZIP archives belong to the profile's device; an MTP mirror belongs to the device it was read from, so a device that only has a mirror so far is listed too. The ZIP and mirror rows then add up only that device's items, while the unique-content total still covers all devices. Changing the device clears any items checked in **Cleanup**, so nothing hidden from view is recycled. As on the Dashboard, **View recipes** opens the saved X100VI recipes of the backup selected in **Space usage**, and is greyed out for backups without recipes and for the ZIP and mirror rows.
-
-**Cleanup** lists what you can move to the Recycle Bin to free space, in plain words, with the history it belongs to and what removing it means:
-
-| Item | If removed |
-|---|---|
-| **Older backup** · history · date | That backup date can no longer be restored; newer backups, including the latest, are kept. |
-| **Old version of a file** · history · file | That earlier version can no longer be restored; the current file stays. |
-| **ZIP copy** · history · date | Only the extra ZIP goes; the backup folder stays. |
-| **Downloaded device copy** · device | The local copy of an MTP device (OP-1 Field, OP-XY, X100VI) made before each backup. Your backups are not affected; it is downloaded again at the next backup. |
-
-Tick **Remove** for the items you want to go; the line under the list shows how many are selected and their size, and **Preview cleanup** becomes available. Review the complete file/folder list and select **Proceed** to move those items to the Recycle Bin. Nothing is selected by default. Hover over **If removed** for the full explanation. The latest backup folder and individual snapshot objects/manifests are protected. Deleting an older whole backup removes its snapshots as well.
-
-Cleanup rejects links, checks that items have not changed since the scan and locks the affected histories. Old-version cleanup updates checksum records and leaves snapshot objects intact. Known-version records distinguish retained versions from ordinary source files whose names happen to contain timestamps. Only the explicit old-version record identifies retained versions. A missing record never triggers a scan or inference from snapshot membership.
-
-Removing a downloaded device copy never changes the camera or device. Its cleanup and the device's backup share a lock to prevent cleanup during download or copying. **Recycling does not free space until the Recycle Bin is emptied.** Cleanup does not empty it automatically. If items changed or another process is using them, refresh and retry after that operation ends.
-
-### Backup histories, names and nicknames
-
-Every backup goes into a **backup history**: a folder under `Gear Backups\profiles` holding that source's dated backups. Normally there is nothing to choose: each card, folder or device gets its own history automatically, named after it on disk (for example `m8-card-DCE92C2E` or `op-xy-XXYWV10D`). The app shows these as readable names, such as **M8 · card DCE92C2E**, **OP-XY · XXYWV10D**, **X100VI · photos** and **X100VI · settings** (camera-settings backups have their own history).
-
-Typing a **History name** in **More options** keeps backups in a separate history under that name instead, for example a second project on the same card. Leave it blank to use the source's own history. On the command line, `--profile NAME` does the same.
-
-To give a history a friendlier name, select it in **Dashboard** or **Storage** and click **Rename…**, for example "Studio card". The nickname replaces the automatic name in every list, including restore and check, in both the GUI and the CLI. It is stored inside the history folder (`.gearbackup\nickname.txt`), so it travels with the backups; the folder itself keeps its name. Clearing the nickname brings back the automatic name. The **Legacy backups** history (backups made before histories existed) can't be renamed.
-
-### Device and backup settings
-
-Open **Device & backup settings**, choose **Settings for a device** or **Settings for one backup history**, then select it; histories are listed by their readable names or nicknames. Use **New backup name** to prepare settings for a backup name you haven't used yet. Settings are grouped into **Backup**, **Restore**, and **Advanced** tabs. Each setting shows its default: leave **Use default** checked to inherit it, or uncheck it to enter a different value. Folder fields have their own **Browse** button, and switches show **On** and **Off**.
-
-**Save changes** saves the selected device or history. **Reset to defaults** selects inherited values; click **Save changes** to apply the reset. Unsaved edits are preserved while switching between devices and histories, and closing warns before discarding them. Creating a new backup name does not run a backup or select it in the main window; enter it in the main **History name** field when backing up. Global settings are unchanged.
-
-Preference priority is **global → device → backup history**. Device defaults apply after source detection; a history's settings then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup's history. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
-
-The optional `GearBackup.Profiles.ini` in the settings folder can also be edited directly:
-
-```ini
-[device:m8]
-BackupFolder=D:\Gear
-PointInTimeHistory=yes
-KeepBackups=3
-
-[device:x100vi]
-BackupFolder=E:\Photos
-PointInTimeHistory=no
-
-[profile:Studio]
-Verify=yes
-KeepOldVersions=2
-```
-
-Device IDs are `m8`, `tracker-mini`, `op1-field`, `op-xy` and `x100vi`. Profile sections use the same names shown in the dashboard or main profile field, including automatic names. Supported override keys are `BackupFolder`, `SingleContentStore`, `PointInTimeHistory`, `HardLinks`, `Verify`, `Thorough`, `Preview`, `KeepBackups`, `KeepOldVersions`, `Recovery`, `RecoveryFolder`, `MaxNameLength` and `Eject`. Omitted keys inherit. The GUI validates values before saving. Both INI files are personal settings and stay intact through installer upgrades/uninstall.
-
-Changing a location does not move existing backups. Dashboard and Storage discover the current location and locations still listed in overrides; browse an older location manually if it is no longer configured. A named-profile integrity check searches configured locations and asks when the same profile exists in several places.
-
-### Readable X100VI recipes
-
-In **Dashboard** or **Storage**, select an X100VI settings backup and click **View recipes** to load its C1–C7 recipes and current shooting settings. Inside the viewer, **Open backup folder** loads another settings backup and **Open XML** one saved export. The selector shows each slot and recipe name. The table translates known protocol values into film simulation names, white-balance modes, grain strength/size, dynamic range, tone/color/detail dials and high-ISO noise reduction. Protocol numbers and exact raw bytes remain visible alongside the readable values.
-
-Use **Copy recipe** to copy readable text to the clipboard or **Export text** to save it. Unknown encodings appear as **Protocol value**, and unsupported or default values are explicit. Some non-recipe fields remain numeric. The viewer validates the export format and consistency of raw/numeric values, rejects external XML entities, and never edits exports or writes to the camera. It reads Gear Backup XML exports; native Fujifilm backup formats are not supported. Display encodings follow the [documented Fujifilm recipe protocol](https://github.com/ILFforever/fujifilm-ptp-recipes/blob/main/docs/properties.md), with color-space labels cross-checked against [libgphoto2](https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/config.c).
+A history/profile name groups backup sets. A full or incremental backup's optional name labels one set or point. Renaming a history's display label in Dashboard/Storage does not change its identity or settings scope.
 
 ## All INI settings
 
-Global preferences live in `GearBackup.ini`: installed copies use `%APPDATA%\GearBackup`, while portable copies and local builds use the executable folder. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them. The GUI also remembers where its main window was (position, size, maximized) in `GearBackup.Window.ini` in the same folder, and opens there next time; if that place is no longer on any screen, it opens centred. Other windows open centred on the main window.
+`GearBackup.ini` is created or completed with explanatory comments on a normal launch. Unknown global keys are ignored; invalid values may produce a warning or error depending on the setting. Paths accept environment variables. Edit the file while the app is closed to avoid competing with a GUI save.
 
-| Setting | Default | Meaning |
-|---|---|---|
-| `BackupFolder` | empty | `%USERPROFILE%\Backup`; base for backups and default recovery location. |
-| `Theme` | `original` | Global GUI color theme: `original` (light gray and teal), `original-dark` (charcoal and teal), or `retro` (teal, navy, gray and cream). |
-| `Mode` | `ask` | `ask`, `full`, or `incremental`. |
-| `Verify` | `no` | Enable automatic SHA-256 integrity comparisons for copies, restore sources, history objects, and recovery copies. |
-| `KeepBackups` | `0` | Number of backup folders to retain per profile; 0 keeps all. |
-| `KeepOldVersions` | `0` | Browsable old versions per file; 0 keeps all. |
-| `MaxNameLength` | `64` | Warn about longer file/folder names; 0 disables length warnings. |
-| `Eject` | `no` | `no`, `ask`, or `yes`. |
-| `Recovery` | `no` | Save existing target files before restore overwrites/removals. |
-| `RecoveryFolder` | empty | Defaults to `<BackupFolder>\Gear Recovery`. |
-| `SourceFolder` | empty | Detect an M8 or OP-1 Field, with manual fallback; otherwise use this drive/folder. |
-| `Device` | `auto` | What kind of device the source is. `auto` detects the connected device (an M8 or Tracker Mini in USB disk mode, or an OP-1 Field, OP-XY or X100VI over MTP); or name it: `m8`, `op1-field`, `op-xy`, `tracker-mini` or `x100vi`. Matters when the source is a card reader or folder, since only a connected device can be detected. |
-| `Profile` | empty | Automatic card/folder identity; otherwise use this named history. |
-| `Thorough` | `no` | Enable content-hash comparison for backup/restore/resume change detection; otherwise use size and modified time. |
-| `Preview` | `yes` | Show file plans and ask before backups/restores. |
-| `HardLinks` | `no` | On NTFS, store history as hard links to the backup files instead of second copies (see Point-in-time history). |
-| `PointInTimeHistory` | `no` | Files and checksums only by default, avoiding the second history copy. Set `yes` to save dated snapshots and their content store. Existing snapshots are preserved; old-version and full-backup retention are independent. |
-| `SingleContentStore` | `yes` | Store each distinct content once, without a browsable file copy; every successful run saves a dated restore point. Set `no` for plain, browsable backup folders. Overrides `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` for this layout. |
+| Key | Default | Meaning / accepted values |
+| --- | --- | --- |
+| `Theme` | `original` | `original`, `original-dark`, or `retro`. |
+| `BackupFolder` | Empty in generated INI | Empty uses `%USERPROFILE%\Backup`; otherwise a backup parent folder. |
+| `SingleContentStore` | `yes` | Use one content store with restore points for new full backups. |
+| `PointInTimeHistory` | `no` | Add snapshots/history content to browsable backups; ignored in single-store mode. |
+| `HardLinks` | `no` | Share browsable history content using NTFS hard links; requires point-in-time history. |
+| `Verify` | `no` | Automatically verify copied/restore content with SHA-256. |
+| `Thorough` | `no` | Compare contents rather than only size and usable timestamps. |
+| `Preview` | `yes` | Review and approve planned backup/restore actions before writing. |
+| `KeepBackups` | `0` | Full backup sets to retain; nonnegative integer, zero keeps all. |
+| `KeepOldVersions` | `0` | Retained versions per file in browsable mode; zero keeps all. |
+| `Recovery` | `no` | Save recovery copies before restore overwrites/removals. |
+| `RecoveryFolder` | Empty | Empty uses `<BackupFolder>\Gear Recovery`; otherwise your recovery folder, outside the source card/folder. |
+| `MaxNameLength` | `64` | Device name-length warning threshold; zero disables length checks. |
+| `Eject` | `no` | `no`, `ask`, or `yes`; applies to eligible detected USB drives after completion. |
+| `Mode` | `ask` | `ask`, `full`, or `incremental`; selects the CLI backup workflow and initial GUI backup type. |
+| `SourceFolder` | Empty | Optional local source/card path; empty uses detection or manual selection. |
+| `Profile` | Empty | Optional fixed history/profile identity. |
+| `Device` | `auto` | `auto`, `m8`, `tracker-mini`, `op1-field`, `op-xy`, or `x100vi`. |
+
+`Also save as zip` is a run option, not a saved INI key. Optional full/incremental names are also supplied for the run.
+
+Device/profile overrides belong in `GearBackup.Profiles.ini`, for example:
+
+```ini
+[device:m8]
+Verify=yes
+
+[profile:Studio]
+BackupFolder=D:\Backups
+Recovery=yes
+RecoveryFolder=D:\RestoreRecovery
+```
+
+Omit a key to inherit it. Overridable keys are `BackupFolder`, `SingleContentStore`, `PointInTimeHistory`, `HardLinks`, `Verify`, `Thorough`, `Preview`, `KeepBackups`, `KeepOldVersions`, `Recovery`, `RecoveryFolder`, `MaxNameLength`, and `Eject`. Theme, source, identity, device selection, and Mode are global settings. Unknown override scopes or keys are rejected rather than silently ignored.
 
 ## Command line and exit codes
 
-Every full or incremental backup has a small SQLite index at `.gearbackup\catalog.sqlite`. It lists current files and empty folders, missing files recorded in the checksum list, and files belonging to saved snapshots. Each file record includes its relative path, size, timestamps, expected SHA-256 and latest completed integrity-check time/result (`unchecked`, `ok`, `damaged`, `missing` or `unreadable`). The last 100 check summaries are retained. Creating an index does not verify file contents; **Check backups** performs that work and records the results. Changed file versions become unchecked again.
+Run `GearBackup.exe` in a terminal, or double-click it for interactive menus. Without arguments, it loads settings, finds the source, and offers the appropriate operations. If CLI PATH was not enabled during installation, use the executable's full path or run it from its folder.
 
-Incremental backup reads the current inventory from SQLite first, for both browsable backups and the single content store. It queries current rows rather than loading all historical snapshots. The activity log shows **Incremental inventory: SQLite (catalog.sqlite)**. A revision marker changes before backup contents are modified; the database also records recovery-file metadata and, for a single store, the current restore-point name. A missing, unreadable, outdated or incomplete database, or an unfinished backup, falls back to checksum lists or manifests. The log explains that fallback. A successful incremental rebuilds an unusable index, even when no source files changed; Preview leaves it untouched. Browsable backups still inspect live target size/timestamps to detect missing or manually changed copies. Thorough mode still compares file contents, and remains off by default.
+| Option | Behavior |
+| --- | --- |
+| `--source PATH` | Use a local folder/card; also supplies the local restore target. |
+| `--profile NAME` | Use a fixed history/profile identity for this run. |
+| `--restore` | Open interactive backup/point/file selection for restore. |
+| `--check` | Select histories/backups to check without requiring a source. |
+| `--camera-settings` | Capture X100VI recipes and shooting settings in the required camera mode. |
+| `--zip` | Also export a successful full backup as ZIP. |
+| `--preview` | Show a backup/restore plan without applying it, or preview a catalog rebuild. |
+| `--rebuild-catalog PATH` | Rebuild one backup set's SQLite catalog. |
+| `--no-pause` | Do not wait for a key before exiting; interactive operation choices still apply. |
 
-When a browsable backup loses its checksum export but the database generation is still current, incremental backup regenerates the export from SQLite's expected hashes. Recorded damaged or unreadable files are copied again even when size and timestamps match. This keeps the original integrity baseline.
+Examples in PowerShell, from the executable folder:
 
-The database remains recoverable. Integrity checks and CLI restores continue to use checksum lists and snapshot manifests; GUI restore uses SQLite first, with recovery-record fallback, so a missing or damaged database does not prevent restoring files. Backup/check operations and old-version cleanup refresh the index. An unchanged browsable incremental leaves a valid index untouched; a single-store incremental refreshes it to include the new point. Database publication problems are reported as warnings without invalidating successfully copied files. The app uses Windows' built-in SQLite library and builds replacements locally before publishing a closed single file to the backup, including when the backup lives on a network share. The database is internal metadata and is not restored onto devices or included in ZIP exports.
+```powershell
+# Detect a device and use interactive choices
+.\GearBackup.exe
 
-To rebuild an existing backup's index, run `GearBackup.exe --rebuild-catalog "D:\Backups\2026-10-11" --no-pause`. This preserves expected hashes from checksum lists and manifests. Files without a recorded checksum stay unchecked; rebuilding never accepts the contents of a potentially damaged file as a new trusted baseline. A rebuild can retain check records from a readable previous index; those records are lost if the old database is unreadable or absent. Add `--preview` to show the destination without changing it. This command cannot be combined with backup, restore, check, source, profile, camera-settings or zip options.
+# Preview a local source using a fixed history
+.\GearBackup.exe --source "E:\" --profile "Studio" --preview --no-pause
 
+# Back up a folder and export a full backup to ZIP
+.\GearBackup.exe --source "D:\M8Card" --profile "Studio" --zip --no-pause
+
+# Restore into a PC folder
+.\GearBackup.exe --restore --source "D:\RestoredFiles" --profile "Studio" --no-pause
+
+# Check saved backup content
+.\GearBackup.exe --check --no-pause
+
+# Capture camera recipes/settings
+.\GearBackup.exe --camera-settings --no-pause
 ```
-GearBackup.exe [--restore | --check | --camera-settings] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
-GearBackup.exe --rebuild-catalog BACKUP_FOLDER [--preview] [--no-pause]
-```
 
-Examples:
+Use `Mode=full` or `Mode=incremental` to choose a CLI backup mode without its mode menu. CLI incremental backup updates the latest set in the resolved history; selecting a different set is a GUI feature. There are no `--full` or `--incremental` flags.
 
-```
-GearBackup.exe --source E:\ --profile "Studio M8"
-GearBackup.exe --source D:\M8Card --preview
-GearBackup.exe --source E:\ --zip
-GearBackup.exe --restore --source E:\ --preview
-GearBackup.exe --check --profile "Studio M8" --no-pause
-GearBackup.exe --camera-settings --zip --no-pause
-```
+`--restore` and `--check` cannot be combined. `--zip` cannot be combined with either. `--camera-settings` cannot be combined with restore, check, or a local source. Catalog rebuild accepts only its path, `--preview`, and `--no-pause`. `--check --preview` prints an explanation and exits without performing the check; run checks without preview.
 
 | Exit code | Meaning |
-|---|---|
-| `0` | Success, preview completed, or user cancelled. |
-| `1` | Could not start/plan the operation: bad arguments, inaccessible files, no usable source/history, insufficient space, or an unexpected error. |
-| `2` | A backup, restore, or integrity check finished with failures. |
+| --- | --- |
+| `0` | Completed, previewed, declined, or cancelled without an operational failure. Check the summary to distinguish these outcomes. |
+| `1` | Could not start/complete the requested workflow because of an error, invalid input, or prerequisite failure. |
+| `2` | Backup/restore reported failed work, or an integrity check found damaged/missing content. |
 
-Unknown arguments and missing argument values are errors. The program remains interactive even with `--no-pause`; that option only suppresses the final exit prompt. A history lock prevents two instances writing the same history concurrently. It does not prevent another application or another history from accessing the same card.
+**Ctrl+C** requests cancellation. Do not treat exit code zero alone as proof that a scheduled backup completed: review the output/status. `--no-pause` does not make the app fully noninteractive.
 
-`--camera-settings` captures X100VI recipes and shooting settings. It cannot be combined with `--restore`, `--check` or `--source`; `--profile`, `--zip` and `--preview` are supported.
+## Troubleshooting
+
+| Symptom | What to check |
+| --- | --- |
+| Device not detected | Check its USB mode and data cable. Retry Detect device. For a drive/card, browse to it under More options. For a local source, select the appropriate device type. |
+| X100VI settings option missing | Connect one X100VI in USB RAW CONV./BACKUP RESTORE and detect again. Close camera applications that may hold the connection. |
+| Restore list empty | Detect the correct device type and confirm the backup location/profile locations. Backups need valid explicit device metadata; folder names alone do not identify them. |
+| Restore points cannot load | Inspect the error in the app. Keep the entire metadata/content folder intact; try a catalog rebuild if the index is damaged. Rebuild does not restore missing objects. |
+| Files unexpectedly marked changed | Check size and timestamp differences. The normal comparison tolerates two seconds. Enable content comparison when timestamps are unreliable; MTP mirroring can add read time. |
+| Backup occupies more space than expected | Count separate full sets, retained changed content, ZIP exports, and MTP mirrors. Browsable point-in-time history can add a second copy; a single store avoids that duplicate inside its set. |
+| Settings ignored | Check installed AppData versus portable executable-folder INIs, then device/profile overrides. Both interfaces share the same effective settings. |
+| Path/name warning | Shorten the backup location or source names. Name warnings depend on the device profile. Excessive Windows paths can prevent an operation. |
+| Eject not offered or fails | Only eligible positively detected USB drives can be ejected. Close applications using the drive. MTP devices and manually selected folders are not ejected this way. |
+| Interrupted backup | Check its Incomplete/Failed status and operation report. The app can offer to resume eligible incomplete full backups; an uncommitted single-store run does not replace the previous completed point. |
+
+Source, backup, and recovery locations must not overlap in unsafe ways. Junctions/symbolic links and paths that escape their expected roots are rejected. Use ordinary folders rather than trying to bypass those checks.
 
 ## Building and testing
 
-Building needs **Visual Studio Build Tools** with the ".NET desktop build tools" workload, which provides the C# compiler. The code is C# 7.3, the newest version Microsoft supports for .NET Framework, and the programs still run on .NET Framework 4.6 or newer, so users need nothing extra. The scripts find the compiler with `vswhere`; set `GEARBACKUP_CSC` to a `csc.exe` to use another one.
+For source builds, install **Visual Studio Build Tools** with **.NET desktop build tools**. The shared compiler script selects a supported C# compiler (C# 7.3); no NuGet packages or .NET SDK are required for the app. **PowerShell 7** is required for HTML manual generation. Packaging also requires the **Inno Setup** compiler.
 
-Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` with that compiler and Windows notification metadata.
+From the repository root:
 
-Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same compiler. The GUI build also generates `Manual.html` plus `Manual-original.html`, `Manual-original-dark.html` and `Manual-retro.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
+```powershell
+# CLI and GUI; --no-pause is for the build wrapper
+.\build.cmd --no-pause
+.\build-gui.cmd --no-pause
 
-Both wrappers use `build\build-app.ps1` for the compiler (found by `build\csharp-compiler.ps1`, which the test scripts also use), framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
+# Standard and portable installer packages, plus SHA-256 files in dist
+.\build-installer.cmd
 
-For a release, update `AppIdentity.Version` and its numeric `BinaryVersion` in `src\AppIdentity.cs`, and match the numeric version in `gui\app.manifest`, then run `build-installer.cmd` with PowerShell 7 and Inno Setup installed. It rebuilds both executables, reads their shared product version, and writes `dist\GearBackup-Setup-<version>.exe` and `dist\GearBackup-Portable-<version>.exe`, each with a SHA-256 file. An explicit `-Version` must match the application version. Product metadata and the GUI's About dialog show the display version (such as `0.9.0A`); Windows file and assembly versions use the numeric version (such as `0.9.0.1`).
+# Regenerate all offline manual styles into a chosen folder
+pwsh -NoProfile -File build\build-manual.ps1 -OutputDirectory dist\manual
 
-Run `pwsh -File tests\run-installer-tests.ps1` after building to check installation, shortcuts, offline documentation, version metadata, CLI/GUI startup, upgrade and uninstall. The test refuses to run when a Gear Backup installation or its Start menu folder already exists; use a separate Windows user account in that case. It creates an isolated application folder and temporary per-user registration/shortcuts, then uninstalls it. Logs and the deliberately preserved test INI stay under `.test-runs`.
+# Core and GUI tests
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
 
-Run `pwsh -File tests\run-cli-path-tests.ps1` to test the installer's PATH routines against an isolated temporary registry key. It checks duplicate detection, upgrades, relocation, deselection and uninstall cleanup without changing your actual PATH.
+# Packaging and PATH checks
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-installer-tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-portable-tests.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-cli-path-tests.ps1
+```
 
-Run `pwsh -File tests\run-portable-tests.ps1` to check portable extraction, version metadata, offline pictures, updates that preserve settings/user files, and CLI/GUI startup after moving the folder. It also checks that Gear Backup shortcuts and uninstall registration remain unchanged. Portable fixtures and logs stay under `.test-runs`.
-
-If `GearBackup.exe` is running and Windows locks it, use `build.cmd --no-pause GearBackup.updated.exe` to build a separate executable. Local builds use the same INI beside the executable. Close the running program before replacing the usual executable.
-
-Run `tests\run-tests.ps1` to compile and run the filesystem integration tests. Each area runs as a named, independent test with its own fixture folder; a failing test is reported and the run continues, ending with a list of every test's result and where the failed check is. They create isolated fixtures under `.test-runs` (removed after a passing run; kept after a failure, or always with `GEAR_KEEP_TEST_FIXTURES=1`), use synthetic songs/card folders, and exclude desktop notification code. They cover backup/resume, history, corruption, restore, bundles, dependency parsing, previews, profiles, and recovery settings/failures. Tests are grouped by area: `BackupTests.cs`, `RestoreTests.cs`, `DeviceTests.cs` (device profiles, MTP mirrors and each device), `SecurityTests.cs` (links, temporary files, malformed manifests), `FujiSettingsTests.cs`, `ManagementTests.cs`, and `HelperTests.cs` for the helpers behind those workflows: change summaries, name warnings, leftover and old-version detection, the 2-second time tolerance, path safety, checksum lists, settings, retention, the resume question, and zip failures. `TestRunner.cs` holds the runner and shared fixtures; the test scripts compile every file in `tests`. Retention tests answer "no", so nothing is moved to the Recycle Bin. They do not write to a connected M8 or test hardware ejection.
-
-Safety tests also cover linked mirror roots, broken junctions, file symbolic links, MTP disconnection during a partial transfer, preservation of extra files after a partially failed exact restore, and malformed snapshot manifests. The file symbolic-link test needs Windows Developer Mode or symbolic-link privilege (for example, an elevated test session). Without it, that test reports `SKIP` with the reason and is excluded from the passed-test count; junction tests and other safety tests still run. A passing summary with a skip does not mean every link case was verified.
-
-Both suites also run automatically on GitHub for every pull request and every push to `main` (`.github\workflows\tests.yml`), on a Windows runner; a failed run keeps its test folders as a downloadable artifact for a week.
-
-For performance measurements, run `pwsh -File benchmarks\run-benchmarks.ps1 -Iterations 5`. It measures small-file and large-file full backups, unchanged incrementals, disk verification, and Dashboard/Storage scans against generated fixtures. `-SourceRef <commit-or-tag>` measures an earlier version without changing the working tree. See `benchmarks\README.md` in the source repository for CSV comparison and measurement limits. Correctness tests in `PerformanceTests.cs` cover metadata-only scans, unchanged-backup fallbacks, and reusable copy/hash buffers.
-
-Run `tests\run-gui-tests.ps1` for hidden Windows Forms integration tests. They drive the actual dialogs and background workers against temporary card folders, exercising preview, backup, incremental history, restore, checking, cancellation, and shared-settings persistence. They do not use a connected M8 or modify the project's INI file.
-
-`tests\ManagementTests.cs` covers device/profile inheritance, destination discovery, storage accounting, dashboard records, cleanup locks and stale scans, protection of ordinary dated filenames, and safe recipe parsing/decoding. GUI tests also exercise the four tool windows at 150% and 200% scaling and run a backup with profile-specific destinations and inherited device preferences. Cleanup tests use isolated fixture files and a replacement recycling callback; they do not recycle personal backups.
-
-Each source file holds either one static class of related helpers (for example `PathSafety` in `PathValidation.cs`, `Snapshots`, `StorageCatalog`, `Workflow`) or ordinary classes (engines, models, windows); there is no shared container class. Files import the helpers they use with `using static`, and members are `internal` only when other files use them. The CLI starts in `Program`, the GUI in `GearGui`, and the tests are a separate `partial class Tests` that uses the same internal members. Instance engines accept an `OperationContext` containing the frontend interaction adapter and a cancellation token, and return an `OperationResult` with exit status, summary, cancellation state, and elapsed time. Plan reviews and structured progress go through `IOperationInteraction`; the engines do not read or write the console directly. `ConsoleInteraction` supplies the CLI frontend, and `GuiInteraction` supplies Windows Forms dialogs, marshals decisions to the UI thread, and batches progress/log updates. Each synchronous operation activates its context on its worker thread. Both frontends hold the history lock around mutations.
-
-Backup file traversal skips metadata folders before descending into them, so normal browsing, checksum-list writing, and retention do not scan history objects as user files.
-
-| File | Responsibility |
-|---|---|
-| `AppIdentity.cs` | Shared product identity and current storage names. |
-| `AssemblyInfo.cs` | Executable metadata using the shared application name and release version. |
-| `Program.cs` | CLI arguments, source selection and menu. |
-| `FujiPtp.cs` | Windows PTP settings reads and restricted recipe read-bank selection. |
-| `FujiSettings.cs` | X100VI capability validation, capture, selector restoration, XML export and settings backup workflow. |
-| `FujiRecipes.cs` | Safe export parsing and readable recipe values/text. |
-| `BackupCatalog.cs` | Dashboard metadata, storage accounting and guarded cleanup. |
-| `RestoreCatalog.cs` | Device-filtered SQL restore inventory, saved-run selection and validated full/individual restore requests. |
-| `BackupDatabase.cs` / `SqliteDatabase.cs` | Rebuildable backup inventories, per-file integrity records and the Windows SQLite adapter. |
-| `VersionCatalog.cs` | Known retained versions, protecting ordinary dated source filenames. |
-| `ProfileSettings.cs` | Device/profile overrides (`GearBackup.Profiles.ini`), validation, inheritance and location discovery. |
-| `Session.cs` | Workflow steps shared by the CLI and GUI: detecting and preparing a source (device, preferences, history), running the backup or restore, check target, history lock, resume question, same-device check before ejecting. |
-| `Config.cs` | The settings table: every setting's INI key, default, explanation, parsing and Profiles-window label, used for loading, saving and overrides. |
-| `Workflow.cs` | Profiles, previews, status, atomic metadata writes. |
-| `PathValidation.cs` | Path normalization, containment, link rejection, and safe relative paths. |
-| `BackupTraversal.cs` | User-content traversal that skips history metadata folders. |
-| `Backup.cs` | CLI backup entry, retention, source scanning, version naming. |
-| `BackupEngine.cs` | Full/incremental execution, resume, space planning and completion status. |
-| `BackupReport.cs` | Statistics formatting and report-file output; execution and completion status stay in the engine. |
-| `Snapshots.cs` | Manifests, deduplicated objects, historical selection and integrity checks. |
-| `Restore.cs` | CLI restore selection, bundles, file validation, recovery helpers. |
-| `RestoreEngine.cs` | Restore planning and execution, staged replacements, exact removal. |
-| `IntegrityEngine.cs` | Integrity-check execution and result handling. |
-| `Operations.cs` | Frontend interface, plans, progress/results, cancellation context, output adapter. |
-| `Dependencies.cs` | Bounded firmware-6 sample-reference extraction. |
-| `Checksums.cs` | Browsable-file checksum lists and check menu. |
-| `FileCopy.cs` | Copying/hashing, verification, free-space checks. |
-| `Changes.cs` | Song summaries and filename warnings. |
-| `Devices.cs` | Device profiles: what identifies each device, its song files, bundles and song reader. The M8 is the first profile. |
-| `UsbDevices.cs` | Finding a connected device's drive by its profile, and safe ejection. |
-| `MtpDevice.cs` | Reading MTP devices (OP-1 Field) through Windows' Portable Devices API. Read-only. |
-| `MtpMirror.cs` | Mirroring an MTP device into a local folder, which is then backed up. |
-| `Notifications.cs` | Windows notifications. |
-| `ConsoleUi.cs` | Console prompts and formatting. |
-| `gui\GuiProgram.cs` | Windows Forms startup and preview rendering. |
-| `gui\MainForm.cs` | Window layout, UI events, display updates, and settings capture. |
-| `gui\MainForm.Navigation.cs` | Device/Backup/Restore tabs, operation selection and independent source/destination inputs. |
-| `gui\MainForm.BackupSets.cs` | Full-set naming and incremental selection. |
-| `gui\MainForm.Restore.cs` | Device-filtered backup/run selectors, asynchronous SQL inventory loading and individual selection capture. |
-| `gui\Dialogs\RestoreBrowserDialog.cs` | Checked folder/file tree and reusable selections. |
-| `gui\DeviceInformation.cs` | Read-only drive capacity and connection overview for detected devices. |
-| `gui\GuiOperationRunner.cs` | Background-worker lifetime, cancellation, operation coordination, history locks, detection/ejection. |
-| `gui\GuiInteraction.cs` | Adapts engine decisions and progress to GUI dialogs and display callbacks. |
-| `gui\GuiTheme.cs` | Shared colors and control styling. |
-| `gui\GuiProgressBar.cs` | Custom progress rendering. |
-| `gui\Dialogs\` | Shared dialog frame, selection, preview, choices, search, settings, and folder picker. |
+The installer build refreshes both executables and the manuals before packaging them. App version information comes from `src/AppIdentity.cs`. Gear Backup is licensed under **GPL-3.0**; see the included `LICENSE` and the [project repository](https://github.com/bondis2k/Gear-Backup).
