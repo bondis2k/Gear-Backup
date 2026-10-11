@@ -6,6 +6,9 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+### Added
+- An incremental backup can be given an optional name on the Backup tab. The Restore tab lists it beside the date and time (`Incremental · Studio jam · 2026-10-11_14.32.08`), and the command-line restore picker shows it too. It is saved with the restore point in both storage layouts.
+
 ### Changed
 - Backups with a single content store are much faster, most of all when little has changed. Every backup rebuilds its catalog from all saved restore points, and each entry was re-checked for links by walking its whole path, so the time grew with every restore point saved. Each content object and folder is now checked once. A backup of an M8 card with 3,167 unchanged files went from 76 s to about 2 s.
 

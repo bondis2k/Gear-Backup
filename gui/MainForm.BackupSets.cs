@@ -8,6 +8,8 @@ using System.Windows.Forms;
 internal sealed partial class MainForm
 {
     readonly TextBox fullBackupName = new TextBox { Name = "FullBackupName", AccessibleName = "Name for this full backup", MaxLength = 80, Dock = DockStyle.Fill };
+    readonly TextBox incrementalName = new TextBox { Name = "IncrementalBackupName", AccessibleName = "Name for this incremental backup", MaxLength = 80, Dock = DockStyle.Fill };
+    Label incrementalNameCaption;
     readonly ComboBox incrementalBackup = new ComboBox { Name = "IncrementalBackup", AccessibleName = "Full backup to update", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     Control backupSetField;
     Label backupSetCaption;
@@ -29,6 +31,10 @@ internal sealed partial class MainForm
         panel.Controls.Add(backupSetCaption);
         panel.Controls.Add(new FieldPanel(fullBackupName) { Dock = DockStyle.Fill, Margin = Padding.Empty });
         panel.Controls.Add(incrementalBackup);
+        incrementalNameCaption = FieldLabel("Name for this incremental backup (optional)");
+        incrementalNameCaption.Margin = new Padding(0, 10, 0, 0);
+        panel.Controls.Add(incrementalNameCaption);
+        panel.Controls.Add(new FieldPanel(incrementalName) { Dock = DockStyle.Fill, Margin = Padding.Empty });
         GuiTheme.StyleComboBox(incrementalBackup);
         incrementalBackup.DropDown += delegate { if (!loadingBackupSets) RefreshBackupSets(); };
         backupSetField = panel;
@@ -41,6 +47,7 @@ internal sealed partial class MainForm
         backupSetField.Visible = full || incremental;
         fullBackupName.Parent.Visible = full;
         incrementalBackup.Visible = incremental;
+        incrementalNameCaption.Visible = incrementalName.Parent.Visible = incremental;
         backupSetCaption.Text = full ? "Name for this backup (optional)" : "Full backup to update";
         if (incremental && !runner.IsBusy) RefreshBackupSets();
     }

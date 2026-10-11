@@ -482,6 +482,12 @@ partial class Tests
             Assert(start.Enabled && preview.Enabled, "going back from Restore to a full backup re-enables Back up and Preview");
             form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.IncrementalBackup);
             Assert(start.Enabled && preview.Enabled, "going back from Restore to an incremental backup re-enables Back up and Preview");
+            var fullName = (TextBox)form.Controls.Find("FullBackupName", true)[0];
+            var incrementalName = (TextBox)form.Controls.Find("IncrementalBackupName", true)[0];
+            form.SelectOperation(GuiOperation.FullBackup);
+            Assert(fullName.Parent.Visible && !incrementalName.Parent.Visible, "a full backup asks for the set name only");
+            form.SelectOperation(GuiOperation.IncrementalBackup);
+            Assert(!fullName.Parent.Visible && incrementalName.Parent.Visible && incrementalName.Visible, "an incremental backup can be given its own name");
             form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.Check);
             Assert(start.Enabled && !preview.Enabled, "Check is available without a preview");
         }

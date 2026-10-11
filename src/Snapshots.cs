@@ -44,7 +44,7 @@ static class Snapshots
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
     // The file's content is stored once in .gearbackup\objects\<sha256>.
-    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false)
+    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false, string customName = null)
     {
         var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -95,7 +95,7 @@ static class Snapshots
         }
         string name = RestorePointNames.Create(backup, started, incremental);
         AtomicText(Path.Combine(SnapshotRoot(backup), name + ".manifest"), rows.ToString());
-        RestorePointNames.SaveMetadata(backup, name, started, incremental);
+        RestorePointNames.SaveMetadata(backup, name, started, incremental, customName);
         OperationOutput.WriteLine("  Point-in-time snapshot saved: " + name);
     }
 
@@ -145,6 +145,7 @@ static class Snapshots
             }
         }
         result.TakenUtc = RestorePointNames.TakenUtc(backup, result.Name);
+        result.CustomName = RestorePointNames.ReadName(backup, result.Name);
         return result;
     }
 
@@ -159,7 +160,8 @@ static class Snapshots
         foreach (string file in files)
         {
             string name = Path.GetFileNameWithoutExtension(file);
-            names.Add(name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            string custom = RestorePointNames.ReadName(backup, name);
+            names.Add((custom == null ? "" : custom + " · ") + name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         }
         int pick = AskItem("Restore from which saved point in time?", names,
             ContentStoreBackup.IsSingle(backup) ? "Latest restore point" : "Current backup files (no snapshot)");
@@ -251,6 +253,7 @@ internal class Snapshot
 {
     public string Name;
     public DateTime TakenUtc;
+    public string CustomName; // optional name the user gave this restore point
     public List<RestoreEntry> Files = new List<RestoreEntry>();
     public List<string> Folders = new List<string>();
     public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -164,4 +164,36 @@ partial class Tests
         BackupDatabase.Rebuild(backup);
         Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-02_23.59.58", "the same clock time on another day is a separate, later point");
     }
+
+    // An incremental backup can be given a name, shown beside its date and time in both storage layouts.
+    static void TestIncrementalBackupNames(string dir)
+    {
+        foreach (bool single in new[] { false, true })
+        {
+            string root = Folder(dir, "incremental-names-" + single), source = Folder(root, "source");
+            Put(Path.Combine(source, "one.m8s"), "FULL");
+            var config = new Config { BackupFolder = root, Preview = false, SingleContentStore = single, PointInTimeHistory = true };
+            string history = Path.Combine(Session.HistoriesRoot(config), "profiles", "Names"), backup;
+            using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
+                backup = RunBackup(source, history, null, false, config).OutputFolder;
+            Put(Path.Combine(source, "one.m8s"), "FIRST");
+            config.IncrementalBackupName = "  Studio jam  ";
+            RunBackup(source, history, backup, true, config);
+            Put(Path.Combine(source, "one.m8s"), "SECOND");
+            config.IncrementalBackupName = null;
+            RunBackup(source, history, backup, true, config);
+            for (int pass = 0; pass < 2; pass++)
+            {
+                if (pass == 1) BackupDatabase.Rebuild(backup);
+                RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
+                Assert(set.Sqlite && set.Points.Count == 4, "named and unnamed incremental points are listed (layout single=" + single + ")");
+                Assert(set.Points[1].Label == "Incremental · Studio jam · " + set.Points[1].Id, "an incremental name appears beside its date and time");
+                Assert(set.Points[0].Label == "Incremental · " + set.Points[0].Id, "an unnamed incremental point shows only its date and time");
+            }
+            string named = Path.Combine(SnapshotRoot(backup), RestoreCatalog.Load(backup, Devices.M8).Points[1].Id + ".manifest");
+            Assert(ReadSnapshot(backup, named).CustomName == "Studio jam", "the name is saved with the restore point, trimmed");
+            config.IncrementalBackupName = new string('x', 81);
+            Throws(() => RunBackup(source, history, backup, true, config), "an incremental name over 80 characters is refused");
+        }
+    }
 }

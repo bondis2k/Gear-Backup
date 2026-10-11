@@ -97,6 +97,7 @@ internal static class BackupDatabase
             data.RestorePoints.Add(snapshot.Name);
             data.PointKinds[snapshot.Name] = ReadPointKind(backup, snapshot.Name);
             data.PointTimes[snapshot.Name] = snapshot.TakenUtc;
+            if (snapshot.CustomName != null) data.PointNames[snapshot.Name] = snapshot.CustomName;
             foreach (string folder in snapshot.Folders) Add(data, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
             foreach (var item in snapshot.Files)
             {
@@ -153,6 +154,7 @@ internal static class BackupDatabase
                 foreach (string point in data.RestorePoints) db.Execute("INSERT INTO restore_points VALUES (?)", point);
                 foreach (var kind in data.PointKinds) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_kind:" + kind.Key, kind.Value);
                 foreach (var time in data.PointTimes) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_taken:" + time.Key, time.Value.ToString("O", CultureInfo.InvariantCulture));
+                foreach (var named in data.PointNames) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + named.Key, named.Value);
                 db.Execute("COMMIT");
             }
             if (new FileInfo(local).Length > Records.ListLimit) throw new IOException("Backup catalog is too large.");
@@ -229,6 +231,14 @@ internal static class BackupDatabase
                             if (!DateTime.TryParseExact(times.String(1), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time) || time.Kind != DateTimeKind.Utc)
                                 throw new IOException("Invalid restore point capture time.");
                             result.PointTimes.Add(name, time);
+                        }
+                    using (var names = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_name:%'"))
+                        while (names.Read())
+                        {
+                            if (result.PointNames.Count >= RowLimit) throw new IOException("Too many restore point names.");
+                            string name = names.String(0).Substring(11), custom = names.String(1);
+                            if (custom == null || custom.Length == 0 || custom.Length > 80) throw new IOException("Invalid restore point name.");
+                            result.PointNames[name] = custom;
                         }
                     using (var kinds = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_kind:%'"))
                         while (kinds.Read())
@@ -341,6 +351,7 @@ internal sealed class CatalogData
     internal readonly List<string> RestorePoints = new List<string>();
     internal readonly Dictionary<string, string> PointKinds = new Dictionary<string, string>(StringComparer.Ordinal);
     internal readonly Dictionary<string, DateTime> PointTimes = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+    internal readonly Dictionary<string, string> PointNames = new Dictionary<string, string>(StringComparer.Ordinal);
     internal string InventoryStamp, InventoryGeneration;
     internal readonly List<CatalogEntry> Files = new List<CatalogEntry>();
     internal readonly List<CatalogCheckRun> Checks = new List<CatalogCheckRun>();

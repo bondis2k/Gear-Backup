@@ -179,7 +179,7 @@ internal sealed class ContentStoreBackup
                     .Append('\t').Append(item.CreatedTicks.ToString(CultureInfo.InvariantCulture)).Append('\n');
             manifest = SafePath(SnapshotRoot(backup), snapshot.Name + ".manifest");
             AtomicText(manifest, rows.ToString());
-            RestorePointNames.SaveMetadata(backup, snapshot.Name, started, incremental);
+            RestorePointNames.SaveMetadata(backup, snapshot.Name, started, incremental, incremental ? config.IncrementalBackupName : null);
             AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"), snapshot.Name + "\n");
             committed = true;
             SetBackupStatus(backup, Status.Complete);
@@ -206,7 +206,7 @@ internal sealed class ContentStoreBackup
             {
                 try
                 {
-                    foreach (string path in new[] { manifest, Path.ChangeExtension(manifest, ".kind"), Path.ChangeExtension(manifest, ".taken") })
+                    foreach (string path in new[] { manifest, Path.ChangeExtension(manifest, ".kind"), Path.ChangeExtension(manifest, ".taken"), Path.ChangeExtension(manifest, ".name") })
                     { RejectRootLinks(path); TryDelete(path); }
                 }
                 catch (Exception ex) { OperationOutput.WriteLine("  Could not remove unpublished restore point: " + ex.Message); }
