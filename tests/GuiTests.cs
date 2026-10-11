@@ -299,6 +299,7 @@ partial class Tests
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestThemeReadability();
         TestActionButtonsFollowOperation();
+        TestFolderPicker();
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
@@ -500,6 +501,75 @@ partial class Tests
             form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.Check);
             Assert(start.Enabled && !preview.Enabled, "Check is available without a preview");
         }
+    }
+
+    // Browse buttons open the app's own folder picker, which follows the colour theme (Windows' picker does not).
+    static void TestFolderPicker()
+    {
+        // Under the working folder, not the temp folder: temp can be a short 8.3 path on a build machine.
+        string top = Path.Combine(Environment.CurrentDirectory, ".test-runs", "gear-folder-picker-" + Guid.NewGuid().ToString("N")), deep = Path.Combine(top, "Songs", "Demos");
+        Directory.CreateDirectory(deep); Directory.CreateDirectory(Path.Combine(top, "Samples"));
+        try
+        {
+            // A short 8.3 spelling of the same folder (where the drive makes them) opens on the real folder too.
+            string shortDeep = ShortPathOf(deep);
+            if (shortDeep != deep)
+                using (var shortPicker = new FolderPickerDialog("Choose a folder", shortDeep, false))
+                {
+                    var shortTree = (TreeView)shortPicker.Controls.Find("FolderTree", true)[0];
+                    Assert(shortTree.SelectedNode != null && shortTree.SelectedNode.Text == "Demos" && ((TextBox)shortPicker.Controls.Find("FolderPath", true)[0]).Text == deep,
+                        "the folder picker opens on a folder given by its short 8.3 path");
+                }
+            using (var picker = new FolderPickerDialog("Choose a folder", deep, true))
+            using (var automation = new System.Windows.Forms.Timer { Interval = 50 })
+            {
+                int step = 0; Exception failure = null;
+                var tree = (TreeView)picker.Controls.Find("FolderTree", true)[0];
+                var path = (TextBox)picker.Controls.Find("FolderPath", true)[0];
+                var message = picker.Controls.Find("FolderPickerMessage", true)[0];
+                automation.Tick += delegate {
+                    try
+                    {
+                        if (step == 0)
+                        {
+                            Assert(tree.SelectedNode != null && tree.SelectedNode.Text == "Demos" && path.Text == deep, "the folder picker opens on the current folder");
+                            Assert(picker.Controls.Find("NewFolder", true).Length == 1, "the folder picker can make a new folder when asked to");
+                            Assert(tree.BackColor == GuiTheme.Surface && tree.ForeColor == GuiTheme.Ink, "the folder picker uses the theme's colours");
+                            TreeNode songs = tree.SelectedNode.Parent;
+                            foreach (TreeNode sibling in songs.Parent.Nodes) if (sibling.Text == "Samples") tree.SelectedNode = sibling;
+                            Assert(path.Text == Path.Combine(top, "Samples"), "choosing a folder in the tree fills in its path");
+                            path.Text = Path.Combine(top, "Missing");
+                            picker.Accept.PerformClick();
+                        }
+                        else if (step == 1)
+                        {
+                            Assert(picker.Visible && message.Text.Length != 0, "a folder that does not exist is not accepted");
+                            path.Text = Path.Combine(top, "Songs");
+                            picker.Accept.PerformClick();
+                        }
+                    }
+                    catch (Exception ex) { failure = ex; picker.DialogResult = DialogResult.Cancel; }
+                    step++;
+                };
+                automation.Start();
+                picker.ShowDialog();
+                automation.Stop();
+                if (failure != null) throw failure;
+                Assert(picker.DialogResult == DialogResult.OK && picker.SelectedPath == Path.Combine(top, "Songs"), "the folder picker returns the chosen folder");
+            }
+            using (var picker = new FolderPickerDialog("Choose a folder", null, false))
+                Assert(picker.Controls.Find("NewFolder", true).Length == 0, "the folder picker offers no new folder when the folder must exist");
+        }
+        finally { try { Directory.Delete(top, true); } catch (IOException) { } }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern uint GetShortPathName(string longPath, System.Text.StringBuilder shortPath, uint size);
+    static string ShortPathOf(string path)
+    {
+        var buffer = new System.Text.StringBuilder(1024);
+        uint length = GetShortPathName(path, buffer, (uint)buffer.Capacity);
+        return length > 0 && length < buffer.Capacity ? buffer.ToString() : path;
     }
 
     static double ThemeContrast(Color a, Color b)

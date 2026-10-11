@@ -32,7 +32,7 @@ internal sealed class RecipeViewerDialog : ToolsDialog
         recipe.SelectedIndexChanged += delegate { DisplayRecipe(); };
 
         ToolButton("Open backup folder", "OpenRecipeFolder", delegate {
-            using (var picker = new FolderBrowserDialog { Description = "Choose an X100VI settings backup folder" })
+            using (var picker = new FolderPickerDialog("Choose an X100VI settings backup folder", null, false))
                 if (picker.ShowDialog(this) == DialogResult.OK) LoadFolder(picker.SelectedPath);
         }, true);
         ToolButton("Open XML", "OpenRecipeXml", delegate {
