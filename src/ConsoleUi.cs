@@ -197,7 +197,7 @@ partial class GearBackup
         OperationContext.Current.Progress(Stage.BackupCopy, "", processedBytes, totalBytes, done, total);
     }
 
-    static string FormatSize(long bytes)
+    internal static string FormatSize(long bytes)
     {
         string[] units = { "B", "KB", "MB", "GB", "TB" };
         double size = bytes;

@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using static PathSafety;
 
 partial class GearBackup
 {
@@ -149,7 +150,7 @@ partial class GearBackup
     }
 
     // The device the current operation works with (set by the front end once the source is known).
-    static DeviceProfile CurrentDevice { get { return OperationContext.Current.Device; } }
+    internal static DeviceProfile CurrentDevice { get { return OperationContext.Current.Device; } }
 
     // The kind of device a source is: the Device setting when it names one, otherwise the detected
     // device, otherwise the device whose marker file is at the top of the source (a card in a reader),

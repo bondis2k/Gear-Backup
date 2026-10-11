@@ -6,13 +6,14 @@ using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
+using static GearBackup;
 
-partial class GearBackup
+static class FileCopy
 {
-    enum FileState { New, Changed, Same }
+    internal enum FileState { New, Changed, Same }
 
     // Same size and modified time (within FAT's 2 s resolution) counts as the same file.
-    static FileState Compare(FileInfo file, string otherPath)
+    internal static FileState Compare(FileInfo file, string otherPath)
     {
         var other = new FileInfo(otherPath);
         if (!other.Exists) return FileState.New;
@@ -25,13 +26,13 @@ partial class GearBackup
         return Math.Abs((other.LastWriteTimeUtc - file.LastWriteTimeUtc).TotalSeconds) <= 2 ? FileState.Same : FileState.Changed;
     }
 
-    static bool UsableFileTime(DateTime time)
+    internal static bool UsableFileTime(DateTime time)
     {
         return time >= new DateTime(1980, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     }
 
     // Exact comparison for missing timestamps; no SHA-256 calculation/comparison.
-    static bool FilesEqual(string first, string second)
+    internal static bool FilesEqual(string first, string second)
     {
         using (var a = new FileStream(first, FileMode.Open, FileAccess.Read, FileShare.Read))
         using (var b = new FileStream(second, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -39,27 +40,20 @@ partial class GearBackup
             if (a.Length != b.Length) return false;
             byte[] left = new byte[65536], right = new byte[65536];
             int count;
-            while ((count = ReadBlock(a, left)) > 0)
+            while ((count = ReadChunk(a, left)) > 0)
             {
                 OperationContext.Current.Progress(Stage.Comparing, first, a.Position, a.Length);
-                if (ReadBlock(b, right) != count) return false;
+                if (ReadChunk(b, right) != count) return false;
                 for (int i = 0; i < count; i++) if (left[i] != right[i]) return false;
             }
             return b.ReadByte() == -1;
         }
     }
 
-    static int ReadBlock(Stream stream, byte[] buffer)
-    {
-        int count = 0, read;
-        while (count < buffer.Length && (read = stream.Read(buffer, count, buffer.Length - count)) > 0) count += read;
-        return count;
-    }
-
     // Copies a file (target must not exist yet) and returns the SHA-256 checksum of the original.
     // With verify, the copy is read back and compared; a mismatch is retried once, then reported as a failure.
     // A failed copy never leaves a partial file behind.
-    static string CopyFile(FileInfo file, string target, bool verify)
+    internal static string CopyFile(FileInfo file, string target, bool verify)
     {
         if (File.Exists(target)) throw new IOException("the target file already exists");
         file.Refresh();
@@ -94,7 +88,7 @@ partial class GearBackup
 
     // Creates `link` as a second name for `existing`. False where hard links aren't supported
     // (FAT, exFAT, most network shares) or fail for any other reason; callers then copy instead.
-    static bool TryHardLink(string existing, string link)
+    internal static bool TryHardLink(string existing, string link)
     {
         try { return CreateHardLink(link, existing, IntPtr.Zero); }
         catch (Exception) { return false; }
@@ -113,7 +107,7 @@ partial class GearBackup
 
     // Identifies the file on disk behind a hard-linked name ("volume:index"), so a check can skip
     // reading the same content twice. Null for a file with only one name, or if it can't be read.
-    static string SharedFileId(string path)
+    internal static string SharedFileId(string path)
     {
         try
         {
@@ -128,23 +122,23 @@ partial class GearBackup
     }
 
     // NTFS supports hard links; the history store then needs no extra space for file content.
-    static bool SupportsHardLinks(string path)
+    internal static bool SupportsHardLinks(string path)
     {
         try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))).DriveFormat == "NTFS"; }
         catch (Exception) { return false; }
     }
 
-    static void TryDelete(string path)
+    internal static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { }
     }
 
-    static string ToHex(byte[] hash)
+    internal static string ToHex(byte[] hash)
     {
         return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
     }
 
-    const int ChunkSize = 1 << 20;
+    internal const int ChunkSize = 1 << 20;
 
     // Windows' own SHA-256 (CNG). Measured about 10% faster than SHA256.Create() on a current PC;
     // on older .NET Framework setups, where SHA256.Create() is the managed implementation, the gap is larger.
@@ -154,7 +148,7 @@ partial class GearBackup
         catch (Exception) { return SHA256.Create(); }
     }
 
-    static string CopyAndHash(string from, string to)
+    internal static string CopyAndHash(string from, string to)
     {
         OperationContext.Current.CheckCancellation();
         using (var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
@@ -165,7 +159,7 @@ partial class GearBackup
     // Copies `input` to `output` and returns the SHA-256 of the content. The next chunk is read in the
     // background while the current one is hashed and written, so the card and the backup disk work at
     // the same time instead of taking turns.
-    static string CopyAndHash(Stream input, Stream output, string label)
+    internal static string CopyAndHash(Stream input, Stream output, string label)
     {
         using (HashAlgorithm sha = NewSha256())
         {
@@ -219,7 +213,7 @@ partial class GearBackup
         }
     }
 
-    static string HashFile(string path)
+    internal static string HashFile(string path)
     {
         OperationContext.Current.CheckCancellation();
         using (HashAlgorithm sha = NewSha256())
@@ -253,7 +247,7 @@ partial class GearBackup
     // system refuses them (some network shares), this falls back to a normal read.
     // Unbuffered reads get no read-ahead from Windows, so the next chunk is read in the background while
     // the current one is hashed: measured 1.4-2.2x faster than taking turns (2 GB file on an NVMe SSD).
-    static string HashFileFromDisk(string path)
+    internal static string HashFileFromDisk(string path)
     {
         OperationContext.Current.CheckCancellation();
         using (SafeFileHandle file = CreateFile(path, GenericRead, ShareRead | ShareDelete, IntPtr.Zero,
@@ -309,7 +303,7 @@ partial class GearBackup
 
     // Returns an error message if the drive holding `path` has less than `needed` bytes free, otherwise null.
     // Network paths can't be checked this way; those are let through.
-    static string CheckFreeSpace(string path, long needed)
+    internal static string CheckFreeSpace(string path, long needed)
     {
         try
         {
@@ -323,14 +317,14 @@ partial class GearBackup
         return null;
     }
 
-    static string FreeSpaceText(string root)
+    internal static string FreeSpaceText(string root)
     {
         try { return FormatSize(new DriveInfo(root).AvailableFreeSpace); }
         catch (Exception) { return "unknown"; }
     }
 
     // "1.2 GB of 7.4 GB"; DriveInfo rejects network paths (\\server\share), which give "unknown".
-    static string DriveSpaceText(string root)
+    internal static string DriveSpaceText(string root)
     {
         try
         {

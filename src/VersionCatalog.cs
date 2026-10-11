@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using static PathSafety;
 
 // Which dated files in a backup are old versions the program kept (Song_2026-10-01_143000.m8s), as
 // opposed to the user's own files that happen to have a date in their name. Storage cleanup only offers

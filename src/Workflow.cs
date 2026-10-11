@@ -5,6 +5,8 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using static FileCopy;
+using static PathSafety;
 
 partial class GearBackup
 {

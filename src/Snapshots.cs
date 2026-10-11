@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using static FileCopy;
+using static PathSafety;
 
 partial class GearBackup
 {

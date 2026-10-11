@@ -8,6 +8,8 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
+using static FileCopy;
+using static PathSafety;
 
 partial class GearBackup
 {
