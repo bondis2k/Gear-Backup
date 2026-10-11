@@ -1170,6 +1170,9 @@ partial class Tests
             TreeNode songs = null, samples = null;
             foreach (TreeNode node in tree.Nodes) { if ((string)node.Tag == "Songs") songs = node; if ((string)node.Tag == "Samples") samples = node; }
             Assert(!songs.IsExpanded && !samples.IsExpanded && browser.ClientSize.Width <= 720, "the file browser starts with its folders collapsed in a moderate-width window");
+            var closeButton = (Button)browser.CancelButton;
+            Assert(browser.RectangleToClient(closeButton.RectangleToScreen(closeButton.ClientRectangle)).Bottom >= browser.ClientSize.Height - 40,
+                "tool window buttons sit at the bottom of the window with no dead space beneath them");
             songs.Checked = true;
             Assert(browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == "Songs" && !samples.Checked, "checking a folder selects its subtree without including other folders");
             TreeNode one = null; foreach (TreeNode node in songs.Nodes) if ((string)node.Tag == @"Songs\one.m8s") one = node;
