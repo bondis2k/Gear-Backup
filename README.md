@@ -4,7 +4,7 @@ Back up your music gear, camera and local folders on Windows. Gear Backup provid
 
 Make full or incremental backups, review changes before copying, and restore the files you need. Optional point-in-time history lets you return to an earlier state; turn it off when you prefer a smaller backup of the current files.
 
-[User manual](MANUAL.md) · [FAQ](FAQ.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
+[Quick start guide](QuickStartGuide.md) · [User manual](MANUAL.md) · [FAQ](FAQ.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
 
 Before version 1.0.0, only the current settings and backup formats are supported. No automatic migration or compatibility with earlier formats is provided.
 
@@ -70,7 +70,7 @@ Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the
 
 ## Settings and storage
 
-Installed copies store settings in `%APPDATA%\GearBackup`; portable copies and local builds store them beside the executables. Existing installed INI files are copied to AppData on first normal launch without overwriting newer files, and the originals are retained. Global preferences are stored in `GearBackup.ini`. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
+Installed copies store settings in `%APPDATA%\GearBackup`; portable copies and local builds store them beside the executables. Installed copies read settings only from AppData and do not import INI files from the executable folder. Global preferences are stored in `GearBackup.ini`. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Device & backup settings** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
 
 Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Original is the default.
 
