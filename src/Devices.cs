@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static PathSafety;
+using static ChangeSummary;
+using static SampleDependencies;
 
 partial class GearBackup
 {
@@ -140,7 +142,7 @@ partial class GearBackup
     // New backups remember their device even with a custom profile name. Older automatic histories
     // can still identify it through their name; unknown legacy histories use the caller's fallback.
     // A device this version doesn't know (a backup from a newer version) is treated like no record.
-    static DeviceProfile BackupDevice(string backup)
+    internal static DeviceProfile BackupDevice(string backup)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt");
         if (!File.Exists(path)) return HistoryDevice(backup);

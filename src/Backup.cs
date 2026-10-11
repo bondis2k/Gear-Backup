@@ -5,20 +5,21 @@ using System.IO;
 using System.Text.RegularExpressions;
 using static BackupTraversal;
 using static Checksums;
+using static GearBackup;
 
-partial class GearBackup
+static class Backups
 {
     // The date/time suffix added to old versions of updated files, e.g. "Song_2026-10-01_143000" or "..._2"
     static readonly Regex VersionSuffix = new Regex(@"_\d{4}-\d{2}-\d{2}_\d{6}(_\d+)?$");
 
     // The full result, including whether the backup was cancelled. Title is null if nothing was done.
-    static OperationResult RunBackup(string source, string backupRoot, string previous, bool incremental, Config config)
+    internal static OperationResult RunBackup(string source, string backupRoot, string previous, bool incremental, Config config)
     {
         return new BackupEngine().Run(source, backupRoot, previous, incremental, config, OperationContext.Current);
     }
 
     // Returns the exit code; title/summary are for the final notification (null if nothing was done).
-    static int Backup(string source, string backupRoot, string previous, bool incremental, Config config,
+    internal static int Backup(string source, string backupRoot, string previous, bool incremental, Config config,
                       out string title, out string summary)
     {
         OperationResult result = RunBackup(source, backupRoot, previous, incremental, config);
@@ -28,7 +29,7 @@ partial class GearBackup
     }
 
     // "Songs\Song.m8s" -> "Songs\Song_2026-10-01_143000.m8s" (adds _2, _3, ... if that name is taken)
-    static string VersionedName(string path, DateTime time)
+    internal static string VersionedName(string path, DateTime time)
     {
         string baseName = Path.Combine(Path.GetDirectoryName(path),
             Path.GetFileNameWithoutExtension(path) + "_" + time.ToString("yyyy-MM-dd_HHmmss"));
@@ -44,7 +45,7 @@ partial class GearBackup
     }
 
     // "Songs\Song_2026-10-01_143000.m8s" -> "Songs\Song.m8s"
-    static string OriginalName(string path)
+    internal static string OriginalName(string path)
     {
         string name = Path.GetFileNameWithoutExtension(path);
         return Path.Combine(Path.GetDirectoryName(path),
@@ -56,7 +57,7 @@ partial class GearBackup
     // considered, so a file of the user's own with a date in its name is never offered. Files that also
     // exist on the M8 under that name are never touched (e.g. a dated version that was restored to the M8).
     // Returns how many were moved.
-    static int PruneOldVersions(string backup, int keep, HashSet<string> onM8, HashSet<string> known)
+    internal static int PruneOldVersions(string backup, int keep, HashSet<string> onM8, HashSet<string> known)
     {
         var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (string path in BackupFiles(backup))
@@ -119,7 +120,7 @@ partial class GearBackup
     }
 
     // Backup folders (named yyyy-MM-dd or yyyy-MM-dd_HHmmss) in backupRoot, oldest first.
-    static List<string> ListBackups(string backupRoot)
+    internal static List<string> ListBackups(string backupRoot)
     {
         var backups = new List<string>();
         if (!Directory.Exists(backupRoot)) return backups;
@@ -139,7 +140,7 @@ partial class GearBackup
     }
 
     // Moves the oldest backups to the Recycle Bin (after asking) so only `keep` remain.
-    static void PruneBackups(string backupRoot, int keep, string current)
+    internal static void PruneBackups(string backupRoot, int keep, string current)
     {
         List<string> backups = ListBackups(backupRoot);
         backups.RemoveAll(b => string.Equals(b, current, StringComparison.OrdinalIgnoreCase));
@@ -186,7 +187,7 @@ partial class GearBackup
     //   Linux (.Trash-1000, .directory, .hidden, .xdg-volume-info, .goutputstream-*, .fuse_hidden*)
     // - Linux: the lost+found folder, FSCK*.REC files, and editor backup files ending in "~"
     // - Windows: Thumbs.db, ehthumbs.db (thumbnail caches) and desktop.ini (folder view settings)
-    static bool IsLeftover(string name, bool isFolder)
+    internal static bool IsLeftover(string name, bool isFolder)
     {
         if (name.StartsWith(".")) return true;
         if (isFolder) return name == "lost+found";
@@ -197,7 +198,7 @@ partial class GearBackup
     }
 
     // Walks the tree, skipping Windows system folders and leftovers from other computers (see IsLeftover).
-    static void CollectFiles(string dir, ScanResult scan)
+    internal static void CollectFiles(string dir, ScanResult scan)
     {
         OperationContext.Current.Progress(Stage.Scanning, dir, 0, 0, scan.Files.Count);
         try

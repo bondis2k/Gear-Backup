@@ -6,6 +6,8 @@ using System.Text;
 using System.Threading;
 using static PathSafety;
 using static Snapshots;
+using static Backups;
+using static RestoreFlow;
 
 class TestRunner
 {

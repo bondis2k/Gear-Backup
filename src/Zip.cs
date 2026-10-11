@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using static FileCopy;
 using static BackupTraversal;
 using static Checksums;
+using static Backups;
 
 partial class GearBackup
 {
@@ -25,7 +26,7 @@ partial class GearBackup
     // Zips the card's files and folders (empty ones included) plus checksums.sha256 and the statistics,
     // leaving out the .gearbackup history store, which only this program uses and would double the size.
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
-    static string ZipBackup(string backup)
+    internal static string ZipBackup(string backup)
     {
         var entries = new List<FileSystemInfo>(BackupEntries(backup));
         foreach (string path in Directory.GetFiles(backup))

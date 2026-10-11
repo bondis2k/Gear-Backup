@@ -4,16 +4,18 @@ using System.IO;
 using System.Text;
 using static PathSafety;
 using static Snapshots;
+using static GearBackup;
+using static RestoreFlow;
 
-partial class GearBackup
+static class SampleDependencies
 {
     // Read-only dependency extraction, bounded to the known firmware-6 song layout.
     // Layout references: github.com/jhw/pym8 m8/api/{instrument.py,instruments/sampler.py}
     // and github.com/Twinside/m8-file-parser src/version.rs. No project bytes are rewritten.
     // Real firmware-6 songs are about 100 KB; anything far larger isn't a song and isn't read into memory.
-    const long MaxSongSize = 16L << 20;
+    internal const long MaxSongSize = 16L << 20;
 
-    static List<string> SamplePaths(string song)
+    internal static List<string> SamplePaths(string song)
     {
         if (new FileInfo(song).Length > MaxSongSize)
             throw new IOException("This file is too large to be an " + CurrentDevice.Name + " song. Use bundle or full restore.");
@@ -45,7 +47,7 @@ partial class GearBackup
         return result;
     }
 
-    static List<RestoreEntry> SongDependencies(RestoreEntry song, Snapshot snapshot, string target, bool verify = true)
+    internal static List<RestoreEntry> SongDependencies(RestoreEntry song, Snapshot snapshot, string target, bool verify = true)
     {
         ValidateEntry(song, verify);
         var result = new List<RestoreEntry> { song };

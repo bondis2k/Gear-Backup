@@ -7,6 +7,7 @@ using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
 using static Snapshots;
+using static Backups;
 
 class GuiTestRunner
 {

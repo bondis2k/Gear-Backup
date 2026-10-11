@@ -66,7 +66,7 @@ partial class GearBackup
 
     // The settings for one device and profile: the global ones with that device's and then that
     // profile's overrides applied. The global settings themselves are never changed.
-    static Config ResolveProfileSettings(Config global, string device, string profileName)
+    internal static Config ResolveProfileSettings(Config global, string device, string profileName)
     {
         var settings = ReadProfileSettings(global);
         Config result = global.Clone();

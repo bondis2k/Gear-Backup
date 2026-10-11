@@ -12,6 +12,7 @@ using static FileCopy;
 using static PathSafety;
 using static Checksums;
 using static VersionCatalog;
+using static Backups;
 
 partial class GearBackup
 {
@@ -359,7 +360,7 @@ partial class GearBackup
         if (File.Exists(status) && File.GetLastWriteTimeUtc(status) > row.CheckedUtc.Value) row.CheckResult += " (previous state)";
     }
 
-    static void SaveCheckRecord(string backup, int ok, int damaged, int missing, int uncheckedFiles)
+    internal static void SaveCheckRecord(string backup, int ok, int damaged, int missing, int uncheckedFiles)
     {
         RejectRootLinks(backup);
         string result = damaged > 0 || missing > 0 ? "Problems found" : uncheckedFiles > 0 ? "Incomplete check" : "OK";

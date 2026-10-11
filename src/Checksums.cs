@@ -8,6 +8,7 @@ using static PathSafety;
 using static GearBackup;
 using static BackupTraversal;
 using static Snapshots;
+using static Backups;
 
 static class Checksums
 {

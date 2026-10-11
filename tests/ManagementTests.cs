@@ -8,6 +8,7 @@ using static PathSafety;
 using static Checksums;
 using static Snapshots;
 using static VersionCatalog;
+using static Backups;
 
 partial class GearBackup
 {
