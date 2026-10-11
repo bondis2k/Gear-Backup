@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text;
 using static PathSafety;
 
 // A standalone full backup: stream the source into a ZIP, then publish the completed archive.
@@ -35,6 +36,9 @@ internal static class ArchiveBackup
         if (!Directory.Exists(parent)) throw new IOException("Archive destination folder does not exist: " + parent);
         if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
         var scan = new ScanResult(); Backups.CollectFiles(source, scan);
+        foreach (var item in Directory.EnumerateFileSystemEntries(source))
+            if (string.Equals(Path.GetFileName(item), Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("The source contains the reserved archive manifest name: " + Checksums.ChecksumFileName + ". Rename it before creating the ZIP.");
         var actions = new List<string>(); var sizes = new Dictionary<string, long>(); long total = 0;
         foreach (string folder in scan.Folders) actions.Add("Create folder: " + Relative(source, folder));
         foreach (FileInfo file in scan.Files)
@@ -71,7 +75,7 @@ internal static class ArchiveBackup
                         string path = Relative(source, file.FullName), name = path.Replace('\\', '/');
                         var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
                         entry.LastWriteTime = BackupZip.ZipTime(file.LastWriteTime);
-                        using (var hash = config.Verify ? SHA256.Create() : null)
+                        using (var hash = SHA256.Create())
                         using (var from = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
                         using (var to = entry.Open())
                         {
@@ -79,15 +83,24 @@ internal static class ArchiveBackup
                             while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
                             {
                                 context.CheckCancellation(); to.Write(buffer, 0, read);
-                                if (hash != null) hash.TransformBlock(buffer, 0, read, buffer, 0);
+                                hash.TransformBlock(buffer, 0, read, buffer, 0);
                                 copied += read; done += read;
                                 context.Progress(Stage.Zipping, path, done, total, count, scan.Files.Count);
                             }
                             if (copied != sizes[path]) throw new IOException("Source file changed during archiving: " + path);
-                            if (hash != null) { hash.TransformFinalBlock(new byte[0], 0, 0); hashes.Add(name, FileCopy.ToHex(hash.Hash)); }
+                            hash.TransformFinalBlock(new byte[0], 0, 0); hashes.Add(name, FileCopy.ToHex(hash.Hash));
                         }
                         context.Progress(Stage.Zipping, path, done, total, ++count, scan.Files.Count);
                     }
+                    context.CheckCancellation();
+                    var names = new List<string>(hashes.Keys);
+                    names.Sort(StringComparer.Ordinal);
+                    using (var writer = new StreamWriter(zip.CreateEntry(Checksums.ChecksumFileName, CompressionLevel.Fastest).Open(), new UTF8Encoding(false)))
+                        foreach (string name in names)
+                        {
+                            context.CheckCancellation();
+                            writer.Write(hashes[name] + "  " + name + "\n");
+                        }
                 }
             }
             if (config.Verify) Verify(temp, hashes);
