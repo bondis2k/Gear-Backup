@@ -125,14 +125,29 @@ static partial class GuiTheme
         return path;
     }
 
+    // Fits a window that has just been shown onto its screen: a window shown over another one (a tool
+    // window or dialog) is centred on it, the main window keeps a restored position, and otherwise it is
+    // centred on the screen. It is always kept fully within the screen's working area.
     public static void FitToScreen(Form form)
     {
         ApplyTo(form);
-        if (GuiHeadless) return;
-        Rectangle area = Screen.FromControl(form).WorkingArea;
+        if (GuiHeadless || form.WindowState != FormWindowState.Normal) return;
+        Form owner = form.Owner;
+        Rectangle? over = owner != null && owner.Visible && owner.WindowState != FormWindowState.Minimized ? owner.Bounds : (Rectangle?)null;
+        Rectangle area = over != null ? Screen.FromRectangle(over.Value).WorkingArea : Screen.FromControl(form).WorkingArea;
         form.MinimumSize = new Size(Math.Min(form.MinimumSize.Width, area.Width), Math.Min(form.MinimumSize.Height, area.Height));
         form.Size = new Size(Math.Min(form.Width, area.Width), Math.Min(form.Height, area.Height));
-        form.Location = new Point(area.Left + (area.Width - form.Width) / 2, area.Top + (area.Height - form.Height) / 2);
+        form.Location = PlaceWindow(form.Size, over, form.StartPosition == FormStartPosition.Manual ? form.Location : (Point?)null, area);
+    }
+
+    // Where a window of this size goes: centred over `over` when given, else at `kept`, else centred in
+    // the area; then moved as needed to lie fully inside the area.
+    internal static Point PlaceWindow(Size size, Rectangle? over, Point? kept, Rectangle area)
+    {
+        Point p = over != null
+            ? new Point(over.Value.Left + (over.Value.Width - size.Width) / 2, over.Value.Top + (over.Value.Height - size.Height) / 2)
+            : kept ?? new Point(area.Left + (area.Width - size.Width) / 2, area.Top + (area.Height - size.Height) / 2);
+        return new Point(Math.Max(area.Left, Math.Min(p.X, area.Right - size.Width)), Math.Max(area.Top, Math.Min(p.Y, area.Bottom - size.Height)));
     }
 }
 

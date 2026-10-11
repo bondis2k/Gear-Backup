@@ -46,7 +46,7 @@ Both packages include the illustrated offline manual and preserve existing INI s
 3. Choose a full or incremental backup, review the preview, and start copying.
 4. Use **Dashboard** to review your backups, **Storage** to manage space, or the restore operation to recover files.
 
-For X100VI recipes, select the camera-settings operation while the camera is in **USB RAW CONV./BACKUP RESTORE** mode. Open **X100VI recipes** to view a saved settings backup.
+For X100VI recipes, select the camera-settings operation while the camera is in **USB RAW CONV./BACKUP RESTORE** mode. To view a saved settings backup, select it in **Dashboard** or **Storage** and click **View recipes**.
 
 **Help** or **F1** opens the offline HTML manual in your browser. The [repository manual](MANUAL.md) explains connection modes, restore choices and troubleshooting.
 
@@ -68,7 +68,7 @@ Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the
 
 Installed copies store settings in `%APPDATA%\GearBackup`; portable copies and local builds store them beside the executables. Existing installed INI files are copied to AppData on first normal launch without overwriting newer files, and the originals are retained. Global preferences are stored in `GearBackup.ini`. Device and profile overrides are stored in `GearBackup.Profiles.ini`; edit them through **Profiles** in the GUI. Profile preferences take priority over device defaults, which take priority over global settings. Both apps share these files.
 
-Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Retro is the default.
+Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Original is the default.
 
 Change previews are enabled by default. Point-in-time history (`PointInTimeHistory`), SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
 

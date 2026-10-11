@@ -6,6 +6,7 @@ using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
+using static ConsoleUi;
 using static Snapshots;
 using static Backups;
 using static FujiSettings;
@@ -75,6 +76,17 @@ partial class Tests
             Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
             moreOptions.PerformClick();
             Assert(!optionalFields.Visible, "optional fields can be collapsed again");
+            using (var configured = new MainForm(true, new Config { SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
+            {
+                configured.Show(); Application.DoEvents();
+                // Design previews leave the source box empty, so type the folder as a user would.
+                configured.Controls.Find("SourceFolder", true)[0].Text = @"D:\Card";
+                string summary = configured.Controls.Find("BackupDestinationSummary", true)[0].Text;
+                Assert(!configured.Controls.Find("OptionalBackupFields", true)[0].Visible,
+                    "More options starts collapsed even when a source folder and profile are set");
+                Assert(summary.StartsWith(@"Source: D:\Card") && summary.Contains("Profile: Studio"),
+                    "the summary line shows the set source folder and profile while collapsed: " + summary);
+            }
             Assert(deviceImage.Image != null && deviceImage.AccessibleName == "No device detected", "the header shows the general picture at startup");
             Icon windowIcon = form.Icon;
             ((MainForm)form).ShowDevice(Devices.OP1Field);
@@ -208,6 +220,8 @@ partial class Tests
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
+        TestRecipeButtons(Path.Combine(root, "recipe-buttons"));
+        TestWindowPlacement(Path.Combine(root, "window-placement"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
@@ -290,7 +304,7 @@ partial class Tests
                 Assert(form.Icon != null && object.ReferenceEquals(form.Icon, table.Icon),
                     "Review changes uses the shared Gear Backup window icon");
                 form.ShowDevice(Devices.OPXY, "MTP");
-                Assert(form.BackColor == Color.FromArgb(0, 128, 128), "retro theme is the default desktop palette");
+                Assert(form.BackColor == Color.FromArgb(243, 245, 247), "Original is the default desktop palette");
                 var source = (TextBox)form.Controls.Find("SourceFolder", true)[0]; string previousSource = source.Text;
                 var grid = FindGuiControl<DataGridView>(table);
                 SetGuiTheme(form, 0, true);
@@ -312,7 +326,7 @@ partial class Tests
                 Assert(loaded.Theme == "original", "cancelling does not save the new theme");
                 using (var restarted = new MainForm(false, loaded))
                     Assert(restarted.BackColor == Color.FromArgb(243, 245, 247), "startup applies the saved Original theme");
-                SetGuiTheme(form, 2, true);
+                SetGuiTheme(form, 1, true);
                 Assert(GuiTheme.ThemeName == "original-dark" && form.BackColor == Color.FromArgb(19, 25, 30),
                     "saving Original dark applies the charcoal palette immediately");
                 CheckNativeTitleBar(form, true);
@@ -340,7 +354,7 @@ partial class Tests
                 File.WriteAllText(themedManual, "test");
                 Assert(MainForm.ManualPath(settingsPath, "original-dark") == themedManual, "Help selects the matching dark manual");
                 Assert(MainForm.ManualPath(settingsPath, "original") == Path.Combine(settingsPath, "Manual.html"), "Help falls back when a themed manual is absent");
-                SetGuiTheme(form, 1, true);
+                SetGuiTheme(form, 2, true);
                 CheckNativeTitleBar(form, false);
                 CheckNativeTitleBar(table, false);
                 Assert(form.BackColor == Color.FromArgb(0, 128, 128) && grid.BackgroundColor == Color.FromArgb(255, 255, 240),
@@ -349,7 +363,7 @@ partial class Tests
                     "switching themes restores the detected device highlight");
             }
         }
-        finally { GuiTheme.ApplyTheme("retro"); }
+        finally { GuiTheme.ApplyTheme("original"); }
     }
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
     static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
@@ -409,7 +423,7 @@ partial class Tests
                 finally { foreach (Form window in windows) window.Dispose(); }
             }
         }
-        finally { GuiTheme.ApplyTheme("retro"); }
+        finally { GuiTheme.ApplyTheme("original"); }
     }
 
     static void SetGuiTheme(MainForm form, int selected, bool save)
@@ -426,7 +440,8 @@ partial class Tests
                     {
                         var tabs = FindGuiControl<TabControl>(owned); tabs.SelectedIndex = 3;
                         var theme = (ComboBox)owned.Controls.Find("ColorTheme", true)[0];
-                        Assert(theme.Items.Count == 3, "Settings offers Original, Retro and Original dark themes");
+                        Assert(theme.Items.Count == 3 && ((string)theme.Items[0]).StartsWith("Original —") && ((string)theme.Items[1]).StartsWith("Original (dark)") &&
+                            ((string)theme.Items[2]).StartsWith("Retro"), "Settings lists Original, Original (dark) and Retro, in that order");
                         theme.SelectedIndex = selected;
                         if (save) ((Button)owned.Controls.Find("SaveSettings", true)[0]).PerformClick();
                         else ((Button)owned.CancelButton).PerformClick();
@@ -456,6 +471,78 @@ partial class Tests
             Assert(!((Label)form.Controls.Find("OperationDetail", true)[0]).Text.Contains("private-file.wav"), "full backup progress does not expose individual paths");
             form.CompleteOperation(new OperationResult { Summary = "Done", Counts = new OperationCounts { Copied = 1 } }, false);
             form.Close();
+        }
+    }
+
+    // Window placement: sub-windows centre on the main window and stay on screen; the main window's
+    // position is saved and restored, and ignored when it's damaged or no longer on any screen.
+    static void TestWindowPlacement(string root)
+    {
+        var area = new Rectangle(0, 0, 1920, 1040);
+        Assert(GuiTheme.PlaceWindow(new Size(600, 400), new Rectangle(100, 100, 1000, 700), null, area) == new Point(300, 250),
+            "a sub-window is centred on the main window");
+        Assert(GuiTheme.PlaceWindow(new Size(600, 400), new Rectangle(1700, 800, 400, 300), null, area) == new Point(1320, 640),
+            "a sub-window centred on a window near the screen edge is kept on screen");
+        Assert(GuiTheme.PlaceWindow(new Size(1000, 720), null, new Point(200, 150), area) == new Point(200, 150),
+            "the main window keeps its restored position");
+        Assert(GuiTheme.PlaceWindow(new Size(1000, 720), null, null, area) == new Point(460, 160),
+            "without a saved position the main window is centred on the screen");
+
+        bool maximized;
+        Rectangle? parsed = WindowPlacement.Parse(WindowPlacement.Format(new Rectangle(-1500, 40, 1100, 760), true).Split('\n'), out maximized);
+        Assert(parsed == new Rectangle(-1500, 40, 1100, 760) && maximized, "a saved position reads back, including maximized");
+        Assert(WindowPlacement.Parse(new[] { "Left=10", "Top=10", "Width=abc", "Height=500" }, out maximized) == null &&
+            WindowPlacement.Parse(new[] { "Left=10", "Top=10", "Width=50", "Height=50" }, out maximized) == null,
+            "a damaged or tiny saved position is ignored");
+        var screens = new List<Rectangle> { area, new Rectangle(1920, 0, 1280, 1000) };
+        Assert(WindowPlacement.OnScreen(new Rectangle(2000, 100, 900, 600), screens) && !WindowPlacement.OnScreen(new Rectangle(4000, 100, 900, 600), screens),
+            "a position on a monitor that's no longer connected is not used");
+
+        Directory.CreateDirectory(root);
+        Rectangle primary = Screen.PrimaryScreen.WorkingArea;
+        var saved = new Rectangle(primary.Left + 40, primary.Top + 30, 900, 650);
+        using (var form = new Form { StartPosition = FormStartPosition.Manual, Bounds = saved })
+            WindowPlacement.Save(form, root);
+        using (var form = new Form { StartPosition = FormStartPosition.CenterScreen })
+        {
+            Assert(WindowPlacement.Restore(form, root) && form.StartPosition == FormStartPosition.Manual && form.Bounds == saved,
+                "the main window opens where it was closed");
+        }
+        File.WriteAllText(Path.Combine(root, WindowPlacement.FileName), "Left=99999\r\nTop=99999\r\nWidth=900\r\nHeight=650\r\n");
+        using (var form = new Form { StartPosition = FormStartPosition.CenterScreen })
+            Assert(!WindowPlacement.Restore(form, root) && form.StartPosition == FormStartPosition.CenterScreen,
+                "an off-screen saved position falls back to opening centred");
+    }
+
+    // View recipes, on Dashboard and Storage, is available only for a selected backup holding recipe
+    // exports (an X100VI settings backup); ordinary backups and Storage's summary rows grey it out.
+    static void TestRecipeButtons(string root)
+    {
+        string photos = Path.Combine(root, "m8-card-1", "2026-10-01"), settings = Path.Combine(root, "x100vi-settings-1", "2026-10-01");
+        Put(Path.Combine(photos, "Songs", "song.m8s"), "SONG");
+        Put(Path.Combine(settings, "C1.xml"), "<GearBackupCameraSettings />");
+        var catalog = new BackupCatalog();
+        catalog.Backups.Add(new CatalogBackup { Profile = "m8-card-1", History = Path.GetDirectoryName(photos), Path = photos,
+            Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
+        catalog.Backups.Add(new CatalogBackup { Profile = "x100vi-settings-1", History = Path.GetDirectoryName(settings), Path = settings,
+            Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.X100VI });
+        foreach (bool storageMode in new[] { false, true })
+        using (var owner = new MainForm(true, new Config()))
+        using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog))
+        {
+            window.Show(); Application.DoEvents();
+            string where = storageMode ? "Storage" : "Dashboard";
+            var table = (DataGridView)window.Controls.Find(storageMode ? "StorageTable" : "DashboardTable", true)[0];
+            var button = (Button)window.Controls.Find("ViewCatalogRecipes", true)[0];
+            table.CurrentCell = table.Rows[0].Cells[0];
+            Assert(!button.Enabled, where + ": View recipes is greyed out for a backup without recipes");
+            table.CurrentCell = table.Rows[1].Cells[0];
+            Assert(button.Enabled, where + ": View recipes is available for a settings backup with recipes");
+            if (storageMode)
+            {
+                table.CurrentCell = table.Rows[table.Rows.Count - 1].Cells[0];
+                Assert(!button.Enabled, "Storage: View recipes is greyed out on a summary row");
+            }
         }
     }
 
@@ -491,6 +578,41 @@ partial class Tests
             filter.SelectedItem = "All devices";
             Assert(table.Rows.Count == 4, "All devices lists every profile again");
         }
+
+        // Storage: the same filter for space usage and cleanup. Backups, old versions and ZIPs follow their
+        // history's device; a mirror follows its folder name, so a device with only a mirror is listed too.
+        catalog.Backups.Add(new CatalogBackup { Profile = "m8-card-1", History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01",
+            Status = Status.Complete, CheckResult = "OK", Latest = false, Device = Devices.M8 });
+        catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.OlderBackup, History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01", Bytes = 100, Folder = true });
+        catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Zip, History = @"C:\Backups\op-xy-ABC", Path = @"C:\Backups\op-xy-ABC\2026-10-01.zip", Bytes = 30 });
+        catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Mirror, History = @"C:\Mirrors", Path = @"C:\Mirrors\x100vi-SERIAL", Bytes = 500, Folder = true });
+        using (var owner = new MainForm(true, new Config()))
+        using (var storage = new CatalogDialog(owner, new Config(), true, catalog))
+        {
+            storage.Show(); Application.DoEvents();
+            var filter = (ComboBox)storage.Controls.Find("StorageDevice", true)[0];
+            var usage = (DataGridView)storage.Controls.Find("StorageTable", true)[0];
+            var cleanup = (DataGridView)storage.Controls.Find("CleanupItems", true)[0];
+            var choices = new List<string>();
+            foreach (object item in filter.Items) choices.Add((string)item);
+            Assert(string.Join("|", choices.ToArray()) == "All devices|M8|OP-XY|X100VI|Unknown device",
+                "the Storage filter also lists devices that only have a mirror: " + string.Join("|", choices.ToArray()));
+            Assert((string)filter.SelectedItem == "All devices" && usage.Rows.Count == 7 && cleanup.Rows.Count == 3,
+                "Storage shows every backup and cleanup item by default");
+            cleanup.Rows[0].Cells[0].Value = true;
+            filter.SelectedItem = "M8";
+            Assert(usage.Rows.Count == 5 && cleanup.Rows.Count == 1 && cleanup.Rows[0].Tag == catalog.Cleanup[0],
+                "choosing a device lists only its backups and cleanup items");
+            Assert(storage.SelectedCleanup().Count == 0, "changing the filter clears selections, so nothing hidden can be recycled");
+            filter.SelectedItem = "X100VI";
+            Assert(usage.Rows.Count == 2 && cleanup.Rows.Count == 1 && Convert.ToString(usage.Rows[1].Cells[1].Value) == FormatSize(500) &&
+                Convert.ToString(usage.Rows[0].Cells[1].Value) == FormatSize(0), "summary rows add up only the chosen device's ZIPs and mirrors");
+            filter.SelectedItem = "OP-XY";
+            Assert(cleanup.Rows.Count == 1 && Convert.ToString(usage.Rows[usage.Rows.Count - 2].Cells[1].Value) == FormatSize(30),
+                "a ZIP follows its history's device");
+            filter.SelectedItem = "All devices";
+            Assert(usage.Rows.Count == 7 && cleanup.Rows.Count == 3, "All devices shows everything again");
+        }
     }
 
     static void TestManagementGui(string root)
@@ -500,8 +622,9 @@ partial class Tests
         using (var owner = new MainForm(true))
         {
             owner.Show(); Application.DoEvents();
-            foreach (string name in new[] { "OpenDashboard", "OpenStorage", "OpenProfiles", "OpenRecipes" })
+            foreach (string name in new[] { "OpenDashboard", "OpenStorage", "OpenProfiles" })
                 Assert(owner.Controls.Find(name, true).Length == 1, "main window exposes " + name);
+            Assert(owner.Controls.Find("OpenRecipes", true).Length == 0, "recipes open from Dashboard and Storage, not the main window");
             // A scan started from a tool window shows its progress there, never as a main-window operation.
             // Without an old-version record (backups from before it existed) the scan walks each backup's
             // files, reporting progress for every one.

@@ -99,7 +99,7 @@ Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `Ge
 1. Connect your device and click **Detect device**. The header shows its name, picture and camera mode where available. M8 and Tracker Mini use USB drive mode; OP-1 Field, OP-XY and X100VI can use MTP. Detection selects the connected device for the next backup.
 2. Choose **Full backup** for a new copy or **Incremental backup** for changes since the latest backup, then click **Back up**. The compact backup-location summary shows where backups are configured to go. Review changes when prompted. You can also click **Preview** for a plan without writing files.
 
-**More options** exposes the source folder, backup location, profile and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave Profile blank for automatic identity. An empty backup location uses `%USERPROFILE%\Backup`. Saved source/profile selections open this section at startup so they remain visible; collapsing it preserves the values.
+**More options** exposes the source folder, backup location, profile and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave Profile blank for automatic identity. An empty backup location uses `%USERPROFILE%\Backup`. The section starts collapsed; collapsing it preserves the values. While it is collapsed, the line under the buttons shows a source folder you set, the backup location and the profile, so saved selections stay visible.
 
 ![Expanded More options showing the optional source folder, backup location, profile and zip controls.](assets/manual/gui-main-options.png)
 
@@ -119,7 +119,7 @@ Restore opens dialogs for history, backup folder, saved snapshot/current files, 
 
 **Settings** groups preferences into **Backup**, **Restore**, **Device** and **Appearance** tabs. It saves the visible paths/profile and verification, comparison, preview, recovery, retention, name-warning, eject and theme preferences to the shared INI file. Comments and unrelated keys are preserved. Editing the paths in the main window affects the next operation; they are persisted when Settings is saved. `Verify`, `Thorough`, and `Recovery` remain off by default. Recovery-location controls are disabled when recovery is off; their configured value is preserved. The GUI operation dropdown controls the current action; the INI `Mode` setting remains the CLI default and selects the initial GUI backup mode.
 
-In **Settings → Appearance**, choose **Original** for the light gray and teal palette, **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette (default). **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. On Windows 11, title bars, title text and borders match the selected palette, including Review changes and other dialogs. Original (dark) uses the matching charcoal title bar; supported earlier Windows versions use the standard dark title bar. App dialogs use the Gear Backup icon. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
+In **Settings → Appearance**, choose **Original** for the light gray and teal palette (default), **Original (dark)** for charcoal and teal, or **Retro** for the teal, navy, gray and cream palette. **Save settings** applies the theme immediately and remembers it for startup. Cancel leaves it unchanged. On Windows 11, title bars, title text and borders match the selected palette, including Review changes and other dialogs. Original (dark) uses the matching charcoal title bar; supported earlier Windows versions use the standard dark title bar. App dialogs use the Gear Backup icon. The theme is global and does not affect backup behavior; Help opens the matching themed manual. You can also set `Theme=original`, `Theme=original-dark` or `Theme=retro` in `GearBackup.ini` before starting the app.
 
 ![Appearance settings with the Original, Original (dark) and Retro color theme selector.](assets/manual/gui-appearance.png)
 
@@ -129,7 +129,7 @@ In **Settings → Appearance**, choose **Original** for the light gray and teal 
 
 | GUI preference | INI setting | When to use it |
 |---|---|---|
-| **Color theme** (Appearance) | `Theme=original` / `Theme=original-dark` / `Theme=retro` | Choose the original, original dark or retro app palette. Default retro. |
+| **Color theme** (Appearance) | `Theme=original` / `Theme=original-dark` / `Theme=retro` | Choose the original, original dark or retro app palette. Default original. |
 | **Verify copied files** | `Verify=yes` | Read copied files back and check their recorded checksums. Off by default. |
 | **Compare file contents** | `Thorough=yes` | Detect content changes even when size and time are unchanged. Off by default; comparing contents takes more reading. |
 | **Review changes before copying** | `Preview=yes` | Review the planned actions before proceeding. On by default; unchanged incremental backups need no confirmation. |
@@ -477,7 +477,7 @@ The CLI uses Windows notifications to summarize backup, restore, or check result
 
 ## Dashboard, storage and profile tools
 
-The GUI's **Dashboard**, **Storage**, **Profiles**, and **X100VI recipes** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
+The GUI's **Dashboard**, **Storage** and **Profiles** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
 
 ### Backup dashboard
 
@@ -485,13 +485,15 @@ The GUI's **Dashboard**, **Storage**, **Profiles**, and **X100VI recipes** butto
 
 Use the **Device** list above the table to show only one device's profiles; it starts at **All devices** and lists the devices that have backups. Each profile belongs to the device its latest backup was made from. Profiles from backups made before Gear Backup recorded the device are listed under **Unknown device** unless their automatic name (such as `m8-card-…`) identifies it.
 
-Select a row to **Check latest backup**, **Open folder**, or **View recipes** for a settings backup. Use **Refresh** after operations in other windows or applications. Dashboard scanning runs in the background; closing the window cancels it. Unavailable locations or linked content are reported rather than followed, so a scan with warnings may not include all stored data.
+Select a row to **Check latest backup**, **Open folder**, or **View recipes**. **View recipes** is available only when the selected backup holds saved X100VI recipes (a camera-settings backup); otherwise it is greyed out. Use **Refresh** after operations in other windows or applications. Dashboard scanning runs in the background; closing the window cancels it. Unavailable locations or linked content are reported rather than followed, so a scan with warnings may not include all stored data.
 
 New successful backups record their completion time separately, preserving the last success if a later incremental run fails. Completed integrity checks save a small result record beside backup metadata; cancellation does not overwrite the unfinished backup's record. Checks from before this feature appear as **Never checked** until run again. Creating a checksum baseline for an older backup is marked **Incomplete check**, since there was no prior checksum list to verify its current files against. A check older than a subsequent backup run is labelled **previous state**, since it does not verify that newer state. For older complete backups without a completion record, the status file's timestamp is used.
 
 ### Storage manager and cleanup
 
 **Storage → Space usage** lists current files, known old versions, history objects and metadata per backup, plus ZIP archives and local MTP mirrors. The **unique stored file content** total counts hard-linked files only once. This is file content size, not allocated disk usage: cluster sizes, compression, sparse-file allocation and the Recycle Bin are excluded. Per-category sizes and cleanup preview sizes are logical; hard-linked categories may share content.
+
+Use the **Device** list above the tabs to show one device's storage; it starts at **All devices**, like the Dashboard's. Backups, their old versions and their profile's ZIP archives belong to the profile's device; an MTP mirror belongs to the device it was read from, so a device that only has a mirror so far is listed too. The ZIP and mirror rows then add up only that device's items, while the unique-content total still covers all devices. Changing the device clears any items checked in **Cleanup**, so nothing hidden from view is recycled. As on the Dashboard, **View recipes** opens the saved X100VI recipes of the backup selected in **Space usage**, and is greyed out for backups without recipes and for the ZIP and mirror rows.
 
 In **Cleanup**, check the items you want removed, then click **Preview cleanup**. Review the complete file/folder list and select **Proceed** to move those items to the Recycle Bin. Nothing is selected by default. Available items are older whole backup folders, known dated old versions, ZIP archives and MTP mirrors. The latest backup folder and individual snapshot objects/manifests are protected. Deleting an older whole backup removes its snapshots as well.
 
@@ -530,18 +532,18 @@ Changing a location does not move existing backups. Dashboard and Storage discov
 
 ### Readable X100VI recipes
 
-Open **X100VI recipes**, then **Open backup folder** to load C1–C7 and current shooting settings, or **Open XML** for one saved export. The selector shows each slot and recipe name. The table translates known protocol values into film simulation names, white-balance modes, grain strength/size, dynamic range, tone/color/detail dials and high-ISO noise reduction. Protocol numbers and exact raw bytes remain visible alongside the readable values.
+In **Dashboard** or **Storage**, select an X100VI settings backup and click **View recipes** to load its C1–C7 recipes and current shooting settings. Inside the viewer, **Open backup folder** loads another settings backup and **Open XML** one saved export. The selector shows each slot and recipe name. The table translates known protocol values into film simulation names, white-balance modes, grain strength/size, dynamic range, tone/color/detail dials and high-ISO noise reduction. Protocol numbers and exact raw bytes remain visible alongside the readable values.
 
 Use **Copy recipe** to copy readable text to the clipboard or **Export text** to save it. Unknown encodings appear as **Protocol value**, and unsupported or default values are explicit. Some non-recipe fields remain numeric. The viewer validates the export format and consistency of raw/numeric values, rejects external XML entities, and never edits exports or writes to the camera. It reads Gear Backup XML exports; native Fujifilm backup formats are not supported. Display encodings follow the [documented Fujifilm recipe protocol](https://github.com/ILFforever/fujifilm-ptp-recipes/blob/main/docs/properties.md), with color-space labels cross-checked against [libgphoto2](https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/config.c).
 
 ## All INI settings
 
-Global preferences live in `GearBackup.ini`: installed copies use `%APPDATA%\GearBackup`, while portable copies and local builds use the executable folder. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them.
+Global preferences live in `GearBackup.ini`: installed copies use `%APPDATA%\GearBackup`, while portable copies and local builds use the executable folder. Optional device and profile overrides live in `GearBackup.Profiles.ini`, described below; both interfaces share them. The GUI also remembers where its main window was (position, size, maximized) in `GearBackup.Window.ini` in the same folder, and opens there next time; if that place is no longer on any screen, it opens centred. Other windows open centred on the main window.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `BackupFolder` | empty | `%USERPROFILE%\Backup`; base for backups and default recovery location. |
-| `Theme` | `retro` | Global GUI color theme: `original` (light gray and teal) `original-dark` (charcoal and teal), or `retro` (teal, navy, gray and cream). |
+| `Theme` | `original` | Global GUI color theme: `original` (light gray and teal), `original-dark` (charcoal and teal), or `retro` (teal, navy, gray and cream). |
 | `Mode` | `ask` | `ask`, `full`, or `incremental`. |
 | `Verify` | `no` | Enable automatic SHA-256 integrity comparisons for copies, restore sources, history objects, and recovery copies. |
 | `KeepBackups` | `0` | Number of backup folders to retain per profile; 0 keeps all. |

@@ -55,9 +55,9 @@ static class AppSettings
     // In the order explanations are added to a new GearBackup.ini; preferences are listed in the same order.
     internal static readonly Setting[] Settings =
     {
-        Choice("Theme", null, new[] { "original", "retro", "original-dark" }, c => c.Theme, (c, v) => c.Theme = v,
-            "; Theme: GUI colour palette. original = light gray and teal; retro = teal, navy, gray and cream (default).\r\n" +
-            "; original-dark = charcoal and teal. Help opens the matching offline manual.\r\n"),
+        Choice("Theme", null, new[] { "original", "original-dark", "retro" }, c => c.Theme, (c, v) => c.Theme = v,
+            "; Theme: GUI colour palette. original = light gray and teal (default); original-dark = charcoal and teal;\r\n" +
+            "; retro = teal, navy, gray and cream. Help opens the matching offline manual.\r\n"),
         new Setting { Key = "BackupFolder", Label = "Backup location", Location = true,
             Get = c => c.BackupFolder,
             Set = (c, value) => { c.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value)); return null; },
@@ -293,7 +293,7 @@ internal class Config
     public bool HardLinks = false;  // share history content with the backup files (NTFS)
     public bool PointInTimeHistory = false; // opt in to snapshots and their content store
     public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
-    public string Theme = "retro"; // global GUI colour palette
+    public string Theme = "original"; // global GUI colour palette
     public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
 
     public Config Clone() { return (Config)MemberwiseClone(); }

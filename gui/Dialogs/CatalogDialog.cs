@@ -16,10 +16,10 @@ internal sealed class CatalogDialog : ToolsDialog
     readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
     readonly DataGridView cleanup = ToolGrid("CleanupItems");
     BackupCatalog catalog;
-    // Dashboard filter: "All devices", then each device that has histories, and "Unknown device" for
-    // histories made before backups recorded their device.
-    readonly ComboBox deviceFilter = new ComboBox { Name = "DashboardDevice", AccessibleName = "Device",
-        DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+    Button viewRecipes;
+    // Device filter on both windows: "All devices", then each device that has histories (or, on Storage,
+    // an MTP mirror), and "Unknown device" for histories made before backups recorded their device.
+    readonly ComboBox deviceFilter = new ComboBox { AccessibleName = "Device", DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
     const string AllDevices = "All devices", UnknownDevice = "Unknown device";
     bool fillingDevices;
 
@@ -32,7 +32,12 @@ internal sealed class CatalogDialog : ToolsDialog
         config = options;
         storage = storageMode;
         grid = ToolGrid(storage ? "StorageTable" : "DashboardTable");
-        if (storage) BuildStorage();
+        deviceFilter.Name = storage ? "StorageDevice" : "DashboardDevice";
+        GuiTheme.StyleComboBox(deviceFilter);
+        deviceFilter.Items.Add(AllDevices);
+        deviceFilter.SelectedIndex = 0;
+        deviceFilter.SelectedIndexChanged += delegate { if (!fillingDevices && catalog != null) Populate(catalog); };
+        if (storage) BuildStorage(owner);
         else BuildDashboard(owner);
         ToolButton("Refresh", "RefreshCatalog", RefreshCatalog);
         ToolButton("Open folder", "OpenCatalogFolder", delegate {
@@ -44,7 +49,7 @@ internal sealed class CatalogDialog : ToolsDialog
         else Shown += delegate { RefreshCatalog(); };
     }
 
-    void BuildStorage()
+    void BuildStorage(MainForm owner)
     {
         foreach (string column in new[] { "Profile / backup", "Current files", "Old versions", "History objects", "Metadata", "Unique content", "Location" })
             grid.Columns.Add(column, column);
@@ -54,7 +59,7 @@ internal sealed class CatalogDialog : ToolsDialog
         clean.Controls.Add(cleanup);
         tabs.TabPages.Add(usage);
         tabs.TabPages.Add(clean);
-        SetContent(GuiTheme.Tabbed(tabs));
+        SetContent(WithDeviceFilter(GuiTheme.Tabbed(tabs)));
         // Only the Select column can be changed; nothing is selected at first.
         cleanup.ReadOnly = false;
         cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Select", FillWeight = 15 });
@@ -65,19 +70,48 @@ internal sealed class CatalogDialog : ToolsDialog
         }
         cleanup.Columns["Location"].FillWeight = 280;
         ToolButton("Preview cleanup", "PreviewCleanup", ReviewCleanup, true);
+        AddRecipesButton(owner);
     }
 
     void BuildDashboard(MainForm owner)
     {
         foreach (string column in new[] { "Profile", "Last successful backup", "Latest status", "Last check", "Check result", "Stored size", "Attention", "Location" })
             grid.Columns.Add(column, column);
+        SetContent(WithDeviceFilter(grid));
+        ToolButton("Check latest backup", "CheckCatalogBackup", delegate {
+            CatalogBackup row = SelectedBackup();
+            if (row == null) return;
+            Work(() => { using (LockHistory(row.History)) return new IntegrityEngine().Run(new List<string> { row.Path }, OperationContext.Current); },
+                result => { Notice.Text = result.Summary; RefreshCatalog(); });
+        }, true);
+        AddRecipesButton(owner);
+    }
+
+    // View recipes, on both windows: opens the selected backup's saved X100VI recipes. It is greyed out
+    // unless the selected row is a backup folder holding recipe exports (a settings backup).
+    void AddRecipesButton(MainForm owner)
+    {
+        viewRecipes = ToolButton("View recipes", "ViewCatalogRecipes", delegate {
+            CatalogBackup row = SelectedBackup();
+            if (row == null || !RecipeViewerDialog.HasRecipes(row.Path)) return;
+            using (var viewer = new RecipeViewerDialog(owner, row.Path)) viewer.ShowDialog(this);
+        });
+        grid.CurrentCellChanged += delegate { UpdateRecipesButton(); };
+        UpdateRecipesButton();
+    }
+
+    void UpdateRecipesButton()
+    {
+        CatalogBackup row = SelectedBackup();
+        viewRecipes.Enabled = row != null && RecipeViewerDialog.HasRecipes(row.Path);
+    }
+
+    // The window's content with the Device filter above it.
+    Control WithDeviceFilter(Control view)
+    {
         var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
         Label label = GuiTheme.Label("Device", 10, GuiTheme.Ink);
         label.Margin = new Padding(0, 6, 8, 0);
-        GuiTheme.StyleComboBox(deviceFilter);
-        deviceFilter.Items.Add(AllDevices);
-        deviceFilter.SelectedIndex = 0;
-        deviceFilter.SelectedIndexChanged += delegate { if (!fillingDevices && catalog != null) Populate(catalog); };
         filterRow.Controls.Add(label);
         filterRow.Controls.Add(deviceFilter);
         var content = new TableLayoutPanel { RowCount = 2, ColumnCount = 1, Margin = Padding.Empty };
@@ -85,19 +119,9 @@ internal sealed class CatalogDialog : ToolsDialog
         content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         content.Controls.Add(filterRow, 0, 0);
-        content.Controls.Add(grid, 0, 1);
-        SetContent(content);
-        ToolButton("Check latest backup", "CheckCatalogBackup", delegate {
-            CatalogBackup row = SelectedBackup();
-            if (row == null) return;
-            Work(() => { using (LockHistory(row.History)) return new IntegrityEngine().Run(new List<string> { row.Path }, OperationContext.Current); },
-                result => { Notice.Text = result.Summary; RefreshCatalog(); });
-        }, true);
-        ToolButton("View recipes", "ViewCatalogRecipes", delegate {
-            CatalogBackup row = SelectedBackup();
-            if (row == null) return;
-            using (var viewer = new RecipeViewerDialog(owner, row.Path)) viewer.ShowDialog(this);
-        });
+        view.Dock = DockStyle.Fill;
+        content.Controls.Add(view, 0, 1);
+        return content;
     }
 
     // The backup of the selected row; null for summary rows (ZIPs, mirrors) or no selection.
@@ -117,34 +141,73 @@ internal sealed class CatalogDialog : ToolsDialog
         else PopulateDashboard(value);
         if (value.Warnings.Count > 0) Notice.Text += "\r\nSkipped / unavailable: " + string.Join("; ", value.Warnings.ToArray());
         if (value.Backups.Count == 0) Notice.Text = "No backups found in the current or configured profile locations. " + Notice.Text;
+        UpdateRecipesButton();
     }
 
+    // Space per backup and the items cleanup can recycle, for the device chosen in the filter. A backup,
+    // its old versions and its history's ZIPs belong to the history's device (as on the Dashboard); an
+    // MTP mirror to the device its folder is named after. Changing the filter rebuilds the Cleanup list,
+    // so nothing hidden from view stays selected.
     void PopulateStorage(BackupCatalog value)
     {
+        Dictionary<string, DeviceProfile> historyDevices = HistoryDevices(value);
+        var devices = new List<DeviceProfile>(historyDevices.Values);
+        foreach (StorageItem item in value.Cleanup)
+            if (item.Kind == StorageKind.Mirror) devices.Add(MirrorDevice(item.Path));
+        FillDeviceChoices(devices);
+        Func<StorageItem, DeviceProfile> itemDevice = item => {
+            if (item.Kind == StorageKind.Mirror) return MirrorDevice(item.Path);
+            DeviceProfile device;
+            return historyDevices.TryGetValue(item.History, out device) ? device : null;
+        };
         foreach (CatalogBackup row in value.Backups)
         {
+            DeviceProfile device;
+            if (!VisibleFor(historyDevices.TryGetValue(row.History, out device) ? device : null)) continue;
             int i = grid.Rows.Add(row.Profile + " / " + Path.GetFileName(row.Path), FormatSize(row.FilesBytes), FormatSize(row.VersionsBytes),
                 FormatSize(row.ObjectsBytes), FormatSize(row.MetadataBytes), FormatSize(row.UniqueBytes), row.Path);
             grid.Rows[i].Tag = row;
         }
-        grid.Rows.Add("ZIP archives", FormatSize(value.ZipBytes));
-        grid.Rows.Add("MTP mirrors", FormatSize(value.MirrorBytes));
+        long zipBytes = 0, mirrorBytes = 0;
         foreach (StorageItem item in value.Cleanup)
         {
+            if (!VisibleFor(itemDevice(item))) continue;
+            if (item.Kind == StorageKind.Zip) zipBytes += item.Bytes;
+            if (item.Kind == StorageKind.Mirror) mirrorBytes += item.Bytes;
             int i = cleanup.Rows.Add(false, item.Kind, FormatSize(item.Bytes), item.Path);
             cleanup.Rows[i].Tag = item;
         }
-        Notice.Text = "Unique stored file content: " + FormatSize(value.UniqueBytes) + ". Hard links counted once; allocation, compression and " +
+        grid.Rows.Add("ZIP archives", FormatSize(zipBytes));
+        grid.Rows.Add("MTP mirrors", FormatSize(mirrorBytes));
+        bool filtered = (deviceFilter.SelectedItem as string ?? AllDevices) != AllDevices;
+        Notice.Text = "Unique stored file content" + (filtered ? " (all devices)" : "") + ": " + FormatSize(value.UniqueBytes) +
+            ". Hard links counted once; allocation, compression and " +
             "Recycle Bin excluded. Cleanup sizes are logical and may share content. Recycling does not free disk space until the Recycle Bin " +
             "is emptied. Latest backups and individual history objects are protected. Removing a mirror requires downloading it again.";
+    }
+
+    // Each history's device: its latest backup's, as on the Dashboard.
+    static Dictionary<string, DeviceProfile> HistoryDevices(BackupCatalog value)
+    {
+        var devices = new Dictionary<string, DeviceProfile>(StringComparer.OrdinalIgnoreCase);
+        foreach (CatalogBackup row in value.Backups)
+            if (row.Latest) devices[row.History] = row.Device;
+        return devices;
+    }
+
+    // The device an MTP mirror belongs to, from its folder name ("x100vi-<serial>"); null if none matches.
+    static DeviceProfile MirrorDevice(string mirror)
+    {
+        string name = Path.GetFileName(mirror.TrimEnd('\\'));
+        return Array.Find(Devices.All, d => name.StartsWith(d.Id + "-", StringComparison.OrdinalIgnoreCase));
     }
 
     // One row per history, describing its latest backup and when the history last succeeded. Only
     // histories of the device chosen in the filter are listed; a history's device is its latest backup's.
     void PopulateDashboard(BackupCatalog value)
     {
-        FillDeviceChoices(value);
-        foreach (CatalogBackup latest in value.Backups.FindAll(b => b.Latest && ShownForDevice(b)))
+        FillDeviceChoices(value.Backups.FindAll(b => b.Latest).ConvertAll(b => b.Device));
+        foreach (CatalogBackup latest in value.Backups.FindAll(b => b.Latest && VisibleFor(b.Device)))
         {
             DateTime? successful = null;
             long bytes = 0;
@@ -164,14 +227,15 @@ internal sealed class CatalogDialog : ToolsDialog
             "Open Storage for detailed sizes. Refresh after a backup or integrity check.";
     }
 
-    // The devices that have histories in this scan. The current choice is kept when it still exists.
-    void FillDeviceChoices(BackupCatalog value)
+    // The filter's choices: the devices that appear in this scan (null for an unknown device), in the
+    // usual device order. The current choice is kept when it still exists.
+    void FillDeviceChoices(List<DeviceProfile> present)
     {
         string selected = deviceFilter.SelectedItem as string ?? AllDevices;
         var names = new List<string> { AllDevices };
         foreach (DeviceProfile device in Devices.All)
-            if (value.Backups.Exists(b => b.Latest && b.Device == device)) names.Add(device.Name);
-        if (value.Backups.Exists(b => b.Latest && b.Device == null)) names.Add(UnknownDevice);
+            if (present.Contains(device)) names.Add(device.Name);
+        if (present.Contains(null)) names.Add(UnknownDevice);
         fillingDevices = true;
         try
         {
@@ -182,11 +246,12 @@ internal sealed class CatalogDialog : ToolsDialog
         finally { fillingDevices = false; }
     }
 
-    bool ShownForDevice(CatalogBackup latest)
+    // Whether something of this device (null: unknown) is shown under the current filter.
+    bool VisibleFor(DeviceProfile device)
     {
         string selected = deviceFilter.SelectedItem as string ?? AllDevices;
         if (selected == AllDevices) return true;
-        return latest.Device == null ? selected == UnknownDevice : latest.Device.Name == selected;
+        return device == null ? selected == UnknownDevice : device.Name == selected;
     }
 
     static string CatalogDate(DateTime? date) { return date == null ? "—" : date.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"); }
