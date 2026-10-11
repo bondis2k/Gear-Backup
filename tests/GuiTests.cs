@@ -196,6 +196,7 @@ partial class GearBackup
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
+        TestDashboardDeviceFilter();
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
@@ -444,6 +445,40 @@ partial class GearBackup
             Assert(!((Label)form.Controls.Find("OperationDetail", true)[0]).Text.Contains("private-file.wav"), "full backup progress does not expose individual paths");
             form.CompleteOperation(new OperationResult { Summary = "Done", Counts = new OperationCounts { Copied = 1 } }, false);
             form.Close();
+        }
+    }
+
+    // The Dashboard's Device filter: All by default, one entry per device with histories (plus Unknown
+    // device for older ones), and a choice that survives a refresh.
+    static void TestDashboardDeviceFilter()
+    {
+        var catalog = new BackupCatalog();
+        foreach (var history in new[] { new { Profile = "m8-card-1", Device = Devices.M8 }, new { Profile = "Studio", Device = Devices.M8 },
+                                       new { Profile = "op-xy-ABC", Device = Devices.OPXY }, new { Profile = "Old card", Device = (DeviceProfile)null } })
+            catalog.Backups.Add(new CatalogBackup { Profile = history.Profile, History = @"C:\Backups\" + history.Profile,
+                Path = @"C:\Backups\" + history.Profile + @"\2026-10-01", Status = Status.Complete, CheckResult = "OK", Latest = true, Device = history.Device });
+        using (var owner = new MainForm(true, new Config()))
+        using (var dashboard = new CatalogDialog(owner, new Config(), false, catalog))
+        {
+            dashboard.Show(); Application.DoEvents();
+            var filter = (ComboBox)dashboard.Controls.Find("DashboardDevice", true)[0];
+            var table = (DataGridView)dashboard.Controls.Find("DashboardTable", true)[0];
+            var choices = new List<string>();
+            foreach (object item in filter.Items) choices.Add((string)item);
+            Assert(string.Join("|", choices.ToArray()) == "All devices|M8|OP-XY|Unknown device",
+                "the Device filter lists All devices, each device with histories, and Unknown device: " + string.Join("|", choices.ToArray()));
+            Assert((string)filter.SelectedItem == "All devices" && table.Rows.Count == 4, "the Dashboard shows every profile by default");
+            filter.SelectedItem = "M8";
+            Assert(table.Rows.Count == 2 && Convert.ToString(table.Rows[0].Cells[0].Value) == "m8-card-1" &&
+                Convert.ToString(table.Rows[1].Cells[0].Value) == "Studio", "choosing a device lists only its profiles");
+            filter.SelectedItem = "Unknown device";
+            Assert(table.Rows.Count == 1 && Convert.ToString(table.Rows[0].Cells[0].Value) == "Old card", "Unknown device lists histories without a device");
+            filter.SelectedItem = "OP-XY";
+            dashboard.Populate(catalog);
+            Assert((string)filter.SelectedItem == "OP-XY" && table.Rows.Count == 1 && Convert.ToString(table.Rows[0].Cells[0].Value) == "op-xy-ABC",
+                "the chosen device stays selected after a refresh");
+            filter.SelectedItem = "All devices";
+            Assert(table.Rows.Count == 4, "All devices lists every profile again");
         }
     }
 

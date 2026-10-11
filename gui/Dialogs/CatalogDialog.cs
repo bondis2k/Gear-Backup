@@ -15,6 +15,12 @@ partial class GearBackup
         readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
         readonly DataGridView cleanup = ToolGrid("CleanupItems");
         BackupCatalog catalog;
+        // Dashboard filter: "All devices", then each device that has histories, and "Unknown device" for
+        // histories made before backups recorded their device.
+        readonly ComboBox deviceFilter = new ComboBox { Name = "DashboardDevice", AccessibleName = "Device",
+            DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+        const string AllDevices = "All devices", UnknownDevice = "Unknown device";
+        bool fillingDevices;
 
         // `initial` shows an existing scan (tests); otherwise the window scans when it opens.
         public CatalogDialog(MainForm owner, Config options, bool storageMode, BackupCatalog initial = null)
@@ -64,7 +70,22 @@ partial class GearBackup
         {
             foreach (string column in new[] { "Profile", "Last successful backup", "Latest status", "Last check", "Check result", "Stored size", "Attention", "Location" })
                 grid.Columns.Add(column, column);
-            SetContent(grid);
+            var filterRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
+            Label label = GuiTheme.Label("Device", 10, GuiTheme.Ink);
+            label.Margin = new Padding(0, 6, 8, 0);
+            GuiTheme.StyleComboBox(deviceFilter);
+            deviceFilter.Items.Add(AllDevices);
+            deviceFilter.SelectedIndex = 0;
+            deviceFilter.SelectedIndexChanged += delegate { if (!fillingDevices && catalog != null) Populate(catalog); };
+            filterRow.Controls.Add(label);
+            filterRow.Controls.Add(deviceFilter);
+            var content = new TableLayoutPanel { RowCount = 2, ColumnCount = 1, Margin = Padding.Empty };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            content.Controls.Add(filterRow, 0, 0);
+            content.Controls.Add(grid, 0, 1);
+            SetContent(content);
             ToolButton("Check latest backup", "CheckCatalogBackup", delegate {
                 CatalogBackup row = SelectedBackup();
                 if (row == null) return;
@@ -117,10 +138,12 @@ partial class GearBackup
                 "is emptied. Latest backups and individual history objects are protected. Removing a mirror requires downloading it again.";
         }
 
-        // One row per history, describing its latest backup and when the history last succeeded.
+        // One row per history, describing its latest backup and when the history last succeeded. Only
+        // histories of the device chosen in the filter are listed; a history's device is its latest backup's.
         void PopulateDashboard(BackupCatalog value)
         {
-            foreach (CatalogBackup latest in value.Backups.FindAll(b => b.Latest))
+            FillDeviceChoices(value);
+            foreach (CatalogBackup latest in value.Backups.FindAll(b => b.Latest && ShownForDevice(b)))
             {
                 DateTime? successful = null;
                 long bytes = 0;
@@ -138,6 +161,31 @@ partial class GearBackup
             }
             Notice.Text = "Last check refers to the latest backup folder. Older backups remain available through Restore. " +
                 "Stored sizes are logical file sizes. Refresh after a backup or integrity check.";
+        }
+
+        // The devices that have histories in this scan. The current choice is kept when it still exists.
+        void FillDeviceChoices(BackupCatalog value)
+        {
+            string selected = deviceFilter.SelectedItem as string ?? AllDevices;
+            var names = new List<string> { AllDevices };
+            foreach (DeviceProfile device in Devices.All)
+                if (value.Backups.Exists(b => b.Latest && b.Device == device)) names.Add(device.Name);
+            if (value.Backups.Exists(b => b.Latest && b.Device == null)) names.Add(UnknownDevice);
+            fillingDevices = true;
+            try
+            {
+                deviceFilter.Items.Clear();
+                deviceFilter.Items.AddRange(names.ToArray());
+                deviceFilter.SelectedIndex = Math.Max(0, names.IndexOf(selected));
+            }
+            finally { fillingDevices = false; }
+        }
+
+        bool ShownForDevice(CatalogBackup latest)
+        {
+            string selected = deviceFilter.SelectedItem as string ?? AllDevices;
+            if (selected == AllDevices) return true;
+            return latest.Device == null ? selected == UnknownDevice : latest.Device.Name == selected;
         }
 
         static string CatalogDate(DateTime? date) { return date == null ? "—" : date.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm"); }

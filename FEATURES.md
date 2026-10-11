@@ -113,7 +113,7 @@ The profile editor separates device settings from backup profiles, groups option
 
 The GUI provides two management views across configured backup locations:
 
-- **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. Actions open folders, check backups and view saved recipes.
+- **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. A **Device** filter (default: all devices) lists one device's profiles. Actions open folders, check backups and view saved recipes.
 - **Storage:** sizes for current files, known old versions, history objects, metadata, ZIPs and MTP mirrors. The unique-content total counts hard-linked content once; it measures file content rather than allocated disk space.
 
 Cleanup starts with nothing selected. Choose older backup folders, known old versions, ZIPs or mirrors, then review the plan before moving them to the Recycle Bin. The latest backup folder and individual history objects are protected. Cleanup rechecks scanned items, respects operation locks and updates checksum records after removing old versions.
