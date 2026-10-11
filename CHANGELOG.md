@@ -6,6 +6,9 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+### Changed
+- Backups with a single content store are much faster, most of all when little has changed. Every backup rebuilds its catalog from all saved restore points, and each entry was re-checked for links by walking its whole path, so the time grew with every restore point saved. Each content object and folder is now checked once. A backup of an M8 card with 3,167 unchanged files went from 76 s to about 2 s.
+
 ## [0.9.3] - 2026-10-11
 
 ### Added

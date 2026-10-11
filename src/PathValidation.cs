@@ -26,6 +26,15 @@ static class PathSafety
     internal static string SafePath(string root, string relative)
     {
         RejectRootLinks(root);
+        string full = CheckedPath(root, relative);
+        RejectLinks(root, full);
+        return full;
+    }
+
+    // The same checks without touching the disk: where `relative` lands under `root`, refusing anything
+    // that is not a plain, canonical path inside it. For many names under one root, check the root once.
+    internal static string CheckedPath(string root, string relative)
+    {
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
             throw new IOException("Invalid relative path: " + relative);
         foreach (string part in relative.Replace('/', '\\').Split('\\'))
@@ -34,7 +43,6 @@ static class PathSafety
         string full = Path.GetFullPath(Path.Combine(root, relative));
         if (!Within(full, root) || Rooted(full) == Rooted(root))
             throw new IOException("Path escapes its folder: " + relative);
-        RejectLinks(root, full);
         return full;
     }
 
@@ -52,17 +60,24 @@ static class PathSafety
 
     // Rejects path if it, or a folder between it and root, is a link (junction/symbolic link), which could
     // redirect a write outside the intended folder.
-    static void RejectLinks(string root, string path)
+    static void RejectLinks(string root, string path) { RejectLinks(root, path, null); }
+
+    // With `clean`, folders already found to be plain are not inspected again, so many paths under the same
+    // folders cost one look at each folder instead of one per path. Only for one read-only scope.
+    internal static void RejectLinks(string root, string path, HashSet<string> clean)
     {
         // Folder names are mutable: a previously checked directory can now be a junction.
         // Always inspect current attributes, including after a preview or a long copy.
         string current = path;
         while (Within(current, root))
         {
+            bool item = object.ReferenceEquals(current, path);
+            if (clean != null && !item && clean.Contains(current)) break;
             bool isFolder = Directory.Exists(current);
             if ((isFolder || File.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked paths are not supported: " + current);
+            if (clean != null && !item) clean.Add(current);
             if (Rooted(current) == Rooted(root)) break;
             current = Path.GetDirectoryName(current.TrimEnd('\\'));
             if (current == null) break;
@@ -90,13 +105,15 @@ internal sealed class InventoryPathCache
 {
     readonly string root;
     readonly Dictionary<string, string> paths = new Dictionary<string, string>(StringComparer.Ordinal);
+    readonly HashSet<string> cleanFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     internal InventoryPathCache(string root) { this.root = root; PathSafety.RejectRootLinks(root); }
     internal string Resolve(string relative)
     {
         string path;
         if (!paths.TryGetValue(relative ?? "", out path))
         {
-            path = PathSafety.SafePath(root, relative);
+            path = PathSafety.CheckedPath(root, relative);
+            PathSafety.RejectLinks(root, path, cleanFolders); // each folder is inspected once per scope
             paths.Add(relative, path);
         }
         return path;

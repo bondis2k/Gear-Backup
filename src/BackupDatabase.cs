@@ -65,12 +65,13 @@ internal static class BackupDatabase
     {
         var data = new CatalogData();
         bool single = ContentStoreBackup.IsSingle(backup);
+        var objects = new ObjectChecks(backup);
         if (single)
         {
-            Snapshot current = ContentStoreBackup.Current(backup);
+            Snapshot current = ContentStoreBackup.Current(backup, objects);
             foreach (string folder in current.Folders) Add(data, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
             foreach (var item in current.Files) Add(data, new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
-                ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = File.Exists(item.StoredPath) });
+                ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
         }
         var sums = single ? null : LoadChecksums(backup);
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -92,16 +93,15 @@ internal static class BackupDatabase
         if (Directory.Exists(snapshots)) foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest"))
         {
             OperationContext.Current.CheckCancellation();
-            Snapshot snapshot = ReadSnapshot(backup, manifest);
+            Snapshot snapshot = ReadSnapshot(backup, manifest, objects);
             data.RestorePoints.Add(snapshot.Name);
             data.PointKinds[snapshot.Name] = ReadPointKind(backup, snapshot.Name);
             data.PointTimes[snapshot.Name] = snapshot.TakenUtc;
             foreach (string folder in snapshot.Folders) Add(data, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
             foreach (var item in snapshot.Files)
             {
-                RejectRootLinks(item.StoredPath);
                 Add(data, new CatalogEntry { SnapshotId = snapshot.Name, Path = item.Relative, Hash = item.Hash,
-                    Size = item.Size, ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = File.Exists(item.StoredPath) });
+                    Size = item.Size, ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
             }
         }
         return data;
