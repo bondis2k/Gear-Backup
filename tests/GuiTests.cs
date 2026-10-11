@@ -295,6 +295,7 @@ partial class Tests
         TestGuiThemes(root);
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestThemeReadability();
+        TestActionButtonsFollowOperation();
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
@@ -463,6 +464,27 @@ partial class Tests
         if (DwmGetWindowAttribute(form.Handle, 36, out value, sizeof(int)) == 0)
             Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink),
                 "native caption text matches the selected palette");
+    }
+
+    // The Restore tab holds Restore/Preview back until a point is chosen; going back to Backup must release them.
+    static void TestActionButtonsFollowOperation()
+    {
+        using (var form = new MainForm(true))
+        {
+            form.Show(); Application.DoEvents();
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var preview = (Button)form.Controls.Find("PreviewOperation", true)[0];
+            form.SelectOperation(GuiOperation.FullBackup);
+            Assert(start.Enabled && preview.Enabled, "Backup starts with its buttons available");
+            form.SelectOperation(GuiOperation.Restore);
+            Assert(!start.Enabled && !preview.Enabled, "Restore waits for a device and restore point");
+            form.SelectOperation(GuiOperation.FullBackup);
+            Assert(start.Enabled && preview.Enabled, "going back from Restore to a full backup re-enables Back up and Preview");
+            form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.IncrementalBackup);
+            Assert(start.Enabled && preview.Enabled, "going back from Restore to an incremental backup re-enables Back up and Preview");
+            form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.Check);
+            Assert(start.Enabled && !preview.Enabled, "Check is available without a preview");
+        }
     }
 
     static double ThemeContrast(Color a, Color b)

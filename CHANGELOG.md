@@ -53,6 +53,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   statistics writes (about 2× faster for small files). (#50)
 
 ### Fixed
+- The **Back up** and **Preview** buttons are available again after visiting the Restore tab and going back to Backup; Restore had left them disabled.
 - Restore picker background reads no longer overwrite the main operation display or leave a stale “Scanning backup” status. Idle/completed operation displays ignore late queued progress.
 - Dark theme: drop-down buttons and scroll bars use Windows' dark look, and the selected row in the backup chooser uses the theme's selection colour instead of Windows blue. The Cleanup tab's **Remove** header is no longer cut off, and Original's grey secondary text is slightly darker for readability. Disabled check boxes and radio buttons (such as Restore's **Remove extra target files**) no longer show near-black text on the dark background.
 - SQLite restore loading validates repeated inventory paths and content objects once per read, avoiding thousands of redundant disk checks across saved runs. Restore rechecks source paths before opening files.
