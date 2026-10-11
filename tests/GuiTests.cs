@@ -488,6 +488,12 @@ partial class Tests
             Assert(fullName.Parent.Visible && !incrementalName.Parent.Visible, "a full backup asks for the set name only");
             form.SelectOperation(GuiOperation.IncrementalBackup);
             Assert(!fullName.Parent.Visible && incrementalName.Parent.Visible && incrementalName.Visible, "an incremental backup can be given its own name");
+            // Tab switches hold the window's repainting while the new page is arranged, and always let go again.
+            var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+            foreach (int index in new[] { 2, 1, 0, 2, 1 }) { tabs.SelectedIndex = index; Application.DoEvents(); }
+            var freezes = typeof(MainForm).GetField("redrawFreezes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert((int)freezes.GetValue(form) == 0, "switching tabs never leaves the window frozen");
+            Assert(start.Enabled && preview.Enabled && tabs.SelectedIndex == 1, "the Backup tab is usable after switching tabs");
             form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.Check);
             Assert(start.Enabled && !preview.Enabled, "Check is available without a preview");
         }
