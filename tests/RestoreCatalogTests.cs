@@ -38,8 +38,8 @@ partial class Tests
             RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
             Assert(set.Sqlite && set.Points.Count == 4 && set.Points[0].Id != "current" && set.Points[2].Label.StartsWith("Full backup"),
                 "SQLite lists full and incremental points newest first in both storage layouts");
-            Assert(System.Text.RegularExpressions.Regex.IsMatch(set.Points[0].Id, @"^\d{2}\.\d{2}\.\d{2}(_\d+)?$") &&
-                set.Points[0].Label == "Incremental · " + set.Points[0].Id, "incremental points use hour.minute.second names in both layouts and GUI labels");
+            Assert(System.Text.RegularExpressions.Regex.IsMatch(set.Points[0].Id, @"^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}(_\d+)?$") &&
+                set.Points[0].Label == "Incremental · " + set.Points[0].Id, "incremental points use date and time names in both layouts and GUI labels");
             string firstId = set.Points[2].Id;
             if (!single)
             {
@@ -147,21 +147,21 @@ partial class Tests
         var scan = new ScanResult(); CollectFiles(source, scan);
         var sums = Checksums.LoadChecksums(backup);
         for (int i = 0; i < 10; i++) SaveSnapshot(backup, source, scan, sums, started, false, false, true);
-        Assert(File.Exists(Path.Combine(SnapshotRoot(backup), "23.59.58.manifest")) && File.Exists(Path.Combine(SnapshotRoot(backup), "23.59.58_10.manifest")),
+        Assert(File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58.manifest")) && File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58_10.manifest")),
             "same-second captures receive safe suffixes instead of overwriting saved runs");
         BackupDatabase.Rebuild(backup);
-        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "23.59.58_10", "same-instant collisions sort numerically, including suffix ten");
+        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-01_23.59.58_10", "same-instant collisions sort numerically, including suffix ten");
         var midnight = new DateTime(2026, 10, 2, 0, 0, 1, DateTimeKind.Local);
         SaveSnapshot(backup, source, scan, sums, midnight, false, false, true);
         BackupDatabase.Rebuild(backup);
         RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
-        Assert(set.Points[0].Id == "00.00.01" && set.Points[0].Snapshot.TakenUtc == midnight.ToUniversalTime(),
+        Assert(set.Points[0].Id == "2026-10-02_00.00.01" && set.Points[0].Snapshot.TakenUtc == midnight.ToUniversalTime(),
             "latest defaults use capture metadata across midnight, not filename order or source file dates");
-        Assert(Path.GetFileNameWithoutExtension(RestorePointNames.OrderedManifests(backup)[0]) == "00.00.01", "CLI uses the same chronological ordering as SQLite GUI");
-        using (var locked = new FileStream(Path.Combine(SnapshotRoot(backup), "00.00.01.taken"), FileMode.Open, FileAccess.Read, FileShare.None))
+        Assert(Path.GetFileNameWithoutExtension(RestorePointNames.OrderedManifests(backup)[0]) == "2026-10-02_00.00.01", "CLI uses the same chronological ordering as SQLite GUI");
+        using (var locked = new FileStream(Path.Combine(SnapshotRoot(backup), "2026-10-02_00.00.01.taken"), FileMode.Open, FileAccess.Read, FileShare.None))
             Assert(RestoreCatalog.Load(backup, Devices.M8).Sqlite, "GUI capture timestamps come from SQLite without rereading sidecar files");
         SaveSnapshot(backup, source, scan, sums, started.AddDays(1), false, false, true);
         BackupDatabase.Rebuild(backup);
-        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "23.59.58_11", "same clock time on another day preserves earlier points and selects the later capture");
+        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-02_23.59.58", "the same clock time on another day is a separate, later point");
     }
 }
