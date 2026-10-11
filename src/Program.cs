@@ -30,10 +30,10 @@ static class Program
         int result;
         try
         {
-            PreviewOnly = Array.IndexOf(args, "--preview") >= 0;
+            bool preview = Array.IndexOf(args, "--preview") >= 0;
             using (var cancellation = new CancellationTokenSource())
             {
-                var context = new OperationContext(new ConsoleInteraction(), cancellation.Token) { PreviewOnly = PreviewOnly };
+                var context = new OperationContext(new ConsoleInteraction(), cancellation.Token) { PreviewOnly = preview };
                 ConsoleCancelEventHandler handler = delegate(object sender, ConsoleCancelEventArgs e)
                 {
                     e.Cancel = true;

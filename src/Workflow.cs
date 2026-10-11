@@ -109,7 +109,7 @@ static class Workflow
     {
         List<string> locations = ConfiguredBackupLocations(config);
         OperationContext context = OperationContext.Current;
-        Dictionary<string, List<string>> cache = context.Fallback ? null : context.HistoryCache;
+        Dictionary<string, List<string>> cache = context.HistoryCache;
         string key = string.Join("|", locations.ConvertAll(location => Rooted(location)).ToArray());
         List<string> roots;
         if (cache == null || !cache.TryGetValue(key, out roots))
@@ -229,7 +229,9 @@ static class Workflow
     // the text goes to a temporary file that then replaces the original.
     internal static void AtomicText(string path, string contents)
     {
-        OperationContext.Current.CheckCancellation();
+        // Also used outside operations (settings saved from a window), where there is nothing to cancel.
+        OperationContext active = OperationContext.Active;
+        if (active != null) active.CheckCancellation();
         // Never write through a link: it could redirect the file anywhere.
         RejectRootLinks(path);
         string folder = Path.GetDirectoryName(path);
@@ -244,7 +246,7 @@ static class Workflow
                 created = true;
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) writer.Write(contents);
             }
-            OperationContext.Current.CheckCancellation();
+            if (active != null) active.CheckCancellation();
             if (File.Exists(path)) ReplaceSafely(temp, path);
             else File.Move(temp, path);
         }

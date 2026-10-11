@@ -75,14 +75,21 @@ internal sealed class OperationCounts
 // flags. Engines reach it through OperationContext.Current instead of passing it to every helper.
 internal sealed class OperationContext
 {
-    // Per thread, because the GUI runs operations on a worker thread. When nothing has been activated
-    // (simple CLI paths), a console context is created on first use.
+    // Per thread, because the GUI runs operations on a worker thread. Every operation starts its own
+    // context (the CLI's Main, the GUI's operation runner and tool windows, each test), so state such as
+    // the device, preview mode and caches never outlives the operation it belongs to.
     [ThreadStatic] static OperationContext current;
-    [ThreadStatic] static OperationContext fallback;
     public static OperationContext Current
     {
-        get { return current ?? (fallback ?? (fallback = new OperationContext(new ConsoleInteraction(), CancellationToken.None) { Fallback = true })); }
+        get
+        {
+            if (current == null) throw new InvalidOperationException("No operation is running: start one with new OperationContext(...).Activate().");
+            return current;
+        }
     }
+    // The running operation, or null outside one; only for work that is also done outside operations,
+    // such as saving settings from a window.
+    public static OperationContext Active { get { return current; } }
     public readonly IOperationInteraction Interaction;
     public readonly CancellationToken Cancellation;
     public bool PreviewOnly;
@@ -101,10 +108,8 @@ internal sealed class OperationContext
     {
         if (buffer != null) (buffer.Length == 65536 ? smallBuffers : largeBuffers).Push(buffer);
     }
-    // The console context made on first use, which lives as long as its thread.
-    internal bool Fallback;
     // Histories found in each set of backup locations, so an unreachable location (a disconnected
-    // network drive) delays an operation once. Not used by the fallback, whose answers would go stale.
+    // network drive) delays an operation once.
     internal readonly Dictionary<string, List<string>> HistoryCache = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
     public OperationContext(IOperationInteraction interaction, CancellationToken cancellation)
     {
@@ -125,6 +130,16 @@ internal sealed class OperationContext
     }
     // Makes this the current context until the returned scope is disposed (scopes nest).
     public IDisposable Activate() { return new ContextScope(this); }
+    // Works with another device until the returned scope is disposed, then switches back (restoring a
+    // backup made from another device than the source's).
+    public IDisposable UseDevice(DeviceProfile device) { return new DeviceScope(this, device); }
+    sealed class DeviceScope : IDisposable
+    {
+        readonly OperationContext context;
+        readonly DeviceProfile previous;
+        public DeviceScope(OperationContext context, DeviceProfile device) { this.context = context; previous = context.Device; context.Device = device; }
+        public void Dispose() { context.Device = previous; }
+    }
     sealed class ContextScope : IDisposable
     {
         readonly OperationContext previous;

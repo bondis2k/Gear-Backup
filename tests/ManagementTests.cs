@@ -96,14 +96,17 @@ partial class Tests
         string source = Rooted(Path.Combine(root, "source")); Put(Path.Combine(source, "song.txt"), "AAAA");
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-test");
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
-        new BackupEngine().Run(source, history, null, false, config, context);
-        string first = LatestBackup(history);
-        Put(Path.Combine(source, "song.txt"), "BBBBBB");
-        new BackupEngine().Run(source, history, first, true, config, context);
-        new BackupEngine().Run(source, history, first, false, config, context);
-        Put(Path.Combine(history, "2026-10-01.zip"), "ZIP");
-        Put(Path.Combine(root, "mirrors", "x100vi-test", "photo.raf"), "PHOTO");
-        return ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
+        using (context.Activate())
+        {
+            new BackupEngine().Run(source, history, null, false, config, context);
+            string first = LatestBackup(history);
+            Put(Path.Combine(source, "song.txt"), "BBBBBB");
+            new BackupEngine().Run(source, history, first, true, config, context);
+            new BackupEngine().Run(source, history, first, false, config, context);
+            Put(Path.Combine(history, "2026-10-01.zip"), "ZIP");
+            Put(Path.Combine(root, "mirrors", "x100vi-test", "photo.raf"), "PHOTO");
+            return ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
+        }
     }
     // Several old versions recycled from one backup leave its checksum list in one rewrite, and a
     // cleanup that fails part-way still takes out what it already recycled.

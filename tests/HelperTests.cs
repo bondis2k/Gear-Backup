@@ -18,6 +18,7 @@ using static ProfileSettings;
 using static Session;
 using static SettingsLocation;
 using static Workflow;
+using static DeviceSelection;
 
 partial class Tests
 {
@@ -578,5 +579,34 @@ partial class Tests
         Assert(RestoreMode.FromKey('p') == RestoreMode.ProjectFolder && RestoreMode.FromKey('x') == null && RestoreMode.All.Key == 'a',
             "restore modes map to and from their menu keys");
         Assert(Stage.Copying.IsFileDetail && !Stage.BackupCopy.IsFileDetail, "per-file stages are marked as detail");
+    }
+
+    // There is no hidden, long-lived context: outside an operation, operation state is refused with a
+    // clear error, while work that is also done outside operations (writing a settings file) still works.
+    // A device switch is scoped and always switches back.
+    static void TestOperationContext(string dir)
+    {
+        Exception outside = null;
+        bool wroteOutside = false;
+        var thread = new Thread(() => {
+            try { OperationContext unused = OperationContext.Current; }
+            catch (InvalidOperationException ex) { outside = ex; }
+            AtomicText(Path.Combine(dir, "settings.ini"), "Theme=retro");
+            wroteOutside = OperationContext.Active == null && File.Exists(Path.Combine(dir, "settings.ini"));
+        });
+        thread.Start();
+        thread.Join();
+        Assert(outside != null && outside.Message.StartsWith("No operation is running"), "outside an operation, the context is refused clearly");
+        Assert(wroteOutside, "settings can still be written outside an operation");
+
+        OperationContext context = OperationContext.Current;
+        DeviceProfile before = context.Device;
+        using (context.UseDevice(Devices.OPXY)) Assert(CurrentDevice == Devices.OPXY, "a device switch applies inside its scope");
+        Assert(CurrentDevice == before, "the device switches back afterwards");
+        try { using (context.UseDevice(Devices.TrackerMini)) throw new IOException("failure"); }
+        catch (IOException) { }
+        Assert(CurrentDevice == before, "the device switches back after a failure too");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+            Assert(CurrentDevice == Devices.M8 && !PreviewOnly, "a new operation starts with the default device and no preview");
     }
 }

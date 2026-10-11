@@ -133,7 +133,7 @@ partial class Tests
             Assert(!cancel.Enabled && sourceBox.Enabled, "GUI reenables inputs after preview");
             Assert(InvokeGuiShortcut((MainForm)form, Keys.Control | Keys.Enter), "Ctrl+Enter starts the selected operation");
             DriveGui(form, state, "Complete", false);
-            string history = Path.Combine(backupBox.Text, "Gear Backups", "profiles", ProfileId(Rooted(source), ""));
+            string history = Path.Combine(backupBox.Text, "Gear Backups", "profiles", InOperation(() => ProfileId(Rooted(source), "")));
             string backup = ListBackups(history)[0];
             Assert(resultCounts.Text.Contains("Copied 2") && resultCounts.Text.Contains("Failed 0") && openOutput.Visible,
                 "completed backup shows structured counts and an open-folder action");
