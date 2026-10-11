@@ -6,6 +6,8 @@ using static Backups;
 using static ChangeSummary;
 using static ConsoleUi;
 using static DeviceSelection;
+using static PathSafety;
+using static Workflow;
 
 // Formats and saves statistics. BackupRun retains control of execution and completion status.
 internal sealed class BackupReport
@@ -111,7 +113,8 @@ internal sealed class BackupReport
             : "backup-statistics.txt");
         try
         {
-            File.WriteAllText(statsFile, "  " + AppIdentity.Name + " " + (Incremental ? "incremental " : "") + "statistics\r\n" + report + "  " + status + "\r\n");
+            RejectRootLinks(statsFile);
+            AtomicText(statsFile, "  " + AppIdentity.Name + " " + (Incremental ? "incremental " : "") + "statistics\r\n" + report + "  " + status + "\r\n");
             OperationOutput.WriteLine("  Statistics saved to " + statsFile);
         }
         catch (Exception ex)

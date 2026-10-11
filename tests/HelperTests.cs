@@ -43,6 +43,9 @@ partial class Tests
         RunTest("Exact restore preserves extras after failure", () => TestPartialExactRestore(dir));
         RunTest("Malformed snapshot manifests", () => TestMalformedSnapshots(dir));
         RunTest("Security: atomic text temporary files", () => TestAtomicText(dir));
+        RunTest("Security: restore folder changed after preview", () => TestRestoreFolderSubstitution(dir));
+        RunTest("Security: statistics hard links", () => TestStatisticsHardLink(dir));
+        RunTest("Security: ZIP metadata symbolic links", () => TestZipMetadataLinks(dir));
         RunTest("Console questions", TestConsoleQuestions);
         RunTest("Device profiles", () => TestDevices(dir));
         RunTest("OP-1 Field: MTP mirror", () => TestMtpMirror(dir));

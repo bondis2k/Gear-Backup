@@ -87,7 +87,7 @@ Two independent options control automatic comparison:
 
 Both default to off. With size/time comparison, an edit preserving both can be missed. Recording checksums does not itself mean a backup has been verified; explicit integrity checks use them even when automatic verification is disabled.
 
-Backups record complete, incomplete or failed status. Path validation rejects linked or escaping paths, history locks prevent concurrent writes, and MTP mirror locks coordinate transfers with cleanup. Windows system DLLs are loaded from System32.
+Backups record complete, incomplete or failed status. Path validation rejects linked or escaping paths and checks current folders again after restore previews and before committing restored files. Statistics use staged replacement to protect files sharing an existing hard link. ZIP export checks metadata for links during enumeration and immediately before reading each entry. History locks prevent concurrent writes, and MTP mirror locks coordinate transfers with cleanup. Windows system DLLs are loaded from System32.
 
 ## X100VI settings and recipes
 

@@ -9,6 +9,7 @@ using static FileCopy;
 using static BackupTraversal;
 using static Checksums;
 using static Backups;
+using static PathSafety;
 
 static class BackupZip
 {
@@ -28,10 +29,14 @@ static class BackupZip
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
     internal static string ZipBackup(string backup)
     {
+        RejectRootLinks(backup);
         var entries = new List<FileSystemInfo>(BackupEntries(backup));
         foreach (string path in Directory.GetFiles(backup))
             if (IsStatisticsFile(path) || Path.GetFileName(path).Equals(ChecksumFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                RejectRootLinks(path);
                 entries.Add(new FileInfo(path));
+            }
         long total = 0;
         int fileCount = 0;
         foreach (FileSystemInfo entry in entries)
@@ -52,6 +57,8 @@ static class BackupZip
                 int count = 0;
                 foreach (FileSystemInfo entry in entries)
                 {
+                    OperationContext.Current.CheckCancellation();
+                    RejectRootLinks(entry.FullName);
                     string name = entry.FullName.Substring(backup.Length).TrimStart('\\').Replace('\\', '/');
                     if (entry is DirectoryInfo)
                     {
