@@ -19,7 +19,7 @@ static class SampleDependencies
     {
         if (new FileInfo(song).Length > MaxSongSize)
             throw new IOException("This file is too large to be an " + CurrentDevice.Name + " song. Use bundle or full restore.");
-        byte[] data = File.ReadAllBytes(song);
+        byte[] data = Records.ReadBytes(song, MaxSongSize, "Song");
         const int start = 80446, stride = 215, count = 128, pathOffset = 87, pathSize = 128;
         if (data.Length < start + stride * count || Encoding.ASCII.GetString(data, 0, 9) != "M8VERSION" || (data[11] & 15) != 6)
             throw new IOException("Dependency restore supports firmware-6 .m8s files only. Use bundle or full restore for this song.");

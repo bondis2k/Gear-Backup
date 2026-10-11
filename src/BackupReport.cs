@@ -113,7 +113,6 @@ internal sealed class BackupReport
             : "backup-statistics.txt");
         try
         {
-            RejectRootLinks(statsFile);
             AtomicText(statsFile, "  " + AppIdentity.Name + " " + (Incremental ? "incremental " : "") + "statistics\r\n" + report + "  " + status + "\r\n");
             OperationOutput.WriteLine("  Statistics saved to " + statsFile);
         }

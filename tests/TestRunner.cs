@@ -156,6 +156,7 @@ partial class Tests
         RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
         RunTest("MTP: values from a faulty device", TestMtpDeviceValues);
         RunTest("Named values: statuses, stages, modes, kinds", TestNamedValues);
+        RunTest("Security: record reads and writes check links", () => TestRecordAccess(Folder(root, "record-access")));
         RunTest("Verification hash at chunk boundaries", () => TestHashFromDisk(Folder(root, "hash-from-disk")));
         RunTest("Storage cleanup updates checksum lists once", () => TestCleanupChecksums(Folder(root, "cleanup-checksums")));
         RunTest("Fast catalog scan", () => TestCatalogShortcuts(Folder(root, "catalog-shortcuts")));

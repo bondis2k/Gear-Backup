@@ -230,6 +230,8 @@ static class Workflow
     internal static void AtomicText(string path, string contents)
     {
         OperationContext.Current.CheckCancellation();
+        // Never write through a link: it could redirect the file anywhere.
+        RejectRootLinks(path);
         string folder = Path.GetDirectoryName(path);
         Directory.CreateDirectory(folder);
         string temp = Path.Combine(folder, ".geartext-" + Guid.NewGuid().ToString("N") + ".tmp");
@@ -271,23 +273,13 @@ static class Workflow
         TryDelete(rollback);
     }
 
-    // Size limits for the records the program reads back from a backup: far above what it writes, so
-    // a damaged or planted file is reported instead of being read whole into memory.
-    internal const long SmallRecordLimit = 4 * 1024, ListRecordLimit = 128L * 1024 * 1024;
-
-    internal static void CheckRecordSize(string path, long limit, string what)
-    {
-        if (new FileInfo(path).Length > limit) throw new IOException(what + " is too large: " + path);
-    }
-
     // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
     // Backups made before status files existed report Status.Legacy.
     internal static Status BackupStatus(string folder)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt");
         if (!File.Exists(path)) return Status.Legacy;
-        CheckRecordSize(path, SmallRecordLimit, "Backup status record");
-        return Status.FromText(File.ReadAllText(path).Trim());
+        return Status.FromText(Records.ReadText(path, Records.SmallLimit, "Backup status record").Trim());
     }
 
     internal static void SetBackupStatus(string folder, Status status)

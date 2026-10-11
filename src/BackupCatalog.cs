@@ -305,10 +305,8 @@ static class StorageCatalog
         string successPath = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
         if (File.Exists(successPath))
         {
-            RejectRootLinks(successPath);
-            CheckRecordSize(successPath, SmallRecordLimit, "Last successful backup record");
             DateTime date;
-            if (!DateTime.TryParseExact(File.ReadAllText(successPath).Trim(), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out date))
+            if (!DateTime.TryParseExact(Records.ReadText(successPath, Records.SmallLimit, "Last successful backup record").Trim(), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out date))
                 throw new IOException("Invalid last successful backup record.");
             return date.ToUniversalTime();
         }
@@ -342,9 +340,7 @@ static class StorageCatalog
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(row.Path), "last-check.txt");
         if (!File.Exists(path)) { row.CheckResult = "Never checked"; return; }
-        RejectRootLinks(path);
-        CheckRecordSize(path, SmallRecordLimit, "Integrity check record");
-        string[] lines = File.ReadAllLines(path);
+        string[] lines = Records.ReadLines(path, Records.SmallLimit, "Integrity check record");
         DateTime checkedUtc;
         if (lines.Length != 2 || !DateTime.TryParseExact(lines[0], "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out checkedUtc))
             throw new IOException("Invalid integrity check record.");
@@ -359,7 +355,6 @@ static class StorageCatalog
         RejectRootLinks(backup);
         string result = damaged > 0 || missing > 0 ? "Problems found" : uncheckedFiles > 0 ? "Incomplete check" : "OK";
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "last-check.txt");
-        RejectRootLinks(path);
         AtomicText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + "\n" + result + "\n");
     }
 

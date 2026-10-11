@@ -23,9 +23,7 @@ static class VersionCatalog
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt");
         if (File.Exists(path))
         {
-            RejectRootLinks(path);
-            if (new FileInfo(path).Length > 16 * 1024 * 1024) throw new IOException("Old-version record is too large.");
-            string[] lines = File.ReadAllLines(path);
+            string[] lines = Records.ReadLines(path, Records.OldVersionLimit, "Old-version record");
             if (lines.Length == 0 || lines[0] != "GEARVERSIONS\t1") throw new IOException("Invalid old-version record.");
             for (int i = 1; i < lines.Length; i++)
             {
@@ -65,8 +63,7 @@ static class VersionCatalog
     // the format is still checked, so a damaged manifest is reported rather than half-read.
     internal static List<string> SnapshotFileNames(string manifest)
     {
-        CheckRecordSize(manifest, ListRecordLimit, "Snapshot manifest");
-        string[] rows = File.ReadAllLines(manifest, Encoding.UTF8);
+        string[] rows = Records.ReadLines(manifest, Records.ListLimit, "Snapshot manifest");
         if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
             throw new IOException("Unsupported snapshot format.");
         var names = new List<string>();
@@ -90,7 +87,6 @@ static class VersionCatalog
         var text = new StringBuilder("GEARVERSIONS\t1\n");
         foreach (string name in names) text.AppendLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(name)));
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt");
-        RejectRootLinks(path);
         AtomicText(path, text.ToString());
     }
 }

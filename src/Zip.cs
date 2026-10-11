@@ -70,7 +70,7 @@ static class BackupZip
                     ZipArchiveEntry item = zip.CreateEntry(name, CompressionLevel.Fastest);
                     item.LastWriteTime = ZipTime(file.LastWriteTime);
                     using (Stream from = IsStatisticsFile(file.FullName)
-                        ? new MemoryStream(Encoding.UTF8.GetBytes(RedactPaths(File.ReadAllText(file.FullName), backup)))
+                        ? new MemoryStream(Encoding.UTF8.GetBytes(RedactPaths(Records.ReadText(file.FullName, Records.ListLimit, "Backup statistics"), backup)))
                         : (Stream)new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
                     using (Stream to = item.Open())
                     {

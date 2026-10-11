@@ -294,4 +294,26 @@ partial class Tests
         Assert(File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains(backup),
             "the backup's own statistics keep full paths");
     }
+
+    // Metadata reads and writes all check for links and size limits in one place (Records, AtomicText),
+    // including writes that used to skip the check (checksum lists, status, snapshots, settings).
+    static void TestRecordAccess(string root)
+    {
+        string elsewhere = Path.Combine(root, "elsewhere"), backup = Path.Combine(root, "backup");
+        Directory.CreateDirectory(elsewhere);
+        Directory.CreateDirectory(backup);
+        CreateTestJunction(AppIdentity.MetadataRoot(backup), elsewhere);
+        WithUi(() => {
+            Throws(() => SetBackupStatus(backup, Status.Complete), "a status write through a linked metadata folder is refused");
+            Throws(() => AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "snapshots", "x.manifest"), "x"), "any record write through a link is refused");
+        });
+        Assert(Directory.GetFileSystemEntries(elsewhere).Length == 0, "nothing was written through the link");
+        Put(Path.Combine(elsewhere, "status.txt"), "complete");
+        Throws(() => BackupStatus(backup), "a status read through a linked metadata folder is refused");
+        string plain = Path.Combine(root, "plain", "status.txt");
+        Put(plain, new string('x', 5000));
+        Throws(() => Records.ReadText(plain, Records.SmallLimit, "Backup status record"), "an oversized record is refused");
+        Put(plain, "complete");
+        Assert(Records.ReadText(plain, Records.SmallLimit, "Backup status record").Trim() == "complete", "an ordinary record reads normally");
+    }
 }
