@@ -69,7 +69,7 @@ static class ConsoleUi
 
 internal sealed class ConsoleInteraction : IOperationInteraction
 {
-    string lastStage;
+    Stage lastStage;
     DateTime lastProgress;
     public void Write(string text) { Console.Write(text); }
     public void WriteLine(string text) { Console.WriteLine(text); }
@@ -111,7 +111,7 @@ internal sealed class ConsoleInteraction : IOperationInteraction
     public void ReportProgress(OperationProgress progress)
     {
         if (Console.IsOutputRedirected) return;
-        if (progress.OverallOnly && Stage.IsFileDetail(progress.Stage)) return;
+        if (progress.OverallOnly && progress.Stage.IsFileDetail) return;
         DateTime now = DateTime.UtcNow;
         bool changed = progress.Stage != lastStage;
         bool finished = progress.TotalBytes > 0 && progress.Bytes == progress.TotalBytes;

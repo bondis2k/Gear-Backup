@@ -35,14 +35,14 @@ partial class Tests
         foreach (string version in KnownOldVersions(backup)) Assert(!File.Exists(Path.Combine(target, version)), "all restore omits genuine retained versions");
 
         ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
-        ui.Keys.Enqueue(RestoreMode.Bundle);
+        ui.Keys.Enqueue(RestoreMode.Bundle.Key);
         target = Folder(root, "bundle");
         using (new OperationContext(ui, CancellationToken.None).Activate())
             Assert(RunRestore(target, new List<string> { backup }, config).ExitCode == 0, "bundle current-file restore succeeds");
         Assert(File.Exists(Path.Combine(target, "Bundles", "Demo", dated)), "bundle restore keeps dated samples");
 
         ui = new TestInteraction { OnAskText = q => dated, OnChooseItem = (q, items) => q == "Choose a file." ? items.Count : 1 };
-        ui.Keys.Enqueue(RestoreMode.SingleFile);
+        ui.Keys.Enqueue(RestoreMode.SingleFile.Key);
         target = Folder(root, "single");
         using (new OperationContext(ui, CancellationToken.None).Activate())
             Assert(RunRestore(target, new List<string> { backup }, config).ExitCode == 0, "single dated-file restore succeeds");
@@ -111,7 +111,7 @@ partial class Tests
         Assert(BackupDevice(backup) == Devices.TrackerMini, "named backups persist their device type");
         string target = Folder(root, "target"); Put(Path.Combine(target, relative), "ORIGINAL");
         var ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
-        ui.Keys.Enqueue(RestoreMode.ProjectFolder); ui.Keys.Enqueue('r');
+        ui.Keys.Enqueue(RestoreMode.ProjectFolder.Key); ui.Keys.Enqueue('r');
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
             PreparedSource prepared = PrepareSource(global, new SourceChoice { Path = target });
@@ -120,7 +120,7 @@ partial class Tests
             Assert(CurrentDevice == Devices.M8, "restore restores its caller's device context afterward");
         }
         Assert(File.ReadAllText(Path.Combine(target, relative)) == "PROJECT", "whole-project restore copies the selected tracker project");
-        Assert(ui.Options.Exists(options => new List<Option>(options).Exists(o => o.Key == RestoreMode.ProjectFolder)), "saved device supplies whole-project choices");
+        Assert(ui.Options.Exists(options => new List<Option>(options).Exists(o => o.Key == RestoreMode.ProjectFolder.Key)), "saved device supplies whole-project choices");
         string[] recovered = Directory.GetFiles(recovery, "project.mt", SearchOption.AllDirectories);
         Assert(recovered.Length == 1 && File.ReadAllText(recovered[0]) == "ORIGINAL", "saved device recovery preferences preserve the original target");
 
@@ -141,7 +141,7 @@ partial class Tests
         Put(Path.Combine(AppIdentity.MetadataRoot(automatic), "device.txt"), "unknown-device");
         Assert(BackupDevice(automatic) == Devices.TrackerMini, "an unknown recorded device falls back to the history's name");
         ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
-        ui.Keys.Enqueue(RestoreMode.All); ui.Keys.Enqueue('r');
+        ui.Keys.Enqueue(RestoreMode.All.Key); ui.Keys.Enqueue('r');
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
             PreparedSource prepared = PrepareSource(global, new SourceChoice { Path = target });

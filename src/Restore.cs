@@ -43,12 +43,12 @@ static class RestoreFlow
         bool historical = snapshot != null;
         if (!historical)
         {
-            string status = BackupStatus(backup);
+            Status status = BackupStatus(backup);
             if (status != Status.Complete && !AskYesNo("Backup status is " + status + ". Browse its available files anyway?")) return new OperationResult();
             snapshot = CurrentBackup(backup);
         }
         OperationOutput.WriteLine("  Selected: " + snapshot.Name);
-        char mode = Ask("What should be restored?", RestoreModes(CurrentDevice));
+        RestoreMode mode = RestoreMode.FromKey(Ask("What should be restored?", RestoreModes(CurrentDevice)));
         List<RestoreEntry> items;
         string bundle = null;
         if (mode == RestoreMode.All) items = snapshot.Files.FindAll(f => !snapshot.OldVersions.Contains(f.Relative));
@@ -109,11 +109,11 @@ static class RestoreFlow
     // The restore choices a device supports: bundles and song-with-samples only where it has them.
     internal static Option[] RestoreModes(DeviceProfile device)
     {
-        var modes = new List<Option> { new Option(RestoreMode.All, "All files") };
-        if (device.BundlesFolder != null) modes.Add(new Option(RestoreMode.Bundle, "Bundle"));
-        if (device.SongIsFolder) modes.Add(new Option(RestoreMode.ProjectFolder, "Whole " + Singular(device.SongsLabel) + " folder"));
-        modes.Add(new Option(RestoreMode.SingleFile, "Single file"));
-        if (device.ReadSamplePaths != null) modes.Add(new Option(RestoreMode.SongWithSamples, "Song with dependent samples"));
+        var modes = new List<Option> { new Option(RestoreMode.All.Key, "All files") };
+        if (device.BundlesFolder != null) modes.Add(new Option(RestoreMode.Bundle.Key, "Bundle"));
+        if (device.SongIsFolder) modes.Add(new Option(RestoreMode.ProjectFolder.Key, "Whole " + Singular(device.SongsLabel) + " folder"));
+        modes.Add(new Option(RestoreMode.SingleFile.Key, "Single file"));
+        if (device.ReadSamplePaths != null) modes.Add(new Option(RestoreMode.SongWithSamples.Key, "Song with dependent samples"));
         return modes.ToArray();
     }
 

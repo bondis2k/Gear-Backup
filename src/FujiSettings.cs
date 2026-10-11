@@ -111,7 +111,7 @@ static class FujiSettings
         {
             for (ushort slot = 1; slot <= 7; slot++)
             {
-                OperationContext.Current.Progress("Reading camera settings", "C" + slot, 0, 0, slot - 1, 7);
+                OperationContext.Current.Progress(Stage.ReadingCameraSettings, "C" + slot, 0, 0, slot - 1, 7);
                 selected = true; // Even a failed selection may already have reached the camera.
                 source.SelectRecipe(slot);
                 if (FujiWord(source.ReadProperty(0xD18C)) != slot) throw new IOException("The camera did not select recipe C" + slot + ".");

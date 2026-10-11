@@ -110,7 +110,7 @@ partial class Tests
         OperationResult result;
         try
         {
-            result = new RestoreEngine().RunSelected(target, f.First, copies, 'a', null, true,
+            result = new RestoreEngine().RunSelected(target, f.First, copies, RestoreMode.All, null, true,
                 new Config { Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
         }
         finally { if (locked != null) locked.Dispose(); }

@@ -532,7 +532,7 @@ partial class Tests
             {
                 dashboard.Show(); Application.DoEvents();
                 var table = (DataGridView)dashboard.Controls.Find("DashboardTable", true)[0];
-                Assert(table.Rows.Count == 1 && Convert.ToString(table.Rows[0].Cells[2].Value) == Status.Complete,
+                Assert(table.Rows.Count == 1 && Convert.ToString(table.Rows[0].Cells[2].Value) == Status.Complete.ToString(),
                     "dashboard groups backups by profile and shows the latest status");
                 CheckGuiLayout(dashboard, 150, Path.Combine(output, "dashboard-150.png"));
             }

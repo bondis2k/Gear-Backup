@@ -160,7 +160,7 @@ partial class Tests
             "incremental backup continues the old history and publishes a new snapshot");
         string target = Rooted(Folder(root, "restored"));
         Snapshot snapshot = LatestSnapshot(backup);
-        OperationResult restored = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, 'a', null, false,
+        OperationResult restored = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false,
             config, new OperationContext(new TestInteraction(), CancellationToken.None));
         Assert(restored.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "AAAA",
             "snapshots from an existing history restore correctly");
@@ -563,5 +563,20 @@ partial class Tests
             using (var sha = System.Security.Cryptography.SHA256.Create()) expected = ToHex(sha.ComputeHash(data));
             Assert(HashFileFromDisk(path) == expected && HashFile(path) == expected, "unbuffered and plain hashes agree for " + size + " bytes");
         }
+    }
+
+    // Statuses keep their text on disk, and restore modes their menu keys.
+    static void TestNamedValues()
+    {
+        Assert(Status.FromText("complete") == Status.Complete && Status.FromText("failed").Unfinished && Status.FromText("incomplete").Unfinished,
+            "known status texts read back as the same statuses");
+        Status unknown = Status.FromText("paused by a newer version");
+        Assert(unknown.ToString() == "paused by a newer version" && unknown != Status.Complete && !unknown.Unfinished,
+            "an unknown status keeps its text and is neither complete nor unfinished");
+        Assert(Status.Complete.ToString() == "complete" && Stage.SavingHistory.ToString() == "Saving history" &&
+            StorageKind.OlderBackup.ToString() == "Older backup", "values print the text they always had");
+        Assert(RestoreMode.FromKey('p') == RestoreMode.ProjectFolder && RestoreMode.FromKey('x') == null && RestoreMode.All.Key == 'a',
+            "restore modes map to and from their menu keys");
+        Assert(Stage.Copying.IsFileDetail && !Stage.BackupCopy.IsFileDetail, "per-file stages are marked as detail");
     }
 }

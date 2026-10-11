@@ -282,15 +282,15 @@ static class Workflow
 
     // Status.Incomplete while a backup runs (or after it was interrupted), then Complete or Failed.
     // Backups made before status files existed report Status.Legacy.
-    internal static string BackupStatus(string folder)
+    internal static Status BackupStatus(string folder)
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt");
         if (!File.Exists(path)) return Status.Legacy;
         CheckRecordSize(path, SmallRecordLimit, "Backup status record");
-        return File.ReadAllText(path).Trim();
+        return Status.FromText(File.ReadAllText(path).Trim());
     }
 
-    internal static void SetBackupStatus(string folder, string status)
+    internal static void SetBackupStatus(string folder, Status status)
     {
         AtomicText(Path.Combine(AppIdentity.MetadataRoot(folder), "status.txt"), status + "\n");
     }
