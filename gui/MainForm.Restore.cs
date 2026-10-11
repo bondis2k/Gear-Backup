@@ -7,11 +7,11 @@ using System.Windows.Forms;
 
 internal sealed partial class MainForm
 {
-    readonly ComboBox restoreBackup = new ComboBox { Name = "RestoreBackup", AccessibleName = "Backup for the identified device", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    readonly ComboBox restoreBackup = new ComboBox { Name = "RestoreBackup", AccessibleName = "Available backups", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     readonly ComboBox restorePoint = new ComboBox { Name = "RestorePoint", AccessibleName = "Full or incremental restore point", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     readonly Button browseRestore = GuiTheme.Button("Choose files…", false);
     readonly CheckBox restoreExact = new CheckBox { Name = "ExactRestorePoint", Text = "Remove extra target files", AutoSize = true, ForeColor = GuiTheme.Ink, Anchor = AnchorStyles.Left };
-    readonly Label restoreNotice = GuiTheme.Label("Detect a device to list its backups.", 9, GuiTheme.Muted);
+    readonly Label restoreNotice = GuiTheme.Label("Choose a backup and a folder to restore your files.", 9, GuiTheme.Muted);
     Control restoreBackupField, restoreDetails;
     Label restoreBackupCaption;
     RestoreSet restoreSet;
@@ -29,11 +29,11 @@ internal sealed partial class MainForm
     Control BuildRestoreBackupField()
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 1, Margin = new Padding(0, 0, 16, 0) };
-        restoreBackupCaption = FieldLabel("Backup for the detected device");
+        restoreBackupCaption = FieldLabel("Available backups · all devices");
         panel.Controls.Add(restoreBackupCaption); panel.Controls.Add(restoreBackup);
         GuiTheme.StyleComboBox(restoreBackup); GuiTheme.StyleComboBox(restorePoint);
         restoreBackup.SelectedIndexChanged += delegate { if (!fillingRestore) LoadRestorePoints(); };
-        hints.SetToolTip(restoreBackup, "Backups matching the identified device. Detect again to refresh the list.");
+        hints.SetToolTip(restoreBackup, "All backups when no device is detected; matching backups when a device is detected. Detect again to refresh the list.");
         restorePoint.SelectedIndexChanged += delegate { restorePaths = null; UpdateRestoreSelectionNotice(); };
         restoreBackupField = panel;
         return panel;
@@ -70,7 +70,7 @@ internal sealed partial class MainForm
     }
     void UpdateRestoreSelectionNotice()
     {
-        restoreNotice.Text = restoreSet == null ? "Detect a device to list its backups." : restoreSet.Notice +
+        restoreNotice.Text = restoreSet == null ? "Choose a backup and a folder to restore your files." : restoreSet.Device.Name + " · " + restoreSet.Notice +
             (rememberedRestoreScope == 1 ? "  " + (restorePaths == null ? "Click Choose files to select folders or files." : restorePaths.Length + " file(s) or folder(s) selected.") : "  All files and folders in the selected point will be restored.");
         var selectedPoint = restorePoint.SelectedItem as RestorePoint;
         if (selectedPoint != null && selectedPoint.Id != "current")
@@ -90,7 +90,7 @@ internal sealed partial class MainForm
             preview.Enabled = !runner.IsBusy && Selected != GuiOperation.Check;
             return;
         }
-        bool ready = !runner.IsBusy && !loadingRestore && displayedDevice != null && restoreSet != null && restorePoint.SelectedItem is RestorePoint &&
+        bool ready = !runner.IsBusy && !loadingRestore && restoreSet != null && restorePoint.SelectedItem is RestorePoint &&
             (rememberedRestoreScope != 1 || (restorePaths != null && restorePaths.Length != 0));
         start.Enabled = preview.Enabled = ready;
     }
@@ -98,7 +98,8 @@ internal sealed partial class MainForm
     {
         if (config == null || runner.IsBusy || IsDisposed || !IsHandleCreated) return;
         DeviceProfile device = displayedDevice;
-        restoreBackupCaption.Text = device == null ? "Backup for the detected device" : "Backups for " + device.Name;
+        restoreBackupCaption.Text = device == null ? "Available backups · all devices" : "Backups for " + device.Name;
+        restoreBackup.AccessibleName = restoreBackupCaption.Text;
         Config options;
         try { options = CaptureConfig(); } catch (Exception) { return; }
         string key = (device == null ? "" : device.Id) + "|" + options.BackupFolder;
@@ -112,11 +113,11 @@ internal sealed partial class MainForm
         loadingRestore = true; restoreBackup.Enabled = restorePoint.Enabled = browseRestore.Enabled = false;
         RefreshRestoreActionState();
         restoreSet = null; restorePaths = null;
-        restoreNotice.Text = device == null ? "Detect a device first. Only matching backups are listed." : "Loading " + device.Name + " backups…";
+        restoreNotice.Text = device == null ? "Loading backups for all devices…" : "Loading " + device.Name + " backups…";
         var paths = new List<string>(); string error = null;
         try
         {
-            if (device != null) paths = await Task.Run(delegate {
+            paths = await Task.Run(delegate {
                 using (new OperationContext(new GuiInteraction(this, value => { }), CancellationToken.None) { PreviewOnly = true, Device = device }.Activate())
                     return RestoreCatalog.BackupsForDevice(options, device);
             });
@@ -131,13 +132,23 @@ internal sealed partial class MainForm
         try
         {
             restoreBackup.Items.Clear(); restorePoint.Items.Clear();
-            foreach (string path in paths) restoreBackup.Items.Add(new RestoreBackupItem { Path = path, Label = BackupSetNames.Label(path) + " · " + Path.GetFileName(Path.GetDirectoryName(path)) });
+            foreach (string path in paths)
+            {
+                string label = BackupSetNames.Label(path) + " · " + Path.GetFileName(Path.GetDirectoryName(path));
+                if (device == null)
+                {
+                    try { var recorded = DeviceSelection.BackupDevice(path); if (recorded != null) label = recorded.Name + " · " + label; }
+                    catch (IOException) { } // Loading the selected set reports a changed/unreadable record.
+                    catch (UnauthorizedAccessException) { }
+                }
+                restoreBackup.Items.Add(new RestoreBackupItem { Path = path, Label = label });
+            }
             int index = paths.FindIndex(path => string.Equals(path, oldPath, StringComparison.OrdinalIgnoreCase));
             if (paths.Count > 0) restoreBackup.SelectedIndex = index >= 0 ? index : 0;
         }
         finally { fillingRestore = false; }
         loadingRestore = false; restoreBackup.Enabled = paths.Count > 0 && !runner.IsBusy;
-        if (paths.Count == 0) restoreNotice.Text = error != null ? "Cannot list backups: " + error : device == null ? "Detect a device first. Only matching backups are listed." : "No backups found for " + device.Name + " at the configured backup locations.";
+        if (paths.Count == 0) restoreNotice.Text = error != null ? "Cannot list backups: " + error : device == null ? "No backups found at the configured backup locations." : "No backups found for " + device.Name + " at the configured backup locations.";
         else LoadRestorePoints();
         RefreshRestoreActionState();
     }
@@ -148,7 +159,7 @@ internal sealed partial class MainForm
         DeviceProfile device = displayedDevice;
         restoreSet = null; restorePaths = null;
         restorePoint.Items.Clear();
-        if (backup == null || device == null) { loadingRestore = false; UpdateRestoreSelectionNotice(); return; }
+        if (backup == null) { loadingRestore = false; UpdateRestoreSelectionNotice(); return; }
         loadingRestore = true; restorePoint.Enabled = browseRestore.Enabled = false;
         RefreshRestoreActionState();
         restoreNotice.Text = "Loading restore points from SQLite…";
@@ -181,10 +192,9 @@ internal sealed partial class MainForm
     {
         var backup = restoreBackup.SelectedItem as RestoreBackupItem;
         var point = restorePoint.SelectedItem as RestorePoint;
-        if (displayedDevice == null) throw new IOException("Detect a device before choosing a backup to restore.");
-        if (loadingRestore || restoreSet == null || backup == null || point == null) throw new IOException("Choose a matching backup and restore point first.");
+        if (loadingRestore || restoreSet == null || backup == null || point == null) throw new IOException("Choose a backup and restore point first.");
         if (rememberedRestoreScope == 1 && (restorePaths == null || restorePaths.Length == 0)) throw new IOException("Click Choose files and check the folders or files to restore.");
-        return new RestoreRequest { Backup = backup.Path, Point = point.Id, Stamp = RestoreCatalog.Stamp(point.Snapshot), DeviceId = displayedDevice.Id,
+        return new RestoreRequest { Backup = backup.Path, Point = point.Id, Stamp = RestoreCatalog.Stamp(point.Snapshot), DeviceId = restoreSet.Device.Id,
             Paths = rememberedRestoreScope == 1 ? (string[])restorePaths.Clone() : null, Exact = rememberedRestoreScope == 0 && restoreExact.Enabled && restoreExact.Checked };
     }
 }

@@ -13,9 +13,10 @@ using static UsbDevices;
 using static ConsoleUi;
 using static Session;
 using static Workflow;
+using static MtpMirror;
 
 // Shared operations offered by the Backup and Restore tabs.
-internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings }
+internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings, ZipArchive }
 
 // Owns the worker lifetime and operation orchestration; the form owns display.
 internal sealed class GuiOperationRunner
@@ -80,7 +81,7 @@ internal sealed class GuiOperationRunner
     {
         SourceChoice known = detectedDrive;
         RunWorker(delegate(OperationContext context) {
-            context.OverallProgressOnly = operation == GuiOperation.FullBackup;
+            context.OverallProgressOnly = operation == GuiOperation.FullBackup || operation == GuiOperation.ZipArchive;
             return Execute(options, operation, known, context);
         }, previewOnly);
     }
@@ -131,7 +132,21 @@ internal sealed class GuiOperationRunner
         else if (known != null && Rooted(options.SourceFolder) == Rooted(known.Path)) chosen = known;
         else chosen = new SourceChoice { Path = options.SourceFolder };
 
-        PreparedSource prepared = PrepareSource(options, chosen);
+        PreparedSource prepared = PrepareSource(options, chosen, operation != GuiOperation.ZipArchive);
+        if (operation == GuiOperation.ZipArchive)
+        {
+            string suggested = ArchiveBackup.FileName(options.FullBackupName, prepared.Device, DateTime.Now);
+            string destination = form.OnUi(delegate { return form.ChooseArchiveDestination(suggested); });
+            if (string.IsNullOrEmpty(destination)) return new OperationResult { Cancelled = true, Summary = "ZIP archive cancelled." };
+            OperationResult archived;
+            using (chosen.Mtp == null ? null : LockHistory(System.IO.Path.GetDirectoryName(Rooted(chosen.Mtp.Mirror).TrimEnd('\\'))))
+            {
+                string archiveSource = chosen.Mtp == null ? prepared.Path : SyncMtpSource(chosen.Mtp);
+                archived = ArchiveBackup.Run(archiveSource, destination, prepared.Config);
+            }
+            EjectIfWanted(prepared, archived, context);
+            return archived;
+        }
         OperationResult result = RunPrepared(prepared, operation == GuiOperation.Restore, operation == GuiOperation.IncrementalBackup);
         EjectIfWanted(prepared, result, context);
         return result;

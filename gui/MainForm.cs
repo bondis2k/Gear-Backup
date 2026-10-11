@@ -335,7 +335,7 @@ internal sealed partial class MainForm : Form
         copy.Zip = zip.Checked && ZipApplies;
         if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
         if (forOperation && Selected == GuiOperation.Restore) copy.RestoreSelection = CaptureRestoreSelection();
-        if (forOperation && Selected == GuiOperation.FullBackup) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
+        if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
         if (forOperation && Selected == GuiOperation.IncrementalBackup)
         {
             copy.IncrementalBackupName = BackupSetNames.Validate(incrementalName.Text);
@@ -358,20 +358,27 @@ internal sealed partial class MainForm : Form
         source.Enabled = sourceBrowse.Enabled = !checking && !cameraSettings && !runner.IsBusy;
         restoreDestination.Enabled = !runner.IsBusy;
         detect.Enabled = !runner.IsBusy;
-        start.Text = restoring ? "Restore" : checking ? "Check" : "Back up";
+        start.Text = restoring ? "Restore" : checking ? "Check" : Selected == GuiOperation.ZipArchive ? "Create ZIP" : "Back up";
         preview.Enabled = !checking && !runner.IsBusy;
         zip.Enabled = ZipApplies && !runner.IsBusy;
-        zip.Visible = !restoring && !checking;
-        optionsToggle.Visible = profileLabel.Visible = profileField.Visible = !restoring && !checking;
+        zip.Visible = !restoring && !checking && Selected != GuiOperation.ZipArchive;
+        optionsToggle.Visible = !restoring && !checking;
+        profileLabel.Visible = profileField.Visible = !restoring && !checking && Selected != GuiOperation.ZipArchive;
+        foreach (Control control in optionalFields.Controls)
+        {
+            int row = optionalFields.GetRow(control);
+            if (row == 2 || row == 3) control.Visible = Selected != GuiOperation.ZipArchive;
+        }
         sourceBrowse.Visible = !checking;
         RefreshSourceField(restoring);
         if (restoring || checking) SetOptionsExpanded(true);
         else if (!checking) SetOptionsExpanded(backupOptionsExpanded);
         RefreshDestinationSummary();
         if (!elapsed.IsRunning && status.Text == "Ready")
-            detail.Text = restoring ? "Detect a device, then choose its backup and a restore destination." :
+            detail.Text = restoring ? "Choose a backup and a restore folder. Detect a device to filter the backups." :
                 checking ? "Check saved backups without connecting a device." :
                 cameraSettings ? "Connect X100VI in settings mode, then Back up." :
+                Selected == GuiOperation.ZipArchive ? "Create a full ZIP archive. You will choose where to save it." :
                 "Detect your device on the Device tab, then open Backup.";
         RefreshRestoreActionState();
     }
@@ -401,6 +408,12 @@ internal sealed partial class MainForm : Form
         string sourceFolder = (Selected == GuiOperation.Restore ? restoreDestination : source).Text.Trim();
         string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
             : (Selected == GuiOperation.Restore ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
+        if (Selected == GuiOperation.ZipArchive)
+        {
+            destinationSummary.Text = sourcePart + "Choose the ZIP save location when you click Create ZIP or Preview.";
+            hints.SetToolTip(destinationSummary, destinationSummary.Text);
+            return;
+        }
         destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   History name: " + profile.Text.Trim() : "");
         hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or the history name in More options. Device & backup settings can override the location.");
     }
@@ -408,7 +421,7 @@ internal sealed partial class MainForm : Form
     {
         if (!cameraSettingsAvailable) return;
         bool previous = synchronizingNavigation; synchronizingNavigation = true;
-        try { SelectOperation(GuiOperation.CameraSettings, false); backupMode.SelectedIndex = 2; }
+        try { SelectOperation(GuiOperation.CameraSettings, false); backupMode.SelectedIndex = 3; }
         finally { synchronizingNavigation = previous; }
     }
     GuiOperation Selected { get { return selectedOperation; } }
@@ -503,7 +516,7 @@ internal sealed partial class MainForm : Form
         restoreContextKey = null;
         RefreshRestoreBackups();
         UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);
-        deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also choose a local source folder on the Backup tab." :
+        deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also back up a local folder or restore saved files without connecting a device." :
             "Click Detect device to refresh storage and connection details.";
         RefreshDestinationSummary();
         deviceName.Text = device == null ? "No device detected" : device.Name + " · detected";
@@ -556,7 +569,7 @@ internal sealed partial class MainForm : Form
             result.Counts.Copied, result.Counts.Unchanged, result.Counts.Removed, result.Counts.Failed);
         counts.Visible = result.Counts != null;
         outputFolder = previewOnly ? null : result.OutputFolder;
-        openFolder.Text = Selected == GuiOperation.Restore ? "Open restore folder" : "Open backup folder";
+        openFolder.Text = Selected == GuiOperation.Restore ? "Open restore folder" : Selected == GuiOperation.ZipArchive ? "Open archive folder" : "Open backup folder";
         openFolder.Visible = !string.IsNullOrEmpty(outputFolder) && Directory.Exists(outputFolder);
         metrics.Text = "Elapsed " + FormatTime(result.Elapsed > TimeSpan.Zero ? result.Elapsed : elapsed.Elapsed);
         metrics.Visible = true;
