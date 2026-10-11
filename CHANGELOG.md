@@ -7,6 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- Standalone ZIP archives include `checksums.sha256` with hashes of all backed-up files, computed while archiving regardless of the verification setting.
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed

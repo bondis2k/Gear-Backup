@@ -123,7 +123,7 @@ With **Also save as zip**, a successful full backup additionally creates a ZIP b
 4. Click **Create ZIP** and choose the ZIP file's save location outside the source folder. The suggested name can be changed in the save window.
 5. Review the contents and wait for **Complete**. Replacing an existing archive requires confirmation.
 
-This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
+This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. A root-level `checksums.sha256` lists the SHA-256 hash and ZIP-relative path of every backed-up file in sha256sum format. Hashes are always included, even with verification disabled; the manifest excludes itself and folders. The source must not contain a root-level file or folder named `checksums.sha256`. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
 
 ### Incremental backup: update a chosen set
 
