@@ -14,6 +14,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - An incremental backup can be given an optional name on the Backup tab. The Restore tab lists it beside the date and time (`Incremental · Studio jam · 2026-10-11_14.32.08`), and the command-line restore picker shows it too. It is saved with the restore point in both storage layouts.
 
 ### Changed
+- The manual's **Connecting a device** table shows each device's icon beside its name.
 - The shared folder picker has a clearer header, quick-access shortcuts, folder and drive icons, larger selection rows, and Up/Go navigation. Restore, backup, recovery and other folder Browse buttons use the same design in all three themes.
 - Restore's **Choose files…** window uses the matching browser style, with file/folder icons, a selection summary, and Select/Clear and Expand/Collapse controls above the tree. Expanded folders and selection survive font/DPI changes.
 - The About window is larger and shows the app icon beside the name, version and license.
