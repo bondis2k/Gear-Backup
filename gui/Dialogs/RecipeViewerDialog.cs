@@ -51,6 +51,14 @@ internal sealed class RecipeViewerDialog : ToolsDialog
     internal void LoadFolder(string folder)
     {
         RejectRootLinks(folder);
+        List<string> files = RecipeFiles(folder);
+        if (files.Count == 0) throw new IOException("No Gear Backup recipe exports found in this folder.");
+        LoadFiles(files.ToArray());
+    }
+
+    // The recipe exports a settings backup folder holds (C1–C7.xml, Shooting settings.xml).
+    static List<string> RecipeFiles(string folder)
+    {
         var files = new List<string>();
         for (int i = 1; i <= 7; i++)
         {
@@ -59,8 +67,15 @@ internal sealed class RecipeViewerDialog : ToolsDialog
         }
         string shooting = Path.Combine(folder, "Shooting settings.xml");
         if (File.Exists(shooting)) files.Add(shooting);
-        if (files.Count == 0) throw new IOException("No Gear Backup recipe exports found in this folder.");
-        LoadFiles(files.ToArray());
+        return files;
+    }
+
+    // Whether a backup folder has recipes to show, so Dashboard and Storage can offer View recipes only
+    // for settings backups. Only checks that the files exist; the viewer validates them when opening.
+    internal static bool HasRecipes(string folder)
+    {
+        try { return Directory.Exists(folder) && RecipeFiles(folder).Count > 0; }
+        catch (Exception) { return false; }
     }
 
     // Reads every file first, so one invalid file leaves what's shown unchanged.

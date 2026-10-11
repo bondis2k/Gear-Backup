@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using static SettingsLocation;
 using static PathSafety;
 using static AppSettings;
 using static ConsoleUi;
@@ -28,7 +29,7 @@ internal sealed class MainForm : Form
     readonly Label deviceConnection = GuiTheme.Label("", 10, GuiTheme.Muted);
     readonly Button openFolder = GuiTheme.Button("Open backup folder", false);
     readonly Button dashboard = GuiTheme.GhostButton("Dashboard"), storage = GuiTheme.GhostButton("Storage"),
-        profiles = GuiTheme.GhostButton("Profiles"), recipes = GuiTheme.GhostButton("X100VI recipes");
+        profiles = GuiTheme.GhostButton("Profiles");
     Button sourceBrowse;
     string outputFolder;
     readonly System.Diagnostics.Stopwatch elapsed = new System.Diagnostics.Stopwatch();
@@ -88,6 +89,13 @@ internal sealed class MainForm : Form
         var interaction = new GuiInteraction(this);
         using (new OperationContext(interaction, CancellationToken.None).Activate())
             config = startupOptions ?? (designPreview ? new Config { BackupFolder = @"C:\Users\YourName\Backup" } : LoadConfig());
+        // Opens where it was last closed; previews and tests always open centred and save nothing.
+        if (!designPreview && !GuiHeadless)
+        {
+            string settingsFolder = config.SettingsDirectory ?? DefaultSettingsDirectory();
+            WindowPlacement.Restore(this, settingsFolder);
+            FormClosed += delegate { WindowPlacement.Save(this, settingsFolder); };
+        }
         GuiTheme.ApplyTheme(config.Theme, this);
         ShowDevice(null);
         source.Text = designPreview ? "" : config.SourceFolder;
@@ -101,16 +109,18 @@ internal sealed class MainForm : Form
         about.Click += delegate { using (var dialog = new AboutDialog()) dialog.ShowDialog(this); };
         help.Click += delegate { OpenManual(); };
         operation.SelectedIndexChanged += delegate { RefreshOperationControls(); };
-        source.TextChanged += delegate { ShowDevice(null); };
+        source.TextChanged += delegate { ShowDevice(null); RefreshDestinationSummary(); };
         backupFolder.TextChanged += delegate { RefreshDestinationSummary(); };
         profile.TextChanged += delegate { RefreshDestinationSummary(); };
         optionsToggle.Click += delegate { SetOptionsExpanded(!optionsExpanded); };
         openFolder.Click += delegate { OpenOutputFolder(); };
-        dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles"; recipes.Name = "OpenRecipes";
+        dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles";
         dashboard.Click += delegate { OpenTool(0); }; storage.Click += delegate { OpenTool(1); };
-        profiles.Click += delegate { OpenTool(2); }; recipes.Click += delegate { OpenTool(3); };
+        profiles.Click += delegate { OpenTool(2); };
         RefreshOperationControls();
-        SetOptionsExpanded(config.SourceFolder.Length > 0 || config.Profile.Length > 0);
+        // Starts collapsed; the summary line under the buttons shows a set source folder, the backup
+        // location and the profile. Choosing Restore opens it, since a destination must be chosen.
+        SetOptionsExpanded(false);
         detail.Text = "Connect your device, click Detect device, then Back up.";
         hints.SetToolTip(start, "Start the selected operation (Ctrl+Enter)");
         hints.SetToolTip(preview, "Preview without changing backup or restore files (Ctrl+P)");
@@ -218,7 +228,7 @@ internal sealed class MainForm : Form
         activityTitle.Anchor = AnchorStyles.Left;
         activity.Controls.Add(activityTitle, 0, 0);
         var tools = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty, BackColor = GuiTheme.Surface, Anchor = AnchorStyles.Right };
-        tools.Controls.Add(dashboard); tools.Controls.Add(storage); tools.Controls.Add(profiles); tools.Controls.Add(recipes);
+        tools.Controls.Add(dashboard); tools.Controls.Add(storage); tools.Controls.Add(profiles);
         activity.Controls.Add(tools, 1, 0);
         var rule = new Panel { Height = 1, Dock = DockStyle.Bottom, BackColor = GuiTheme.Border, Margin = new Padding(0, 0, 6, 8) };
         activity.Controls.Add(rule, 0, 1); activity.SetColumnSpan(rule, 2);
@@ -354,7 +364,11 @@ internal sealed class MainForm : Form
                 folder = ResolveProfileSettings(options, device == null ? options.Device : device.Id, name).BackupFolder;
         }
         catch (Exception) { /* Keep partially edited paths visible; validation happens when starting. */ }
-        destinationSummary.Text = "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   Profile: " + profile.Text.Trim() : "");
+        // A source folder set in More options replaces device detection, so it's shown even while collapsed.
+        string sourceFolder = source.Text.Trim();
+        string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
+            : (Selected == GuiOperation.Restore ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
+        destinationSummary.Text = sourcePart + "Backup location: " + folder + (profile.Text.Trim().Length > 0 ? "   ·   Profile: " + profile.Text.Trim() : "");
         hints.SetToolTip(destinationSummary, destinationSummary.Text + "\nChange folders or profile in More options. Device/profile preferences can override the location.");
     }
     public void SelectCameraSettings() { operation.SelectedIndex = (int)GuiOperation.CameraSettings; }
@@ -387,7 +401,7 @@ internal sealed class MainForm : Form
     }
     internal static string ManualPath(string root, string theme)
     {
-        string name = theme == "original-dark" ? "Manual-original-dark.html" : theme == "original" ? "Manual-original.html" : "Manual-retro.html";
+        string name = theme == "original-dark" ? "Manual-original-dark.html" : theme == "retro" ? "Manual-retro.html" : "Manual-original.html";
         string path = Path.Combine(root, name);
         return File.Exists(path) ? path : Path.Combine(root, "Manual.html");
     }
@@ -417,7 +431,7 @@ internal sealed class MainForm : Form
         cancel.Visible = busy;
         zip.Enabled = !busy && ZipApplies;
         openFolder.Enabled = !busy;
-        dashboard.Enabled = storage.Enabled = profiles.Enabled = recipes.Enabled = !busy;
+        dashboard.Enabled = storage.Enabled = profiles.Enabled = !busy;
         if (busy) { status.ForeColor = GuiTheme.Ink; status.Text = "Preparing"; detail.Text = "You can cancel at any time."; progress.Style = ProgressBarStyle.Marquee; }
         else { progress.Style = ProgressBarStyle.Continuous; }
         if (!busy) RefreshOperationControls();
@@ -520,9 +534,8 @@ internal sealed class MainForm : Form
         try
         {
             Config options = CaptureConfig();
-            using (Form dialog = choice < 2 ? (Form)new CatalogDialog(this, options, choice == 1) : choice == 2 ?
-                (Form)new ProfileSettingsDialog(this, options) : new RecipeViewerDialog(this,
-                    outputFolder != null && File.Exists(Path.Combine(outputFolder, "C1.xml")) ? outputFolder : null))
+            // Saved X100VI recipes open from a settings backup's row in Dashboard or Storage (View recipes).
+            using (Form dialog = choice < 2 ? (Form)new CatalogDialog(this, options, choice == 1) : new ProfileSettingsDialog(this, options))
                 dialog.ShowDialog(this);
             RefreshDestinationSummary();
         }

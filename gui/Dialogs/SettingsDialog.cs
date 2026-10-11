@@ -30,8 +30,8 @@ internal sealed class SettingsDialog : Form
         appearance.Controls.Add(GuiTheme.Label("Color theme", 10, GuiTheme.Ink));
         var theme = new ComboBox { Name = "ColorTheme", AccessibleName = "Color theme", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top };
         GuiTheme.StyleComboBox(theme);
-        theme.Items.AddRange(new object[] { "Original — light gray and teal", "Retro — teal, navy, gray and cream", "Original (dark) — charcoal and teal" });
-        theme.SelectedIndex = config.Theme == "original-dark" ? 2 : config.Theme == "original" ? 0 : 1;
+        theme.Items.AddRange(new object[] { "Original — light gray and teal", "Original (dark) — charcoal and teal", "Retro — teal, navy, gray and cream" });
+        theme.SelectedIndex = config.Theme == "original-dark" ? 1 : config.Theme == "retro" ? 2 : 0;
         appearance.Controls.Add(theme);
         appearance.Controls.Add(Explanation("Applies when you save. Help opens the manual matching your selected theme."));
         var verify = Check("Verify copied files", "VerifyCopies", config.Verify);
@@ -82,7 +82,7 @@ internal sealed class SettingsDialog : Form
                 config.PointInTimeHistory = history.Checked;
                 config.KeepOldVersions = (int)versions.Value; config.MaxNameLength = (int)length.Value;
                 config.Eject = (EjectMode)eject.SelectedIndex;
-                config.Theme = theme.SelectedIndex == 2 ? "original-dark" : theme.SelectedIndex == 0 ? "original" : "retro";
+                config.Theme = theme.SelectedIndex == 1 ? "original-dark" : theme.SelectedIndex == 2 ? "retro" : "original";
                 DialogResult = DialogResult.OK; Close();
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check recovery location"); }

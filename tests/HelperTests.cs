@@ -402,7 +402,7 @@ partial class Tests
             ApplySetting(config, "Theme", "neon");
         });
         Assert(config.Mode == BackupMode.Ask && config.KeepBackups == 0 && config.Eject == EjectMode.No && !config.Verify, "invalid values keep the defaults");
-        Assert(config.Theme == "retro", "an invalid theme retains the default palette");
+        Assert(config.Theme == "original", "an invalid theme retains the default palette");
         Assert(ui.Output.ToString().Contains("Mode=sometimes isn't valid") && ui.Output.ToString().Contains("KeepBackups=-1 isn't valid"),
             "invalid values are reported");
         WithUi(() => { ApplySetting(config, "VERIFY", "On"); ApplySetting(config, "eject", "YES"); ApplySetting(config, "Mode", "Full"); });

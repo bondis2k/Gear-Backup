@@ -26,7 +26,7 @@ static partial class GuiTheme
         Desktop = Color.FromArgb(19, 25, 30), Background = Color.FromArgb(26, 34, 40), Surface = Color.FromArgb(32, 42, 49),
         Border = Color.FromArgb(70, 86, 96), DisabledSurface = Color.FromArgb(38, 46, 52), DisabledInk = Color.FromArgb(126, 142, 152)
     };
-    static Palette palette = retro;
+    static Palette palette = original;
     public static Color Ink { get { return palette.Ink; } }
     public static Color Muted { get { return palette.Muted; } }
     public static Color Accent { get { return palette.Accent; } }
@@ -48,7 +48,7 @@ static partial class GuiTheme
     public static void ApplyTheme(string name, Control newlyCreated = null)
     {
         Palette previous = palette;
-        palette = name == "original-dark" ? dark : name == "original" ? original : retro;
+        palette = name == "original-dark" ? dark : name == "retro" ? retro : original;
         var roots = new List<Control>();
         foreach (Form form in Application.OpenForms) roots.Add(form);
         if (newlyCreated != null && !roots.Contains(newlyCreated)) roots.Add(newlyCreated);

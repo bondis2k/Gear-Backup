@@ -74,7 +74,8 @@ $themeCss
 </div></body></html>
 "@
     Set-Content -LiteralPath (Join-Path $OutputDirectory "Manual-$theme.html") -Value $manualHtml -Encoding utf8
-    if ($theme -eq 'retro') { Set-Content -LiteralPath (Join-Path $OutputDirectory 'Manual.html') -Value $manualHtml -Encoding utf8 }
+    # Manual.html is the default theme's manual (Original).
+    if ($theme -eq 'original') { Set-Content -LiteralPath (Join-Path $OutputDirectory 'Manual.html') -Value $manualHtml -Encoding utf8 }
 }
 
 # Keep illustrations usable beside executables built into another folder.

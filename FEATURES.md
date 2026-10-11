@@ -95,7 +95,7 @@ The camera-settings operation captures **C1–C7 names and 23 raw properties per
 
 Each capture creates a dated full backup in its own history, never the photo history: `x100vi-settings-<serial>` automatically, or `<profile>-settings` for a named profile, using that profile's preferences. Checksums, optional history and ZIP export are supported. Camera capture restores and verifies the original recipe read selector, checks that shooting values stayed unchanged, and prevents concurrent Gear Backup captures of the same camera.
 
-The **X100VI recipes** viewer opens a saved backup folder or individual XML export without a connected camera. It shows readable film simulations, white balance, grain strength/size, tone values and noise reduction alongside protocol numbers and raw bytes. Selected recipes can be copied or exported as text. Unmapped values remain labelled as protocol values.
+The X100VI recipe viewer opens from **View recipes** in Dashboard or Storage (available for settings backups), and from there any saved backup folder or individual XML export, without a connected camera. It shows readable film simulations, white balance, grain strength/size, tone values and noise reduction alongside protocol numbers and raw bytes. Selected recipes can be copied or exported as text. Unmapped values remain labelled as protocol values.
 
 Settings capture does not provide incremental backup or resume. It does not export full-camera setup menus or native Fujifilm backup files, and it cannot restore settings to the camera. Settings preview temporarily selects recipe read banks and restores the selector.
 
@@ -116,7 +116,7 @@ The profile editor separates device settings from backup profiles, groups option
 The GUI provides two management views across configured backup locations:
 
 - **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. A **Device** filter (default: all devices) lists one device's profiles. Actions open folders, check backups and view saved recipes.
-- **Storage:** sizes for current files, known old versions, history objects, metadata, ZIPs and MTP mirrors. The unique-content total counts hard-linked content once; it measures file content rather than allocated disk space.
+- **Storage:** sizes for current files, known old versions, history objects, metadata, ZIPs and MTP mirrors. The unique-content total counts hard-linked content once; it measures file content rather than allocated disk space. A **Device** filter (default: all devices) shows one device's backups, ZIPs and mirrors.
 
 Cleanup starts with nothing selected. Choose older backup folders, known old versions, ZIPs or mirrors, then review the plan before moving them to the Recycle Bin. The latest backup folder and individual history objects are protected. Cleanup rechecks scanned items, respects operation locks and updates checksum records after removing old versions.
 
@@ -148,7 +148,7 @@ The main window focuses on **Detect device**, the operation choice and **Back up
 
 Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
 
-**Settings → Appearance** offers **Original** (light gray and teal), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream; default). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual. Windows 11 title bars, title text and borders match the selected palette. Supported earlier Windows versions use standard dark title bars for Original (dark). App dialogs share the Gear Backup icon.
+**Settings → Appearance** offers **Original** (light gray and teal; default), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual. Windows 11 title bars, title text and borders match the selected palette. Supported earlier Windows versions use standard dark title bars for Original (dark). App dialogs share the Gear Backup icon.
 
 ## Distribution
 
