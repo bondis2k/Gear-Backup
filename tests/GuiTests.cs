@@ -8,6 +8,9 @@ using System.Windows.Forms;
 using static PathSafety;
 using static Snapshots;
 using static Backups;
+using static FujiSettings;
+using static MtpMirror;
+using static StorageCatalog;
 
 class GuiTestRunner
 {

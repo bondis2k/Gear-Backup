@@ -9,6 +9,8 @@ using static PathSafety;
 using static Snapshots;
 using static Backups;
 using static SampleDependencies;
+using static MtpMirror;
+using static UsbDevices;
 
 partial class GearBackup
 {

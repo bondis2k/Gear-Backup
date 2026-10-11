@@ -9,6 +9,10 @@ using static Checksums;
 using static Snapshots;
 using static VersionCatalog;
 using static Backups;
+using static FujiRecipes;
+using static FujiSettings;
+using static MtpMirror;
+using static StorageCatalog;
 
 partial class GearBackup
 {

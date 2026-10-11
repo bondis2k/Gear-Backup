@@ -5,8 +5,10 @@ using System.IO;
 using System.Text;
 using System.Xml;
 using static PathSafety;
+using static GearBackup;
+using static FujiSettings;
 
-partial class GearBackup
+static class FujiRecipes
 {
     internal sealed class FujiRecipe
     {
@@ -19,7 +21,7 @@ partial class GearBackup
         public string Name, Code, Raw, Display;
         public int? Number;
     }
-    static FujiRecipe ReadFujiRecipe(string path)
+    internal static FujiRecipe ReadFujiRecipe(string path)
     {
         RejectRootLinks(path);
         if (new FileInfo(path).Length > 1024 * 1024) throw new IOException("Recipe export is too large.");
@@ -71,7 +73,7 @@ partial class GearBackup
     }
     // Protocol encodings: https://github.com/ILFforever/fujifilm-ptp-recipes/blob/main/docs/properties.md
     // Unknown values remain explicit protocol values, rather than being guessed or clamped.
-    static string FormatFujiRecipeValue(int index, int number)
+    internal static string FormatFujiRecipeValue(int index, int number)
     {
         string text = number.ToString(CultureInfo.InvariantCulture);
         if (FujiSigned(index) && number == -32768 || !FujiSigned(index) && number == 65535) return "Default / unavailable";
@@ -111,7 +113,7 @@ partial class GearBackup
         return "Protocol value " + text;
     }
     static string SignedRecipeDial(decimal number) { return (number > 0 ? "+" : "") + number.ToString("0.#", CultureInfo.InvariantCulture); }
-    static string FujiRecipeReport(FujiRecipe recipe)
+    internal static string FujiRecipeReport(FujiRecipe recipe)
     {
         var text = new StringBuilder();
         text.AppendLine(recipe.ToString()).AppendLine("Fujifilm " + recipe.Model + " · firmware " + recipe.Firmware).AppendLine();

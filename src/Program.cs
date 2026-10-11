@@ -11,6 +11,8 @@ using System.IO;
 using System.Threading;
 using static Checksums;
 using static Backups;
+using static FujiSettings;
+using static MtpMirror;
 
 partial class GearBackup
 {

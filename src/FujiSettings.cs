@@ -5,8 +5,11 @@ using System.Text;
 using System.Xml;
 using static PathSafety;
 using static Backups;
+using static GearBackup;
+using static MtpMirror;
+using static PortableDevices;
 
-partial class GearBackup
+static class FujiSettings
 {
     internal interface IFujiSettingsSource
     {
@@ -23,25 +26,25 @@ partial class GearBackup
 
     // Codes describe stored recipes and their corresponding live shooting values. Raw bytes are
     // retained even when an enum isn't decoded, so a snapshot doesn't silently lose unknown values.
-    static readonly string[] FujiSettingNames = {
+    internal static readonly string[] FujiSettingNames = {
         "Image size", "Image quality", "Dynamic range", "Dynamic range priority", "Film simulation",
         "Monochromatic color warm/cool", "Monochromatic color magenta/green", "Grain effect",
         "Color Chrome effect", "Color Chrome FX Blue", "Smooth skin effect", "White balance",
         "White balance shift red", "White balance shift blue", "Color temperature", "Highlight tone",
         "Shadow tone", "Color", "Sharpness", "Noise reduction", "Clarity", "Lens modulation optimizer", "Color space"
     };
-    static readonly ushort[] FujiLiveCodes = {
+    internal static readonly ushort[] FujiLiveCodes = {
         0xD1A5, 0xD018, 0xD007, 0xD02E, 0xD001, 0xD104, 0xD031, 0xD023, 0xD029, 0xD030,
         0xD189, 0x5005, 0xD00B, 0xD00C, 0xD017, 0xD320, 0xD321, 0xD008, 0x5015, 0xD01C,
         0xD032, 0xD34D, 0xD00A
     };
-    static bool FujiSigned(int index)
+    internal static bool FujiSigned(int index)
     {
         return index == 5 || index == 6 || index == 12 || index == 13 ||
             index == 15 || index == 16 || index == 17 || index == 18 || index == 20;
     }
 
-    static FujiInfo ParseFujiInfo(byte[] data)
+    internal static FujiInfo ParseFujiInfo(byte[] data)
     {
         if (data == null || data.Length > 1024 * 1024) throw new IOException("Invalid camera device information.");
         try
@@ -83,7 +86,7 @@ partial class GearBackup
             throw new IOException("Invalid camera text response.");
         return Encoding.Unicode.GetString(bytes, 0, bytes.Length - 2);
     }
-    static string FujiText(byte[] data)
+    internal static string FujiText(byte[] data)
     {
         using (var stream = new MemoryStream(data))
         using (var reader = new BinaryReader(stream))
@@ -93,13 +96,13 @@ partial class GearBackup
             return text;
         }
     }
-    static ushort FujiWord(byte[] bytes)
+    internal static ushort FujiWord(byte[] bytes)
     {
         if (bytes == null || bytes.Length != 2) throw new IOException("Invalid camera settings value.");
         return (ushort)(bytes[0] | (bytes[1] << 8));
     }
 
-    static Dictionary<string, byte[]> CaptureFujiSettings(IFujiSettingsSource source)
+    internal static Dictionary<string, byte[]> CaptureFujiSettings(IFujiSettingsSource source)
     {
         OperationContext.Current.CheckCancellation();
         FujiInfo info = ParseFujiInfo(source.DeviceInfo());
@@ -171,7 +174,7 @@ partial class GearBackup
         }
         return values;
     }
-    static bool SameFujiBytes(byte[] left, byte[] right)
+    internal static bool SameFujiBytes(byte[] left, byte[] right)
     {
         if (left == null || right == null) return left == right;
         if (left.Length != right.Length) return false;
@@ -210,7 +213,7 @@ partial class GearBackup
         }
     }
 
-    static OperationResult RunFujiSettingsBackup(Config config)
+    internal static OperationResult RunFujiSettingsBackup(Config config)
     {
         var cameras = FindMtpDevices("VID_04CB");
         cameras.RemoveAll(info => !string.Equals(info.FriendlyName, "X100VI", StringComparison.OrdinalIgnoreCase));
@@ -242,7 +245,7 @@ partial class GearBackup
         return SaveFujiSettings(files, history, config);
     }
 
-    static OperationResult SaveFujiSettings(Dictionary<string, byte[]> files, string history, Config config)
+    internal static OperationResult SaveFujiSettings(Dictionary<string, byte[]> files, string history, Config config)
     {
         if (!EnsureBackupFolder(config)) return BackupFolderCancelled();
         string staging = Path.Combine(Path.GetTempPath(), "GearBackup-camera-" + Guid.NewGuid().ToString("N"));
@@ -273,18 +276,18 @@ partial class GearBackup
     }
 
     // "Studio" -> "Studio-settings", shortened to fit the 64-character profile limit.
-    static string SettingsProfileName(string profile)
+    internal static string SettingsProfileName(string profile)
     {
         const string suffix = "-settings";
         if (profile.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return profile;
         return profile.Substring(0, Math.Min(profile.Length, 64 - suffix.Length)).TrimEnd() + suffix;
     }
 
-    static bool FujiSettingsMode(MtpDeviceInfo info)
+    internal static bool FujiSettingsMode(MtpDeviceInfo info)
     {
         using (var camera = new FujiPtp(info.InterfacePath))
             return ParseFujiInfo(camera.DeviceInfo()).Properties.Contains(0xD18C);
     }
 
-    static string FujiModeName(bool settingsMode) { return settingsMode ? "settings mode" : "photo-transfer mode"; }
+    internal static string FujiModeName(bool settingsMode) { return settingsMode ? "settings mode" : "photo-transfer mode"; }
 }

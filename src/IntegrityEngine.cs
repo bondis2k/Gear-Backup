@@ -4,6 +4,7 @@ using System.IO;
 using static Checksums;
 using static Snapshots;
 using static GearBackup;
+using static StorageCatalog;
 
 // "Check backups": verifies backup files against checksums.sha256 and history objects against their
 // manifests. Records completed check results for the dashboard.

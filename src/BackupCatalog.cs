@@ -13,8 +13,10 @@ using static PathSafety;
 using static Checksums;
 using static VersionCatalog;
 using static Backups;
+using static GearBackup;
+using static MtpMirror;
 
-partial class GearBackup
+static class StorageCatalog
 {
     // One backup folder as the Dashboard and Storage windows see it.
     internal sealed class CatalogBackup
@@ -77,7 +79,7 @@ partial class GearBackup
     // are left out: Windows updates a folder's time in its parent's listing a few milliseconds late, so a
     // scan right after a backup could disagree with a later check although nothing changed. Any change to
     // a file shows in the file's own entry, and an added or removed folder in the folder names.
-    static string StorageStamp(string path, bool folder, out long bytes)
+    internal static string StorageStamp(string path, bool folder, out long bytes)
     {
         RejectRootLinks(path);
         var directories = new List<DirectoryInfo>();
@@ -86,7 +88,7 @@ partial class GearBackup
     }
 
     // The same stamp from a listing the caller already has, so a scan reads each tree once.
-    static string StorageStamp(string path, bool folder, List<FileInfo> files, List<DirectoryInfo> directories, out long bytes)
+    internal static string StorageStamp(string path, bool folder, List<FileInfo> files, List<DirectoryInfo> directories, out long bytes)
     {
         bytes = 0;
         var stamp = new StringBuilder();
@@ -139,7 +141,7 @@ partial class GearBackup
     // What tells files apart for the unique total, by path: hard links to one file share an identity. On
     // NTFS that's the file's ID, read a whole folder at a time; opening every file instead took seconds on
     // a large history. File systems without hard links (FAT, exFAT) just use the path.
-    static Dictionary<string, string> FileIdentities(string root, List<FileInfo> files)
+    internal static Dictionary<string, string> FileIdentities(string root, List<FileInfo> files)
     {
         var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (!SupportsHardLinks(root))
@@ -170,7 +172,7 @@ partial class GearBackup
 
     // The NTFS file ID of every entry in a folder, by name, from FILE_ID_BOTH_DIR_INFO records (FileId at
     // offset 96, FileNameLength at 60, FileName at 104). Null if Windows can't list it this way.
-    static Dictionary<string, long> FolderFileIds(string folder)
+    internal static Dictionary<string, long> FolderFileIds(string folder)
     {
         const uint ListDirectory = 1, ShareAll = 7, OpenExisting = 3, BackupSemantics = 0x02000000, OpenReparsePoint = 0x00200000;
         const int RestartInfo = 11, NextInfo = 10, NoMoreFiles = 18, Size = 64 * 1024;
@@ -204,7 +206,7 @@ partial class GearBackup
 
     // Scans every configured backup location (the global one and those named in device/profile
     // preferences) and the MTP mirrors. mirrorRoot is for tests.
-    static BackupCatalog ScanBackupCatalog(Config config, string mirrorRoot = null)
+    internal static BackupCatalog ScanBackupCatalog(Config config, string mirrorRoot = null)
     {
         var catalog = new BackupCatalog();
         var seenHistories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -294,7 +296,7 @@ partial class GearBackup
 
     // The backup's device for the Dashboard's filter. A damaged device record only loses the filter
     // (the history's name may still tell), not the backup's row.
-    static DeviceProfile CatalogDevice(string backup)
+    internal static DeviceProfile CatalogDevice(string backup)
     {
         try { return BackupDevice(backup); }
         catch (Exception ex)
@@ -372,7 +374,7 @@ partial class GearBackup
     // Moves the selected items to the Recycle Bin (or passes them to `recycle`, for tests). Only items from
     // this catalog are accepted; under the locks of their histories, each is checked again (still inside its
     // history, not the latest backup, unchanged since the scan) before anything is recycled.
-    static int CleanupStorage(BackupCatalog catalog, List<StorageItem> selected, Action<StorageItem> recycle = null)
+    internal static int CleanupStorage(BackupCatalog catalog, List<StorageItem> selected, Action<StorageItem> recycle = null)
     {
         if (PreviewOnly) throw new IOException("Cleanup cannot run in preview-only mode.");
         var items = new List<StorageItem>();

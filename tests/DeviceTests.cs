@@ -11,6 +11,8 @@ using static Backups;
 using static ChangeSummary;
 using static RestoreFlow;
 using static SampleDependencies;
+using static MtpMirror;
+using static PortableDevices;
 
 partial class GearBackup
 {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using static PathSafety;
+using static FujiRecipes;
 
 partial class GearBackup
 {

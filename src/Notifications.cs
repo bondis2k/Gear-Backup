@@ -4,6 +4,7 @@ using System.Threading;
 using Microsoft.Win32;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
+using static UsbDevices;
 
 partial class GearBackup
 {

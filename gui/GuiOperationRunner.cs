@@ -8,6 +8,8 @@ using static PathSafety;
 using static Checksums;
 using static Backups;
 using static RestoreFlow;
+using static FujiSettings;
+using static UsbDevices;
 
 partial class GearBackup
 {
