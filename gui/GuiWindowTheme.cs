@@ -24,6 +24,25 @@ static partial class GuiTheme
         if (form.IsHandleCreated) ApplyTitleBar(form);
     }
 
+    [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+    static extern int SetWindowTheme(IntPtr window, string appName, string idList);
+
+    // Windows paints native scroll bars and drop-down buttons light unless told to use its dark control
+    // themes; the other themes use the default look. Unsupported Windows versions ignore the request.
+    static void ApplyNativeTheme(Control control)
+    {
+        string name;
+        if (control is ComboBox) name = "DarkMode_CFD";
+        else if (control is ListBox || control is TextBoxBase || control is ScrollBar || control is DataGridView || control is ListView ||
+                 control is TreeView || (control is ScrollableControl && ((ScrollableControl)control).AutoScroll)) name = "DarkMode_Explorer";
+        else return;
+        control.HandleCreated -= NativeControlCreated;
+        control.HandleCreated += NativeControlCreated;
+        if (control.IsHandleCreated) SetWindowTheme(control.Handle, ThemeName == "original-dark" ? name : null, null);
+    }
+
+    static void NativeControlCreated(object sender, EventArgs e) { ApplyNativeTheme((Control)sender); }
+
     static void WindowHandleCreated(object sender, EventArgs e) { ApplyTitleBar((Form)sender); }
 
     static void ApplyTitleBar(Form form)

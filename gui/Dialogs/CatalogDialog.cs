@@ -101,7 +101,7 @@ internal sealed class CatalogDialog : ToolsDialog
         page.SizeChanged += delegate { intro.MaximumSize = new System.Drawing.Size(Math.Max(100, page.ClientSize.Width - 8), 0); };
         page.Controls.Add(intro, 0, 0);
         cleanup.ReadOnly = false;
-        cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Remove", FillWeight = 22, MinimumWidth = 70 });
+        cleanup.Columns.Add(new DataGridViewCheckBoxColumn { Name = "Selected", HeaderText = "Remove", FillWeight = 24, MinimumWidth = 92 });
         foreach (string column in new[] { "Item", "Size", "If removed", "Location" })
         {
             int i = cleanup.Columns.Add(column, column);

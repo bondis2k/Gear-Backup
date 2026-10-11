@@ -293,6 +293,7 @@ partial class Tests
         TestSettingsInteraction(root);
         TestGuiThemes(root);
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
+        TestThemeReadability();
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
@@ -461,6 +462,35 @@ partial class Tests
         if (DwmGetWindowAttribute(form.Handle, 36, out value, sizeof(int)) == 0)
             Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink),
                 "native caption text matches the selected palette");
+    }
+
+    static double ThemeContrast(Color a, Color b)
+    {
+        Func<Color, double> luminance = delegate(Color c) {
+            Func<int, double> channel = delegate(int v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); };
+            return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B);
+        };
+        double x = luminance(a), y = luminance(b);
+        return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+    }
+
+    // Every theme's text colours stay readable on the surfaces they are drawn on.
+    static void TestThemeReadability()
+    {
+        try
+        {
+            foreach (string theme in new[] { "original", "original-dark", "retro" })
+            {
+                GuiTheme.ApplyTheme(theme);
+                foreach (Color surface in new[] { GuiTheme.Background, GuiTheme.Surface })
+                    foreach (Color ink in new[] { GuiTheme.Ink, GuiTheme.Muted, GuiTheme.AccentDark })
+                        Assert(ThemeContrast(ink, surface) >= 4.5, "text is readable in " + theme + ": " + ink.Name + " on " + surface.Name);
+                Assert(ThemeContrast(GuiTheme.PrimaryInk, GuiTheme.Accent) >= 4.5, "primary button text is readable in " + theme);
+            }
+            using (var dialog = new SelectionDialog("Choose", new List<string> { "One" }))
+                Assert(dialog.List.DrawMode == DrawMode.OwnerDrawFixed, "choice list draws its selection in the theme's colours");
+        }
+        finally { GuiTheme.ApplyTheme("original"); }
     }
 
     static void TestAllWindowThemes(string root)
