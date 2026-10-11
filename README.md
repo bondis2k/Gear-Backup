@@ -14,12 +14,12 @@ Before version 1.0.0, only the current settings and backup formats are supported
 
 | Device or source | What you can back up | Connection |
 | --- | --- | --- |
-| Dirtywave M8 | Songs, samples, instruments and bundles | USB drive mode or SD card reader |
-| Polyend Tracker Mini | Projects, patterns, instruments and samples | USB drive mode or SD card reader |
-| Teenage Engineering OP-1 Field | Synths, drums, tapes and mixdowns | MTP |
-| Teenage Engineering OP-XY | Projects and other device files | MTP |
-| Fujifilm X100VI | Photos and videos; C1–C7 recipes and current shooting settings | MTP for media; USB RAW CONV./BACKUP RESTORE mode for settings |
-| Local folders and memory cards | Files and folders | Any accessible filesystem path |
+| <img src="assets/manual/device-m8.png" alt="" width="40" height="40"> Dirtywave M8 | Songs, samples, instruments and bundles | USB drive mode or SD card reader |
+| <img src="assets/manual/device-tracker-mini.png" alt="" width="40" height="40"> Polyend Tracker Mini | Projects, patterns, instruments and samples | USB drive mode or SD card reader |
+| <img src="assets/manual/device-op1-field.png" alt="" width="40" height="40"> Teenage Engineering OP-1 Field | Synths, drums, tapes and mixdowns | MTP |
+| <img src="assets/manual/device-opxy.png" alt="" width="40" height="40"> Teenage Engineering OP-XY | Projects and other device files | MTP |
+| <img src="assets/manual/device-x100vi.png" alt="" width="40" height="40"> Fujifilm X100VI | Photos and videos; C1–C7 recipes and current shooting settings | MTP for media; USB RAW CONV./BACKUP RESTORE mode for settings |
+| <img src="assets/manual/device-local-folders.png" alt="" width="40" height="40"> Local folders and memory cards | Files and folders | Any accessible filesystem path |
 
 MTP devices are read through a local PC mirror. Their backups restore to a PC folder for manual transfer. X100VI settings are saved as XML exports: full-camera settings export and restoring settings to the camera are not supported.
 
