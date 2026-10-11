@@ -34,10 +34,11 @@ Executable builds are ignored by Git. If you downloaded or cloned the repository
 - [Checking backups](#checking-backups)
 - [Progress and cancellation](#progress-and-cancellation)
 - [Retention, statistics, and notifications](#retention-statistics-and-notifications)
-- [Dashboard, storage and profile tools](#dashboard-storage-and-profile-tools)
+- [Dashboard, storage and settings tools](#dashboard-storage-and-settings-tools)
   - [Backup dashboard](#backup-dashboard)
   - [Storage manager and cleanup](#storage-manager-and-cleanup)
-  - [Preferences per device and profile](#preferences-per-device-and-profile)
+  - [Backup histories, names and nicknames](#backup-histories-names-and-nicknames)
+  - [Device and backup settings](#device-and-backup-settings)
   - [Readable X100VI recipes](#readable-x100vi-recipes)
 - [All INI settings](#all-ini-settings)
 - [Command line and exit codes](#command-line-and-exit-codes)
@@ -99,7 +100,7 @@ Run `build-gui.cmd --no-pause`, then open `GearBackup.GUI.exe`. The existing `Ge
 1. Connect your device and click **Detect device**. The header shows its name, picture and camera mode where available. M8 and Tracker Mini use USB drive mode; OP-1 Field, OP-XY and X100VI can use MTP. Detection selects the connected device for the next backup.
 2. Choose **Full backup** for a new copy or **Incremental backup** for changes since the latest backup, then click **Back up**. The compact backup-location summary shows where backups are configured to go. Review changes when prompted. You can also click **Preview** for a plan without writing files.
 
-**More options** exposes the source folder, backup location, profile and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave Profile blank for automatic identity. An empty backup location uses `%USERPROFILE%\Backup`. The section starts collapsed; collapsing it preserves the values. While it is collapsed, the line under the buttons shows a source folder you set, the backup location and the profile, so saved selections stay visible.
+**More options** exposes the source folder, backup location, **Backup name** and **Also save as zip**. Open it when using a card reader or a folder, changing the destination, choosing a named history, or adding a [zip copy](#zip-copy-of-a-full-backup). Leave Source blank to detect a connected device when starting; leave **Backup name** blank so each card, folder or device keeps its own history (see [Backup histories, names and nicknames](#backup-histories-names-and-nicknames)). An empty backup location uses `%USERPROFILE%\Backup`. The section starts collapsed; collapsing it preserves the values. While it is collapsed, the line under the buttons shows a source folder you set, the backup location and the profile, so saved selections stay visible.
 
 ![Expanded More options showing the optional source folder, backup location, profile and zip controls.](assets/manual/gui-main-options.png)
 
@@ -475,15 +476,15 @@ Every backup writes statistics with copied/unchanged files, song changes, skippe
 
 The CLI uses Windows notifications to summarize backup, restore, or check results; the GUI shows results in its window. `Eject=no` leaves the M8 connected, `Eject=ask` asks in a notification/console or GUI dialog, and `Eject=yes` requests safe removal. Automatic ejection only applies to a device identified through the M8 USB detection path.
 
-## Dashboard, storage and profile tools
+## Dashboard, storage and settings tools
 
-The GUI's **Dashboard**, **Storage** and **Profiles** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
+The GUI's **Dashboard**, **Storage** and **Device & backup settings** buttons are available while no operation is running. They open separate windows and keep the main backup workflow unchanged.
 
 ### Backup dashboard
 
 **Dashboard** groups backups by profile across the current backup location and every location specified in device/profile overrides. It shows the last successful backup time, the latest folder's completion status, and its last integrity check and result. It reads small health records without scanning all backup files; the size column directs you to **Storage** for detailed totals. **Overdue** means the last successful backup is more than seven days old. Failed or incomplete backups and failed integrity checks are marked for attention.
 
-Use the **Device** list above the table to show only one device's profiles; it starts at **All devices** and lists the devices that have backups. Each profile belongs to the device its latest backup was made from. Profiles from backups made before Gear Backup recorded the device are listed under **Unknown device** unless their automatic name (such as `m8-card-…`) identifies it.
+Use the **Device** list above the table to show only one device's profiles; it lists the devices that have backups. It starts on the device detected in the main window, if that device has backups, otherwise on **All devices**. Each profile belongs to the device its latest backup was made from. Profiles from backups made before Gear Backup recorded the device are listed under **Unknown device** unless their automatic name (such as `m8-card-…`) identifies it.
 
 Select a row to **Check latest backup**, **Open folder**, or **View recipes**. **View recipes** is available only when the selected backup holds saved X100VI recipes (a camera-settings backup); otherwise it is greyed out. Use **Refresh** after operations in other windows or applications. Dashboard scanning runs in the background; closing the window cancels it. Unavailable locations or linked content are reported rather than followed, so a scan with warnings may not include all stored data.
 
@@ -493,21 +494,38 @@ New successful backups record their completion time separately, preserving the l
 
 **Storage → Space usage** lists current files, known old versions, history objects and metadata per backup, plus ZIP archives and local MTP mirrors. The **unique stored file content** total counts hard-linked files only once. This is file content size, not allocated disk usage: cluster sizes, compression, sparse-file allocation and the Recycle Bin are excluded. Per-category sizes and cleanup preview sizes are logical; hard-linked categories may share content.
 
-Use the **Device** list above the tabs to show one device's storage; it starts at **All devices**, like the Dashboard's. Backups, their old versions and their profile's ZIP archives belong to the profile's device; an MTP mirror belongs to the device it was read from, so a device that only has a mirror so far is listed too. The ZIP and mirror rows then add up only that device's items, while the unique-content total still covers all devices. Changing the device clears any items checked in **Cleanup**, so nothing hidden from view is recycled. As on the Dashboard, **View recipes** opens the saved X100VI recipes of the backup selected in **Space usage**, and is greyed out for backups without recipes and for the ZIP and mirror rows.
+Use the **Device** list above the tabs to show one device's storage; like the Dashboard's, it starts on the device detected in the main window, otherwise on **All devices**. Backups, their old versions and their profile's ZIP archives belong to the profile's device; an MTP mirror belongs to the device it was read from, so a device that only has a mirror so far is listed too. The ZIP and mirror rows then add up only that device's items, while the unique-content total still covers all devices. Changing the device clears any items checked in **Cleanup**, so nothing hidden from view is recycled. As on the Dashboard, **View recipes** opens the saved X100VI recipes of the backup selected in **Space usage**, and is greyed out for backups without recipes and for the ZIP and mirror rows.
 
-In **Cleanup**, check the items you want removed, then click **Preview cleanup**. Review the complete file/folder list and select **Proceed** to move those items to the Recycle Bin. Nothing is selected by default. Available items are older whole backup folders, known dated old versions, ZIP archives and MTP mirrors. The latest backup folder and individual snapshot objects/manifests are protected. Deleting an older whole backup removes its snapshots as well.
+**Cleanup** lists what you can move to the Recycle Bin to free space, in plain words, with the history it belongs to and what removing it means:
+
+| Item | If removed |
+|---|---|
+| **Older backup** · history · date | That backup date can no longer be restored; newer backups, including the latest, are kept. |
+| **Old version of a file** · history · file | That earlier version can no longer be restored; the current file stays. |
+| **ZIP copy** · history · date | Only the extra ZIP goes; the backup folder stays. |
+| **Downloaded device copy** · device | The local copy of an MTP device (OP-1 Field, OP-XY, X100VI) made before each backup. Your backups are not affected; it is downloaded again at the next backup. |
+
+Tick **Remove** for the items you want to go; the line under the list shows how many are selected and their size, and **Preview cleanup** becomes available. Review the complete file/folder list and select **Proceed** to move those items to the Recycle Bin. Nothing is selected by default. Hover over **If removed** for the full explanation. The latest backup folder and individual snapshot objects/manifests are protected. Deleting an older whole backup removes its snapshots as well.
 
 Cleanup rejects links, checks that items have not changed since the scan and locks the affected histories. Old-version cleanup updates checksum records and leaves snapshot objects intact. Known-version records distinguish retained versions from ordinary source files whose names happen to contain timestamps. Older backups with snapshot manifests can identify versions from source membership; older backups without either form of evidence do not offer individual version cleanup. They can still be managed as whole older backup folders.
 
-Mirrors are temporary local copies of MTP devices. Removing one means the next backup must download its contents again; the camera or device is never changed. Mirror cleanup and MTP backup share a lock to prevent cleanup during download or copying. **Recycling does not free space until the Recycle Bin is emptied.** Cleanup does not empty it automatically. If items changed or another process is using them, refresh and retry after that operation ends.
+Removing a downloaded device copy never changes the camera or device. Its cleanup and the device's backup share a lock to prevent cleanup during download or copying. **Recycling does not free space until the Recycle Bin is emptied.** Cleanup does not empty it automatically. If items changed or another process is using them, refresh and retry after that operation ends.
 
-### Preferences per device and profile
+### Backup histories, names and nicknames
 
-Open **Profiles**, choose **Settings for a device** or **Settings for one backup profile**, then select its name. Use **New profile** to create a named profile. Settings are grouped into **Backup**, **Restore**, and **Advanced** tabs. Each setting shows its default: leave **Use default** checked to inherit it, or uncheck it to enter a different value. Folder fields have their own **Browse** button, and switches show **On** and **Off**.
+Every backup goes into a **backup history**: a folder under `Gear Backups\profiles` holding that source's dated backups. Normally there is nothing to choose: each card, folder or device gets its own history automatically, named after it on disk (for example `m8-card-DCE92C2E` or `op-xy-XXYWV10D`). The app shows these as readable names, such as **M8 · card DCE92C2E**, **OP-XY · XXYWV10D**, **X100VI · photos** and **X100VI · settings** (camera-settings backups have their own history).
 
-**Save changes** saves the selected device/profile. **Reset to defaults** selects inherited values; click **Save changes** to apply the reset. Unsaved edits are preserved while switching between devices/profiles, and closing warns before discarding them. Creating a preferences profile does not run a backup or select that profile in the main window; enter its name in the main **Profile** field when backing up. Global settings are unchanged.
+Typing a **Backup name** in **More options** keeps backups in a separate history under that name instead, for example a second project on the same card. Leave it blank to use the source's own history. On the command line, `--profile NAME` does the same.
 
-Preference priority is **global → device → profile**. Device defaults apply after source detection; named or automatic profile preferences then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup profile. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
+To give a history a friendlier name, select it in **Dashboard** or **Storage** and click **Rename…**, for example "Studio card". The nickname replaces the automatic name in every list, including restore and check, in both the GUI and the CLI. It is stored inside the history folder (`.gearbackup\nickname.txt`), so it travels with the backups; the folder itself keeps its name. Clearing the nickname brings back the automatic name. The **Legacy backups** history (backups made before histories existed) can't be renamed.
+
+### Device and backup settings
+
+Open **Device & backup settings**, choose **Settings for a device** or **Settings for one backup history**, then select it; histories are listed by their readable names or nicknames. Use **New backup name** to prepare settings for a backup name you haven't used yet. Settings are grouped into **Backup**, **Restore**, and **Advanced** tabs. Each setting shows its default: leave **Use default** checked to inherit it, or uncheck it to enter a different value. Folder fields have their own **Browse** button, and switches show **On** and **Off**.
+
+**Save changes** saves the selected device or history. **Reset to defaults** selects inherited values; click **Save changes** to apply the reset. Unsaved edits are preserved while switching between devices and histories, and closing warns before discarding them. Creating a new backup name does not run a backup or select it in the main window; enter it in the main **Backup name** field when backing up. Global settings are unchanged.
+
+Preference priority is **global → device → backup history**. Device defaults apply after source detection; a history's settings then override them. This lets an M8 keep history on one disk while an X100VI saves photos without history on another disk. Restore preferences use the selected backup's history. Global `SourceFolder`, `Profile`, `Mode` and device detection remain outside these overrides; the GUI operation selection and ZIP checkbox remain per-run choices.
 
 The optional `GearBackup.Profiles.ini` in the settings folder can also be edited directly:
 

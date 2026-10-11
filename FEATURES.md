@@ -111,7 +111,7 @@ Restore and check history selection covers all configured backup locations, with
 
 Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Installed copies use `%APPDATA%\GearBackup`; portable copies and local builds keep settings beside the executables. Existing installed INI files migrate on first normal launch without overwriting destination settings or deleting originals; previews remain read-only. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
 
-The profile editor separates device settings from backup profiles, groups options into Backup, Restore and Advanced tabs, and shows each setting's default. Uncheck **Use default** to customize a value; **New profile**, **Save changes** and **Reset to defaults** provide explicit actions.
+**Device & backup settings** separates device settings from settings for one backup history (listed by readable name or nickname), groups options into Backup, Restore and Advanced tabs, and shows each setting's default. Uncheck **Use default** to customize a value; **New backup name**, **Save changes** and **Reset to defaults** provide explicit actions. Histories are shown by readable names ("M8 · card DCE92C2E", "X100VI · photos") everywhere, and **Rename…** in Dashboard or Storage gives a history a nickname kept with its backups.
 
 The GUI provides two management views across configured backup locations:
 

@@ -84,7 +84,7 @@ partial class Tests
                 string summary = configured.Controls.Find("BackupDestinationSummary", true)[0].Text;
                 Assert(!configured.Controls.Find("OptionalBackupFields", true)[0].Visible,
                     "More options starts collapsed even when a source folder and profile are set");
-                Assert(summary.StartsWith(@"Source: D:\Card") && summary.Contains("Profile: Studio"),
+                Assert(summary.StartsWith(@"Source: D:\Card") && summary.Contains("Backup name: Studio"),
                     "the summary line shows the set source folder and profile while collapsed: " + summary);
             }
             Assert(deviceImage.Image != null && deviceImage.AccessibleName == "No device detected", "the header shows the general picture at startup");
@@ -222,6 +222,7 @@ partial class Tests
         TestDashboardDeviceFilter();
         TestRecipeButtons(Path.Combine(root, "recipe-buttons"));
         TestWindowPlacement(Path.Combine(root, "window-placement"));
+        TestHistoryNamesGui(Path.Combine(root, "history-names"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
@@ -474,6 +475,57 @@ partial class Tests
         }
     }
 
+    // Histories in windows: Rename is offered for a device's history (not the legacy one), and Device &
+    // backup settings lists histories by nickname or readable name while keeping the folder name as key.
+    static void TestHistoryNamesGui(string root)
+    {
+        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        string histories = HistoriesRoot(config), named = Path.Combine(histories, "profiles", "m8-card-DCE92C2E");
+        Directory.CreateDirectory(Path.Combine(named, "2026-10-01"));
+        Directory.CreateDirectory(Path.Combine(histories, "2026-09-01"));
+        HistoryNames.SetNickname(named, "Studio card");
+        var catalog = new BackupCatalog();
+        catalog.Backups.Add(new CatalogBackup { Profile = HistoryNames.DisplayName(named), History = named, Path = Path.Combine(named, "2026-10-01"),
+            Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
+        catalog.Backups.Add(new CatalogBackup { Profile = "Legacy backups", History = histories, Path = Path.Combine(histories, "2026-09-01"),
+            Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
+        using (var owner = new MainForm(true, config))
+        {
+            using (var dashboard = new CatalogDialog(owner, config, false, catalog))
+            {
+                dashboard.Show(); Application.DoEvents();
+                var table = (DataGridView)dashboard.Controls.Find("DashboardTable", true)[0];
+                var rename = (Button)dashboard.Controls.Find("RenameHistory", true)[0];
+                table.CurrentCell = table.Rows[0].Cells[0];
+                Assert(Convert.ToString(table.Rows[0].Cells[0].Value) == "Studio card" && rename.Enabled, "a device's history shows its nickname and can be renamed");
+                table.CurrentCell = table.Rows[1].Cells[0];
+                Assert(!rename.Enabled, "the legacy history can't be renamed");
+            }
+            using (var settings = new ProfileSettingsDialog(owner, config))
+            {
+                settings.Show(); Application.DoEvents();
+                Assert(settings.Text.StartsWith("Device & backup settings"), "the settings window has its new name: " + settings.Text);
+                var kind = (ComboBox)FindGuiControls<ComboBox>(settings)[0];
+                kind.SelectedIndex = 1; Application.DoEvents();
+                var scope = (ComboBox)FindGuiControls<ComboBox>(settings)[1];
+                var labels = new List<string>();
+                foreach (object item in scope.Items) labels.Add(item.ToString());
+                Assert(labels.Contains("Studio card"), "backup-history settings list histories by nickname: " + string.Join(" | ", labels.ToArray()));
+            }
+        }
+    }
+
+    static List<T> FindGuiControls<T>(Control parent) where T : Control
+    {
+        var found = new List<T>();
+        foreach (Control child in parent.Controls)
+        {
+            if (child is T) found.Add((T)child);
+            found.AddRange(FindGuiControls<T>(child));
+        }
+        return found;
+    }
+
     // Window placement: sub-windows centre on the main window and stay on screen; the main window's
     // position is saved and restored, and ignored when it's damaged or no longer on any screen.
     static void TestWindowPlacement(string root)
@@ -612,6 +664,54 @@ partial class Tests
                 "a ZIP follows its history's device");
             filter.SelectedItem = "All devices";
             Assert(usage.Rows.Count == 7 && cleanup.Rows.Count == 3, "All devices shows everything again");
+
+            // Cleanup in plain words: what each item is, what removing it means, and what's selected.
+            Func<int, string> itemText = r => Convert.ToString(cleanup.Rows[r].Cells["Item"].Value);
+            Func<int, string> effect = r => Convert.ToString(cleanup.Rows[r].Cells["If removed"].Value);
+            Assert(itemText(0) == "Older backup · m8-card-1 · 2026-09-01" && effect(0) == "Can't restore this date anymore",
+                "an older backup is described with its history and date: " + itemText(0));
+            Assert(itemText(1) == "ZIP copy · op-xy-ABC · 2026-10-01" && effect(1) == "Backup folder stays", "a ZIP copy is described: " + itemText(1));
+            Assert(itemText(2) == "Downloaded device copy · X100VI · photos" && effect(2) == "Downloaded again next backup" &&
+                cleanup.Rows[2].Cells["If removed"].ToolTipText.Contains("Your backups are not affected"),
+                "a mirror is described as a downloaded device copy that's safe to remove: " + itemText(2));
+            Assert(cleanup.Columns["Selected"].HeaderText == "Remove", "the tick column is labelled Remove");
+            var selection = storage.Controls.Find("CleanupSelection", true)[0];
+            var preview = (Button)storage.Controls.Find("PreviewCleanup", true)[0];
+            Assert(selection.Text.StartsWith("Nothing selected") && !preview.Enabled, "Preview cleanup waits until something is ticked");
+            cleanup.Rows[0].Cells[0].Value = true;
+            cleanup.Rows[2].Cells[0].Value = true;
+            Assert(selection.Text == "2 items selected · " + FormatSize(600) && preview.Enabled, "the selection total follows the ticks: " + selection.Text);
+            cleanup.Rows[0].Cells[0].Value = false;
+            cleanup.Rows[2].Cells[0].Value = false;
+            Assert(!preview.Enabled, "unticking everything greys out Preview cleanup again");
+            var tabs = FindGuiControl<TabControl>(storage);
+            var rename = (Button)storage.Controls.Find("RenameHistory", true)[0];
+            usage.CurrentCell = usage.Rows[0].Cells[0];
+            tabs.SelectedIndex = 1; Application.DoEvents();
+            Assert(!rename.Enabled, "Rename is greyed out while the Cleanup tab is showing");
+            tabs.SelectedIndex = 0; Application.DoEvents();
+        }
+
+        // A device detected in the main window is where both windows' filters start.
+        foreach (bool storageMode in new[] { false, true })
+        using (var owner = new MainForm(true, new Config()))
+        {
+            string where = storageMode ? "Storage" : "Dashboard";
+            using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog, Devices.OPXY))
+            {
+                window.Show(); Application.DoEvents();
+                var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
+                Assert((string)filter.SelectedItem == "OP-XY", where + " starts filtered to the detected device: " + filter.SelectedItem);
+                filter.SelectedItem = "M8";
+                window.Populate(catalog);
+                Assert((string)filter.SelectedItem == "M8", where + ": after choosing another device, a refresh keeps that choice");
+            }
+            using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog, Devices.TrackerMini))
+            {
+                window.Show(); Application.DoEvents();
+                var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
+                Assert((string)filter.SelectedItem == "All devices", where + " stays on All devices when the detected device has nothing to show");
+            }
         }
     }
 

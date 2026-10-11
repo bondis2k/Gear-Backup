@@ -115,7 +115,7 @@ static class Program
         config = prepared.Config;
         histories = prepared.Histories;
         string backupRoot = prepared.History;
-        OperationOutput.WriteLine("  Profile: " + Path.GetFileName(backupRoot));
+        OperationOutput.WriteLine("  Backup history: " + HistoryNames.DisplayName(backupRoot) + " (" + Path.GetFileName(backupRoot) + ")");
         string previous = LatestBackup(backupRoot);
 
         bool incremental = false;
