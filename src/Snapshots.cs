@@ -61,10 +61,14 @@ partial class GearBackup
                 throw new IOException("No trustworthy checksum for " + relative);
             string obj = ObjectPath(backup, hash);
             Directory.CreateDirectory(Path.GetDirectoryName(obj));
-            // Optional integrity checks are independent of generating object identities.
+            // An object that already exists was verified when it was written (with Verify=yes), so here it
+            // only has to have the right size: reading every existing object again on each backup took
+            // longer than the backup itself once the history grew. Damage that keeps the size is found by
+            // Check backups, which reads every object.
             if (File.Exists(obj))
             {
-                if (verify && checkedObjects.Add(hash) && HashFile(obj) != hash) throw new IOException("Damaged history object for " + relative);
+                if (checkedObjects.Add(hash) && new FileInfo(obj).Length != new FileInfo(path).Length)
+                    throw new IOException("Damaged history object for " + relative);
             }
             else
             {

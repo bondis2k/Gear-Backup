@@ -156,6 +156,16 @@ partial class GearBackup
         Put(currentSong.StoredPath, "BAD");
         Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 2, "history failure prevents successful backup");
         Assert(BackupStatus(f.Backup) == Status.Failed, "history failure sets failed status");
+
+        // Objects a previous backup wrote and verified are only size-checked by later backups, which
+        // no longer read the whole history; damage that keeps the size is for Check backups to find.
+        Fixture g = BackedUpCard(Path.Combine(root, "same-size"), true);
+        RestoreEntry song = LatestSnapshot(g.Backup).Files.Find(e => e.Relative == "Songs\\one.m8s");
+        Put(song.StoredPath, new string('X', (int)song.Size));
+        Assert(Backup(g.Source, g.History, g.Backup, true, g.Config, out title, out summary) == 0, "a backup doesn't re-read existing history objects");
+        ok = damaged = missing = 0;
+        CheckSnapshots(g.Backup, ref ok, ref damaged, ref missing);
+        Assert(damaged > 0, "Check backups finds same-size damage in history");
     }
 
     static void TestVerifyOff(string root)
@@ -517,8 +527,8 @@ partial class GearBackup
         config.Verify = true;
         result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, CancellationToken.None));
         string sharedObject = snapshot.Files[0].StoredPath;
-        Assert(ui.Progress.FindAll(p => p.Stage == Stage.Hashing && p.Path == sharedObject && p.Bytes == p.TotalBytes).Count == 1,
-            "shared snapshot object verified only once per run");
+        Assert(!ui.Progress.Exists(p => p.Path == sharedObject),
+            "an existing history object isn't read again by a later backup, even with Verify=yes");
         Assert(ui.Progress.FindAll(p => p.Stage == Stage.Hashing && p.Path == Path.Combine(source, "Songs", "one.m8s") && p.Bytes == p.TotalBytes).Count == 1,
             "thorough planning reuses source hash instead of rehashing for space estimate");
         Assert(result.ExitCode == 0 && ui.Plans == 0, "unchanged incremental needs no injected confirmation");

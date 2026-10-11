@@ -146,6 +146,7 @@ partial class GearBackup
         RunTest("Device and profile preferences", () => TestProfilePreferences(Folder(root, "profile-preferences")));
         RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
         RunTest("MTP: values from a faulty device", TestMtpDeviceValues);
+        RunTest("Verification hash at chunk boundaries", () => TestHashFromDisk(Folder(root, "hash-from-disk")));
         RunTest("Storage cleanup updates checksum lists once", () => TestCleanupChecksums(Folder(root, "cleanup-checksums")));
         RunTest("Fast catalog scan", () => TestCatalogShortcuts(Folder(root, "catalog-shortcuts")));
         RunTest("Readable X100VI recipes", () => TestRecipeReading(Folder(root, "recipe-reading")));
