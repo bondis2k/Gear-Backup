@@ -138,8 +138,8 @@ static class Session
     internal static bool? ConfirmResume(string previous, bool incremental, Config config)
     {
         if (previous == null) return incremental;
-        string status = BackupStatus(previous);
-        if (!Status.Unfinished(status)) return incremental;
+        Status status = BackupStatus(previous);
+        if (!status.Unfinished) return incremental;
         OperationOutput.WriteLine("  Latest backup is " + status + ". Resume uses " +
             (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
         char answer = Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),

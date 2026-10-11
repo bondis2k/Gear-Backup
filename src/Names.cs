@@ -1,44 +1,78 @@
-using static ConsoleUi;
-// Named values for things that used to be typed as text in several places, so a typo is now a
-// compile error instead of a silent bug.
+// Named values with their own types, so a stage, status, restore mode or storage kind can't be mixed up
+// with arbitrary text. Each value prints as the text it always had (ToString), so files on disk, the
+// console, reports and windows show exactly what they did when these were plain strings and characters.
+
 // Progress stages the engines report to the front ends.
-internal static class Stage
+internal sealed class Stage
 {
-    public const string Scanning = "Scanning", PlanningBackup = "Planning backup", BackupCopy = "Backup copy",
-        Copying = "Copying", Hashing = "Hashing", Verifying = "Verifying", Comparing = "Comparing",
-        SavingHistory = "Saving history", SavingChecksums = "Saving checksums", Zipping = "Zipping",
-        ScanningBackup = "Scanning backup", CheckingBackup = "Checking backup", CheckingHistory = "Checking history",
-        PlanningRestore = "Planning restore", Restoring = "Restoring", SavingRecovery = "Saving recovery",
-        Downloading = "Downloading";
+    public static readonly Stage Scanning = new Stage("Scanning"), PlanningBackup = new Stage("Planning backup"),
+        BackupCopy = new Stage("Backup copy"), Copying = new Stage("Copying"), Hashing = new Stage("Hashing"),
+        Verifying = new Stage("Verifying"), Comparing = new Stage("Comparing"), SavingHistory = new Stage("Saving history"),
+        SavingChecksums = new Stage("Saving checksums"), Zipping = new Stage("Zipping"), ScanningBackup = new Stage("Scanning backup"),
+        CheckingBackup = new Stage("Checking backup"), CheckingHistory = new Stage("Checking history"),
+        PlanningRestore = new Stage("Planning restore"), Restoring = new Stage("Restoring"), SavingRecovery = new Stage("Saving recovery"),
+        Downloading = new Stage("Downloading"), ReadingCameraSettings = new Stage("Reading camera settings");
+
+    readonly string text;
+    Stage(string text) { this.text = text; }
+    public override string ToString() { return text; }
 
     // Per-file detail. During a full backup only overall progress is shown, so front ends skip these.
-    public static bool IsFileDetail(string stage)
+    public bool IsFileDetail { get { return this == Copying || this == Hashing || this == Verifying || this == Comparing || this == ScanningBackup; } }
+}
+
+// A backup folder's status, stored in .gearbackup\status.txt as its text.
+internal sealed class Status
+{
+    public static readonly Status Incomplete = new Status("incomplete"), Complete = new Status("complete"), Failed = new Status("failed");
+    // Reported for backups made before status files existed.
+    public static readonly Status Legacy = new Status("legacy (status unknown)");
+
+    readonly string text;
+    Status(string text) { this.text = text; }
+    public override string ToString() { return text; }
+
+    // The status a status file holds. Text this version doesn't know is kept as it is (and is neither
+    // complete nor unfinished), so it still shows up in the Dashboard and the check menu.
+    public static Status FromText(string text)
     {
-        return stage == Copying || stage == Hashing || stage == Verifying || stage == Comparing || stage == ScanningBackup;
+        foreach (Status known in new[] { Incomplete, Complete, Failed, Legacy })
+            if (known.text == text) return known;
+        return new Status(text);
+    }
+
+    // An interrupted or failed backup, which can be resumed.
+    public bool Unfinished { get { return this == Incomplete || this == Failed; } }
+}
+
+// What a restore brings back. Key is also what's typed in the console menu.
+internal sealed class RestoreMode
+{
+    public static readonly RestoreMode All = new RestoreMode('a'), Bundle = new RestoreMode('b'), ProjectFolder = new RestoreMode('p'),
+        SingleFile = new RestoreMode('s'), SongWithSamples = new RestoreMode('d');
+
+    public readonly char Key;
+    RestoreMode(char key) { Key = key; }
+    public override string ToString() { return Key.ToString(); }
+
+    // The mode chosen with this menu key; null for any other key.
+    public static RestoreMode FromKey(char key)
+    {
+        foreach (RestoreMode mode in new[] { All, Bundle, ProjectFolder, SingleFile, SongWithSamples })
+            if (mode.Key == key) return mode;
+        return null;
     }
 }
 
-// A backup folder's status, stored in .gearbackup\status.txt. The text values are what's on disk.
-internal static class Status
-{
-    public const string Incomplete = "incomplete", Complete = "complete", Failed = "failed";
-    // Reported for backups made before status files existed.
-    public const string Legacy = "legacy (status unknown)";
-
-    // An interrupted or failed backup, which can be resumed.
-    public static bool Unfinished(string status) { return status == Incomplete || status == Failed; }
-}
-
-// What a restore brings back. Each value is also the key typed in the console menu.
-internal static class RestoreMode
-{
-    public const char All = 'a', Bundle = 'b', ProjectFolder = 'p', SingleFile = 's', SongWithSamples = 'd';
-}
-
 // The kinds of item Storage offers for cleanup; the text is shown in its table.
-internal static class StorageKind
+internal sealed class StorageKind
 {
-    public const string OlderBackup = "Older backup", OldVersion = "Old version", Zip = "ZIP", Mirror = "MTP mirror";
+    public static readonly StorageKind OlderBackup = new StorageKind("Older backup"), OldVersion = new StorageKind("Old version"),
+        Zip = new StorageKind("ZIP"), Mirror = new StorageKind("MTP mirror");
+
+    readonly string text;
+    StorageKind(string text) { this.text = text; }
+    public override string ToString() { return text; }
 }
 
 // Mode setting: what to do when a backup already exists.

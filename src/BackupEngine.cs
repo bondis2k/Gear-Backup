@@ -227,7 +227,7 @@ internal sealed class BackupRun
         pathProblem = CheckPathLengths();
         if (pathProblem != null) return;
 
-        resuming = incremental && Status.Unfinished(BackupStatus(dest));
+        resuming = incremental && BackupStatus(dest).Unfinished;
         states = new FileState[scan.Files.Count];
         Dictionary<string, string> oldSums = previousSums = previous == null ? null : LoadChecksums(previous);
         var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

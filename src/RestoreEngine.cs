@@ -13,7 +13,7 @@ using static Workflow;
 // files, shows the preview), then Run carries out the approved plan.
 internal sealed class RestoreEngine
 {
-    public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, char mode,
+    public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode,
         string bundle, bool exact, Config config, OperationContext context)
     {
         var timer = System.Diagnostics.Stopwatch.StartNew();
@@ -61,7 +61,7 @@ internal sealed class RestoreEngine
     }
 
     // Returns a result with no title when the user cancels at a prompt (nothing was changed).
-    OperationResult PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, char mode, string bundle, bool exact,
+    OperationResult PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode, string bundle, bool exact,
         Config config)
     {
         var removals = new List<string>();

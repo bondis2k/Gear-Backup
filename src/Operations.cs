@@ -48,7 +48,8 @@ internal sealed class OperationPlan
 
 internal sealed class OperationProgress
 {
-    public string Stage, Path;
+    public Stage Stage;
+    public string Path;
     // True during full backups: show overall progress only, not every file's copy progress.
     public bool OverallOnly;
     public long Bytes, TotalBytes;
@@ -114,7 +115,7 @@ internal sealed class OperationContext
     public void CheckCancellation() { Cancellation.ThrowIfCancellationRequested(); }
     // Reports progress, and checks for cancellation before and after, so a Cancel pressed while the
     // front end handles the update stops the operation right there.
-    public void Progress(string stage, string path, long bytes, long totalBytes, int files = 0, int totalFiles = 0)
+    public void Progress(Stage stage, string path, long bytes, long totalBytes, int files = 0, int totalFiles = 0)
     {
         CheckCancellation();
         Interaction.ReportProgress(new OperationProgress { Stage = stage, Path = path,

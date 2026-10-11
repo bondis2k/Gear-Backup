@@ -79,14 +79,14 @@ static class StorageCatalog
             return ToHex(sha.ComputeHash(Encoding.UTF8.GetBytes(stamp.ToString())));
     }
 
-    static StorageItem MakeStorageItem(string kind, string path, string history, string backup, bool folder)
+    static StorageItem MakeStorageItem(StorageKind kind, string path, string history, string backup, bool folder)
     {
         long bytes;
         string stamp = StorageStamp(path, folder, out bytes);
         return new StorageItem { Kind = kind, Path = path, History = history, Backup = backup, Folder = folder, Stamp = stamp, Bytes = bytes };
     }
 
-    static StorageItem MakeStorageItem(string kind, string path, string history, string backup, List<FileInfo> files, List<DirectoryInfo> directories)
+    static StorageItem MakeStorageItem(StorageKind kind, string path, string history, string backup, List<FileInfo> files, List<DirectoryInfo> directories)
     {
         long bytes;
         string stamp = StorageStamp(path, true, files, directories, out bytes);
@@ -300,7 +300,7 @@ static class StorageCatalog
 
     // When the backup last completed successfully: its own record, or for a complete backup made before
     // those records existed, its status file's time. Null otherwise.
-    static DateTime? LastSuccess(string backup, string status)
+    static DateTime? LastSuccess(string backup, Status status)
     {
         string successPath = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
         if (File.Exists(successPath))
@@ -456,7 +456,8 @@ static class StorageCatalog
 // One backup folder as the Dashboard and Storage windows see it.
 internal sealed class CatalogBackup
 {
-    public string Profile, History, Path, Status, CheckResult;
+    public string Profile, History, Path, CheckResult;
+    public Status Status;
     public DateTime? CompletedUtc, CheckedUtc;
     public DeviceProfile Device;    // the device it was made from; null when unknown (older backups)
     public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
@@ -467,7 +468,8 @@ internal sealed class CatalogBackup
 // Something Storage offers to recycle. Stamp records its state at scan time (see StorageStamp).
 internal sealed class StorageItem
 {
-    public string Kind, Path, History, Backup, Stamp;
+    public StorageKind Kind;
+    public string Path, History, Backup, Stamp;
     public long Bytes;
     public bool Folder;
 }

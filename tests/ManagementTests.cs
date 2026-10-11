@@ -259,7 +259,7 @@ partial class Tests
         Directory.CreateDirectory(target);
         var ui = new TestInteraction();
         ui.OnChooseItem = (question, items) => question.StartsWith("Restore from which saved point") ? 0 : 1;
-        ui.Keys.Enqueue(RestoreMode.All);
+        ui.Keys.Enqueue(RestoreMode.All.Key);
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
             PreparedSource restoreTo = PrepareSource(global, new SourceChoice { Path = target, Detected = Devices.TrackerMini });

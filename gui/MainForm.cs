@@ -274,7 +274,7 @@ internal sealed class MainForm : Form
     }
     public void UpdateProgress(OperationProgress value)
     {
-        if (value.OverallOnly && Stage.IsFileDetail(value.Stage)) return;
+        if (value.OverallOnly && value.Stage.IsFileDetail) return;
         lock (queueLock) pendingProgress = value;
     }
     public void DrainDisplay()
@@ -292,7 +292,7 @@ internal sealed class MainForm : Form
         if (value == null) return;
         if (runner.CancellationRequested) return;
         latestProgress = value; RefreshProgressMetrics();
-        status.Text = value.Stage;
+        status.Text = value.Stage.ToString();
         detail.Text = value.OverallOnly ? (value.TotalFiles > 0 ? value.Files + " / " + value.TotalFiles + " files" : "Working…") : value.Path;
         if (value.TotalBytes > 0)
         {

@@ -387,7 +387,7 @@ partial class Tests
         Snapshot current = CurrentBackup(backup);
         string target = Rooted(Path.Combine(root, "restored"));
         Directory.CreateDirectory(target);
-        result = new RestoreEngine().RunSelected(target, current, current.Files, 'a', null, false, config,
+        result = new RestoreEngine().RunSelected(target, current, current.Files, RestoreMode.All, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None));
         Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "song.txt")) == "SECOND VERSION" &&
             File.ReadAllText(Path.Combine(target, "new.txt")) == "NEW" && Directory.Exists(Path.Combine(target, "empty")),
@@ -547,7 +547,7 @@ partial class Tests
         string target = Rooted(Path.Combine(root, "engine-target"));
         Directory.CreateDirectory(target);
         ui = new TestInteraction();
-        result = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, 'a', null, false,
+        result = new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false,
             config, new OperationContext(ui, CancellationToken.None));
         Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "HEADLESS",
             "restore planning and execution run through injected frontend");
