@@ -62,6 +62,7 @@ Run `GearBackup.exe` for the interactive menu, or specify an operation and sourc
 ```cmd
 GearBackup.exe --source E:\
 GearBackup.exe --source D:\MyGear --profile "Studio" --preview
+GearBackup.exe --zip-archive --source D:\MyGear --output D:\Archives --name "Live set" --no-pause
 GearBackup.exe --restore --source E:\
 GearBackup.exe --check
 GearBackup.exe --camera-settings

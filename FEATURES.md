@@ -7,6 +7,7 @@ Gear Backup is a Windows application for backing up music gear, camera content, 
 | Capability | Graphical app | Command-line app |
 | --- | --- | --- |
 | Full and incremental file backups | Yes | Yes |
+| Standalone ZIP archive backup | Yes | Yes, with `--zip-archive` |
 | Restore files and saved snapshots | Yes | Yes |
 | Check backup integrity | Yes | Yes |
 | Capture X100VI recipes and shooting settings | Yes | Yes |
@@ -37,15 +38,15 @@ MTP transfers first refresh a local PC mirror, downloading new or changed conten
 ## File backup
 
 - **Full backup:** capture the source into a new dated backup set using the selected storage layout. An optional GUI name identifies that set without changing its folder or history.
-- **Zip archive:** the GUI can save a standalone full backup to a chosen ZIP file, without creating a backup set or content store. The optional name becomes the filename; blank uses device name plus date/time. Includes source files and empty folders with normal exclusions, plus a `checksums.sha256` manifest of every file (even with verification off), supports preview and optional verification, and publishes only a completed archive. Existing destinations require replacement confirmation. Extract the ZIP with Windows or another archive tool.
+- **Zip archive:** both apps can save a standalone full backup to a chosen ZIP file, without creating a backup set or content store. The optional name becomes the filename; blank uses device name plus date/time. The CLI uses `--zip-archive`, with optional `--output` (a ZIP file path or existing folder) and `--name` (the suggested filename when choosing a folder). Omitting `--output` prompts for a destination. Includes source files and empty folders with normal exclusions, plus a `checksums.sha256` manifest of every file (even with verification off), supports preview and optional verification, and publishes only a completed archive. Existing destinations require replacement confirmation. Extract the ZIP with Windows or another archive tool.
 - **Incremental backup:** the GUI lists full backup sets for the current source/history and updates the selected set; the CLI uses the latest set. Names, dates and completion status make sets identifiable. Browsable backups retain dated old copies; a single content store retains earlier states through restore-point membership.
 - **Incremental point names:** saved runs use the date and time, `yyyy-MM-dd_HH.mm.ss`, with numbered suffixes only when a name is already taken. Full capture timestamps remain in metadata and SQLite for chronological restore selection across days; the GUI shows the selected run's full date separately.
-- **Comparison choices:** use size and modified time, with a two-second timestamp tolerance, or enable SHA-256 content comparison. Files without usable timestamps are compared byte by byte.
+- **Comparison choices:** use size and modified time, with a two-second timestamp tolerance, or enable SHA-256 content comparison. Files without usable timestamps are compared by content: byte by byte for browsable backups, or using SHA-256 for single-content-store backups.
 - **Resume:** continue an incomplete or failed backup in the same folder, using the selected comparison mode. Detected suspect copies are moved aside.
 - **Folder preservation:** keep empty folders and skip common operating-system leftovers such as `.DS_Store`, `Thumbs.db` and trash folders.
 - **Space planning:** estimate required space for copies, history and optional ZIP output before copying.
 - **Path-length check:** stop before copying, with the offending path named, when a backup or restore would create a path over Windows' 260-character limit.
-- **ZIP export:** optionally create a separate archive after a successful full backup. It contains files, empty folders, checksums and a report, with local paths hidden in the report and internal history omitted.
+- **ZIP export:** optionally create a separate archive after a successful full backup. It contains files, empty folders and checksums, with internal history omitted. Browsable-backup exports also include a report with local paths hidden; single-content-store exports do not include a report.
 
 Incremental previews list actions rather than skipped files. If there are no new or changed files to copy, the normal run skips the proceed prompt. Full-backup progress suppresses individual file paths.
 
@@ -142,6 +143,7 @@ Backups default to `%USERPROFILE%\Backup`. Starting a backup asks before creatin
 | Setting | Default |
 | --- | --- |
 | Change previews | On |
+| Single content store | On; saves a restore point for every successful run |
 | Point-in-time history | Off |
 | SHA-256 change comparison | Off |
 | Automatic copy verification | Off |
@@ -150,6 +152,8 @@ Backups default to `%USERPROFILE%\Backup`. Starting a backup asks before creatin
 | Backup and old-version retention limits | Unlimited |
 | Automatic ejection | Off |
 | Backup location | `%USERPROFILE%\Backup` |
+
+The point-in-time history setting controls additional history for browsable backups. Single-content-store backups always save restore points, even when this setting is off.
 
 The GUI preview table supports search and action filters without changing the execution plan. Cancel or Ctrl+C stops further work and requests cleanup; interrupted file backups can be resumed. Progress includes stages, processed bytes and elapsed time where available.
 

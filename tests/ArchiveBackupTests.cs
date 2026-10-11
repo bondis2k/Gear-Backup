@@ -93,4 +93,40 @@ partial class Tests
         }
         Assert(count == expectedFiles, "manifest covers every source file, including empty files, without hashing itself or folders");
     }
+
+    static void TestCliArchive(string root)
+    {
+        string source = Folder(root, "source"), settings = Folder(root, "settings"), output = Folder(root, "output");
+        Put(Path.Combine(source, "song.m8s"), "CLI SONG");
+        Func<Config> config = () => new Config { SettingsDirectory = settings, Device = "m8", BackupFolder = Path.Combine(source, "unused") };
+        int exit = -1;
+        WithUi(() => exit = Program.Run(false, false, new[] { "--zip-archive", "--source", source, "--output", output, "--name", "Live set" }, config()));
+        string archive = Path.Combine(output, "Live set.zip");
+        Assert(exit == 0 && File.Exists(archive) && !Directory.Exists(Path.Combine(source, "unused")), "CLI archive uses custom name and skips backup history creation");
+        using (var zip = new ZipArchive(File.OpenRead(archive), ZipArchiveMode.Read)) AssertArchiveManifest(zip, 1);
+        string explicitPath = Path.Combine(output, "explicit.zip");
+        WithUi(() => Program.Run(false, false, new[] { "--zip-archive", "--source", source, "--output", explicitPath }, config()));
+        Assert(File.Exists(explicitPath), "CLI accepts an explicit ZIP filename");
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true }.Activate())
+            exit = Program.Run(false, false, new[] { "--zip-archive", "--source", source, "--output", Path.Combine(output, "preview.zip") }, config());
+        Assert(exit == 0 && !File.Exists(Path.Combine(output, "preview.zip")), "CLI ZIP preview creates no archive");
+        var prompt = new TestInteraction { OnAskText = question => output };
+        using (new OperationContext(prompt, CancellationToken.None).Activate())
+            Program.Run(false, false, new[] { "--zip-archive", "--source", source }, config());
+        Assert(Directory.GetFiles(output, "M8_*.zip").Length == 1, "CLI prompts for destination and uses device plus date/time when unnamed");
+        int before = Directory.GetFiles(output).Length;
+        using (new OperationContext(new TestInteraction { OnAskText = question => "" }, CancellationToken.None).Activate())
+            exit = Program.Run(false, false, new[] { "--zip-archive", "--source", source }, config());
+        Assert(exit == 0 && Directory.GetFiles(output).Length == before, "blank CLI destination cancels without writing");
+        foreach (string incompatible in new[] { "--restore", "--check", "--camera-settings", "--zip", "--rebuild-catalog" })
+            Throws(() => WithUi(() => Program.Run(incompatible == "--restore", incompatible == "--check",
+                incompatible == "--rebuild-catalog" ? new[] { "--zip-archive", incompatible, root } : new[] { "--zip-archive", incompatible }, config())), "CLI rejects conflicting archive operations: " + incompatible);
+        foreach (string option in new[] { "--output", "--name" })
+        {
+            Throws(() => WithUi(() => Program.Run(false, false, new[] { option, output }, config())), "archive-only options require --zip-archive");
+            Throws(() => WithUi(() => Program.Run(false, false, new[] { "--zip-archive", option }, config())), "archive option needs a value");
+        }
+        Throws(() => WithUi(() => Program.Run(false, false, new[] { "--zip-archive", "--source", source, "--output", Path.Combine(source, "self.zip") }, config())), "CLI cannot archive into its source");
+        Throws(() => Program.ArchiveDestination(Path.Combine(output, "not-a-zip.txt"), "default.zip"), "explicit output must be a ZIP or existing folder");
+    }
 }

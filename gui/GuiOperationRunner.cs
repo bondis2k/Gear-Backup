@@ -138,12 +138,7 @@ internal sealed class GuiOperationRunner
             string suggested = ArchiveBackup.FileName(options.FullBackupName, prepared.Device, DateTime.Now);
             string destination = form.OnUi(delegate { return form.ChooseArchiveDestination(suggested); });
             if (string.IsNullOrEmpty(destination)) return new OperationResult { Cancelled = true, Summary = "ZIP archive cancelled." };
-            OperationResult archived;
-            using (chosen.Mtp == null ? null : LockHistory(System.IO.Path.GetDirectoryName(Rooted(chosen.Mtp.Mirror).TrimEnd('\\'))))
-            {
-                string archiveSource = chosen.Mtp == null ? prepared.Path : SyncMtpSource(chosen.Mtp);
-                archived = ArchiveBackup.Run(archiveSource, destination, prepared.Config);
-            }
+            OperationResult archived = RunArchive(prepared, destination);
             EjectIfWanted(prepared, archived, context);
             return archived;
         }

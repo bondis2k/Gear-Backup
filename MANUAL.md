@@ -125,6 +125,8 @@ With **Also save as zip**, a successful full backup additionally creates a ZIP b
 
 This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. A root-level `checksums.sha256` lists the SHA-256 hash and ZIP-relative path of every backed-up file in sha256sum format. Hashes are always included, even with verification disabled; the manifest excludes itself and folders. The source must not contain a root-level file or folder named `checksums.sha256`. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
 
+The CLI supports the same operation with `--zip-archive`. Supply `--output` with an existing folder or a `.zip` file path, or omit it to be asked where to save; a blank answer cancels. When selecting a folder, `--name` supplies the filename, otherwise the device name plus date/time is used. An explicit `.zip` output path takes precedence over `--name`. The destination's parent folder must already exist. `--profile` still selects device/profile preferences without creating a backup history. `--preview` shows the plan without writing the archive.
+
 ### Incremental backup: update a chosen set
 
 1. Detect the device or choose its source folder.
@@ -313,6 +315,9 @@ Run `GearBackup.exe` in a terminal, or double-click it for interactive menus. Wi
 | `--check` | Select histories/backups to check without requiring a source. |
 | `--camera-settings` | Capture X100VI recipes and shooting settings in the required camera mode. |
 | `--zip` | Also export a successful full backup as ZIP. |
+| `--zip-archive` | Create a standalone full ZIP without a backup set or content store. |
+| `--output PATH` | With `--zip-archive`, save to a `.zip` file or existing folder; omitted prompts for a destination. |
+| `--name NAME` | With `--zip-archive`, set the suggested filename when choosing a folder; omitted uses device name plus date/time. |
 | `--preview` | Show a backup/restore plan without applying it, or preview a catalog rebuild. |
 | `--rebuild-catalog PATH` | Rebuild one backup set's SQLite catalog. |
 | `--no-pause` | Do not wait for a key before exiting; interactive operation choices still apply. |
@@ -329,6 +334,9 @@ Examples in PowerShell, from the executable folder:
 # Back up a folder and export a full backup to ZIP
 .\GearBackup.exe --source "D:\M8Card" --profile "Studio" --zip --no-pause
 
+# Save a standalone ZIP; D:\Archives must already exist
+.\GearBackup.exe --zip-archive --source "D:\M8Card" --output "D:\Archives" --name "Live set" --no-pause
+
 # Restore into a PC folder
 .\GearBackup.exe --restore --source "D:\RestoredFiles" --profile "Studio" --no-pause
 
@@ -342,6 +350,8 @@ Examples in PowerShell, from the executable folder:
 Use `Mode=full` or `Mode=incremental` to choose a CLI backup mode without its mode menu. CLI incremental backup updates the latest set in the resolved history; selecting a different set is a GUI feature. There are no `--full` or `--incremental` flags.
 
 `--restore` and `--check` cannot be combined. `--zip` cannot be combined with either. `--camera-settings` cannot be combined with restore, check, or a local source. Catalog rebuild accepts only its path, `--preview`, and `--no-pause`. `--check --preview` prints an explanation and exits without performing the check; run checks without preview.
+
+`--zip-archive` cannot be combined with `--restore`, `--check`, `--camera-settings`, `--rebuild-catalog` or `--zip`. `--output` and `--name` require `--zip-archive`.
 
 | Exit code | Meaning |
 | --- | --- |
