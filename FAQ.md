@@ -72,3 +72,17 @@ For a file whose path already exists in the previous backup, Gear Backup compare
 By default (steps 1 to 3) a change that leaves both the size and the modified time exactly as they were goes unnoticed. That is rare, but if you want to be certain, turn on **Compare file contents**.
 
 When a file is judged changed, its new content is hashed while it is copied. If that content is already stored, nothing new is stored. With **Preview** on (the default), Gear Backup lists every **New** and **Changed** file before it copies anything, so you can see what it found.
+
+### What is the downside of enabling Compare file contents?
+
+Time, and nothing else.
+
+Normally an incremental backup only looks at each file's size and modified time, which takes a moment even for thousands of files. With **Compare file contents** on, Gear Backup has to **read every file in full** on every backup, even when nothing has changed, to calculate its SHA-256 and compare it with the saved one. The extra time is therefore however long it takes to read the whole device at its read speed. It also applies when you restore or resume an interrupted backup. With plain, browsable backup folders it reads the backup's copy of each file too.
+
+For example, an M8 card with about 1 GB in 3,169 files, read through a USB card reader: a backup with nothing changed took under 3 seconds normally. With **Compare file contents** on, the first one took about 2.5 minutes, because the whole card was read. A repeat straight afterwards took about 4 seconds, since Windows still had the files cached. Your numbers will depend on the card, the reader and how much is stored.
+
+Other than the time, it costs no extra space and does not change what is stored. It is only used to *decide* what to copy, so it never makes a backup less safe. A **full** backup is not slowed down, because it already reads every file once.
+
+It also has an upside: a file whose date changed but whose content did not (for example one that was opened and saved without changes) is recognised as unchanged and not copied again.
+
+A good approach is to leave it off for everyday backups and turn it on for an occasional backup, or when you suspect a file changed without its size or date changing.
