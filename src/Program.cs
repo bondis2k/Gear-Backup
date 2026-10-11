@@ -3,7 +3,7 @@
 // or restores a backup to a selected card or folder. Settings are in GearBackup.ini next to the exe.
 // Afterwards it offers to eject supported USB-drive devices via a Windows notification.
 //
-// Usage: GearBackup.exe [--restore | --check | --camera-settings] [--source PATH] [--profile NAME] [--zip] [--preview] [--no-pause]
+// Usage: GearBackup.exe [--restore | --check | --camera-settings | --zip-archive] [--source PATH] [--profile NAME] [--zip] [--output PATH] [--name NAME] [--preview] [--no-pause]
 // Build: build.cmd
 using System;
 using System.Collections.Generic;
@@ -69,14 +69,16 @@ static class Program
         return result;
     }
 
-    internal static int Run(bool restore, bool check, string[] args)
+    internal static int Run(bool restore, bool check, string[] args, Config suppliedConfig = null)
     {
         OperationOutput.WriteLine();
         OperationOutput.WriteLine("  " + AppIdentity.Name);
         OperationOutput.WriteLine("  ----------------------------------------");
 
-        Config config = LoadConfig();
+        Config config = suppliedConfig ?? LoadConfig();
         string rebuildCatalog = null;
+        bool archive = Array.IndexOf(args, "--zip-archive") >= 0;
+        string archiveOutput = null, archiveName = null;
         for (int i = 0; i < args.Length; i++)
         {
             if (args[i] == "--rebuild-catalog")
@@ -90,11 +92,22 @@ static class Program
                 if (++i >= args.Length) throw new ArgumentException("Missing value for " + key);
                 ApplySetting(config, key == "--source" ? "SourceFolder" : "Profile", args[i]);
             }
+            else if (args[i] == "--output" || args[i] == "--name")
+            {
+                string key = args[i];
+                if (++i >= args.Length || args[i].StartsWith("--") || string.IsNullOrWhiteSpace(args[i]))
+                    throw new ArgumentException("Missing value for " + key);
+                if (key == "--output") archiveOutput = args[i]; else archiveName = BackupSetNames.Validate(args[i]);
+            }
             else if (args[i] == "--zip") config.Zip = true;
-            else if (args[i] != "--restore" && args[i] != "--check" && args[i] != "--camera-settings" && args[i] != "--preview" && args[i] != "--no-pause")
+            else if (args[i] != "--restore" && args[i] != "--check" && args[i] != "--camera-settings" && args[i] != "--zip-archive" && args[i] != "--preview" && args[i] != "--no-pause")
                 throw new ArgumentException("Unknown argument: " + args[i]);
         }
         if (restore && check) throw new ArgumentException("Choose --restore or --check, not both.");
+        if (!archive && (archiveOutput != null || archiveName != null))
+            throw new ArgumentException("--output and --name apply only to --zip-archive.");
+        if (archive && (restore || check || rebuildCatalog != null || config.Zip || Array.IndexOf(args, "--camera-settings") >= 0))
+            throw new ArgumentException("--zip-archive cannot be combined with --restore, --check, --camera-settings, --rebuild-catalog or --zip.");
         if (rebuildCatalog != null)
         {
             if (restore || check || Array.IndexOf(args, "--camera-settings") >= 0 || Array.IndexOf(args, "--source") >= 0 ||
@@ -126,12 +139,28 @@ static class Program
             OperationOutput.WriteLine("  Source selection cancelled. Use --check to check backups without a source.");
             return 0;
         }
-        PreparedSource prepared = PrepareSource(config, chosen);
+        PreparedSource prepared = PrepareSource(config, chosen, !archive);
         DeviceProfile device = prepared.Device;
         MtpSource mtp = chosen.Mtp;
         string source = prepared.Path, pnpId = chosen.PnpId;
         WriteColored("  Source: " + source + " (" + device.Name + ")", ConsoleColor.Green);
         config = prepared.Config;
+        if (archive)
+        {
+            OperationContext.Current.OverallProgressOnly = true;
+            string suggested = ArchiveBackup.FileName(archiveName, device, DateTime.Now);
+            string destination = ArchiveDestination(archiveOutput, suggested);
+            if (destination == null) { OperationOutput.WriteLine("  ZIP archive cancelled."); return 0; }
+            var archived = RunArchive(prepared, destination);
+            if (archived.Summary != null) OperationOutput.WriteLine("  " + archived.Summary);
+            if (!PreviewOnly && !archived.Cancelled && archived.ExitCode == 0 && pnpId != null && config.Eject != EjectMode.No)
+            {
+                string changed = ConfirmSameDevice(source, pnpId);
+                if (changed == null) Finish(pnpId, archived.Title, archived.Summary, config.Eject);
+                else OperationOutput.WriteLine("  " + changed);
+            }
+            return archived.ExitCode;
+        }
         histories = prepared.Histories;
         string backupRoot = prepared.History;
         OperationOutput.WriteLine("  Backup history: " + HistoryNames.DisplayName(backupRoot) + " (" + Path.GetFileName(backupRoot) + ")");
@@ -200,6 +229,20 @@ static class Program
         else if (result.Cancelled && result.Title == null && result.Summary != null)
             OperationOutput.WriteLine("  " + result.Summary);
         return result.ExitCode;
+    }
+
+    internal static string ArchiveDestination(string output, string suggested)
+    {
+        if (output == null)
+        {
+            output = AskText("Save ZIP as (file path or existing folder; suggested name: " + suggested + "; blank cancels):");
+            if (string.IsNullOrWhiteSpace(output)) return null;
+        }
+        output = Path.GetFullPath(output);
+        if (Directory.Exists(output)) return Path.Combine(output, suggested);
+        if (!output.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("--output must be a .zip file path or an existing folder.");
+        return output;
     }
 
     // Checks one history's backups (the M8 isn't involved) and shows the result as a notification.

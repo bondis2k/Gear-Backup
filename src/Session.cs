@@ -74,6 +74,16 @@ static class Session
         }
     }
 
+    internal static OperationResult RunArchive(PreparedSource prepared, string destination)
+    {
+        MtpSource mtp = prepared.Source.Mtp;
+        using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+        {
+            string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+            return ArchiveBackup.Run(source, destination, prepared.Config);
+        }
+    }
+
     internal static OperationResult BackupFolderCancelled()
     {
         return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
