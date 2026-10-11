@@ -28,6 +28,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   `GearBackup.ini`) and opens there next time; it opens centred if that place is no longer on a screen.
 
 ### Changed
+- The **Choose files to restore** window starts with all folders collapsed and opens at a narrower, more appropriate size.
 - **Use a single content store** is now on by default for new full backups (`SingleContentStore=yes`). Turn it off in Settings for plain, browsable backup folders. Files are stored by content, so a file with the same name but different content never overwrites another; each restore point records the original names and restores them.
 - Incremental restore points use `yyyy-MM-dd_HH.mm.ss` names (date and time), with collision suffixes to preserve existing points. Capture timestamps are stored independently in metadata and SQLite, keeping latest defaults correct across days and midnight.
 - Pre-1.0 builds support the current settings, metadata, snapshot and SQLite formats only. Removed former product-name aliases, settings-location migrations, history renaming/reuse, device inference from history names and snapshot-based old-version inference.
