@@ -55,6 +55,8 @@ partial class Tests
                 var version = (Label)about.Controls.Find("ApplicationVersion", true)[0];
                 Assert(version.Text == "Version " + AppIdentity.Version, "About displays the shared release version");
                 Assert(((Label)about.Controls.Find("ApplicationLicense", true)[0]).Text.Contains("GNU General Public License"), "About names the license");
+                var aboutIcon = (PictureBox)about.Controls.Find("AboutIcon", true)[0];
+                Assert(aboutIcon.Image != null && aboutIcon.Width >= 100 && about.ClientSize.Width >= 520, "About shows the app icon in a roomier window");
             }
             var sourceBox = (TextBox)form.Controls.Find("SourceFolder", true)[0];
             var backupBox = (TextBox)form.Controls.Find("BackupFolder", true)[0];

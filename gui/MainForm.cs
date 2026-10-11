@@ -526,7 +526,7 @@ internal sealed partial class MainForm : Form
     // build-gui.cmd embeds the device pictures from the assets folder under their file names.
     static Stream Resource(string name) { return typeof(MainForm).Assembly.GetManifestResourceStream(name); }
 
-    static Image LoadImage(string name)
+    internal static Image LoadImage(string name)
     {
         try
         {
