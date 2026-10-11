@@ -53,6 +53,8 @@ h2{margin-top:2em;font-size:22px;padding:8px 10px;background:#e0e0d8;border:1px 
 h3{margin-top:1.6em;font-size:18px}a{color:#0000ee;text-decoration:underline}a:visited{color:#551a8b}
 a:focus-visible,summary:focus-visible{outline:2px dotted #000;outline-offset:3px}
 img{display:block;max-width:100%;height:auto;margin:24px auto;border:1px solid #808080;background:#fff}
+.device-cell{display:inline-flex;align-items:center;gap:10px}
+td img.device-icon{flex:none;display:block;width:40px;height:40px;margin:0;border:0;background:transparent}
 pre{padding:14px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;overflow:auto;overflow-wrap:normal;line-height:1.45}
 code{font-family:"Courier New",Courier,monospace;font-size:.88em}p code,li code,td code{background:#e8e8e0;padding:1px 3px}
 table{border-collapse:collapse;width:100%;margin:18px 0;font-size:16px}td,th{padding:9px;text-align:left;vertical-align:top;border:1px solid #808080}

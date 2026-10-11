@@ -62,12 +62,12 @@ An installed copy is identified by `GearBackup.installed` beside its executables
 
 | Device | Connection for file backup | Restore guidance |
 | --- | --- | --- |
-| Dirtywave M8 | USB disk mode, or its SD card in a reader. | Restore to the connected drive/card or a PC folder. |
-| Polyend Tracker Mini | USB drive mode, or its SD card in a reader. | Restore to the drive/card or a PC folder. |
-| OP-1 Field | MTP mode: **shift + COM**, then **T4**. | Restore to a PC folder, then transfer files to the device with Explorer. |
-| OP-XY | MTP mode: **COM**, then **T4**. | Restore to a PC folder, then transfer files with Explorer. |
-| Fujifilm X100VI photos/videos | USB file-transfer mode (MTP), or the camera's SD card in a reader. | Restore to a PC folder for viewing/editing. Putting photos back on the card is usually unnecessary. |
-| Fujifilm X100VI recipes/settings | **USB RAW CONV./BACKUP RESTORE**. | Read and export saved recipes; the app does not write settings back to the camera. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-m8.png" alt="" width="40" height="40"><span>Dirtywave M8</span></span> | USB disk mode, or its SD card in a reader. | Restore to the connected drive/card or a PC folder. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-tracker-mini.png" alt="" width="40" height="40"><span>Polyend Tracker Mini</span></span> | USB drive mode, or its SD card in a reader. | Restore to the drive/card or a PC folder. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-op1-field.png" alt="" width="40" height="40"><span>OP-1 Field</span></span> | MTP mode: **shift + COM**, then **T4**. | Restore to a PC folder, then transfer files to the device with Explorer. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-opxy.png" alt="" width="40" height="40"><span>OP-XY</span></span> | MTP mode: **COM**, then **T4**. | Restore to a PC folder, then transfer files with Explorer. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-x100vi.png" alt="" width="40" height="40"><span>Fujifilm X100VI photos/videos</span></span> | USB file-transfer mode (MTP), or the camera's SD card in a reader. | Restore to a PC folder for viewing/editing. Putting photos back on the card is usually unnecessary. |
+| <span class="device-cell"><img class="device-icon" src="assets/manual/device-x100vi.png" alt="" width="40" height="40"><span>Fujifilm X100VI recipes/settings</span></span> | **USB RAW CONV./BACKUP RESTORE**. | Read and export saved recipes; the app does not write settings back to the camera. |
 
 You can also back up an ordinary local folder. Open **More options** on Backup and choose its source. For a card reader or folder, set the appropriate device type when automatic identification is insufficient. An unknown folder defaults to the M8 device profile.
 
