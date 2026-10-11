@@ -38,6 +38,9 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   through one place that rejects links and enforces size limits. Checksum lists, status files,
   snapshots, recovery records and settings were previously written without a link check. Settings
   files over 1 MB or reached through a link are now refused. (#53)
+- Listing an MTP device checks for Cancel between batches, stops when a faulty device keeps repeating
+  the same items, and refuses more than 200,000 items in a folder or 2,000,000 in total, so a device
+  that never stops listing can't loop forever or fill memory.
 
 ### Internal
 - Stages, statuses, restore modes and storage kinds are typed values instead of text. (#52)

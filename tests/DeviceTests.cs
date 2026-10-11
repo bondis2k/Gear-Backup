@@ -494,5 +494,42 @@ partial class Tests
             "an invalid device date counts as no date instead of failing the listing");
         Assert(MtpDevice.DownloadBufferSize(0) == 256 * 1024 && MtpDevice.DownloadBufferSize(1024 * 1024) == 1024 * 1024 &&
             MtpDevice.DownloadBufferSize(uint.MaxValue) == 4 * 1024 * 1024, "the device's buffer size is kept between 256 KB and 4 MB");
+
+        // Listing a folder batch by batch, as a device sends it.
+        int batches = 0;
+        List<string> ids = MtpDevice.CollectIds(into => {
+            for (int i = 0; i < (batches < 2 ? 100 : 40); i++) into.Add("id" + (batches * 100 + i));
+            return ++batches < 3;
+        });
+        Assert(ids.Count == 240 && ids[0] == "id0" && ids[239] == "id239", "a folder's IDs are collected across several batches");
+        batches = 0;
+        ids = MtpDevice.CollectIds(into => {
+            batches++;
+            for (int i = 0; i < 100; i++) into.Add("same" + i);
+            return true;
+        });
+        Assert(ids.Count == 100 && batches == 2, "a device repeating the same batch is stopped instead of looping forever");
+        int counter = 0;
+        Throws(() => MtpDevice.CollectIds(into => {
+            for (int i = 0; i < 100; i++) into.Add("new" + counter++);
+            return true;
+        }, 5000), "a device that never stops listing new items is refused at the limit");
+        Assert(counter <= 5100, "the endless listing stops right after the limit: " + counter + " IDs read");
+        using (var cancel = new CancellationTokenSource())
+        using (new OperationContext(new TestInteraction(), cancel.Token).Activate())
+        {
+            batches = 0;
+            bool cancelled = false;
+            try
+            {
+                MtpDevice.CollectIds(into => {
+                    if (++batches == 3) cancel.Cancel();
+                    for (int i = 0; i < 100; i++) into.Add("c" + batches + "-" + i);
+                    return true;
+                });
+            }
+            catch (OperationCanceledException) { cancelled = true; }
+            Assert(cancelled && batches == 3, "Cancel stops a listing between batches");
+        }
     }
 }

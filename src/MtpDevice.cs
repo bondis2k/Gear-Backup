@@ -231,6 +231,9 @@ internal sealed class MtpDevice : IMtpSource, IDisposable
 
     // Deeper than any real device's folders; also stops a device whose listing never ends.
     const int MaxDepth = 64;
+    // Far more than any real device holds (an X100VI card with tens of thousands of photos is well
+    // below); a faulty device listing without end is stopped instead of filling memory.
+    internal const int MaxFolderItems = 200000, MaxItems = 2000000;
 
     // `seen` holds every object already listed, and a repeat is skipped: a faulty device that lists a
     // folder inside itself would otherwise be walked until the program runs out of stack.
@@ -241,6 +244,7 @@ internal sealed class MtpDevice : IMtpSource, IDisposable
         {
             OperationContext.Current.CheckCancellation();
             if (!seen.Add(id)) continue;
+            if (into.Count >= MaxItems) throw new IOException("The device lists more than " + MaxItems.ToString("N0") + " items; reconnect it and try again.");
             MtpObject item = Read(id, parentPath);
             into.Add(item);
             OperationContext.Current.Progress(Stage.Scanning, item.RelativePath, 0, 0, into.Count);
@@ -252,24 +256,45 @@ internal sealed class MtpDevice : IMtpSource, IDisposable
     // about 30% slower (0.33 s against 0.22 s).
     List<string> Children(string parentId)
     {
-        var ids = new List<string>();
         IEnumPortableDeviceObjectIDs objects;
         content.EnumObjects(0, parentId, IntPtr.Zero, out objects);
         var batch = new IntPtr[100];
-        while (true)
-        {
+        return CollectIds(into => {
             uint fetched;
             int hr = objects.Next((uint)batch.Length, batch, out fetched);
             if (hr < 0) Marshal.ThrowExceptionForHR(hr);
             for (int i = 0; i < fetched && i < batch.Length; i++)
             {
-                ids.Add(Marshal.PtrToStringUni(batch[i]));
+                into.Add(Marshal.PtrToStringUni(batch[i]));
                 Marshal.FreeCoTaskMem(batch[i]);
             }
             // S_FALSE (1), or fewer IDs than asked for, means the list is finished.
-            if (hr != 0 || fetched < batch.Length) break;
+            return hr == 0 && fetched >= batch.Length;
+        });
+    }
+
+    // Adds the next batch of IDs to the list; returns whether more may follow.
+    internal delegate bool NextIds(List<string> into);
+
+    // Collects a folder's IDs batch by batch from `next`. Between batches it checks for Cancel; it stops
+    // when a full batch brings no new IDs (a faulty device repeating itself), and refuses a folder with
+    // more than `limit` items, so a device that never stops listing can't loop forever or fill memory.
+    internal static List<string> CollectIds(NextIds next, int limit = MaxFolderItems)
+    {
+        var ids = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var batch = new List<string>();
+        while (true)
+        {
+            OperationContext.Current.CheckCancellation();
+            batch.Clear();
+            bool more = next(batch);
+            int added = 0;
+            foreach (string id in batch)
+                if (seen.Add(id)) { ids.Add(id); added++; }
+            if (ids.Count > limit) throw new IOException("A folder on the device lists more than " + limit.ToString("N0") + " items; reconnect it and try again.");
+            if (!more || added == 0) return ids;
         }
-        return ids;
     }
 
     MtpObject Read(string id, string parentPath)
