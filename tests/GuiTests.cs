@@ -15,6 +15,7 @@ using static AppSettings;
 using static ProfileSettings;
 using static Session;
 using static Workflow;
+using static GearGui;
 
 class GuiTestRunner
 {

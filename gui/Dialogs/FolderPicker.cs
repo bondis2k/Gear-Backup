@@ -1,9 +1,10 @@
 using System.IO;
 using System.Windows.Forms;
+using static GearBackup;
 
-partial class GearBackup
+static class FolderPicker
 {
-    static void BrowseFolder(IWin32Window owner, TextBox target, bool allowNew, string description = null)
+    internal static void BrowseFolder(IWin32Window owner, TextBox target, bool allowNew, string description = null)
     {
         using (var dialog = new FolderBrowserDialog { Description = description ?? (allowNew ? "Choose a backup or recovery location" : "Choose the card or source folder"), ShowNewFolderButton = allowNew })
         {
@@ -11,5 +12,4 @@ partial class GearBackup
             if (dialog.ShowDialog(owner) == DialogResult.OK) target.Text = dialog.SelectedPath;
         }
     }
-
 }
