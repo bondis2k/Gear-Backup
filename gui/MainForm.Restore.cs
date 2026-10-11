@@ -83,7 +83,13 @@ internal sealed partial class MainForm
     }
     void RefreshRestoreActionState()
     {
-        if (Selected != GuiOperation.Restore) return;
+        // Restore holds its action buttons back until a point is chosen; the other operations take them back.
+        if (Selected != GuiOperation.Restore)
+        {
+            start.Enabled = !runner.IsBusy;
+            preview.Enabled = !runner.IsBusy && Selected != GuiOperation.Check;
+            return;
+        }
         bool ready = !runner.IsBusy && !loadingRestore && displayedDevice != null && restoreSet != null && restorePoint.SelectedItem is RestorePoint &&
             (rememberedRestoreScope != 1 || (restorePaths != null && restorePaths.Length != 0));
         start.Enabled = preview.Enabled = ready;

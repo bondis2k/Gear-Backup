@@ -61,7 +61,21 @@ internal abstract class ToolsDialog : Form
         var bar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 14, 0, 0), Margin = Padding.Empty };
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = true, Margin = Padding.Empty };
+        // An auto-sizing flow panel in a stretching column measures its buttons stacked and keeps that height,
+        // leaving dead space under the bar, so its height is worked out here from the buttons that fit per line.
+        Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = false, WrapContents = true, Margin = Padding.Empty, Height = 40 };
+        Actions.Layout += delegate {
+            int width = Actions.ClientSize.Width, x = 0, lines = 1, rowHeight = 0;
+            if (width <= 0) return;
+            foreach (Control button in Actions.Controls)
+            {
+                if (!button.Visible) continue;
+                int w = button.Width + button.Margin.Horizontal;
+                if (x > 0 && x + w > width) { lines++; x = 0; }
+                x += w; rowHeight = Math.Max(rowHeight, button.Height + button.Margin.Vertical);
+            }
+            if (rowHeight > 0 && Actions.Height != lines * rowHeight) Actions.Height = lines * rowHeight;
+        };
         var close = GuiTheme.Button("Close", false);
         close.Margin = Padding.Empty;
         close.Click += delegate { Close(); };

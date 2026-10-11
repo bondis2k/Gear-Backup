@@ -38,7 +38,7 @@ MTP transfers first refresh a local PC mirror, downloading new or changed conten
 
 - **Full backup:** capture the source into a new dated backup set using the selected storage layout. An optional GUI name identifies that set without changing its folder or history.
 - **Incremental backup:** the GUI lists full backup sets for the current source/history and updates the selected set; the CLI uses the latest set. Names, dates and completion status make sets identifiable. Browsable backups retain dated old copies; a single content store retains earlier states through restore-point membership.
-- **Incremental point names:** saved runs use `HH.mm.ss`, with numbered suffixes only when a name is already taken. Full capture timestamps remain in metadata and SQLite for chronological restore selection across days; the GUI shows the selected run's full date separately.
+- **Incremental point names:** saved runs use the date and time, `yyyy-MM-dd_HH.mm.ss`, with numbered suffixes only when a name is already taken. Full capture timestamps remain in metadata and SQLite for chronological restore selection across days; the GUI shows the selected run's full date separately.
 - **Comparison choices:** use size and modified time, with a two-second timestamp tolerance, or enable SHA-256 content comparison. Files without usable timestamps are compared byte by byte.
 - **Resume:** continue an incomplete or failed backup in the same folder, using the selected comparison mode. Detected suspect copies are moved aside.
 - **Folder preservation:** keep empty folders and skip common operating-system leftovers such as `.DS_Store`, `Thumbs.db` and trash folders.

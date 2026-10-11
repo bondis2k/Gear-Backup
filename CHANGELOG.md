@@ -6,6 +6,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-11
+
 ### Added
 - Device-filtered Restore tab with SQL-backed full/incremental restore-point selection, latest defaults and a checked folder/file browser. Saved runs record whether they came from a full or incremental backup; restores revalidate device, inventory and selections under the history lock. Exact restore remains optional.
 - SQLite-first incremental inventory for both storage layouts, with current-row queries, stale/incomplete inventory detection, recovery-record fallbacks, live browsable-file checks and automatic catalog repair after successful fallback runs.
@@ -28,8 +30,9 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   `GearBackup.ini`) and opens there next time; it opens centred if that place is no longer on a screen.
 
 ### Changed
+- The **Choose files to restore** window starts with all folders collapsed and opens at a narrower, more appropriate size. Tool windows (Storage, Dashboard, Device & backup settings and others) no longer leave dead space under their bottom buttons.
 - **Use a single content store** is now on by default for new full backups (`SingleContentStore=yes`). Turn it off in Settings for plain, browsable backup folders. Files are stored by content, so a file with the same name but different content never overwrites another; each restore point records the original names and restores them.
-- Incremental restore points use `HH.mm.ss` names, with collision suffixes to preserve existing points. Capture timestamps are stored independently in metadata and SQLite, keeping latest defaults correct across days and midnight.
+- Incremental restore points use `yyyy-MM-dd_HH.mm.ss` names (date and time), with collision suffixes to preserve existing points. Capture timestamps are stored independently in metadata and SQLite, keeping latest defaults correct across days and midnight.
 - Pre-1.0 builds support the current settings, metadata, snapshot and SQLite formats only. Removed former product-name aliases, settings-location migrations, history renaming/reuse, device inference from history names and snapshot-based old-version inference.
 - "Profiles" are now called what they are: the main window's field is **Backup name (optional)**, which
   starts a separate history, and the **Profiles** window is **Device & backup settings**. `GearBackup.ini`,
@@ -53,6 +56,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   statistics writes (about 2× faster for small files). (#50)
 
 ### Fixed
+- The **Back up** and **Preview** buttons are available again after visiting the Restore tab and going back to Backup; Restore had left them disabled.
 - Restore picker background reads no longer overwrite the main operation display or leave a stale “Scanning backup” status. Idle/completed operation displays ignore late queued progress.
 - Dark theme: drop-down buttons and scroll bars use Windows' dark look, and the selected row in the backup chooser uses the theme's selection colour instead of Windows blue. The Cleanup tab's **Remove** header is no longer cut off, and Original's grey secondary text is slightly darker for readability. Disabled check boxes and radio buttons (such as Restore's **Remove extra target files**) no longer show near-black text on the dark background.
 - SQLite restore loading validates repeated inventory paths and content objects once per read, avoiding thousands of redundant disk checks across saved runs. Restore rechecks source paths before opening files.
@@ -133,7 +137,8 @@ First release of Gear Backup.
 - Graphical and command-line interfaces, Setup and Portable packages, and an illustrated offline
   manual in three themes (Original, Original (dark), Retro).
 
-[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.0A...v0.9.1
 [0.9.0A]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.0...v0.9.0A

@@ -13,13 +13,14 @@ internal sealed class RestoreBrowserDialog : ToolsDialog
     internal RestoreBrowserDialog(MainForm owner, Snapshot snapshot, string[] selected = null)
         : base(owner, "Choose files to restore", "Check folders to include everything below them, or check individual files. Nothing is restored until you review the restore preview.")
     {
+        // A file tree is narrow and tall; the folders start collapsed so the whole backup is visible at a glance.
+        ClientSize = new System.Drawing.Size(640, 620); MinimumSize = new System.Drawing.Size(520, 420);
         tree.BackColor = GuiTheme.Surface; tree.ForeColor = GuiTheme.Ink;
         SetContent(tree);
         tree.BeginUpdate();
         foreach (string folder in snapshot.Folders) Add(folder, true);
         foreach (RestoreEntry file in snapshot.Files) Add(file.Relative, false);
         tree.Sort();
-        foreach (TreeNode node in tree.Nodes) node.Expand();
         tree.EndUpdate();
         tree.AfterCheck += delegate(object sender, TreeViewEventArgs e) {
             if (changingChecks) return;

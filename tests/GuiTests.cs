@@ -295,6 +295,7 @@ partial class Tests
         TestGuiThemes(root);
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestThemeReadability();
+        TestActionButtonsFollowOperation();
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
@@ -463,6 +464,27 @@ partial class Tests
         if (DwmGetWindowAttribute(form.Handle, 36, out value, sizeof(int)) == 0)
             Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink),
                 "native caption text matches the selected palette");
+    }
+
+    // The Restore tab holds Restore/Preview back until a point is chosen; going back to Backup must release them.
+    static void TestActionButtonsFollowOperation()
+    {
+        using (var form = new MainForm(true))
+        {
+            form.Show(); Application.DoEvents();
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var preview = (Button)form.Controls.Find("PreviewOperation", true)[0];
+            form.SelectOperation(GuiOperation.FullBackup);
+            Assert(start.Enabled && preview.Enabled, "Backup starts with its buttons available");
+            form.SelectOperation(GuiOperation.Restore);
+            Assert(!start.Enabled && !preview.Enabled, "Restore waits for a device and restore point");
+            form.SelectOperation(GuiOperation.FullBackup);
+            Assert(start.Enabled && preview.Enabled, "going back from Restore to a full backup re-enables Back up and Preview");
+            form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.IncrementalBackup);
+            Assert(start.Enabled && preview.Enabled, "going back from Restore to an incremental backup re-enables Back up and Preview");
+            form.SelectOperation(GuiOperation.Restore); form.SelectOperation(GuiOperation.Check);
+            Assert(start.Enabled && !preview.Enabled, "Check is available without a preview");
+        }
     }
 
     static double ThemeContrast(Color a, Color b)
@@ -1147,6 +1169,10 @@ partial class Tests
             var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
             TreeNode songs = null, samples = null;
             foreach (TreeNode node in tree.Nodes) { if ((string)node.Tag == "Songs") songs = node; if ((string)node.Tag == "Samples") samples = node; }
+            Assert(!songs.IsExpanded && !samples.IsExpanded && browser.ClientSize.Width <= 720, "the file browser starts with its folders collapsed in a moderate-width window");
+            var closeButton = (Button)browser.CancelButton;
+            Assert(browser.RectangleToClient(closeButton.RectangleToScreen(closeButton.ClientRectangle)).Bottom >= browser.ClientSize.Height - 40,
+                "tool window buttons sit at the bottom of the window with no dead space beneath them");
             songs.Checked = true;
             Assert(browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == "Songs" && !samples.Checked, "checking a folder selects its subtree without including other folders");
             TreeNode one = null; foreach (TreeNode node in songs.Nodes) if ((string)node.Tag == @"Songs\one.m8s") one = node;

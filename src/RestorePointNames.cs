@@ -10,7 +10,7 @@ internal static class RestorePointNames
     internal static string Create(string backup, DateTime started, bool incremental)
     {
         string root = Snapshots.SnapshotRoot(backup);
-        string name = started.ToString(incremental ? "HH.mm.ss" : "yyyy-MM-dd_HHmmss_fffffff", CultureInfo.InvariantCulture);
+        string name = started.ToString(incremental ? "yyyy-MM-dd_HH.mm.ss" : "yyyy-MM-dd_HHmmss_fffffff", CultureInfo.InvariantCulture);
         string candidate = name;
         for (int suffix = 2; ; suffix++)
         {
@@ -62,7 +62,7 @@ internal static class RestorePointNames
     static int Suffix(string name, out string basis)
     {
         int index = name.LastIndexOf('_'), suffix;
-        if ((index == 8 || index == 25) && int.TryParse(name.Substring(index + 1), NumberStyles.None, CultureInfo.InvariantCulture, out suffix))
+        if ((index == 19 || index == 25) && int.TryParse(name.Substring(index + 1), NumberStyles.None, CultureInfo.InvariantCulture, out suffix))
         { basis = name.Substring(0, index); return suffix; }
         basis = name; return 1;
     }
