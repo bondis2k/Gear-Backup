@@ -19,7 +19,7 @@ partial class Tests
         Put(Path.Combine(source, dated), "REAL SAMPLE");
         Put(Path.Combine(source, "Bundles", "Demo", dated), "BUNDLE SAMPLE");
         Put(Path.Combine(source, "song.txt"), "FIRST");
-        var config = new Config { BackupFolder = root, SettingsDirectory = root, Preview = false, PointInTimeHistory = false, Thorough = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, SettingsDirectory = root, Preview = false, PointInTimeHistory = false, Thorough = true };
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
         new BackupEngine().Run(source, history, null, false, config, context);
         string backup = LatestBackup(history);
@@ -55,12 +55,12 @@ partial class Tests
 
     static void TestHistoryLocations(string root)
     {
-        var config = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
         string alternate = Path.Combine(root, "alternate");
         SaveProfileSettings(config, "device:tracker-mini", new Dictionary<string, string> { { "BackupFolder", alternate } });
         SaveProfileSettings(config, "profile:Studio", new Dictionary<string, string> { { "BackupFolder", alternate } });
         string globalHistory = Path.Combine(HistoriesRoot(config), "profiles", "Studio");
-        string otherHistory = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
+        string otherHistory = Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = alternate }), "profiles", "Studio");
         Directory.CreateDirectory(Path.Combine(globalHistory, "2026-01-01"));
         Directory.CreateDirectory(Path.Combine(otherHistory, "2026-01-01"));
         int before;
@@ -96,7 +96,7 @@ partial class Tests
 
     static void TestRestoreDevicePreferences(string root)
     {
-        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
         string alternate = Path.Combine(root, "tracker"), recovery = Path.Combine(root, "recovery");
         SaveProfileSettings(global, "device:tracker-mini", new Dictionary<string, string> {
             { "BackupFolder", alternate }, { "Recovery", "yes" }, { "RecoveryFolder", recovery }, { "Verify", "yes" }, { "PointInTimeHistory", "no" }

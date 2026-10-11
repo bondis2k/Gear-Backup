@@ -111,7 +111,7 @@ partial class Tests
         try
         {
             result = new RestoreEngine().RunSelected(target, f.First, copies, RestoreMode.All, null, true,
-                new Config { Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
+                new Config { SingleContentStore = false, Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
         }
         finally { if (locked != null) locked.Dispose(); }
         Assert(result.ExitCode != 0 && !result.Cancelled && result.Summary.Contains("1 failed"),
@@ -279,7 +279,7 @@ partial class Tests
         string source = Rooted(Path.Combine(dir, "redact-card"));
         Put(Path.Combine(source, "Songs", "a.m8s"), "A");
         string zipHistory = Path.Combine(dir, "redact-history");
-        new BackupEngine().Run(source, zipHistory, null, false, new Config { BackupFolder = dir, Preview = false, Zip = true },
+        new BackupEngine().Run(source, zipHistory, null, false, new Config { SingleContentStore = false, BackupFolder = dir, Preview = false, Zip = true },
             new OperationContext(new TestInteraction(), CancellationToken.None));
         string backup = ListBackups(zipHistory)[0];
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

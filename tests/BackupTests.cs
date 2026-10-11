@@ -25,8 +25,8 @@ partial class Tests
     static void TestSettingsAndProfiles(string root)
     {
         string source = Rooted(Path.Combine(root, "card"));
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
-        Assert(!new Config().Verify && !new Config().Thorough, "SHA-256 comparisons default off");
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true };
+        Assert(!new Config { SingleContentStore = false }.Verify && !new Config { SingleContentStore = false }.Thorough, "SHA-256 comparisons default off");
         Assert(!config.Recovery, "recovery defaults to no");
         Assert(RecoveryRoot(config) == Path.Combine(root, "Gear Recovery"), "empty recovery location defaults under backup folder");
         ApplySetting(config, "RecoveryFolder", "%USERPROFILE%\\M8-test-recovery");
@@ -53,7 +53,7 @@ partial class Tests
     static void TestFullAndIncremental(string root)
     {
         string source = Rooted(Path.Combine(root, "card")), history = Path.Combine(root, "history");
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
         string title, summary;
         Put(Path.Combine(source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(source, "Songs", "removed.m8s"), "REMOVED");
@@ -200,7 +200,7 @@ partial class Tests
         Assert(Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false).StartsWith("meta:"), "default guard records metadata fingerprint");
         var optionalCopies = new List<RestoreEntry> { optionalEntry };
         var optionalHashes = new Dictionary<string, string> { { "optional.bin", Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false) } };
-        var offConfig = new Config { BackupFolder = root, Preview = false };
+        var offConfig = new Config { SingleContentStore = false, BackupFolder = root, Preview = false };
         ExecuteRestore(optionalTarget, optionalCopies, new List<string>(), new List<string>(), new List<string>(), optionalHashes, offConfig, out title, out summary);
         Assert(title == "Gear Backup restore complete" && File.ReadAllText(Path.Combine(optionalTarget, "optional.bin")) == "BBBB", "Verify=no permits restore without stored-checksum comparison");
         Assert(CopyFile(new FileInfo(optionalPath), Path.Combine(root, "optional-copy.bin"), false) == HashFile(optionalPath), "checksum records are generated when verification is off");
@@ -223,7 +223,7 @@ partial class Tests
         Put(undatedSong, "UNCHANGED");
         File.SetLastWriteTimeUtc(undatedSong, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
         string undatedHistory = Path.Combine(root, "undated-history");
-        var fastConfig = new Config { BackupFolder = root, Preview = false };
+        var fastConfig = new Config { SingleContentStore = false, BackupFolder = root, Preview = false };
         Assert(Backup(undatedSource, undatedHistory, null, false, fastConfig, out title, out summary) == 0, "undated initial backup succeeds with SHA off");
         string undatedBackup = ListBackups(undatedHistory)[0];
         string undatedCopy = Path.Combine(undatedBackup, "Songs", "undated.m8s");
@@ -263,7 +263,7 @@ partial class Tests
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
         Assert(DriveSpaceText(@"\\server\share") == "unknown", "statistics free-space text tolerates network sources");
         Assert(DriveSpaceText(Path.GetPathRoot(root)).Contains(" of "), "statistics free-space text shows free and total size");
-        var original = new Config();
+        var original = new Config { SingleContentStore = false };
         foreach (var field in typeof(Config).GetFields())
         {
             if (field.FieldType == typeof(bool)) field.SetValue(original, !(bool)field.GetValue(original));
@@ -293,7 +293,7 @@ partial class Tests
         File.SetLastWriteTimeUtc(undated, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
         Directory.CreateDirectory(Path.Combine(source, "Empty"));
         string history = Path.Combine(root, "zip-history");
-        var config = new Config { BackupFolder = root, Preview = false, Zip = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Zip = true };
 
         var ui = new TestInteraction();
         OperationResult full = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
@@ -357,13 +357,13 @@ partial class Tests
 
     static void TestWithoutHistory(string root)
     {
-        Assert(!new Config().PointInTimeHistory, "point-in-time history is disabled by default");
+        Assert(!new Config { SingleContentStore = false }.PointInTimeHistory, "point-in-time history is disabled by default");
         string source = Rooted(Path.Combine(root, "source"));
         Put(Path.Combine(source, "song.txt"), "FIRST");
         Put(Path.Combine(source, "unchanged.txt"), "SAME");
         Directory.CreateDirectory(Path.Combine(source, "empty"));
         string history = Path.Combine(root, "history");
-        var config = new Config { HardLinks = true, Verify = true, Thorough = true, Preview = false };
+        var config = new Config { SingleContentStore = false, HardLinks = true, Verify = true, Thorough = true, Preview = false };
         var ui = new TestInteraction();
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         string backup = ListBackups(history)[0];
@@ -430,8 +430,8 @@ partial class Tests
         Put(song, "AAAA");
         DateTime songTime = File.GetLastWriteTimeUtc(song);
         string history = Path.Combine(root, "opt-history");
-        Assert(!new Config().HardLinks, "hard-linked history is opt-in");
-        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, HardLinks = true, PointInTimeHistory = true };
+        Assert(!new Config { SingleContentStore = false }.HardLinks, "hard-linked history is opt-in");
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, HardLinks = true, PointInTimeHistory = true };
         var ui = new TestInteraction();
         OperationResult first = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         Assert(first.ExitCode == 0, "optimization fixture backup succeeds");
@@ -511,7 +511,7 @@ partial class Tests
         Put(Path.Combine(source, "Songs", "one.m8s"), "HEADLESS");
         Put(Path.Combine(source, "Songs", "two.m8s"), "HEADLESS");
         string history = Path.Combine(root, "engine-history");
-        var config = new Config { BackupFolder = root, Preview = true, PointInTimeHistory = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = true, PointInTimeHistory = true };
         var ui = new TestInteraction();
         bool delayed = false;
         ui.OnProgress = delegate(OperationProgress p) {
@@ -558,7 +558,7 @@ partial class Tests
         Directory.CreateDirectory(cancelSource);
         File.WriteAllBytes(large.FullName, new byte[2 * 1024 * 1024]);
         string cancelHistory = Path.Combine(root, "cancel-history");
-        config = new Config { BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
@@ -610,7 +610,7 @@ partial class Tests
         {
             ui = new TestInteraction();
             ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
-            var recoveryConfig = new Config { BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
+            var recoveryConfig = new Config { SingleContentStore = false, BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
             result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
                 recoveryConfig, new OperationContext(ui, cancellation.Token));
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL" &&
@@ -649,7 +649,7 @@ partial class Tests
         string source = Rooted(Folder(root, "src"));
         string relative = Path.Combine(new string('s', 40), new string('f', 30) + ".wav");
         Put(Path.Combine(source, relative), "LONG");
-        var config = new Config { BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
 
         // A history deep enough that the copy would be over 259 characters, while the folder itself fits.
         string deep = Path.Combine(root, new string('h', Math.Max(1, 185 - root.Length)));

@@ -43,8 +43,7 @@ internal sealed class BackupEngine
                 if (incremental && (previous == null || !Directory.Exists(previous)))
                     throw new IOException("An incremental backup needs an existing backup folder.");
                 string title, summary;
-                if (incremental && !ContentStoreBackup.IsSingle(previous) && config.SingleContentStore)
-                    throw new IOException("Start a full backup with SingleContentStore=yes before using this mode incrementally. Existing browsable backups are preserved.");
+                // An incremental backup keeps the layout of the backup it updates; the setting applies to new full backups.
                 if (incremental ? ContentStoreBackup.IsSingle(previous) : config.SingleContentStore)
                     return new ContentStoreBackup().Run(source, backupRoot, previous, incremental, config);
                 var run = new BackupRun(source, backupRoot, previous, incremental, config);

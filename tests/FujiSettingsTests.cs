@@ -30,7 +30,7 @@ partial class Tests
         Assert(Encoding.UTF8.GetString(files["About this backup.txt"]).Contains("not a full-camera backup"), "export states its limitations");
 
         string history = Path.Combine(root, "history");
-        var config = new Config { BackupFolder = root, Preview = false, Verify = true, Zip = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Verify = true, Zip = true };
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true, Device = Devices.X100VI }.Activate())
             SaveFujiSettings(files, history, config);
         Assert(!Directory.Exists(history), "settings preview does not create a backup history");

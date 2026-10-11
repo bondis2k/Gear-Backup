@@ -18,7 +18,7 @@ partial class Tests
         Put(Path.Combine(source, "Samples", "音 'quote'.wav"), "SAMPLE");
         Put(Path.Combine(source, "Songs", "song.m8s"), "SONG");
         Directory.CreateDirectory(Path.Combine(source, "Empty"));
-        var config = new Config { Preview = false, PointInTimeHistory = true, Verify = false, MaxNameLength = 0 };
+        var config = new Config { SingleContentStore = false, Preview = false, PointInTimeHistory = true, Verify = false, MaxNameLength = 0 };
         string history = Path.Combine(root, "history");
         OperationResult result = RunBackup(source, history, null, false, config);
         string backup = ListBackups(history)[0], database = BackupDatabase.CatalogPath(backup);
@@ -103,7 +103,7 @@ partial class Tests
             CurrentEntry(BackupDatabase.Read(backup), "keep.txt").Result == "unchecked", "rebuild without authoritative checksums never establishes a new baseline");
         string source = Folder(root, "unchanged-source"), history = Path.Combine(root, "history");
         Put(Path.Combine(source, "song.txt"), "SONG");
-        var config = new Config { Preview = false, PointInTimeHistory = false };
+        var config = new Config { SingleContentStore = false, Preview = false, PointInTimeHistory = false };
         var result = RunBackup(source, history, null, false, config);
         string clean = result.OutputFolder, catalog = BackupDatabase.CatalogPath(clean);
         Assert(File.Exists(catalog), "history-free backups also have a catalog");

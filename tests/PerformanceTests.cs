@@ -35,7 +35,7 @@ partial class Tests
     {
         string source = Path.Combine(root, "source"), history = Path.Combine(root, "history");
         Put(Path.Combine(source, "song.txt"), "UNCHANGED");
-        var config = new Config { Preview = false, MaxNameLength = 0 };
+        var config = new Config { SingleContentStore = false, Preview = false, MaxNameLength = 0 };
         OperationResult result = null;
         WithUi(() => result = Backups.RunBackup(source, history, null, false, config));
         string backup = result.OutputFolder, checksums = Path.Combine(backup, Checksums.ChecksumFileName);
