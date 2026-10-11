@@ -14,7 +14,7 @@ using static ConsoleUi;
 using static Session;
 using static Workflow;
 
-// The main window's operations, in the order of its Operation list.
+// Shared operations offered by the Backup and Restore tabs.
 internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings }
 
 // Owns the worker lifetime and operation orchestration; the form owns display.
@@ -49,11 +49,14 @@ internal sealed class GuiOperationRunner
     // Drives populate the source; MTP uses detection at backup time, never a previous drive path.
     internal void ShowDetected(SourceChoice found)
     {
+        string information = DeviceInformation.Read(found);
         detectedDrive = found != null && found.Mtp == null ? found : null;
         form.OnUi(delegate {
             form.SetDetectedSource(found != null && found.Mtp == null ? found.Path : "");
+            form.SetBackupSetSource(found);
             string connection = found == null ? null : found.CameraMode ?? (found.Mtp != null ? "MTP" : "USB drive · " + found.Path);
-            form.ShowDevice(found == null ? null : found.Detected, connection);
+            form.ShowDevice(found == null ? null : found.Detected, connection, found != null && found.CameraSettingsMode);
+            form.ShowDeviceInformation(information);
             if (found != null && found.CameraSettingsMode) form.SelectCameraSettings();
             return true;
         });
@@ -87,7 +90,7 @@ internal sealed class GuiOperationRunner
         if (operation == GuiOperation.CameraSettings)
         {
             OperationResult settingsResult = RunFujiSettingsBackup(options);
-            form.OnUi(delegate { form.ShowDevice(Devices.X100VI, FujiModeName(true)); return true; });
+            form.OnUi(delegate { form.ShowDevice(Devices.X100VI, FujiModeName(true), true); return true; });
             return settingsResult;
         }
         if (operation == GuiOperation.Check)
@@ -98,6 +101,22 @@ internal sealed class GuiOperationRunner
             var backups = ListBackups(history);
             if (backups.Count == 0) throw new IOException("No backups found at this location.");
             using (LockHistory(history)) return RunCheck(backups);
+        }
+
+        if (operation == GuiOperation.Restore && options.RestoreSelection != null)
+        {
+            string target = options.SourceFolder;
+            if (target.Length == 0 && known != null && known.Detected != null && known.Detected.Id == options.RestoreSelection.DeviceId) target = known.Path;
+            if (string.IsNullOrEmpty(target)) throw new IOException("Choose a restore destination folder or a connected USB drive.");
+            if (!Directory.Exists(target)) throw new IOException("Restore destination does not exist: " + target);
+            OperationResult restored = RestoreCatalog.Run(target, options, options.RestoreSelection);
+            if (known != null && Rooted(known.Path) == Rooted(target))
+            {
+                DeviceProfile device = Devices.Find(options.RestoreSelection.DeviceId);
+                Config effective = ProfileSettings.ResolveProfileSettings(options, device.Id, System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(options.RestoreSelection.Backup)));
+                EjectIfWanted(new PreparedSource { Source = known, Path = target, Device = device, Config = effective }, restored, context);
+            }
+            return restored;
         }
 
         SourceChoice chosen;

@@ -83,6 +83,26 @@ static class PathSafety
     }
 }
 
+// Read-only inventory scope: saved runs repeat the same paths many times. Validate each
+// unique path once while materializing one catalog; never reuse this cache for filesystem
+// writes or across operations. Restore execution checks the source again before opening it.
+internal sealed class InventoryPathCache
+{
+    readonly string root;
+    readonly Dictionary<string, string> paths = new Dictionary<string, string>(StringComparer.Ordinal);
+    internal InventoryPathCache(string root) { this.root = root; PathSafety.RejectRootLinks(root); }
+    internal string Resolve(string relative)
+    {
+        string path;
+        if (!paths.TryGetValue(relative ?? "", out path))
+        {
+            path = PathSafety.SafePath(root, relative);
+            paths.Add(relative, path);
+        }
+        return path;
+    }
+}
+
 // Windows' classic path limits, which the program's file calls are bound by: at most 259 characters
 // for a file and 247 for a folder. Collects the paths an operation will create, so it can stop with
 // a clear message before copying anything, instead of failing part-way through.

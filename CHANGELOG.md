@@ -7,6 +7,15 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- Device-filtered Restore tab with SQL-backed full/incremental restore-point selection, latest defaults and a checked folder/file browser. Saved runs record whether they came from a full or incremental backup; restores revalidate device, inventory and selections under the history lock. Exact restore remains optional.
+- SQLite-first incremental inventory for both storage layouts, with current-row queries, stale/incomplete inventory detection, recovery-record fallbacks, live browsable-file checks and automatic catalog repair after successful fallback runs.
+- Per-set full backup names in the Backup tab, switching to a named full-backup dropdown for incremental updates. Explicit selections are checked under the history lock; older unnamed backups remain selectable. The separate grouping field is labelled History name.
+- Device, Backup and Restore tabs in the main window, with a drive storage overview, connection details and independent backup-source/restore-destination fields.
+- Optional single content store (`SingleContentStore=yes`), saving each distinct content once within a backup set and recording a restore point for every successful run, including unchanged incrementals. Settings, restore, integrity checks, SQLite inventory, ZIP export and the X100VI recipe viewer support this layout. New full backups select the layout; existing sets remain usable.
+- A rebuildable `.gearbackup\catalog.sqlite` index in each backup, recording file/folder inventory,
+  snapshot membership and per-file verification results, plus the last 100 integrity-check summaries.
+  Backup, check and old-version cleanup operations refresh it; checksum lists/manifests stay authoritative.
+- `--rebuild-catalog BACKUP_FOLDER` rebuilds the index without creating new checksum baselines.
 - **Storage** has a **Device** filter, like the Dashboard's (default: All devices). It filters both
   Space usage and Cleanup; MTP mirrors belong to the device they were read from, and changing the
   device clears checked cleanup items so nothing hidden from view is recycled.
@@ -19,6 +28,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   `GearBackup.ini`) and opens there next time; it opens centred if that place is no longer on a screen.
 
 ### Changed
+- Incremental restore points use `HH.mm.ss` names, with collision suffixes to preserve existing points. Capture timestamps are stored independently in metadata and SQLite, keeping latest defaults correct across days and midnight.
+- Pre-1.0 builds support the current settings, metadata, snapshot and SQLite formats only. Removed former product-name aliases, settings-location migrations, history renaming/reuse, device inference from history names and snapshot-based old-version inference.
 - "Profiles" are now called what they are: the main window's field is **Backup name (optional)**, which
   starts a separate history, and the **Profiles** window is **Device & backup settings**. `GearBackup.ini`,
   `GearBackup.Profiles.ini` and `--profile` are unchanged.
@@ -41,6 +52,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   statistics writes (about 2× faster for small files). (#50)
 
 ### Fixed
+- Restore picker background reads no longer overwrite the main operation display or leave a stale “Scanning backup” status. Idle/completed operation displays ignore late queued progress.
+- SQLite restore loading validates repeated inventory paths and content objects once per read, avoiding thousands of redundant disk checks across saved runs. Restore rechecks source paths before opening files.
 - Restore checks the target's folders again right before committing files, instead of trusting
   checks cached during the preview. (#51)
 - Writing statistics can no longer truncate an unrelated file hard-linked in its place. (#51)

@@ -17,36 +17,15 @@ internal static class AppIdentity
     public const string SnapshotHeader = "GEARSNAPSHOT\t1";
     public const string NotificationId = "GearBackup.Application";
 
-    // Only compatibility code knows the former product's on-disk names.
-    internal static class Legacy
-    {
-        public const string Name = "M8 Backup";
-        public const string DirectoryName = "M8Backup";
-        public const string ConfigFileName = DirectoryName + ".ini";
-        public const string BackupsFolderName = "M8 Backups";
-        public const string RecoveryFolderName = "M8 Recovery";
-        public const string MetadataFolderName = ".m8backup";
-        public const string SnapshotHeader = "M8SNAPSHOT\t1";
-    }
-
-    // Reuse an existing installation's folders without moving its files or breaking paths.
-    public static string ExistingFolder(string parent, string name, string legacyName)
-    {
-        string current = Path.Combine(parent, name), legacy = Path.Combine(parent, legacyName);
-        return !Directory.Exists(current) && Directory.Exists(legacy) ? legacy : current;
-    }
-
     public static string MetadataRoot(string backup)
     {
-        return ExistingFolder(backup, MetadataFolderName, Legacy.MetadataFolderName);
+        return Path.Combine(backup, MetadataFolderName);
     }
 
     public static bool IsMetadataPath(string path)
     {
         string normalized = path.Replace('/', '\\');
-        foreach (string name in new[] { MetadataFolderName, Legacy.MetadataFolderName })
-            if (normalized.EndsWith("\\" + name, System.StringComparison.OrdinalIgnoreCase) ||
-                normalized.IndexOf("\\" + name + "\\", System.StringComparison.OrdinalIgnoreCase) >= 0) return true;
-        return false;
+        return normalized.EndsWith("\\" + MetadataFolderName, System.StringComparison.OrdinalIgnoreCase) ||
+            normalized.IndexOf("\\" + MetadataFolderName + "\\", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

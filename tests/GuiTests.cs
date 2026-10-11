@@ -56,7 +56,9 @@ partial class Tests
             }
             var sourceBox = (TextBox)form.Controls.Find("SourceFolder", true)[0];
             var backupBox = (TextBox)form.Controls.Find("BackupFolder", true)[0];
-            var mode = (ComboBox)form.Controls.Find("Operation", true)[0];
+            var fullName = (TextBox)form.Controls.Find("FullBackupName", true)[0];
+            var incrementalSet = (ComboBox)form.Controls.Find("IncrementalBackup", true)[0];
+            Action<int> selectOperation = index => ((MainForm)form).SelectOperation((GuiOperation)index);
             var start = (Button)form.Controls.Find("StartOperation", true)[0];
             var preview = (Button)form.Controls.Find("PreviewOperation", true)[0];
             var cancel = (Button)form.Controls.Find("CancelOperation", true)[0];
@@ -70,8 +72,15 @@ partial class Tests
             var openOutput = (Button)form.Controls.Find("OpenOutputFolder", true)[0];
             var moreOptions = (Button)form.Controls.Find("ToggleBackupOptions", true)[0];
             var optionalFields = form.Controls.Find("OptionalBackupFields", true)[0];
+            var workflowTabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+            var restoreTargetBox = (TextBox)form.Controls.Find("RestoreDestination", true)[0];
+            Assert(workflowTabs.TabPages.Count == 3 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" && workflowTabs.SelectedIndex == 0,
+                "main window starts with Device, followed by separate Backup and Restore tabs");
             Assert(!optionalFields.Visible && !sourceBox.Visible && !backupBox.Visible && !form.Controls.Find("Profile", true)[0].Visible && !cancel.Visible,
                 "main window initially focuses on detection and backup instead of optional fields");
+            workflowTabs.SelectedIndex = 1;
+            var backupTypes = (ComboBox)form.Controls.Find("BackupOperation", true)[0];
+            Assert(backupTypes.Items.Count == 2 && !backupTypes.Items.Contains("Restore files") && !backupTypes.Items.Contains("Check backups"), "Backup tab starts with only full and incremental backup");
             moreOptions.PerformClick();
             Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
             moreOptions.PerformClick();
@@ -79,12 +88,13 @@ partial class Tests
             using (var configured = new MainForm(true, new Config { SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
             {
                 configured.Show(); Application.DoEvents();
+                ((TabControl)configured.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
                 // Design previews leave the source box empty, so type the folder as a user would.
                 configured.Controls.Find("SourceFolder", true)[0].Text = @"D:\Card";
                 string summary = configured.Controls.Find("BackupDestinationSummary", true)[0].Text;
                 Assert(!configured.Controls.Find("OptionalBackupFields", true)[0].Visible,
                     "More options starts collapsed even when a source folder and profile are set");
-                Assert(summary.StartsWith(@"Source: D:\Card") && summary.Contains("Backup name: Studio"),
+                Assert(summary.StartsWith(@"Source: D:\Card") && summary.Contains("History name: Studio"),
                     "the summary line shows the set source folder and profile while collapsed: " + summary);
             }
             Assert(deviceImage.Image != null && deviceImage.AccessibleName == "No device detected", "the header shows the general picture at startup");
@@ -113,30 +123,45 @@ partial class Tests
             var detectionRunner = (GuiOperationRunner)typeof(MainForm).GetField("runner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
             detectionRunner.ShowDetected(new SourceChoice { Path = @"E:\", Detected = Devices.M8 });
             Assert(sourceBox.Text == @"E:\" && connectionLabel.Text.Contains("USB drive"), "USB detection selects and identifies the drive");
+            detectionRunner.ShowDetected(new SourceChoice { Path = root, Detected = Devices.M8 });
+            Assert(form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("Capacity:") && form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("Free:") && form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("Filesystem:"),
+                "drive detection displays capacity, free space and filesystem without a file scan");
             detectionRunner.ShowDetected(new SourceChoice { Path = Path.Combine(root, "mtp-mirror"), Detected = Devices.OP1Field,
                 Mtp = new MtpSource { Device = Devices.OP1Field } });
             Assert(sourceBox.Text == "" && connectionLabel.Text == "MTP", "MTP detection clears the previous USB source and displays its transport");
+            Assert(form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("not reported"), "MTP details do not misreport the PC mirror's capacity as device storage");
+            workflowTabs.SelectedIndex = 0;
+            detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraSettingsMode = true, CameraMode = FujiModeName(true) });
+            Assert(workflowTabs.SelectedIndex == 0 && backupTypes.SelectedIndex == 2 && form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("C1–C7"),
+                "camera detection stays on Device and prepares settings capture on Backup");
+            Assert(backupTypes.Items.Count == 3, "settings backup appears for a detected X100VI in settings mode");
+            detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraMode = FujiModeName(false) });
+            Assert(backupTypes.Items.Count == 2 && backupTypes.SelectedIndex == 0, "photo mode removes settings backup and resets a stale settings selection");
+            detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.OP1Field, Mtp = new MtpSource { Device = Devices.OP1Field } });
             Assert(typeof(GuiOperationRunner).GetField("detectedDrive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(detectionRunner) == null,
                 "MTP detection also clears the previous drive selection used for ejection");
             Assert(deviceLabel.Font.Size >= 17 && deviceLabel.ForeColor == GuiTheme.AccentDark && deviceImage.Width >= 88,
                 "the detected device has a prominent name, highlight and larger picture");
             detectionRunner.ShowDetected(null);
             Assert(!connectionLabel.Visible && sourceBox.Text == "", "failed detection clears stale source and connection details");
+            Assert(backupTypes.Items.Count == 2, "settings backup is hidden after device detection is cleared");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
-            mode.SelectedIndex = 4;
+            detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraSettingsMode = true, CameraMode = FujiModeName(true) });
+            selectOperation(4);
             Assert(!sourceBox.Enabled && preview.Enabled && zipBox.Enabled && sourceLabel.Text.Contains("C1–C7"),
                 "camera settings operation uses the connected camera, supports preview and zip, and identifies its scope");
-            sourceBox.Text = "invalid|unused";
             var settingsConfig = (Config)typeof(MainForm).GetMethod("CaptureConfig", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
                 .Invoke(form, new object[] { true });
             Assert(settingsConfig.SourceFolder == "", "camera settings capture ignores an unused source path");
             sourceBox.Text = source;
-            mode.SelectedIndex = 3;
+            selectOperation(3);
             Assert(!sourceBox.Enabled && sourceLabel.Text.Contains("not needed"), "check mode disables the unused source and explains it");
             Assert(start.Text == "Check" && !preview.Enabled, "GUI check mode disables copy preview");
             Assert(!zipBox.Enabled, "zip option is only available for full backups");
-            mode.SelectedIndex = 0;
+            selectOperation(0);
             Assert(zipBox.Enabled, "zip option is available for a full backup");
+            Assert(fullName.Visible && !incrementalSet.Visible, "full mode offers a name field instead of the incremental set picker");
+            fullName.Text = "Live October";
             zipBox.Checked = true;
             Assert(InvokeGuiShortcut((MainForm)form, Keys.Control | Keys.P), "Ctrl+P starts the preview");
             Assert(cancel.Enabled && !sourceBox.Enabled, "GUI disables editable inputs while worker runs");
@@ -147,12 +172,16 @@ partial class Tests
             DriveGui(form, state, "Complete", false);
             string history = Path.Combine(backupBox.Text, "Gear Backups", "profiles", InOperation(() => ProfileId(Rooted(source), "")));
             string backup = ListBackups(history)[0];
+            Assert(BackupSetNames.Read(backup) == "Live October", "GUI saves full backup name without changing automatic history grouping");
             Assert(resultCounts.Text.Contains("Copied 2") && resultCounts.Text.Contains("Failed 0") && openOutput.Visible,
                 "completed backup shows structured counts and an open-folder action");
             Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI full backup executes shared engine");
             Assert(File.Exists(backup + ".zip"), "GUI full backup with the zip option saves a zip");
             zipBox.Checked = false;
-            mode.SelectedIndex = 1;
+            selectOperation(1);
+            DateTime selectionDeadline = DateTime.UtcNow.AddSeconds(15);
+            while (!incrementalSet.Enabled && DateTime.UtcNow < selectionDeadline) { Application.DoEvents(); Thread.Sleep(10); }
+            Assert(!fullName.Visible && incrementalSet.Visible && incrementalSet.Enabled && incrementalSet.Text.Contains("Live October"), "incremental mode lists the named full set");
             start.PerformClick();
             DriveGui(form, state, "Complete", false);
             Assert(resultCounts.Text.Contains("Copied 0") && resultCounts.Text.Contains("Unchanged 2"), "unchanged incremental summary distinguishes unchanged files from copies");
@@ -160,28 +189,74 @@ partial class Tests
 
             string target = Path.Combine(root, "restore-target");
             Directory.CreateDirectory(target);
-            sourceBox.Text = target; mode.SelectedIndex = 2;
-            Assert(sourceLabel.Text.StartsWith("Restore destination") && sourceBox.AccessibleName == "Restore destination" && sourceBox.Enabled,
+            ((MainForm)form).ShowDevice(Devices.M8, "USB drive");
+            restoreTargetBox.Text = target; selectOperation(2);
+            WaitForRestorePicker(form);
+            ((MainForm)form).DrainDisplay();
+            Assert(!state.Text.Contains("Scanning") && !state.Text.Contains("Loading"), "background restore inventory never leaves a scanning operation status");
+            string settledStatus = state.Text;
+            ((MainForm)form).UpdateProgress(new OperationProgress { Stage = Stage.ScanningBackup, Path = backup });
+            ((MainForm)form).DrainDisplay();
+            Assert(state.Text == settledStatus, "late queued progress cannot overwrite a settled idle operation status");
+            Assert(workflowTabs.SelectedIndex == 2 && sourceLabel.Text.StartsWith("Restore destination") && restoreTargetBox.AccessibleName == "Restore destination" && restoreTargetBox.Enabled,
                 "restore mode clearly identifies the writable destination");
-            Assert(optionalFields.Visible && sourceBox.Visible, "restore automatically exposes the destination field");
+            Assert(optionalFields.Visible && restoreTargetBox.Visible && !sourceBox.Visible && sourceBox.Text == source, "restore exposes its independent destination without changing the backup source");
+            var preservedConfig = (Config)typeof(MainForm).GetMethod("CaptureConfig", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                .Invoke(form, new object[] { false });
+            Assert(preservedConfig.SourceFolder == Path.GetFullPath(source), "saving settings from Restore preserves the backup source");
             start.PerformClick();
             DriveGui(form, state, "Complete", false);
             Assert(File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI restore wizard restores selected snapshot");
             Assert(openOutput.Text == "Open restore folder" && resultCounts.Text.Contains("Copied 2"), "restore result links to its destination and shows copy counts");
 
-            mode.SelectedIndex = 3; sourceBox.Text = "bad:unused:path";
+            var restoreScope = (ComboBox)form.Controls.Find("RestoreOperation", true)[0];
+            var browseRestoreFiles = (Button)form.Controls.Find("BrowseRestoreFiles", true)[0];
+            var pointPicker = (ComboBox)form.Controls.Find("RestorePoint", true)[0];
+            restoreScope.SelectedIndex = 1;
+            Assert(browseRestoreFiles.Visible && !start.Enabled && pointPicker.SelectedIndex == 0, "individual restore keeps the latest point selected and requires a checked selection");
+            using (var browserAutomation = new System.Windows.Forms.Timer { Interval = 20 })
+            {
+                browserAutomation.Tick += delegate {
+                    foreach (Form owned in form.OwnedForms)
+                    {
+                        var browser = owned as RestoreBrowserDialog;
+                        if (browser == null || !browser.Visible) continue;
+                        var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+                        foreach (TreeNode node in tree.Nodes) if ((string)node.Tag == "Samples") node.Checked = true;
+                        ((Button)browser.Controls.Find("UseRestoreSelection", true)[0]).PerformClick();
+                    }
+                };
+                browserAutomation.Start(); browseRestoreFiles.PerformClick(); browserAutomation.Stop();
+            }
+            Assert(start.Enabled && form.Controls.Find("RestoreFileTree", true).Length == 0, "the browser publishes its checked selection back to the restore tab");
+            string individualTarget = Folder(root, "individual-restore-target");
+            restoreTargetBox.Text = individualTarget; start.PerformClick();
+            DriveGui(form, state, "Complete", false);
+            Assert(File.Exists(Path.Combine(individualTarget, "Samples", "kick.wav")) && !Directory.Exists(Path.Combine(individualTarget, "Songs")), "main-window individual restore copies only the checked subtree");
+            restoreScope.SelectedIndex = 0; restoreTargetBox.Text = target;
+            ((MainForm)form).ShowDevice(Devices.OP1Field, "MTP");
+            DateTime filterDeadline = DateTime.UtcNow.AddSeconds(15);
+            while (!form.Controls.Find("RestoreBackup", true)[0].Enabled && DateTime.UtcNow < filterDeadline && ((ComboBox)form.Controls.Find("RestoreBackup", true)[0]).Items.Count != 0) { Application.DoEvents(); Thread.Sleep(10); }
+            Assert(((ComboBox)form.Controls.Find("RestoreBackup", true)[0]).Items.Count == 0 && !start.Enabled, "changing the identified device removes nonmatching restore backups");
+            ((MainForm)form).ShowDevice(Devices.M8, "USB drive"); WaitForRestorePicker(form);
+
+            selectOperation(3); sourceBox.Text = "bad:unused:path";
             start.PerformClick();
             DriveGui(form, state, "Complete", false);
             Assert(state.Text == "Complete", "GUI integrity check needs no source card");
 
-            mode.SelectedIndex = 0; sourceBox.Text = source;
+            selectOperation(0); sourceBox.Text = source;
+            Assert(restoreTargetBox.Text == target, "returning to Backup preserves the independent restore destination");
             int backupsBefore = ListBackups(history).Count;
             start.PerformClick();
             DriveGui(form, state, "Complete", true);
             Assert(ListBackups(history).Count == backupsBefore, "dismissing GUI acceptance dialog prevents writes");
 
             // Cancel inside a marshalled choice dialog: cancellation must survive Invoke.
-            mode.SelectedIndex = 2; sourceBox.Text = target;
+            ((MainForm)form).ShowDevice(Devices.M8, "USB drive");
+            selectOperation(2); restoreTargetBox.Text = target;
+            WaitForRestorePicker(form);
+            Put(Path.Combine(target, "Songs", "one.m8s"), "DIFFERENT TARGET");
             start.PerformClick();
             DriveGui(form, state, "Cancelled", true);
             Assert(state.Text == "Cancelled", "GUI dialog cancellation is not reported as an invocation error");
@@ -214,6 +289,7 @@ partial class Tests
         Assert(text.Contains("Profile=Studio") && text.Contains("SourceFolder="), "settings save includes paths and profile");
         Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
         TestPreviewFiltering();
+        TestRestoreFileBrowser();
         TestSettingsInteraction(root);
         TestGuiThemes(root);
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
@@ -276,6 +352,10 @@ partial class Tests
             var history = (CheckBox)dialog.Controls.Find("PointInTimeHistory", true)[0];
             Assert(!history.Checked, "settings show history disabled by default");
             history.Checked = true;
+            var single = (CheckBox)dialog.Controls.Find("SingleContentStore", true)[0];
+            Assert(!single.Checked, "single content store is optional by default");
+            single.Checked = true;
+            Assert(!history.Enabled && history.Checked, "single store disables copied history without losing its preference");
             tabs.SelectedIndex = 1;
             var recovery = (CheckBox)dialog.Controls.Find("RecoveryCopies", true)[0];
             var path = (TextBox)dialog.Controls.Find("RecoveryLocation", true)[0];
@@ -286,6 +366,7 @@ partial class Tests
             string expectedPath = path.Text;
             ((Button)dialog.Controls.Find("SaveSettings", true)[0]).PerformClick();
             Assert(config.PointInTimeHistory, "settings save the choice to enable history");
+            Assert(config.SingleContentStore, "settings save the single content store choice");
             Assert(!config.Recovery && !config.Verify && !config.Thorough && config.HardLinks && config.RecoveryFolder == expectedPath,
                 "saving grouped settings preserves default-off options, recovery location and hidden settings: " +
                 config.Recovery + ", " + config.Verify + ", " + config.Thorough + ", " + config.HardLinks + ", " + config.RecoveryFolder + " / " + expectedPath);
@@ -398,7 +479,7 @@ partial class Tests
                     new SelectionDialog("Choose backup", new List<string> { "Backup" }),
                     new ChoiceDialog("Continue?", new List<Option>()), new SearchDialog("Search", "Enter a name"),
                     new CatalogDialog(owner, config, false, catalog), new CatalogDialog(owner, config, true, catalog),
-                    new RecipeViewerDialog(owner, null), profiles.CreateProfilePrompt()
+                    new RecipeViewerDialog(owner, null), new RestoreBrowserDialog(owner, new Snapshot { Name = "Theme test" }), profiles.CreateProfilePrompt()
                 };
                 try
                 {
@@ -475,7 +556,7 @@ partial class Tests
         }
     }
 
-    // Histories in windows: Rename is offered for a device's history (not the legacy one), and Device &
+    // Histories in windows: Rename is offered for a device's history (only under profiles), and Device &
     // backup settings lists histories by nickname or readable name while keeping the folder name as key.
     static void TestHistoryNamesGui(string root)
     {
@@ -487,7 +568,7 @@ partial class Tests
         var catalog = new BackupCatalog();
         catalog.Backups.Add(new CatalogBackup { Profile = HistoryNames.DisplayName(named), History = named, Path = Path.Combine(named, "2026-10-01"),
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
-        catalog.Backups.Add(new CatalogBackup { Profile = "Legacy backups", History = histories, Path = Path.Combine(histories, "2026-09-01"),
+        catalog.Backups.Add(new CatalogBackup { Profile = "Unmanaged folder", History = histories, Path = Path.Combine(histories, "2026-09-01"),
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
         using (var owner = new MainForm(true, config))
         {
@@ -499,7 +580,7 @@ partial class Tests
                 table.CurrentCell = table.Rows[0].Cells[0];
                 Assert(Convert.ToString(table.Rows[0].Cells[0].Value) == "Studio card" && rename.Enabled, "a device's history shows its nickname and can be renamed");
                 table.CurrentCell = table.Rows[1].Cells[0];
-                Assert(!rename.Enabled, "the legacy history can't be renamed");
+                Assert(!rename.Enabled, "an unmanaged folder cannot be renamed");
             }
             using (var settings = new ProfileSettingsDialog(owner, config))
             {
@@ -796,6 +877,11 @@ partial class Tests
             using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) files = CaptureFujiSettings(new FakeFujiSettings());
             string folder = Path.Combine(root, "recipes"); Directory.CreateDirectory(folder);
             foreach (var file in files) File.WriteAllBytes(Path.Combine(folder, file.Key), file.Value);
+            var stored = new BackupEngine().Run(folder, Path.Combine(root, "recipe-content-store"), null, false,
+                new Config { SingleContentStore = true, Preview = false }, new OperationContext(new TestInteraction(), CancellationToken.None));
+            Assert(stored.ExitCode == 0 && RecipeViewerDialog.HasRecipes(stored.OutputFolder), "single content store exposes backed-up camera recipes");
+            using (var storedViewer = new RecipeViewerDialog(owner, stored.OutputFolder))
+                Assert(((ComboBox)storedViewer.Controls.Find("RecipeSelection", true)[0]).Items.Count == 8, "recipe viewer reads all recipes directly from stored content");
             using (var viewer = new RecipeViewerDialog(owner, folder))
             {
                 viewer.Show(); Application.DoEvents();
@@ -842,7 +928,8 @@ partial class Tests
             Assert(emptyLocation.BackupFolder == DefaultBackupFolder(), "an empty GUI location uses the user profile Backup folder");
             ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = config.BackupFolder;
             ((TextBox)form.Controls.Find("Profile", true)[0]).Text = "Studio";
-            ((ComboBox)form.Controls.Find("Operation", true)[0]).SelectedIndex = 0;
+            form.SelectOperation(GuiOperation.FullBackup);
+            ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
             ((Button)form.Controls.Find("StartOperation", true)[0]).PerformClick();
             var status = (Label)form.Controls.Find("OperationStatus", true)[0];
             bool askedToCreate = false;
@@ -881,21 +968,17 @@ partial class Tests
             typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(form, config);
             form.Show(); Application.DoEvents();
             string target = Folder(root, "target");
-            ((TextBox)form.Controls.Find("SourceFolder", true)[0]).Text = target;
+            ((TextBox)form.Controls.Find("RestoreDestination", true)[0]).Text = target;
             ((TextBox)form.Controls.Find("BackupFolder", true)[0]).Text = config.BackupFolder;
             ((TextBox)form.Controls.Find("Profile", true)[0]).Text = "";
-            var operation = (ComboBox)form.Controls.Find("Operation", true)[0];
             var start = (Button)form.Controls.Find("StartOperation", true)[0];
             var status = (Label)form.Controls.Find("OperationStatus", true)[0];
-            bool offeredProject = false;
-            operation.SelectedIndex = 2; start.PerformClick();
-            DriveGui(form, status, "Complete", false, dialog => {
-                var buttons = new List<Button>(); CollectGuiButtons(dialog, buttons);
-                if (buttons.Exists(b => b.Text == "Whole project folder")) offeredProject = true;
-            });
-            Assert(offeredProject, "GUI local-folder restore offers the saved Tracker Mini's project choices");
+            form.ShowDevice(Devices.TrackerMini, "USB drive");
+            form.SelectOperation(GuiOperation.Restore); WaitForRestorePicker(form); start.PerformClick();
+            DriveGui(form, status, "Complete", false);
+            Assert(((ComboBox)form.Controls.Find("RestoreBackup", true)[0]).Items.Count == 1, "GUI lists only backups matching the identified Tracker Mini across override locations");
             Assert(File.ReadAllText(Path.Combine(target, relative)) == "SAMPLE", "GUI current-file restore preserves dated samples from an override location");
-            operation.SelectedIndex = 3; start.PerformClick();
+            form.SelectOperation(GuiOperation.Check); start.PerformClick();
             DriveGui(form, status, "Complete", false);
             Assert(File.Exists(Path.Combine(AppIdentity.MetadataRoot(LatestBackup(history)), "last-check.txt")),
                 "GUI checks find alternate locations without a named profile or source device");
@@ -913,12 +996,19 @@ partial class Tests
             using (var form = new MainForm(true))
             {
                 form.ShowDevice(Devices.OP1Field, "MTP");
+                form.ShowDeviceInformation(DeviceInformation.Read(new SourceChoice { Mtp = new MtpSource { Device = Devices.OP1Field } }));
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + percent + ".png"));
             }
             using (var form = new MainForm(true))
             {
-                form.Show(); ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
+                form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
+                ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + percent + ".png"));
+            }
+            using (var form = new MainForm(true))
+            {
+                form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 2;
+                CheckGuiLayout(form, percent, Path.Combine(output, "main-restore-" + percent + ".png"));
             }
             using (var form = new SettingsDialog(new Config())) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
             using (var form = new SettingsDialog(new Config()))
@@ -936,11 +1026,13 @@ partial class Tests
                 using (var form = new MainForm(true, new Config { Theme = theme }))
                 {
                     form.ShowDevice(Devices.OP1Field, "MTP");
+                    form.ShowDeviceInformation(DeviceInformation.Read(new SourceChoice { Mtp = new MtpSource { Device = Devices.OP1Field } }));
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + theme + "-" + percent + ".png"));
                 }
                 using (var form = new MainForm(true, new Config { Theme = theme }))
                 {
-                    form.Show(); ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
+                    form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
+                    ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + theme + "-" + percent + ".png"));
                 }
                 using (var form = new SettingsDialog(new Config { Theme = theme }))
@@ -992,6 +1084,51 @@ partial class Tests
         var method = form.GetType().GetMethod("ProcessCmdKey", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         object[] arguments = { Message.Create(form.Handle, 0x100, IntPtr.Zero, IntPtr.Zero), keys };
         return (bool)method.Invoke(form, arguments);
+    }
+
+    static void TestRestoreFileBrowser()
+    {
+        var snapshot = new Snapshot { Name = "Example" };
+        snapshot.Folders.AddRange(new[] { "Songs", @"Songs\Empty", "Samples" });
+        snapshot.Files.Add(new RestoreEntry { Relative = @"Songs\one.m8s", Size = 4 });
+        snapshot.Files.Add(new RestoreEntry { Relative = @"Songs\two.m8s", Size = 4 });
+        snapshot.Files.Add(new RestoreEntry { Relative = @"Samples\kick.wav", Size = 4 });
+        using (var owner = new MainForm(true))
+        using (var browser = new RestoreBrowserDialog(owner, snapshot))
+        {
+            browser.Show(); Application.DoEvents();
+            var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+            TreeNode songs = null, samples = null;
+            foreach (TreeNode node in tree.Nodes) { if ((string)node.Tag == "Songs") songs = node; if ((string)node.Tag == "Samples") samples = node; }
+            songs.Checked = true;
+            Assert(browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == "Songs" && !samples.Checked, "checking a folder selects its subtree without including other folders");
+            TreeNode one = null; foreach (TreeNode node in songs.Nodes) if ((string)node.Tag == @"Songs\one.m8s") one = node;
+            one.Checked = false;
+            Assert(!songs.Checked && Array.IndexOf(browser.SelectedPaths, @"Songs\one.m8s") < 0 && Array.IndexOf(browser.SelectedPaths, @"Songs\two.m8s") >= 0,
+                "unchecking one child preserves the other selected files and empty folder");
+            ((Button)browser.Controls.Find("ClearRestoreFiles", true)[0]).PerformClick();
+            Assert(browser.SelectedPaths.Length == 0, "clear selection clears every subtree");
+            one.Checked = true;
+            ((Button)browser.Controls.Find("UseRestoreSelection", true)[0]).PerformClick();
+            Assert(browser.DialogResult == DialogResult.OK && browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == @"Songs\one.m8s", "file browser accepts an individual file");
+        }
+        using (var owner = new MainForm(true))
+        using (var browser = new RestoreBrowserDialog(owner, snapshot, new[] { @"Songs\Empty" }))
+        {
+            browser.Show(); Application.DoEvents();
+            Assert(browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == @"Songs\Empty", "opening the browser again restores the previous empty-folder selection");
+            ((Button)browser.Controls.Find("SelectAllRestoreFiles", true)[0]).PerformClick();
+            Assert(browser.SelectedPaths.Length == 2, "select all selects complete top-level subtrees");
+            browser.Close();
+        }
+    }
+
+    static void WaitForRestorePicker(Form form)
+    {
+        var picker = (ComboBox)form.Controls.Find("RestorePoint", true)[0];
+        DateTime deadline = DateTime.UtcNow.AddSeconds(15);
+        while ((!picker.Enabled || picker.SelectedItem == null) && DateTime.UtcNow < deadline) { Application.DoEvents(); Thread.Sleep(10); }
+        Assert(picker.Enabled && picker.SelectedItem != null, "restore picker loads matching device backups and defaults to the latest point");
     }
 
     static void DriveGui(Form form, Label state, string expected, bool dismiss, Action<Form> inspect = null)

@@ -6,6 +6,8 @@ Make full or incremental backups, review changes before copying, and restore the
 
 [User manual](MANUAL.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
 
+Before version 1.0.0, only the current settings and backup formats are supported. No automatic migration or compatibility with earlier formats is provided.
+
 ## Supported devices
 
 | Device or source | What you can back up | Connection |
@@ -23,8 +25,9 @@ MTP devices are read through a local PC mirror. Their backups restore to a PC fo
 
 - **Flexible backups:** full and incremental copies, separate source profiles, optional ZIP archives, and resumable interrupted backups.
 - **History when you need it:** dated snapshots, retained file versions and optional NTFS hard links. Disable point-in-time history to avoid its additional content copy.
-- **Selective restore:** restore everything, a folder or a single file, with device-specific choices for M8 bundles, songs with their samples, and Tracker Mini projects.
+- **Selective restore:** the GUI lists backups for the detected device, defaults to the latest saved run and uses SQLite for full restore or a checked folder/file browser. The CLI also offers M8 bundles, songs with samples and Tracker Mini projects.
 - **Checks and control:** change previews, backup integrity checks, optional SHA-256 change comparison, optional copy verification and recovery copies before restore.
+- **Backup file catalog:** SQLite supplies the primary inventory for incremental backups and records snapshot membership and integrity results. Checksum lists and manifests provide recovery records if the database is missing, stale or damaged.
 - **Backup management:** a dashboard showing backup health and age, a storage breakdown, and previewed cleanup to the Recycle Bin.
 - **Device preferences:** save different backup locations, history and retention choices for each device or profile.
 - **Readable X100VI recipes:** browse saved recipes offline, see film simulation names and setting values, and copy or export them as text.
@@ -41,7 +44,7 @@ Download a package from [GitHub Releases](https://github.com/bondis2k/Gear-Backu
 Both packages include the illustrated offline manual and preserve existing INI settings when updated. Portable backups use the configured backup location; MTP mirrors are stored in the PC's Local AppData folder.
 
 1. Open `GearBackup.GUI.exe` and connect your device, insert its card, or choose a source folder.
-2. Click **Detect device**, choose **Full backup** or **Incremental backup**, then **Back up**. Backups default to `%USERPROFILE%\Backup`. Use **More options** to choose a source folder, change the destination, set an optional profile or add a zip copy.
+2. On **Device**, click **Detect device** and review its connection and available storage details. Open **Backup**, choose **Full backup** or **Incremental backup**, then **Back up**. Backups default to `%USERPROFILE%\Backup`. Use **More options** to choose a source folder, change the destination, set an optional profile or add a zip copy. Use **Restore** for a separate restore destination or integrity checks.
    If the destination folder is missing, starting a backup asks whether to create it; choosing No cancels.
 3. Choose a full or incremental backup, review the preview, and start copying.
 4. Use **Dashboard** to review your backups, **Storage** to manage space, or the restore operation to recover files.
@@ -60,6 +63,7 @@ GearBackup.exe --source D:\MyGear --profile "Studio" --preview
 GearBackup.exe --restore --source E:\
 GearBackup.exe --check
 GearBackup.exe --camera-settings
+GearBackup.exe --rebuild-catalog "D:\Backups\Gear Backups\profiles\Studio\2026-10-11" --no-pause
 ```
 
 Use **Cancel** in the GUI or **Ctrl+C** in the CLI to stop an operation. See the [command-line reference](MANUAL.md#command-line-and-exit-codes) for all arguments and exit codes.
@@ -73,6 +77,8 @@ Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appea
 Change previews are enabled by default. Point-in-time history (`PointInTimeHistory`), SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
 
 The default `PointInTimeHistory=no` avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Enable **Save point-in-time history** in Settings or set `PointInTimeHistory=yes` if you want to restore earlier states. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
+
+For restore points without a second content copy, enable **Use a single content store** in **Settings → Backup** (`SingleContentStore=yes`) and start a full backup. Each distinct file content is stored once within that backup set. Every successful incremental run saves a restore point dated by the backup run, including runs with no changes. Restore or export files through the app; this layout has no browsable file tree. Separate full backups remain independent. This option defaults to off.
 
 See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, retention, recovery locations and other options.
 

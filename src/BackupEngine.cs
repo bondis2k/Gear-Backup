@@ -25,6 +25,7 @@ internal sealed class BackupEngine
             {
                 context.OverallProgressOnly = !incremental;
                 context.CheckCancellation();
+                if (!incremental) BackupSetNames.Validate(config.FullBackupName);
                 source = Rooted(source);
                 backupRoot = Path.GetFullPath(backupRoot);
                 if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
@@ -42,6 +43,10 @@ internal sealed class BackupEngine
                 if (incremental && (previous == null || !Directory.Exists(previous)))
                     throw new IOException("An incremental backup needs an existing backup folder.");
                 string title, summary;
+                if (incremental && !ContentStoreBackup.IsSingle(previous) && config.SingleContentStore)
+                    throw new IOException("Start a full backup with SingleContentStore=yes before using this mode incrementally. Existing browsable backups are preserved.");
+                if (incremental ? ContentStoreBackup.IsSingle(previous) : config.SingleContentStore)
+                    return new ContentStoreBackup().Run(source, backupRoot, previous, incremental, config);
                 var run = new BackupRun(source, backupRoot, previous, incremental, config);
                 int code = run.Execute(out title, out summary);
                 return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed,
@@ -85,9 +90,11 @@ internal sealed class BackupRun
     readonly List<string> keptVersions = new List<string>();
     // Per top-level folder (Songs, Samples, ...): [files, bytes]
     readonly SortedDictionary<string, long[]> perFolder = new SortedDictionary<string, long[]>(StringComparer.OrdinalIgnoreCase);
-    // Checksums for the backup's checksum list; an incremental run starts from the existing list
+    // Output/recovery checksums; incremental runs seed these from SQLite or recovery records.
     Dictionary<string, string> sums;
     Dictionary<string, string> previousSums;
+    Dictionary<string, CatalogEntry> inventory;
+    bool refreshInventory;
     HashSet<string> knownVersions;
     Changes changes;
     string checksumStatus;
@@ -117,6 +124,7 @@ internal sealed class BackupRun
         {
             unchanged = scan.Files.Count;
             RecordSuccess();
+            if (refreshInventory || !File.Exists(BackupDatabase.CatalogPath(dest))) BackupDatabase.TryRefresh(dest);
             title = AppIdentity.Name + " complete";
             summary = "No new or changed files. " + unchanged.ToString("N0") + " unchanged; backup is up to date.";
             OperationOutput.WriteLine("  " + summary);
@@ -127,6 +135,7 @@ internal sealed class BackupRun
         CopyFiles();
         SaveHistory();
         Report();
+        BackupDatabase.TryRefresh(dest);
         string zipPath = SaveZip();
 
         // Only tidy up old backups once this one is known to be good
@@ -161,6 +170,7 @@ internal sealed class BackupRun
         if (config.PointInTimeHistory)
             check.File(Path.Combine(AppIdentity.MetadataRoot(dest), "objects", new string('0', 64)), ".tmp".Length);
         check.File(root + "backup-statistics_" + started.ToString("yyyy-MM-dd_HHmmss_fffffff") + ".txt");
+        check.File(Path.Combine(AppIdentity.MetadataRoot(dest), ".gearcatalog-" + new string('0', 32) + ".tmp"));
         return check.Problem("Choose a shorter backup location (for example D:\\Backups), or shorten folder names on the source.");
     }
     public string OutputFolder { get { return dest; } }
@@ -229,7 +239,17 @@ internal sealed class BackupRun
 
         resuming = incremental && BackupStatus(dest).Unfinished;
         states = new FileState[scan.Files.Count];
-        Dictionary<string, string> oldSums = previousSums = previous == null ? null : LoadChecksums(previous);
+        CatalogData indexed = incremental ? BackupDatabase.TryIncrementalInventory(previous) : null;
+        refreshInventory = incremental && indexed == null;
+        if (indexed != null)
+        {
+            inventory = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+            previousSums = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in indexed.Files) if (!entry.IsDirectory)
+            { inventory.Add(entry.Path, entry); previousSums.Add(entry.Path, entry.Hash); }
+        }
+        else previousSums = previous == null ? null : LoadChecksums(previous);
+        Dictionary<string, string> oldSums = previousSums;
         var pendingObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // HardLinks=yes on NTFS: the history store shares the backup files' content instead of copying it.
         linkedHistory = config.PointInTimeHistory && config.HardLinks && SupportsHardLinks(backupRoot);
@@ -244,7 +264,7 @@ internal sealed class BackupRun
             string comparedHash = null;
             states[i] = previous == null
                 ? FileState.New
-                : CompareContent(file, SafePath(previous, relative), thoroughNow, out comparedHash);
+                : CompareInventory(file, relative, thoroughNow, out comparedHash);
             totalBytes += file.Length;
             if (!incremental || states[i] != FileState.Same) neededBytes += file.Length;
             if (incremental && states[i] == FileState.Same) skippedInPlan++;
@@ -262,6 +282,27 @@ internal sealed class BackupRun
         nameWarnings = CurrentDevice.NameWarnings ? CheckNames(scan, source, config.MaxNameLength) : new List<string>();
         if (nameWarnings.Count > 0)
             WriteColored("  " + nameWarnings.Count + " name(s) the " + CurrentDevice.Name + " may not handle well (listed in the statistics).", ConsoleColor.Yellow);
+    }
+
+    FileState CompareInventory(FileInfo file, string relative, bool thorough, out string hash)
+    {
+        string target = SafePath(previous, relative);
+        hash = null;
+        CatalogEntry entry;
+        if (inventory == null || !inventory.TryGetValue(relative, out entry))
+            return CompareContent(file, target, thorough, out hash);
+        var actual = new FileInfo(target);
+        if (!actual.Exists) return FileState.New;
+        // SQLite supplies the baseline; live metadata guards against deleted or manually changed
+        // backup files. Thorough comparison still reads both contents to catch silent damage.
+        if (actual.Length != entry.Size || actual.LastWriteTimeUtc.Ticks != entry.ModifiedTicks ||
+            entry.Result == "damaged" || entry.Result == "unreadable") return FileState.Changed;
+        if (thorough || !UsableFileTime(file.LastWriteTimeUtc) || !UsableFileTime(actual.LastWriteTimeUtc))
+            return CompareContent(file, target, thorough, out hash);
+        if (file.Length != entry.Size || Math.Abs(file.LastWriteTimeUtc.Ticks - entry.ModifiedTicks) > TimeSpan.FromSeconds(2).Ticks)
+            return FileState.Changed;
+        hash = entry.Hash;
+        return FileState.Same;
     }
 
     bool CheckSpace()
@@ -289,6 +330,7 @@ internal sealed class BackupRun
             config.KeepBackups > 0 || config.KeepOldVersions > 0 || config.Zip ||
             BackupStatus(dest) != Status.Complete || previousSums == null || previousSums.Count != scan.Files.Count)
             return false;
+        if (!File.Exists(Path.Combine(dest, ChecksumFileName))) return false;
         string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
         if (!File.Exists(devicePath) || new FileInfo(devicePath).Length > Records.DeviceLimit ||
             Records.ReadText(devicePath, Records.DeviceLimit, "Backup device record").Trim() != CurrentDevice.Id) return false;
@@ -337,12 +379,14 @@ internal sealed class BackupRun
         // Mark before the first mutation. A killed process leaves an incomplete status.
         Directory.CreateDirectory(dest);
         SetBackupStatus(dest, Status.Incomplete);
+        BackupDatabase.BeginInventoryUpdate(dest);
+        if (!incremental) BackupSetNames.Write(dest, config.FullBackupName);
         string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
         AtomicText(devicePath, CurrentDevice.Id + "\n");
         foreach (string folder in scan.Folders)
             Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
 
-        sums = (incremental ? LoadChecksums(dest) : null) ??
+        sums = (incremental ? previousSums : null) ??
                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         knownVersions = incremental ? KnownOldVersions(dest) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long processedBytes = 0;
@@ -433,13 +477,13 @@ internal sealed class BackupRun
         {
             try
             {
-                // Populate missing hashes for verified resume/legacy files before creating history.
+                // Populate missing hashes for resumed files before creating history.
                 foreach (FileInfo f in scan.Files)
                 {
                     string rel = Relative(f);
                     if (!sums.ContainsKey(rel)) sums[rel] = HashFile(SafePath(dest, rel));
                 }
-                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory);
+                if (failed == 0) SaveSnapshot(dest, source, scan, sums, started, config.Verify, linkedHistory, incremental);
             }
             catch (Exception ex)
             {
@@ -491,10 +535,7 @@ internal sealed class BackupRun
             string newHash, oldHash;
             if (!sums.TryGetValue(relative, out newHash)) continue;  // copy failed; keep the metadata result
             if (oldSums == null || !oldSums.TryGetValue(relative, out oldHash))
-            {
-                OperationContext.Current.Progress(Stage.Comparing, relative, 0, 0);
-                oldHash = HashFile(SafePath(previous, relative));  // older backup without a checksum list
-            }
+                throw new IOException("Previous backup is missing its checksum inventory. Check or repair it before comparing backups.");
             states[i] = newHash == oldHash ? FileState.Same : FileState.Changed;
         }
     }

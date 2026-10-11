@@ -25,20 +25,18 @@ internal sealed class Stage
 internal sealed class Status
 {
     public static readonly Status Incomplete = new Status("incomplete"), Complete = new Status("complete"), Failed = new Status("failed");
-    // Reported for backups made before status files existed.
-    public static readonly Status Legacy = new Status("legacy (status unknown)");
+    public static readonly Status Unknown = new Status("unknown (missing or invalid status)");
 
     readonly string text;
     Status(string text) { this.text = text; }
     public override string ToString() { return text; }
 
-    // The status a status file holds. Text this version doesn't know is kept as it is (and is neither
-    // complete nor unfinished), so it still shows up in the Dashboard and the check menu.
+    // Missing or unrecognized status metadata does not count as a successful backup.
     public static Status FromText(string text)
     {
-        foreach (Status known in new[] { Incomplete, Complete, Failed, Legacy })
+        foreach (Status known in new[] { Incomplete, Complete, Failed })
             if (known.text == text) return known;
-        return new Status(text);
+        return Unknown;
     }
 
     // An interrupted or failed backup, which can be resumed.

@@ -155,6 +155,7 @@ partial class Tests
                 Directory.GetFileSystemEntries(backup).Length == 1, "rejecting malformed input leaves the manifest unchanged and creates no objects");
         }
         Put(manifest, AppIdentity.SnapshotHeader + "\nD\t" + Encode("Songs") + "\n" + valid + "\n");
+        WithUi(() => RestorePointNames.SaveMetadata(backup, "input", DateTime.Now, false));
         Snapshot read = null;
         WithUi(() => read = ReadSnapshot(backup, manifest));
         Assert(read.Files.Count == 1 && read.Folders.Count == 1 && read.Files[0].Size == 4,

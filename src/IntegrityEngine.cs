@@ -38,13 +38,24 @@ internal sealed class IntegrityEngine
         {
             OperationContext.Current.CheckCancellation();
             var verifiedLinks = new Dictionary<string, string>();
-            bool hadChecksums = File.Exists(Path.Combine(backup, ChecksumFileName));
+            var catalogResults = new List<CatalogVerification>();
+            bool single = ContentStoreBackup.IsSingle(backup);
+            bool hadChecksums = single || File.Exists(Path.Combine(backup, ChecksumFileName));
             int beforeOk = ok, beforeDamaged = damaged, beforeMissing = missing, beforeUnchecked = unchecked_;
-            CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_, verifiedLinks);
-            CheckSnapshots(backup, ref ok, ref damaged, ref missing, verifiedLinks);
+            if (!single) CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_, verifiedLinks, catalogResults);
+            CheckSnapshots(backup, ref ok, ref damaged, ref missing, verifiedLinks, catalogResults);
+            if (single)
+            {
+                string latest = ContentStoreBackup.Current(backup).Name;
+                var latestResults = catalogResults.FindAll(r => r.SnapshotId == latest);
+                foreach (var result in latestResults) catalogResults.Add(new CatalogVerification { Path = result.Path, ExpectedHash = result.ExpectedHash,
+                    ObservedHash = result.ObservedHash, Result = result.Result, CheckedUtc = result.CheckedUtc });
+            }
             try { if (!PreviewOnly) SaveCheckRecord(backup, ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, Math.Max(unchecked_ - beforeUnchecked, hadChecksums ? 0 : 1)); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { OperationOutput.WriteLine("  Could not save check result: " + ex.Message); }
+            BackupDatabase.TryRefresh(backup, catalogResults, string.Format("{0} OK, {1} damaged, {2} missing, {3} unchecked",
+                ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked));
         }
 
         summary = string.Format("{0:N0} file(s) OK", ok);

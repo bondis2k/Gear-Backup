@@ -50,7 +50,7 @@ partial class Tests
         Assert(File.Exists(Path.Combine(target, dated)), "single-file restore preserves its exact source name");
 
         File.Delete(Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt"));
-        Assert(CurrentBackup(backup).OldVersions.Count == 0, "legacy backups without evidence do not guess retained versions from names");
+        Assert(CurrentBackup(backup).OldVersions.Count == 0, "missing version records never infer retained versions from names");
     }
 
     static void TestHistoryLocations(string root)
@@ -135,18 +135,18 @@ partial class Tests
         Assert(File.ReadAllText(Path.Combine(target, relative)) == "PROJECT", "failed verification leaves the restored target unchanged");
         string automatic = Path.Combine(HistoriesRoot(global), "profiles", "tracker-mini-card-ABCDEF12", "2026-01-01");
         Directory.CreateDirectory(automatic);
-        Assert(BackupDevice(automatic) == Devices.TrackerMini, "old automatic histories infer their device without a new record");
+        Assert(BackupDevice(automatic) == null, "automatic history names do not replace missing device records");
         Put(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), "unknown-device");
         Assert(BackupDevice(backup) == null, "a device this version doesn't know counts as no record");
         Put(Path.Combine(AppIdentity.MetadataRoot(automatic), "device.txt"), "unknown-device");
-        Assert(BackupDevice(automatic) == Devices.TrackerMini, "an unknown recorded device falls back to the history's name");
+        Assert(BackupDevice(automatic) == null, "an unknown device record is not inferred from its folder name");
         ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
         ui.Keys.Enqueue(RestoreMode.All.Key); ui.Keys.Enqueue('r');
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
             PreparedSource prepared = PrepareSource(global, new SourceChoice { Path = target });
             Put(Path.Combine(backup, relative), "PROJECT");
-            Assert(RunPrepared(prepared, true, false).ExitCode == 0, "a backup recording an unknown device can still be restored");
+            Throws(() => RunPrepared(prepared, true, false), "restore refuses a backup with invalid device identity");
         }
         Put(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), new string('x', 200));
         Throws(() => BackupDevice(backup), "an oversized device record is refused");

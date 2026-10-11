@@ -197,13 +197,13 @@ static class StorageCatalog
         return catalog;
     }
 
-    // A location's legacy history (backups directly under Gear Backups) and its profiles.
+    // Profile histories under a configured backup location.
     static void ScanLocation(BackupCatalog catalog, string location, HashSet<string> seenHistories)
     {
         string root = HistoriesRoot(new Config { BackupFolder = location });
         if (!Directory.Exists(root)) return;
         RejectRootLinks(root);
-        var histories = new List<string> { root };
+        var histories = new List<string>();
         string profiles = Path.Combine(root, "profiles");
         if (Directory.Exists(profiles))
         {
@@ -212,7 +212,7 @@ static class StorageCatalog
         }
         foreach (string history in histories)
             if (seenHistories.Add(Rooted(history)))
-                ScanPart(catalog, history, () => ScanHistory(catalog, history, history == root ? "Legacy backups" : HistoryNames.DisplayName(history)));
+                ScanPart(catalog, history, () => ScanHistory(catalog, history, HistoryNames.DisplayName(history)));
     }
 
     // A history's backup folders and its ZIP archives. Every backup but the latest can be cleaned up.
@@ -250,14 +250,14 @@ static class StorageCatalog
             RejectRootLinks(backup);
             var metadata = new CatalogBackup { Profile = profile, History = history, Path = backup,
                 Status = BackupStatus(backup), Latest = latest, Device = CatalogDevice(backup) };
-            metadata.CompletedUtc = LastSuccess(backup, metadata.Status);
+            metadata.CompletedUtc = LastSuccess(backup);
             ReadCheckRecord(metadata);
             catalog.Backups.Add(metadata);
             return;
         }
         var folders = new List<DirectoryInfo>();
         List<FileInfo> files = StorageFiles(backup, folders);
-        HashSet<string> oldVersionNames = KnownOldVersions(backup);
+        HashSet<string> oldVersionNames = ContentStoreBackup.IsSingle(backup) ? new HashSet<string>() : KnownOldVersions(backup);
         var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest,
             Device = CatalogDevice(backup) };
         Dictionary<string, string> identities = FileIdentities(backup, files);
@@ -279,28 +279,26 @@ static class StorageCatalog
             else row.FilesBytes += file.Length;
             CountUnique(catalog, identities[file.FullName], file.Length, row);
         }
-        row.CompletedUtc = LastSuccess(backup, row.Status);
+        row.CompletedUtc = LastSuccess(backup);
         ReadCheckRecord(row);
         catalog.Backups.Add(row);
         if (!latest) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OlderBackup, backup, history, backup, files, folders));
         foreach (string version in versions) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OldVersion, version, history, backup, false));
     }
 
-    // The backup's device for the Dashboard's filter. A damaged device record only loses the filter
-    // (the history's name may still tell), not the backup's row.
+    // A damaged device record loses the device filter, while the backup remains visible in All devices.
     internal static DeviceProfile CatalogDevice(string backup)
     {
         try { return BackupDevice(backup); }
         catch (Exception ex)
         {
             if (!(ex is IOException || ex is UnauthorizedAccessException)) throw;
-            return HistoryDevice(backup);
+            return null;
         }
     }
 
-    // When the backup last completed successfully: its own record, or for a complete backup made before
-    // those records existed, its status file's time. Null otherwise.
-    static DateTime? LastSuccess(string backup, Status status)
+    // The recorded last successful run. Missing metadata is not inferred from file timestamps.
+    static DateTime? LastSuccess(string backup)
     {
         string successPath = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
         if (File.Exists(successPath))
@@ -310,8 +308,7 @@ static class StorageCatalog
                 throw new IOException("Invalid last successful backup record.");
             return date.ToUniversalTime();
         }
-        if (status != Status.Complete) return null;
-        return File.GetLastWriteTimeUtc(Path.Combine(AppIdentity.MetadataRoot(backup), "status.txt"));
+        return null;
     }
 
     // The MTP mirrors of known devices; each can be recycled (the next backup downloads it again).
@@ -444,6 +441,7 @@ static class StorageCatalog
                 if (sums == null) continue;
                 foreach (string name in backup.Value) sums.Remove(name);
                 WriteChecksums(backup.Key, sums);
+                BackupDatabase.TryRefresh(backup.Key);
             }
     }
 }
@@ -454,7 +452,7 @@ internal sealed class CatalogBackup
     public string Profile, History, Path, CheckResult;
     public Status Status;
     public DateTime? CompletedUtc, CheckedUtc;
-    public DeviceProfile Device;    // the device it was made from; null when unknown (older backups)
+    public DeviceProfile Device;    // the device it was made from; null when identity metadata is missing/invalid
     public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
     public bool Latest;
     public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }

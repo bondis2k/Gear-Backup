@@ -22,13 +22,15 @@ static class RestoreFlow
         var choices = new List<string>(backups);
         choices.Reverse();
         var labels = new List<string>();
-        foreach (string choice in choices) labels.Add(Path.GetFileName(choice) + " [" + BackupStatus(choice) + "]");
+        foreach (string choice in choices) labels.Add(BackupSetNames.Label(choice) + " [" + BackupStatus(choice) + "]");
         int pick = AskItem("Restore from which backup?", labels);
         if (pick == 0) return new OperationResult();
         string backup = choices[pick - 1];
         // The backup's own device decides the restore choices and preferences; the source's device
         // comes back afterwards.
-        using (OperationContext.Current.UseDevice(BackupDevice(backup) ?? CurrentDevice))
+        DeviceProfile device = BackupDevice(backup);
+        if (device == null) throw new IOException("Backup device metadata is missing or invalid. Select a valid backup.");
+        using (OperationContext.Current.UseDevice(device))
         {
             if (global != null)
                 config = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(Path.GetDirectoryName(backup)));
@@ -118,6 +120,7 @@ static class RestoreFlow
 
     internal static void ValidateEntry(RestoreEntry item, bool verify = true)
     {
+        RejectRootLinks(item.StoredPath);
         if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
             throw new IOException("Backup file is missing or truncated: " + item.Relative);
         if (verify && item.Hash != null && HashFile(item.StoredPath) != item.Hash)

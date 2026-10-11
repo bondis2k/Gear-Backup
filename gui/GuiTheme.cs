@@ -79,11 +79,22 @@ static partial class GuiTheme
         // strip fall outside the clipping panel.
         var clip = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = Padding.Empty };
         clip.Controls.Add(tabs);
-        clip.Resize += delegate {
-            Rectangle page = tabs.DisplayRectangle;
-            int left = page.Left, top = page.Top, right = tabs.Width - page.Right, bottom = tabs.Height - page.Bottom;
-            tabs.Bounds = new Rectangle(-left, -top, clip.Width + left + right, clip.Height + top + bottom);
+        bool aligning = false;
+        Action align = delegate {
+            if (aligning) return;
+            aligning = true;
+            try {
+                Rectangle page = tabs.DisplayRectangle;
+                int left = page.Left, top = page.Top, right = tabs.Width - page.Right, bottom = tabs.Height - page.Bottom;
+                var bounds = new Rectangle(-left, -top, clip.Width + left + right, clip.Height + top + bottom);
+                if (tabs.Bounds != bounds) tabs.Bounds = bounds;
+            }
+            finally { aligning = false; }
         };
+        clip.Resize += delegate { align(); };
+        clip.Layout += delegate { align(); };
+        // DPI scaling can resize the child after its clipping panel; keep the native frame clipped.
+        tabs.SizeChanged += delegate { align(); };
         var container = new Panel { Dock = DockStyle.Fill, BackColor = Surface, Margin = Padding.Empty };
         container.Controls.Add(clip);
         container.Controls.Add(new TabStrip(tabs) { Dock = DockStyle.Top });

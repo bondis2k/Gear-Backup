@@ -33,13 +33,13 @@ static class Snapshots
         return SafePath(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"), hash);
     }
 
-    // Immutable content objects make old manifests independent of renamed/pruned legacy versions.
+    // Immutable content objects keep saved restore points independent of renamed/pruned file versions.
     // Manifest format (.gearbackup\snapshots\<time>.manifest), one entry per line, tab-separated:
     //   GEARSNAPSHOT  1                                        header and format version
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
     // The file's content is stored once in .gearbackup\objects\<sha256>.
-    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks)
+    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false)
     {
         var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -88,9 +88,10 @@ static class Snapshots
                 .Append(original.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)).Append('\t')
                 .Append(original.CreationTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)).Append('\n');
         }
-        string name = started.ToString("yyyy-MM-dd_HHmmss_fffffff", CultureInfo.InvariantCulture) + ".manifest";
-        AtomicText(Path.Combine(SnapshotRoot(backup), name), rows.ToString());
-        OperationOutput.WriteLine("  Point-in-time snapshot saved: " + Path.GetFileNameWithoutExtension(name));
+        string name = RestorePointNames.Create(backup, started, incremental);
+        AtomicText(Path.Combine(SnapshotRoot(backup), name + ".manifest"), rows.ToString());
+        RestorePointNames.SaveMetadata(backup, name, started, incremental);
+        OperationOutput.WriteLine("  Point-in-time snapshot saved: " + name);
     }
 
     // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
@@ -98,7 +99,7 @@ static class Snapshots
     internal static Snapshot ReadSnapshot(string backup, string manifest)
     {
         string[] rows = Records.ReadLines(manifest, Records.ListLimit, "Snapshot manifest");
-        if (rows.Length == 0 || (rows[0] != AppIdentity.SnapshotHeader && rows[0] != AppIdentity.Legacy.SnapshotHeader))
+        if (rows.Length == 0 || rows[0] != AppIdentity.SnapshotHeader)
             throw new IOException("Unsupported snapshot format.");
         var result = new Snapshot { Name = Path.GetFileNameWithoutExtension(manifest) };
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -134,6 +135,7 @@ static class Snapshots
                 parent = Path.GetDirectoryName(parent);
             }
         }
+        result.TakenUtc = RestorePointNames.TakenUtc(backup, result.Name);
         return result;
     }
 
@@ -142,13 +144,16 @@ static class Snapshots
     {
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return null;
-        var files = new List<string>(Directory.GetFiles(root, "*.manifest"));
-        files.Sort(StringComparer.OrdinalIgnoreCase);
-        files.Reverse();
+        var files = RestorePointNames.OrderedManifests(backup);
         if (files.Count == 0) return null;
         var names = new List<string>();
-        foreach (string file in files) names.Add(Path.GetFileNameWithoutExtension(file));
-        int pick = AskItem("Restore from which saved point in time?", names, "Current backup files (no snapshot)");
+        foreach (string file in files)
+        {
+            string name = Path.GetFileNameWithoutExtension(file);
+            names.Add(name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        }
+        int pick = AskItem("Restore from which saved point in time?", names,
+            ContentStoreBackup.IsSingle(backup) ? "Latest restore point" : "Current backup files (no snapshot)");
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
 
@@ -156,6 +161,7 @@ static class Snapshots
     // where available.
     internal static Snapshot CurrentBackup(string backup)
     {
+        if (ContentStoreBackup.IsSingle(backup)) return ContentStoreBackup.Current(backup);
         var result = new Snapshot { Name = "current backup files", OldVersions = KnownOldVersions(backup) };
         Dictionary<string, string> sums = LoadChecksums(backup);
         foreach (FileSystemInfo entry in BackupEntries(backup))
@@ -187,11 +193,12 @@ static class Snapshots
 
     // Checks every history object referenced by any manifest in this backup; each object once.
     internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
-                               Dictionary<string, string> verifiedLinks = null)
+                               Dictionary<string, string> verifiedLinks = null, List<CatalogVerification> catalogResults = null)
     {
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return;
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var outcomes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
         {
             OperationContext.Current.Progress(Stage.CheckingHistory, manifest, 0, 0);
@@ -200,15 +207,19 @@ static class Snapshots
                 Snapshot snapshot = ReadSnapshot(backup, manifest);
                 foreach (RestoreEntry item in snapshot.Files)
                 {
-                    if (!checkedObjects.Add(item.Hash)) continue;
-                    if (!File.Exists(item.StoredPath)) { missing++; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
-                    else if (AlreadyVerified(item, verifiedLinks)) ok++;
-                    else
+                    if (checkedObjects.Add(item.Hash))
                     {
-                        try { ValidateEntry(item); ok++; }
-                        catch (OperationCanceledException) { throw; }
-                        catch (Exception ex) { damaged++; OperationOutput.WriteLine("    Damaged history: " + ex.Message); }
+                        if (!File.Exists(item.StoredPath)) { missing++; outcomes[item.Hash] = "missing"; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
+                        else if (AlreadyVerified(item, verifiedLinks)) { ok++; outcomes[item.Hash] = "ok"; }
+                        else
+                        {
+                            try { ValidateEntry(item); ok++; outcomes[item.Hash] = "ok"; }
+                            catch (OperationCanceledException) { throw; }
+                            catch (Exception ex) { damaged++; outcomes[item.Hash] = "damaged"; OperationOutput.WriteLine("    Damaged history: " + ex.Message); }
+                        }
                     }
+                    if (catalogResults != null) catalogResults.Add(new CatalogVerification { SnapshotId = snapshot.Name, Path = item.Relative,
+                        ExpectedHash = item.Hash, ObservedHash = outcomes[item.Hash] == "ok" ? item.Hash : null, Result = outcomes[item.Hash] });
                 }
             }
             catch (OperationCanceledException) { throw; }
@@ -219,7 +230,7 @@ static class Snapshots
 }
 
 // One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
-// the size, times and checksum it had when backed up. Hash is null for older backups without one.
+// the size, times and checksum it had when backed up.
 internal class RestoreEntry
 {
     public string Relative, StoredPath, Hash;
@@ -230,6 +241,7 @@ internal class RestoreEntry
 internal class Snapshot
 {
     public string Name;
+    public DateTime TakenUtc;
     public List<RestoreEntry> Files = new List<RestoreEntry>();
     public List<string> Folders = new List<string>();
     public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
