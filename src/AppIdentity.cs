@@ -5,8 +5,8 @@ internal static class AppIdentity
 {
     public const string Name = "Gear Backup";
     // Display version supports suffixes; Windows binary metadata requires numbers.
-    public const string Version = "0.9.1";
-    public const string BinaryVersion = "0.9.1.0";
+    public const string Version = "0.9.2";
+    public const string BinaryVersion = "0.9.2.0";
     public const string DirectoryName = "GearBackup";
     public const string ConfigFileName = DirectoryName + ".ini";
     public const string ProfileConfigFileName = DirectoryName + ".Profiles.ini";
