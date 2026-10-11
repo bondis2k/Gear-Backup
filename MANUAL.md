@@ -606,7 +606,7 @@ Global preferences live in `GearBackup.ini`: installed copies use `%APPDATA%\Gea
 | `Preview` | `yes` | Show file plans and ask before backups/restores. |
 | `HardLinks` | `no` | On NTFS, store history as hard links to the backup files instead of second copies (see Point-in-time history). |
 | `PointInTimeHistory` | `no` | Files and checksums only by default, avoiding the second history copy. Set `yes` to save dated snapshots and their content store. Existing snapshots are preserved; old-version and full-backup retention are independent. |
-| `SingleContentStore` | `yes` | Store each distinct content once, without a browsable file copy; every successful run saves a dated restore point. Set `no` for plain, browsable backup folders; an existing backup keeps its layout when updated incrementally. Overrides `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` for this layout. |
+| `SingleContentStore` | `yes` | Store each distinct content once, without a browsable file copy; every successful run saves a dated restore point. Set `no` for plain, browsable backup folders. Overrides `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` for this layout. |
 
 ## Command line and exit codes
 

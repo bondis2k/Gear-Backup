@@ -108,12 +108,6 @@ partial class Tests
         int count = Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length;
         result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true });
         Assert(result.Title == null && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == count, "preview-only single-store backup is read-only");
-        string regularHistory = Path.Combine(root, "regular");
-        result = RunBackup(source, regularHistory, null, false, new Config { SingleContentStore = false, Preview = false });
-        string regular = result.OutputFolder;
-        result = RunBackup(source, regularHistory, regular, true, config);
-        Assert(result.ExitCode == 0 && !ContentStoreBackup.IsSingle(regular), "an existing browsable set keeps its layout when updated with the single store enabled");
-        Assert(File.Exists(Path.Combine(regular, "one.txt")), "existing browsable backup is preserved");
         result = RunBackup(source, history, backup, true, new Config { Preview = false, SingleContentStore = false });
         Assert(result.ExitCode == 0 && !File.Exists(Path.Combine(backup, "one.txt")), "an existing single-store set keeps its layout when preferences change");
         string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");

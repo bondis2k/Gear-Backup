@@ -68,7 +68,7 @@ static class AppSettings
         YesNo("SingleContentStore", "Single content store", c => c.SingleContentStore, (c, v) => c.SingleContentStore = v,
             "; SingleContentStore: yes = store each distinct file content once and save a restore point for every backup run.\r\n" +
             "; Restore through the app; there is no separate browsable copy. Set no for plain, browsable backup folders.\r\n" +
-            "; Existing backups keep their layout when updated incrementally. Default yes.\r\n"),
+            "; Default yes.\r\n"),
         YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
             "; PointInTimeHistory: yes = save restorable snapshots and a history content store.\r\n" +
             "; no (default) = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
