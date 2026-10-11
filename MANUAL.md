@@ -585,11 +585,13 @@ Unknown arguments and missing argument values are errors. The program remains in
 
 ## Building and testing
 
-Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` using Windows' .NET Framework C# compiler and Windows notification metadata.
+Building needs **Visual Studio Build Tools** with the ".NET desktop build tools" workload, which provides the C# compiler. The code is C# 7.3, the newest version Microsoft supports for .NET Framework, and the programs still run on .NET Framework 4.6 or newer, so users need nothing extra. The scripts find the compiler with `vswhere`; set `GEARBACKUP_CSC` to a `csc.exe` to use another one.
 
-Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same built-in compiler. The GUI build also generates `Manual.html` plus `Manual-original.html`, `Manual-original-dark.html` and `Manual-retro.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
+Run `build.cmd --no-pause` to build `GearBackup.exe` from `src\*.cs` with that compiler and Windows notification metadata.
 
-Both wrappers use `build\build-app.ps1` for compiler paths, framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
+Install PowerShell 7, then run `build-gui.cmd --no-pause` to build `GearBackup.GUI.exe` from `src\*.cs`, `gui\*.cs`, and `gui\Dialogs\*.cs`, with Windows Forms and the same compiler. The GUI build also generates `Manual.html` plus `Manual-original.html`, `Manual-original-dark.html` and `Manual-retro.html` beside the executable and copies its images when building into another folder. To build under another name while the GUI is running, use `build-gui.cmd --no-pause GearBackup.GUI.updated.exe`.
+
+Both wrappers use `build\build-app.ps1` for the compiler (found by `build\csharp-compiler.ps1`, which the test scripts also use), framework references and common build options. The GUI adds Windows Forms references and embeds the device pictures.
 
 For a release, update `AppIdentity.Version` and its numeric `BinaryVersion` in `src\AppIdentity.cs`, and match the numeric version in `gui\app.manifest`, then run `build-installer.cmd` with PowerShell 7 and Inno Setup installed. It rebuilds both executables, reads their shared product version, and writes `dist\GearBackup-Setup-<version>.exe` and `dist\GearBackup-Portable-<version>.exe`, each with a SHA-256 file. An explicit `-Version` must match the application version. Product metadata and the GUI's About dialog show the display version (such as `0.9.0A`); Windows file and assembly versions use the numeric version (such as `0.9.0.1`).
 
