@@ -530,4 +530,22 @@ partial class GearBackup
         result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(new TestInteraction(), CancellationToken.None));
         Assert(result.ExitCode == 0 && !File.Exists(ListBackups(history)[2] + ".zip"), "no zip unless asked for");
     }
+
+    // The verification hash reads two chunks at a time; it must match the plain hash at every size
+    // around a chunk boundary.
+    static void TestHashFromDisk(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var random = new Random(7);
+        foreach (int size in new[] { 0, 1, ChunkSize - 1, ChunkSize, ChunkSize + 1, 3 * ChunkSize + 5 })
+        {
+            string path = Path.Combine(dir, "file" + size + ".bin");
+            var data = new byte[size];
+            random.NextBytes(data);
+            File.WriteAllBytes(path, data);
+            string expected;
+            using (var sha = System.Security.Cryptography.SHA256.Create()) expected = ToHex(sha.ComputeHash(data));
+            Assert(HashFileFromDisk(path) == expected && HashFile(path) == expected, "unbuffered and plain hashes agree for " + size + " bytes");
+        }
+    }
 }
