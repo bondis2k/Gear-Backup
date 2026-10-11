@@ -7,6 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- Gear Backup is released under the GNU General Public License, version 3: a `LICENSE` file in the repository and the installer, a License section in the README and a line in the About window.
 - An incremental backup can be given an optional name on the Backup tab. The Restore tab lists it beside the date and time (`Incremental · Studio jam · 2026-10-11_14.32.08`), and the command-line restore picker shows it too. It is saved with the restore point in both storage layouts.
 
 ### Changed

@@ -115,3 +115,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
 The suites use isolated temporary fixtures and hidden GUI windows. They cover backup, restore, history, integrity, profiles, storage management and recipe parsing without writing to connected devices. Hardware behavior still needs testing with the relevant device.
 
 Repeatable [performance benchmarks](benchmarks/README.md) measure file copying, verification, unchanged incrementals and catalog scans, with elapsed time and managed allocation recorded to CSV.
+
+## License
+
+Gear Backup is free software, released under the [GNU General Public License, version 3](LICENSE) (GPL-3.0). Copyright (C) 2026 Thomas Bondal.
+
+You can use, study, share and change it. If you distribute a changed version, you must do so under the same license and make its source code available. The program comes with no warranty; see the [full license text](LICENSE) for the details.

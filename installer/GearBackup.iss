@@ -76,6 +76,7 @@ Source: "{#PayloadDir}\Manual.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Manual-*.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\MANUAL.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\assets\manual\*.png"; DestDir: "{app}\assets\manual"; Flags: ignoreversion
 ; GearBackup.ini is created by the app. Never package personal settings or delete them.
 

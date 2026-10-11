@@ -52,7 +52,7 @@ if ($Version -and $Version -ne $applicationVersion) {
 }
 $Version = $applicationVersion
 
-Copy-Item -LiteralPath (Join-Path $projectRoot 'MANUAL.md'), (Join-Path $projectRoot 'README.md') -Destination $payloadPath
+Copy-Item -LiteralPath (Join-Path $projectRoot 'MANUAL.md'), (Join-Path $projectRoot 'README.md'), (Join-Path $projectRoot 'LICENSE') -Destination $payloadPath
 Copy-Item -LiteralPath (Join-Path $projectRoot 'assets\Backup.ico') -Destination $payloadPath
 
 # The wizard uses the same smiling card as the app, on its light background.
