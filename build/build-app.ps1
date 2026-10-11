@@ -7,11 +7,12 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $frameworkPath = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319'
 $metadataPath = Join-Path $env:WINDIR 'System32\WinMetadata'
-$compilerPath = Join-Path $frameworkPath 'csc.exe'
-if (-not (Test-Path -LiteralPath $compilerPath)) { throw 'The Windows .NET Framework C# compiler was not found.' }
+# References to .NET Framework itself still come from its folder; only the compiler is newer.
+. (Join-Path $PSScriptRoot 'csharp-compiler.ps1')
+$compilerPath = Get-CSharpCompiler
 if (-not $Output) { $Output = if ($Target -eq 'GUI') { 'GearBackup.GUI.exe' } else { 'GearBackup.exe' } }
 if (-not [IO.Path]::IsPathRooted($Output)) { $Output = Join-Path $projectRoot $Output }
-$arguments = @('/nologo', "/out:$Output", "/win32icon:$projectRoot\assets\Backup.ico",
+$arguments = @('/nologo', "/langversion:$CSharpLanguageVersion", "/out:$Output", "/win32icon:$projectRoot\assets\Backup.ico",
     '/r:System.Management.dll', '/r:Microsoft.VisualBasic.dll', '/r:System.IO.Compression.dll')
 foreach ($reference in @('Windows.Data.winmd', 'Windows.UI.winmd', 'Windows.Foundation.winmd')) {
     $arguments += "/r:$(Join-Path $metadataPath $reference)"

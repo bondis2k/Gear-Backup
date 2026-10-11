@@ -78,7 +78,7 @@ See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, reten
 
 ## Build from source
 
-The build scripts use Windows' .NET Framework C# compiler; no .NET SDK or NuGet packages are needed. Install **PowerShell 7** to build the GUI and generate its HTML manual.
+Building needs **Visual Studio Build Tools** with the ".NET desktop build tools" workload (for the C# compiler); no .NET SDK or NuGet packages are needed, and the programs still run on .NET Framework 4.6 or newer. Install **PowerShell 7** to build the GUI and generate its HTML manual.
 
 From the repository folder:
 
