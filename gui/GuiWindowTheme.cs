@@ -41,6 +41,32 @@ static partial class GuiTheme
         if (control.IsHandleCreated) SetWindowTheme(control.Handle, ThemeName == "original-dark" ? name : null, null);
     }
 
+    // Windows draws a disabled check box or radio button's text in its own dark grey, which vanishes on
+    // the dark theme's background, so that text is repainted in the theme's disabled colour.
+    static void StyleDisabledText(ButtonBase button)
+    {
+        button.Paint -= PaintDisabledText;
+        button.Paint += PaintDisabledText;
+    }
+
+    static void PaintDisabledText(object sender, PaintEventArgs e)
+    {
+        var button = (ButtonBase)sender;
+        if (button.Enabled || ThemeName != "original-dark" || string.IsNullOrEmpty(button.Text)) return;
+        float scale = e.Graphics.DpiX / 96f;
+        // The text starts a fixed distance after the check box, 16 pixels at 96 DPI.
+        int left = (int)Math.Round(16 * scale);
+        Color back = Color.Empty;
+        for (Control parent = button; parent != null && back.IsEmpty; parent = parent.Parent)
+            if (parent.BackColor.A == 255) back = parent.BackColor;
+        int cover = left - (int)Math.Round(scale);
+        var area = new Rectangle(cover, 0, Math.Max(0, button.Width - cover), button.Height);
+        using (var brush = new SolidBrush(back.IsEmpty ? Background : back)) e.Graphics.FillRectangle(brush, area);
+        var text = new Rectangle(left, 0, Math.Max(0, button.Width - left), button.Height);
+        TextRenderer.DrawText(e.Graphics, button.Text, button.Font, text, DisabledInk,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.HidePrefix);
+    }
+
     static void NativeControlCreated(object sender, EventArgs e) { ApplyNativeTheme((Control)sender); }
 
     static void WindowHandleCreated(object sender, EventArgs e) { ApplyTitleBar((Form)sender); }

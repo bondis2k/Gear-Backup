@@ -487,6 +487,22 @@ partial class Tests
                         Assert(ThemeContrast(ink, surface) >= 4.5, "text is readable in " + theme + ": " + ink.Name + " on " + surface.Name);
                 Assert(ThemeContrast(GuiTheme.PrimaryInk, GuiTheme.Accent) >= 4.5, "primary button text is readable in " + theme);
             }
+            // A disabled check box keeps readable text in the dark theme (Windows would draw it dark grey on dark).
+            GuiTheme.ApplyTheme("original-dark");
+            using (var panel = new Panel { Size = new Size(260, 30), BackColor = GuiTheme.Surface })
+            using (var box = new CheckBox { Text = "Remove extra target files", AutoSize = true, Enabled = false })
+            {
+                panel.Controls.Add(box); GuiTheme.ApplyTo(panel);
+                panel.CreateControl(); box.CreateControl();
+                using (var bitmap = new Bitmap(box.Width, box.Height))
+                {
+                    box.DrawToBitmap(bitmap, new Rectangle(Point.Empty, box.Size));
+                    double best = 0;
+                    for (int x = 24; x < bitmap.Width; x++)
+                        for (int y = 0; y < bitmap.Height; y++) best = Math.Max(best, ThemeContrast(bitmap.GetPixel(x, y), GuiTheme.Surface));
+                    Assert(best >= 2.0, "disabled check box text stays visible in the dark theme");
+                }
+            }
             using (var dialog = new SelectionDialog("Choose", new List<string> { "One" }))
                 Assert(dialog.List.DrawMode == DrawMode.OwnerDrawFixed, "choice list draws its selection in the theme's colours");
         }

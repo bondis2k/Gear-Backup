@@ -93,7 +93,7 @@ static partial class GuiTheme
             control.BackColor = BackgroundColor(control.BackColor, old);
         control.ForeColor = ForegroundColor(control.ForeColor, old);
         // Checkboxes can inherit Windows' black ControlText rather than a palette colour.
-        if (control is CheckBox || control is RadioButton) control.ForeColor = Ink;
+        if (control is CheckBox || control is RadioButton) { control.ForeColor = Ink; StyleDisabledText((ButtonBase)control); }
         if (control is ComboBox || control is NumericUpDown || control is ListBox || control is TextBox)
         {
             control.BackColor = palette == dark || control.Parent is FieldPanel ? Surface : SystemColors.Window;
