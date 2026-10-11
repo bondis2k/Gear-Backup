@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 using static StorageCatalog;
+using static ConsoleUi;
+using static Workflow;
 
 partial class GearBackup
 {

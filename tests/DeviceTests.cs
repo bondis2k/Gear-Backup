@@ -13,6 +13,10 @@ using static RestoreFlow;
 using static SampleDependencies;
 using static MtpMirror;
 using static PortableDevices;
+using static AppSettings;
+using static DeviceSelection;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {

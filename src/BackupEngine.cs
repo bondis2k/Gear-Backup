@@ -10,6 +10,9 @@ using static GearBackup;
 using static Backups;
 using static ChangeSummary;
 using static BackupZip;
+using static ConsoleUi;
+using static DeviceSelection;
+using static Workflow;
 
 internal sealed class BackupEngine
 {

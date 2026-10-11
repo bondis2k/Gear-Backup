@@ -12,6 +12,12 @@ using static Snapshots;
 using static Backups;
 using static ChangeSummary;
 using static BackupZip;
+using static AppSettings;
+using static ConsoleUi;
+using static ProfileSettings;
+using static Session;
+using static SettingsLocation;
+using static Workflow;
 
 partial class GearBackup
 {

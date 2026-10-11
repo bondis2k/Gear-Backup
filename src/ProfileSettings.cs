@@ -7,16 +7,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using static PathSafety;
+using static GearBackup;
+using static AppSettings;
+using static DeviceSelection;
+using static SettingsLocation;
+using static Workflow;
 
-partial class GearBackup
+static class ProfileSettings
 {
-    static string ProfileSettingsPath(Config config)
+    internal static string ProfileSettingsPath(Config config)
     {
         return Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), AppIdentity.ProfileConfigFileName);
     }
 
     // The preference with this key, or null when it isn't one that can be overridden.
-    static Setting FindPreference(string key)
+    internal static Setting FindPreference(string key)
     {
         Setting setting = FindSetting(key);
         return setting != null && setting.IsPreference ? setting : null;
@@ -35,7 +40,7 @@ partial class GearBackup
 
     // Every section of the file, as scope -> key -> value. An unknown section or key is an error rather
     // than being ignored, so a typo doesn't silently stop a preference from applying.
-    static Dictionary<string, Dictionary<string, string>> ReadProfileSettings(Config config)
+    internal static Dictionary<string, Dictionary<string, string>> ReadProfileSettings(Config config)
     {
         var sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         string path = SettingsReadPath(config, AppIdentity.ProfileConfigFileName);
@@ -80,14 +85,14 @@ partial class GearBackup
     }
 
     // The settings for a source, once its device is known (the current device).
-    static Config ResolveSourceSettings(Config global, string source)
+    internal static Config ResolveSourceSettings(Config global, string source)
     {
         return ResolveProfileSettings(global, CurrentDevice.Id, ProfileId(source, global.Profile));
     }
 
     // Replaces one scope's overrides (none removes the scope), keeping the other scopes. Values are
     // checked first, and a line break is refused so a value can't start a new section.
-    static void SaveProfileSettings(Config global, string scope, Dictionary<string, string> values)
+    internal static void SaveProfileSettings(Config global, string scope, Dictionary<string, string> values)
     {
         ValidateSettingsScope(scope);
         var checkedValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -9,6 +9,7 @@ using static PathSafety;
 using static GearBackup;
 using static FujiSettings;
 using static PortableDevices;
+using static ConsoleUi;
 
 static class MtpMirror
 {

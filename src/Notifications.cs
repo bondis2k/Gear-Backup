@@ -5,6 +5,8 @@ using Microsoft.Win32;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 using static UsbDevices;
+using static ConsoleUi;
+using static DeviceSelection;
 
 partial class GearBackup
 {

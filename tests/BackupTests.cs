@@ -14,6 +14,8 @@ using static Snapshots;
 using static Backups;
 using static RestoreFlow;
 using static BackupZip;
+using static AppSettings;
+using static Workflow;
 
 partial class GearBackup
 {

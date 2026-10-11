@@ -13,6 +13,10 @@ using static Checksums;
 using static Backups;
 using static FujiSettings;
 using static MtpMirror;
+using static AppSettings;
+using static ConsoleUi;
+using static Session;
+using static Workflow;
 
 partial class GearBackup
 {

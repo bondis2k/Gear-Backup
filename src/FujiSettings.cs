@@ -8,6 +8,9 @@ using static Backups;
 using static GearBackup;
 using static MtpMirror;
 using static PortableDevices;
+using static ProfileSettings;
+using static Session;
+using static Workflow;
 
 static class FujiSettings
 {

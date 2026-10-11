@@ -5,6 +5,8 @@ using static FileCopy;
 using static GearBackup;
 using static Backups;
 using static ChangeSummary;
+using static ConsoleUi;
+using static DeviceSelection;
 
 // Formats and saves statistics. BackupRun retains control of execution and completion status.
 internal sealed class BackupReport

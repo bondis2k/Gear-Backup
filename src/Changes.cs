@@ -6,6 +6,7 @@ using static FileCopy;
 using static BackupTraversal;
 using static GearBackup;
 using static Backups;
+using static DeviceSelection;
 
 static class ChangeSummary
 {

@@ -1,7 +1,7 @@
 using System.Reflection;
 
-[assembly: AssemblyTitle(GearBackup.AppIdentity.Name)]
-[assembly: AssemblyProduct(GearBackup.AppIdentity.Name)]
-[assembly: AssemblyVersion(GearBackup.AppIdentity.BinaryVersion)]
-[assembly: AssemblyFileVersion(GearBackup.AppIdentity.BinaryVersion)]
-[assembly: AssemblyInformationalVersion(GearBackup.AppIdentity.Version)]
+[assembly: AssemblyTitle(AppIdentity.Name)]
+[assembly: AssemblyProduct(AppIdentity.Name)]
+[assembly: AssemblyVersion(AppIdentity.BinaryVersion)]
+[assembly: AssemblyFileVersion(AppIdentity.BinaryVersion)]
+[assembly: AssemblyInformationalVersion(AppIdentity.Version)]

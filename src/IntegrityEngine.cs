@@ -5,6 +5,8 @@ using static Checksums;
 using static Snapshots;
 using static GearBackup;
 using static StorageCatalog;
+using static ConsoleUi;
+using static Workflow;
 
 // "Check backups": verifies backup files against checksums.sha256 and history objects against their
 // manifests. Records completed check results for the dashboard.
