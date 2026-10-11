@@ -28,9 +28,8 @@ static class Checksums
     {
         string file = Path.Combine(folder, ChecksumFileName);
         if (!File.Exists(file)) return null;
-        CheckRecordSize(file, ListRecordLimit, "Checksum list");
         var sums = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string line in File.ReadAllLines(file, Encoding.UTF8))
+        foreach (string line in Records.ReadLines(file, Records.ListLimit, "Checksum list"))
         {
             // "<hash>  <path>" or "<hash> *<path>" (binary-mode marker)
             if (line.Length < 67 || line[64] != ' ') continue;

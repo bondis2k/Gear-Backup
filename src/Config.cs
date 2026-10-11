@@ -175,7 +175,7 @@ static class AppSettings
             var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (exists)
             {
-                foreach (string line in File.ReadAllLines(readFile))
+                foreach (string line in Records.ReadLines(readFile, Records.SettingsLimit, "Settings file"))
                 {
                     string trimmed = line.Trim();
                     int equals = trimmed.IndexOf('=');
@@ -202,7 +202,7 @@ static class AppSettings
                 {
                     // Preserve values and comments; only update product names in comment lines.
                     var text = new StringBuilder();
-                    foreach (string line in File.ReadAllLines(readFile))
+                    foreach (string line in Records.ReadLines(readFile, Records.SettingsLimit, "Settings file"))
                     {
                         string trimmed = line.TrimStart();
                         text.AppendLine(trimmed.StartsWith(";") || trimmed.StartsWith("#")
@@ -234,7 +234,7 @@ static class AppSettings
     {
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var text = new StringBuilder();
-        if (File.Exists(path)) foreach (string line in File.ReadAllLines(path))
+        if (File.Exists(path)) foreach (string line in Records.ReadLines(path, Records.SettingsLimit, "Settings file"))
         {
             string trimmed = line.Trim();
             int equals = trimmed.IndexOf('=');

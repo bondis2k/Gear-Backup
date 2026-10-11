@@ -290,9 +290,8 @@ internal sealed class BackupRun
             BackupStatus(dest) != Status.Complete || previousSums == null || previousSums.Count != scan.Files.Count)
             return false;
         string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
-        RejectRootLinks(devicePath);
-        if (!File.Exists(devicePath) || new FileInfo(devicePath).Length > 128 ||
-            File.ReadAllText(devicePath).Trim() != CurrentDevice.Id) return false;
+        if (!File.Exists(devicePath) || new FileInfo(devicePath).Length > Records.DeviceLimit ||
+            Records.ReadText(devicePath, Records.DeviceLimit, "Backup device record").Trim() != CurrentDevice.Id) return false;
         foreach (FileInfo file in scan.Files)
         {
             OperationContext.Current.CheckCancellation();
@@ -339,7 +338,6 @@ internal sealed class BackupRun
         Directory.CreateDirectory(dest);
         SetBackupStatus(dest, Status.Incomplete);
         string devicePath = Path.Combine(AppIdentity.MetadataRoot(dest), "device.txt");
-        RejectRootLinks(devicePath);
         AtomicText(devicePath, CurrentDevice.Id + "\n");
         foreach (string folder in scan.Folders)
             Directory.CreateDirectory(SafePath(dest, folder.Substring(source.Length)));
@@ -524,7 +522,6 @@ internal sealed class BackupRun
         try
         {
             string successPath = Path.Combine(AppIdentity.MetadataRoot(dest), "last-success.txt");
-            RejectRootLinks(successPath);
             AtomicText(successPath, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + "\n");
         }
         catch (OperationCanceledException) { throw; }

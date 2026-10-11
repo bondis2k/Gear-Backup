@@ -28,9 +28,7 @@ static class DeviceSelection
     {
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt");
         if (!File.Exists(path)) return HistoryDevice(backup);
-        RejectRootLinks(path);
-        if (new FileInfo(path).Length > 128) throw new IOException("Invalid backup device record.");
-        return Devices.Find(File.ReadAllText(path).Trim()) ?? HistoryDevice(backup);
+        return Devices.Find(Records.ReadText(path, Records.DeviceLimit, "Backup device record").Trim()) ?? HistoryDevice(backup);
     }
 
     // The device the current operation works with (set by the front end once the source is known).

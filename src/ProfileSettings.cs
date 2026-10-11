@@ -44,10 +44,8 @@ static class ProfileSettings
         var sections = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
         string path = SettingsReadPath(config, AppIdentity.ProfileConfigFileName);
         if (!File.Exists(path)) return sections;
-        RejectRootLinks(path);
-        if (new FileInfo(path).Length > 1024 * 1024) throw new IOException("Profile settings file is too large.");
         Dictionary<string, string> current = null;
-        foreach (string line in File.ReadAllLines(path))
+        foreach (string line in Records.ReadLines(path, Records.SettingsLimit, "Profile settings file"))
         {
             string text = line.Trim();
             if (text.Length == 0 || text.StartsWith(";") || text.StartsWith("#")) continue;
