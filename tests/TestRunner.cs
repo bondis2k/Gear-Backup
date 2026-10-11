@@ -223,6 +223,7 @@ partial class Tests
         public readonly StringBuilder Output = new StringBuilder();
         public readonly List<OperationProgress> Progress = new List<OperationProgress>();
         public Action<OperationProgress> OnProgress;
+        public Action<OperationPlan> OnReview;
         public int Plans;
         public void Write(string text) { Output.Append(text); }
         public void WriteLine(string text) { Output.AppendLine(text); }
@@ -246,7 +247,7 @@ partial class Tests
             if (OnChooseItem != null) return OnChooseItem(question, items);
             throw new Exception("Engine unexpectedly asked to pick from: " + question);
         }
-        public bool ReviewPlan(OperationPlan plan) { Plans++; return !plan.PreviewOnly; }
+        public bool ReviewPlan(OperationPlan plan) { Plans++; if (OnReview != null) OnReview(plan); return !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
         {
             Progress.Add(progress);

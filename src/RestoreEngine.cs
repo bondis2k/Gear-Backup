@@ -216,6 +216,8 @@ internal sealed class RestoreEngine
                 DateTime created = new DateTime(item.CreatedTicks, DateTimeKind.Utc);
                 if (UsableFileTime(modified)) File.SetLastWriteTimeUtc(temp, modified);
                 if (UsableFileTime(created)) File.SetCreationTimeUtc(temp, created);
+                // Copying can take time: check the current folders again before committing the staged file.
+                target = SafePath(targetRoot, item.Relative);
                 AssertTargetUnchanged(target, targetHashes[item.Relative]);
                 OperationContext.Current.CheckCancellation();
                 if (File.Exists(target)) ReplaceSafely(temp, target);

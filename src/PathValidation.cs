@@ -25,7 +25,7 @@ static class PathSafety
     // Never allow manifest/checksum entries to escape the selected backup or target.
     internal static string SafePath(string root, string relative)
     {
-        RejectRootLinksOnce(root);
+        RejectRootLinks(root);
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
             throw new IOException("Invalid relative path: " + relative);
         foreach (string part in relative.Replace('/', '\\').Split('\\'))
@@ -54,30 +54,19 @@ static class PathSafety
     // redirect a write outside the intended folder.
     static void RejectLinks(string root, string path)
     {
-        HashSet<string> verified = OperationContext.Current.VerifiedFolders;
+        // Folder names are mutable: a previously checked directory can now be a junction.
+        // Always inspect current attributes, including after a preview or a long copy.
         string current = path;
         while (Within(current, root))
         {
             bool isFolder = Directory.Exists(current);
-            if (isFolder && verified.Contains(Rooted(current))) break;
             if ((isFolder || File.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Linked paths are not supported: " + current);
-            if (isFolder) verified.Add(Rooted(current));
             if (Rooted(current) == Rooted(root)) break;
             current = Path.GetDirectoryName(current.TrimEnd('\\'));
             if (current == null) break;
         }
-    }
-
-    // RejectRootLinks, skipped when this operation already checked the same folder.
-    static void RejectRootLinksOnce(string path)
-    {
-        HashSet<string> verified = OperationContext.Current.VerifiedFolders;
-        string key = Rooted(path);
-        if (verified.Contains(key)) return;
-        RejectRootLinks(path);
-        verified.Add(key);
     }
 
     // Rejects path if it or any folder above it, up to the drive root, is a link.

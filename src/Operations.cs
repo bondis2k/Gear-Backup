@@ -88,9 +88,6 @@ internal sealed class OperationContext
     public bool OverallProgressOnly;
     // The kind of device the source is (see Devices.cs); the M8 unless a front end sets another.
     public DeviceProfile Device = Devices.M8;
-    // Folders already found not to be links during this operation, so path checks
-    // don't repeat the same file-system lookups for every file.
-    public readonly HashSet<string> VerifiedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     // Buffers belong to this operation, never to another worker or thread. Rent separately so a
     // nested operation (for example from a progress callback) cannot overwrite an active copy.
     readonly Stack<byte[]> smallBuffers = new Stack<byte[]>(), largeBuffers = new Stack<byte[]>();
