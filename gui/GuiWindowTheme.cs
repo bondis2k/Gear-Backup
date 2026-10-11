@@ -2,14 +2,13 @@ using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
-using static GearBackup;
 
 static partial class GuiTheme
 {
     const int ImmersiveDarkMode = 20;
     const int CaptionColor = 35, CaptionTextColor = 36, WindowBorderColor = 34;
     static readonly Lazy<Icon> windowIcon = new Lazy<Icon>(delegate {
-        using (var stream = typeof(GearBackup).Assembly.GetManifestResourceStream("Backup.ico"))
+        using (var stream = typeof(GuiTheme).Assembly.GetManifestResourceStream("Backup.ico"))
         using (var icon = new Icon(stream)) return (Icon)icon.Clone();
     });
 

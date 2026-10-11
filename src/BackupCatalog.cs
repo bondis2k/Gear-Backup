@@ -13,45 +13,15 @@ using static PathSafety;
 using static Checksums;
 using static VersionCatalog;
 using static Backups;
-using static GearBackup;
 using static MtpMirror;
 using static DeviceSelection;
 using static ProfileSettings;
 using static Session;
 using static Workflow;
+using static StorageCatalog;
 
 static class StorageCatalog
 {
-    // One backup folder as the Dashboard and Storage windows see it.
-    internal sealed class CatalogBackup
-    {
-        public string Profile, History, Path, Status, CheckResult;
-        public DateTime? CompletedUtc, CheckedUtc;
-        public DeviceProfile Device;    // the device it was made from; null when unknown (older backups)
-        public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
-        public bool Latest;
-        public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }
-    }
-
-    // Something Storage offers to recycle. Stamp records its state at scan time (see StorageStamp).
-    internal sealed class StorageItem
-    {
-        public string Kind, Path, History, Backup, Stamp;
-        public long Bytes;
-        public bool Folder;
-    }
-
-    internal sealed class BackupCatalog
-    {
-        public readonly List<CatalogBackup> Backups = new List<CatalogBackup>();
-        public readonly List<StorageItem> Cleanup = new List<StorageItem>();
-        // Locations, histories or backups that couldn't be read; the scan carries on without them.
-        public readonly List<string> Warnings = new List<string>();
-        public long ZipBytes, MirrorBytes, UniqueBytes;
-        // Each file's identity once counted, so hard-linked content counts once in UniqueBytes.
-        public readonly HashSet<string> Counted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    }
-
     // Every file below root, including metadata, sorted by path; folders are added to `folders` when given.
     // Never follows a junction or symbolic link: any link is an error.
     static List<FileInfo> StorageFiles(string root, List<DirectoryInfo> folders = null)
@@ -463,4 +433,34 @@ static class StorageCatalog
                 WriteChecksums(backup.Key, sums);
             }
     }
+}
+
+// One backup folder as the Dashboard and Storage windows see it.
+internal sealed class CatalogBackup
+{
+    public string Profile, History, Path, Status, CheckResult;
+    public DateTime? CompletedUtc, CheckedUtc;
+    public DeviceProfile Device;    // the device it was made from; null when unknown (older backups)
+    public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
+    public bool Latest;
+    public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }
+}
+
+// Something Storage offers to recycle. Stamp records its state at scan time (see StorageStamp).
+internal sealed class StorageItem
+{
+    public string Kind, Path, History, Backup, Stamp;
+    public long Bytes;
+    public bool Folder;
+}
+
+internal sealed class BackupCatalog
+{
+    public readonly List<CatalogBackup> Backups = new List<CatalogBackup>();
+    public readonly List<StorageItem> Cleanup = new List<StorageItem>();
+    // Locations, histories or backups that couldn't be read; the scan carries on without them.
+    public readonly List<string> Warnings = new List<string>();
+    public long ZipBytes, MirrorBytes, UniqueBytes;
+    // Each file's identity once counted, so hard-linked content counts once in UniqueBytes.
+    public readonly HashSet<string> Counted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 }

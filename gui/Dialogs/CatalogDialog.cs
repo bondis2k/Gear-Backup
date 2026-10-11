@@ -5,7 +5,6 @@ using System.Windows.Forms;
 using static StorageCatalog;
 using static ConsoleUi;
 using static Workflow;
-using static GearBackup;
 
 // The Dashboard (one row per history: last success, status, last check) and Storage (space per backup,
 // and items to recycle) windows. Both show a BackupCatalog; Refresh scans again in the background.

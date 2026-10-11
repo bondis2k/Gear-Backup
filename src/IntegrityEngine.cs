@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using static Checksums;
 using static Snapshots;
-using static GearBackup;
 using static StorageCatalog;
 using static ConsoleUi;
 using static Workflow;

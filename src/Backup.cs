@@ -5,8 +5,8 @@ using System.IO;
 using System.Text.RegularExpressions;
 using static BackupTraversal;
 using static Checksums;
-using static GearBackup;
 using static ConsoleUi;
+using static Backups;
 
 static class Backups
 {
@@ -170,16 +170,6 @@ static class Backups
         OperationOutput.WriteLine();
     }
 
-    internal class ScanResult
-    {
-        public List<FileInfo> Files = new List<FileInfo>();
-        public List<string> Folders = new List<string>();
-        public int SkippedFolders, SkippedFolderFiles, SkippedFiles;
-        public long SkippedFolderBytes, SkippedFileBytes;
-        // Skipped items without a leading "." (Linux and Windows leftovers), listed by name in the statistics
-        public List<string> SkippedNamed = new List<string>();
-    }
-
     // Linux disk-check (fsck.fat) recovered fragments: FSCK0000.REC, FSCK0001.REC, ...
     static readonly Regex FsckFile = new Regex(@"^FSCK\d{4}\.REC$", RegexOptions.IgnoreCase);
 
@@ -248,4 +238,14 @@ static class Backups
         }
         catch (UnauthorizedAccessException ex) { throw new IOException("Cannot scan " + dir + ": " + ex.Message, ex); }
     }
+}
+
+internal class ScanResult
+{
+    public List<FileInfo> Files = new List<FileInfo>();
+    public List<string> Folders = new List<string>();
+    public int SkippedFolders, SkippedFolderFiles, SkippedFiles;
+    public long SkippedFolderBytes, SkippedFileBytes;
+    // Skipped items without a leading "." (Linux and Windows leftovers), listed by name in the statistics
+    public List<string> SkippedNamed = new List<string>();
 }

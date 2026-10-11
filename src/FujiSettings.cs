@@ -5,28 +5,15 @@ using System.Text;
 using System.Xml;
 using static PathSafety;
 using static Backups;
-using static GearBackup;
 using static MtpMirror;
 using static PortableDevices;
 using static ProfileSettings;
 using static Session;
 using static Workflow;
+using static FujiSettings;
 
 static class FujiSettings
 {
-    internal interface IFujiSettingsSource
-    {
-        byte[] DeviceInfo();
-        byte[] ReadProperty(ushort code);
-        void SelectRecipe(ushort slot);
-    }
-
-    internal sealed class FujiInfo
-    {
-        public string Manufacturer, Model, Firmware, Serial;
-        public HashSet<ushort> Properties = new HashSet<ushort>();
-    }
-
     // Codes describe stored recipes and their corresponding live shooting values. Raw bytes are
     // retained even when an enum isn't decoded, so a snapshot doesn't silently lose unknown values.
     internal static readonly string[] FujiSettingNames = {
@@ -293,4 +280,17 @@ static class FujiSettings
     }
 
     internal static string FujiModeName(bool settingsMode) { return settingsMode ? "settings mode" : "photo-transfer mode"; }
+}
+
+internal interface IFujiSettingsSource
+{
+    byte[] DeviceInfo();
+    byte[] ReadProperty(ushort code);
+    void SelectRecipe(ushort slot);
+}
+
+internal sealed class FujiInfo
+{
+    public string Manufacturer, Model, Firmware, Serial;
+    public HashSet<ushort> Properties = new HashSet<ushort>();
 }

@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
-using static GearBackup;
 using static GearGui;
 
 // The app's look: colours, fonts, and the controls that draw themselves in that style (rounded buttons

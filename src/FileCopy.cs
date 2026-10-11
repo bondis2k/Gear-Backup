@@ -6,14 +6,12 @@ using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
-using static GearBackup;
 using static ConsoleUi;
 using static DeviceSelection;
+using static FileCopy;
 
 static class FileCopy
 {
-    internal enum FileState { New, Changed, Same }
-
     // Same size and modified time (within FAT's 2 s resolution) counts as the same file.
     internal static FileState Compare(FileInfo file, string otherPath)
     {
@@ -336,3 +334,5 @@ static class FileCopy
         catch (Exception) { return "unknown"; }
     }
 }
+
+internal enum FileState { New, Changed, Same }

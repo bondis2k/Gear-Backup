@@ -4,7 +4,6 @@ using System.IO;
 using static FileCopy;
 using static PathSafety;
 using static Snapshots;
-using static GearBackup;
 using static Backups;
 using static RestoreFlow;
 using static ConsoleUi;

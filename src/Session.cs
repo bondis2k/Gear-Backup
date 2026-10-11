@@ -9,7 +9,6 @@ using static RestoreFlow;
 using static FujiSettings;
 using static MtpMirror;
 using static UsbDevices;
-using static GearBackup;
 using static ConsoleUi;
 using static DeviceSelection;
 using static ProfileSettings;

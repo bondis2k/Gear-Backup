@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
-using static GearBackup;
 using static Checksums;
 
 static class BackupTraversal

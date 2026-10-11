@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static FileCopy;
-using static GearBackup;
 using static Backups;
 using static ChangeSummary;
 using static ConsoleUi;

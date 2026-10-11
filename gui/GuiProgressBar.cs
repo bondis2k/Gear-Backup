@@ -1,7 +1,6 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
-using static GearBackup;
 
 // A flat progress bar in the theme's accent colour (the standard WinForms bar ignores colours under
 // visual styles). Marquee mode is animated by MainForm's display timer calling Advance.

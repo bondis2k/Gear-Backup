@@ -7,7 +7,6 @@ using System.IO;
 using static PathSafety;
 using static ChangeSummary;
 using static SampleDependencies;
-using static GearBackup;
 using static DeviceSelection;
 
 static class DeviceSelection

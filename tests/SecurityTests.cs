@@ -13,7 +13,7 @@ using static MtpMirror;
 using static UsbDevices;
 using static Workflow;
 
-partial class GearBackup
+partial class Tests
 {
     static void TestAdditionalMirrorLinks(string dir)
     {

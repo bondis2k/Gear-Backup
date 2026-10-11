@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using static GearBackup;
+using static PathSafety;
 
 static class PathSafety
 {
@@ -92,31 +92,30 @@ static class PathSafety
             current = Path.GetDirectoryName(current);
         }
     }
+}
 
-    // Windows' classic path limits, which the program's file calls are bound by: at most 259 characters
-    // for a file and 247 for a folder. Collects the paths an operation will create, so it can stop with
-    // a clear message before copying anything, instead of failing part-way through.
-    internal sealed class PathLengthCheck
+// Windows' classic path limits, which the program's file calls are bound by: at most 259 characters
+// for a file and 247 for a folder. Collects the paths an operation will create, so it can stop with
+// a clear message before copying anything, instead of failing part-way through.
+internal sealed class PathLengthCheck
+{
+    public const int MaxFile = 259, MaxFolder = 247;
+    string longest;
+    int longestLength, longestLimit;
+
+    // `extra`: characters a name may grow by (a dated old version, a temporary file beside it).
+    public void File(string path, int extra = 0) { Note(path, path.Length + extra, MaxFile); }
+    public void Folder(string path) { Note(path, path.TrimEnd('\\').Length, MaxFolder); }
+
+    void Note(string path, int length, int limit)
     {
-        public const int MaxFile = 259, MaxFolder = 247;
-        string longest;
-        int longestLength, longestLimit;
-
-        // `extra`: characters a name may grow by (a dated old version, a temporary file beside it).
-        public void File(string path, int extra = 0) { Note(path, path.Length + extra, MaxFile); }
-        public void Folder(string path) { Note(path, path.TrimEnd('\\').Length, MaxFolder); }
-
-        void Note(string path, int length, int limit)
-        {
-            if (length - limit > longestLength - longestLimit || longest == null) { longest = path; longestLength = length; longestLimit = limit; }
-        }
-
-        // Null when everything fits; otherwise what's too long and what to do about it.
-        public string Problem(string advice)
-        {
-            if (longest == null || longestLength <= longestLimit) return null;
-            return "A path would be " + longestLength + " characters, over Windows' limit of " + (longestLimit + 1) + ": " + longest + ". " + advice;
-        }
+        if (length - limit > longestLength - longestLimit || longest == null) { longest = path; longestLength = length; longestLimit = limit; }
     }
 
+    // Null when everything fits; otherwise what's too long and what to do about it.
+    public string Problem(string advice)
+    {
+        if (longest == null || longestLength <= longestLimit) return null;
+        return "A path would be " + longestLength + " characters, over Windows' limit of " + (longestLimit + 1) + ": " + longest + ". " + advice;
+    }
 }

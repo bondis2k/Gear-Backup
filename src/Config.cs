@@ -7,7 +7,6 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using static PathSafety;
-using static GearBackup;
 using static ConsoleUi;
 using static SettingsLocation;
 using static Workflow;

@@ -15,12 +15,12 @@ class TestRunner
 {
     static int Main()
     {
-        try { return GearBackup.RunTests(); }
+        try { return Tests.RunTests(); }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }
 
-partial class GearBackup
+partial class Tests
 {
     static int assertions;
     static void Assert(bool condition, string message)
@@ -273,7 +273,12 @@ partial class GearBackup
         public override void SetLength(long value) { throw new NotSupportedException(); }
         public override void Write(byte[] buffer, int offset, int count) { throw new NotSupportedException(); }
     }
-    // Tests exclude Windows toast code to avoid registry writes/desktop notifications.
-    static bool? ShowToast(string title, string summary, bool ask) { return false; }
-    static void Finish(string pnp, string title, string summary, EjectMode mode) { }
+}
+
+// Tests leave out Notifications.cs, whose Windows notifications would write to the registry and appear on
+// the desktop; these stand-ins replace it.
+static class Notifications
+{
+    internal static bool? ShowToast(string title, string summary, bool ask) { return false; }
+    internal static void Finish(string pnp, string title, string summary, EjectMode mode) { }
 }

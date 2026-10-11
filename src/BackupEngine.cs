@@ -6,7 +6,6 @@ using static PathSafety;
 using static Checksums;
 using static Snapshots;
 using static VersionCatalog;
-using static GearBackup;
 using static Backups;
 using static ChangeSummary;
 using static BackupZip;

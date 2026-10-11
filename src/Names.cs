@@ -1,4 +1,3 @@
-using static GearBackup;
 using static ConsoleUi;
 // Named values for things that used to be typed as text in several places, so a typo is now a
 // compile error instead of a silent bug.

@@ -8,11 +8,13 @@ using static UsbDevices;
 using static ConsoleUi;
 using static DeviceSelection;
 
-partial class GearBackup
+static class Notifications
 {
+    const string AppId = AppIdentity.NotificationId;
+
     // Shows the final notification and handles ejecting, depending on the Eject setting:
     // "no" = just the summary, "ask" = "Eject M8" / "Not now" buttons, "yes" = eject straight away.
-    static void Finish(string pnpId, string title, string summary, EjectMode ejectMode)
+    internal static void Finish(string pnpId, string title, string summary, EjectMode ejectMode)
     {
         if (ejectMode == EjectMode.No)
         {
@@ -56,7 +58,7 @@ partial class GearBackup
 
     // Shows a toast. With askEject, it has "Eject M8" / "Not now" buttons and waits for the answer:
     // returns true/false, or null if notifications didn't work or nobody answered.
-    static bool? ShowToast(string title, string message, bool askEject)
+    internal static bool? ShowToast(string title, string message, bool askEject)
     {
         try
         {

@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
-using static GearBackup;
 using static BackupTraversal;
 using static Checksums;
 using static VersionCatalog;
@@ -14,25 +13,10 @@ using static Backups;
 using static RestoreFlow;
 using static ConsoleUi;
 using static Workflow;
+using static Snapshots;
 
 static class Snapshots
 {
-    // One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
-    // the size, times and checksum it had when backed up. Hash is null for older backups without one.
-    internal class RestoreEntry
-    {
-        public string Relative, StoredPath, Hash;
-        public long Size, ModifiedTicks, CreatedTicks;
-    }
-    // The files and folders of one point in time, from a manifest or from the current backup files.
-    internal class Snapshot
-    {
-        public string Name;
-        public List<RestoreEntry> Files = new List<RestoreEntry>();
-        public List<string> Folders = new List<string>();
-        public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    }
-
     internal static bool ValidHash(string hash) { return hash != null && Regex.IsMatch(hash, "^[a-f0-9]{64}$"); }
     // Paths are stored Base64-encoded in manifests, so tabs or other odd characters in a name can't
     // break the tab-separated format.
@@ -233,4 +217,21 @@ static class Snapshots
         }
         OperationOutput.WriteLine("    {0} unique history object(s) checked.", checkedObjects.Count);
     }
+}
+
+// One file that can be restored: where it goes (Relative), where its content is (StoredPath), and
+// the size, times and checksum it had when backed up. Hash is null for older backups without one.
+internal class RestoreEntry
+{
+    public string Relative, StoredPath, Hash;
+    public long Size, ModifiedTicks, CreatedTicks;
+}
+
+// The files and folders of one point in time, from a manifest or from the current backup files.
+internal class Snapshot
+{
+    public string Name;
+    public List<RestoreEntry> Files = new List<RestoreEntry>();
+    public List<string> Folders = new List<string>();
+    public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 }

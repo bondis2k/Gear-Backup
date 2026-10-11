@@ -1,6 +1,5 @@
 using System.Drawing;
 using System.Windows.Forms;
-using static GearBackup;
 using static GearGui;
 
 internal sealed class AboutDialog : Form
