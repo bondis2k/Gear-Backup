@@ -32,10 +32,22 @@ partial class Tests
             string otherHistory = Path.Combine(Session.HistoriesRoot(config), "profiles", "OtherDevice");
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.OP1Field }.Activate())
                 RunBackup(source, otherHistory, null, false, config);
-            Assert(RestoreCatalog.BackupsForDevice(config, Devices.M8).Count == 1 && RestoreCatalog.BackupsForDevice(config, null).Count == 0,
-                "restore backups are filtered by identified device even with custom history names");
+            Assert(RestoreCatalog.BackupsForDevice(config, Devices.M8).Count == 1 && RestoreCatalog.BackupsForDevice(config, null).Count == 2,
+                "restore backups are filtered with a detected device and include all types without one");
             Assert(RestoreCatalog.BackupsForDevice(config, Devices.OP1Field).Count == 1, "other device backups remain separately available");
             RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
+            var offlineSet = RestoreCatalog.Load(backup, null);
+            Assert(offlineSet.Device == Devices.M8 && offlineSet.Sqlite && offlineSet.Points.Count == set.Points.Count,
+                "offline restore reads the backup's device identity and SQLite points in both layouts");
+            string otherBackup = RestoreCatalog.BackupsForDevice(config, Devices.OP1Field)[0];
+            var otherSet = RestoreCatalog.Load(otherBackup, null);
+            var otherPoint = otherSet.Points[0];
+            var offlineRequest = new RestoreRequest { Backup = otherBackup, DeviceId = otherSet.Device.Id, Point = otherPoint.Id, Stamp = RestoreCatalog.Stamp(otherPoint.Snapshot) };
+            string offlineTarget = Folder(root, "offline-other-device");
+            using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
+                Assert(RestoreCatalog.Run(offlineTarget, config, offlineRequest).ExitCode == 0 &&
+                    File.ReadAllText(Path.Combine(offlineTarget, "Songs", "one.m8s")) == "LATEST INCREMENTAL CONTENT",
+                    "offline restore uses the selected non-default device's backup without a connected source");
             Assert(set.Sqlite && set.Points.Count == 4 && set.Points[0].Id != "current" && set.Points[2].Label.StartsWith("Full backup"),
                 "SQLite lists full and incremental points newest first in both storage layouts");
             Assert(System.Text.RegularExpressions.Regex.IsMatch(set.Points[0].Id, @"^\d{4}-\d{2}-\d{2}_\d{2}\.\d{2}\.\d{2}(_\d+)?$") &&
@@ -100,6 +112,7 @@ partial class Tests
             Assert(!set.Sqlite && set.Points.Count == 4 && File.ReadAllText(database) == "CORRUPT", "read-only restore browsing falls back to recovery records without repairing database");
             string unknown = Folder(root, "2026-01-01");
             Throws(() => RestoreCatalog.Load(unknown, Devices.M8), "unknown device backup cannot enter a device-filtered restore");
+            Throws(() => RestoreCatalog.Load(unknown, null), "offline restore still rejects unknown backup identity");
         }
         string plain = Folder(dir, "restore-current-only"), plainSource = Folder(plain, "source");
         Put(Path.Combine(plainSource, "one.txt"), "ORIGINAL");

@@ -84,7 +84,7 @@ partial class Tests
                 "main window initially focuses on detection and backup instead of optional fields");
             workflowTabs.SelectedIndex = 1;
             var backupTypes = (ComboBox)form.Controls.Find("BackupOperation", true)[0];
-            Assert(backupTypes.Items.Count == 2 && !backupTypes.Items.Contains("Restore files") && !backupTypes.Items.Contains("Check backups"), "Backup tab starts with only full and incremental backup");
+            Assert(backupTypes.Items.Count == 3 && backupTypes.Items[2].ToString() == "Zip archive" && !backupTypes.Items.Contains("Restore files") && !backupTypes.Items.Contains("Check backups"), "Backup tab starts with full, incremental and ZIP archive backup");
             moreOptions.PerformClick();
             Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
             moreOptions.PerformClick();
@@ -136,11 +136,11 @@ partial class Tests
             Assert(form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("not reported"), "MTP details do not misreport the PC mirror's capacity as device storage");
             workflowTabs.SelectedIndex = 0;
             detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraSettingsMode = true, CameraMode = FujiModeName(true) });
-            Assert(workflowTabs.SelectedIndex == 0 && backupTypes.SelectedIndex == 2 && form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("C1–C7"),
+            Assert(workflowTabs.SelectedIndex == 0 && backupTypes.SelectedIndex == 3 && form.Controls.Find("DeviceStorageDetails", true)[0].Text.Contains("C1–C7"),
                 "camera detection stays on Device and prepares settings capture on Backup");
-            Assert(backupTypes.Items.Count == 3, "settings backup appears for a detected X100VI in settings mode");
+            Assert(backupTypes.Items.Count == 4, "settings backup appears for a detected X100VI in settings mode");
             detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraMode = FujiModeName(false) });
-            Assert(backupTypes.Items.Count == 2 && backupTypes.SelectedIndex == 0, "photo mode removes settings backup and resets a stale settings selection");
+            Assert(backupTypes.Items.Count == 3 && backupTypes.SelectedIndex == 0, "photo mode removes settings backup and resets a stale settings selection");
             detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.OP1Field, Mtp = new MtpSource { Device = Devices.OP1Field } });
             Assert(typeof(GuiOperationRunner).GetField("detectedDrive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(detectionRunner) == null,
                 "MTP detection also clears the previous drive selection used for ejection");
@@ -148,7 +148,7 @@ partial class Tests
                 "the detected device has a prominent name, highlight and larger picture");
             detectionRunner.ShowDetected(null);
             Assert(!connectionLabel.Visible && sourceBox.Text == "", "failed detection clears stale source and connection details");
-            Assert(backupTypes.Items.Count == 2, "settings backup is hidden after device detection is cleared");
+            Assert(backupTypes.Items.Count == 3, "settings backup is hidden after device detection is cleared");
             sourceBox.Text = source; backupBox.Text = Path.Combine(root, "backups");
             detectionRunner.ShowDetected(new SourceChoice { Detected = Devices.X100VI, Mtp = new MtpSource { Device = Devices.X100VI }, CameraSettingsMode = true, CameraMode = FujiModeName(true) });
             selectOperation(4);
@@ -294,6 +294,8 @@ partial class Tests
         Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
         TestPreviewFiltering();
         TestRestoreFileBrowser();
+        TestOfflineRestore(Path.Combine(root, "offline-restore"));
+        TestGuiArchive(Path.Combine(root, "zip-archive"));
         TestLazyRestoreBrowser();
         TestSettingsInteraction(root);
         TestGuiThemes(root);
@@ -1367,6 +1369,98 @@ partial class Tests
             ((Button)browser.Controls.Find("SelectAllRestoreFiles", true)[0]).PerformClick();
             Assert(browser.SelectedPaths.Length == 2, "select all selects complete top-level subtrees");
             browser.Close();
+        }
+    }
+
+    static void TestOfflineRestore(string root)
+    {
+        string source = Folder(root, "source"), target = Folder(root, "restored");
+        Put(Path.Combine(source, "Songs", "one.m8s"), "OFFLINE SONG");
+        Put(Path.Combine(source, "Samples", "kick.wav"), "OFFLINE SAMPLE");
+        var config = new Config { BackupFolder = root, SettingsDirectory = Folder(root, "settings"), Preview = false };
+        foreach (DeviceProfile device in new[] { Devices.M8, Devices.OP1Field })
+        using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = device }.Activate())
+            RunBackup(source, Path.Combine(Session.HistoriesRoot(config), "profiles", device.Id), null, false, config);
+        using (var form = new MainForm(true, config))
+        {
+            form.Show(); form.SelectOperation(GuiOperation.Restore); Application.DoEvents(); WaitForRestorePicker(form);
+            var backups = (ComboBox)form.Controls.Find("RestoreBackup", true)[0];
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var state = (Label)form.Controls.Find("OperationStatus", true)[0];
+            Assert(backups.Items.Count == 2 && backups.Text.Contains(Devices.OP1Field.Name) && start.Enabled,
+                "Restore starts without detection, listing device names across all available backups with the latest selected");
+            var capture = typeof(MainForm).GetMethod("CaptureConfig", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            ((TextBox)form.Controls.Find("RestoreDestination", true)[0]).Text = target;
+            var request = ((Config)capture.Invoke(form, new object[] { true })).RestoreSelection;
+            Assert(request.DeviceId == Devices.OP1Field.Id, "offline selection takes its device identity from the backup");
+            start.PerformClick(); DriveGui(form, state, "Complete", false);
+            Assert(File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "OFFLINE SONG" &&
+                File.ReadAllText(Path.Combine(target, "Samples", "kick.wav")) == "OFFLINE SAMPLE",
+                "offline full restore copies files to a PC folder without source detection");
+            form.ShowDevice(Devices.M8); Application.DoEvents(); WaitForRestorePicker(form);
+            Assert(backups.Items.Count == 1, "detecting a device filters the all-device restore inventory");
+            form.ShowDevice(null); Application.DoEvents(); WaitForRestorePicker(form);
+            Assert(backups.Items.Count == 2, "clearing device detection restores the all-device backup list");
+            ((ComboBox)form.Controls.Find("RestoreOperation", true)[0]).SelectedIndex = 1;
+            using (var timer = new System.Windows.Forms.Timer { Interval = 20 })
+            {
+                timer.Tick += delegate {
+                    foreach (Form owned in form.OwnedForms)
+                    {
+                        var browser = owned as RestoreBrowserDialog;
+                        if (browser == null || !browser.Visible) continue;
+                        var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+                        foreach (TreeNode node in tree.Nodes) if ((string)node.Tag == "Samples") node.Checked = true;
+                        ((Button)browser.Controls.Find("UseRestoreSelection", true)[0]).PerformClick();
+                    }
+                };
+                timer.Start(); ((Button)form.Controls.Find("BrowseRestoreFiles", true)[0]).PerformClick(); timer.Stop();
+            }
+            string individual = Folder(root, "individual");
+            ((TextBox)form.Controls.Find("RestoreDestination", true)[0]).Text = individual;
+            start.PerformClick(); DriveGui(form, state, "Complete", false);
+            Assert(File.Exists(Path.Combine(individual, "Samples", "kick.wav")) && !Directory.Exists(Path.Combine(individual, "Songs")),
+                "offline individual restore uses only the checked files and folders");
+            form.Close();
+        }
+    }
+
+    static void TestGuiArchive(string root)
+    {
+        string source = Folder(root, "source"), destination = Path.Combine(root, "archive.zip");
+        Put(Path.Combine(source, "Songs", "one.m8s"), "GUI ARCHIVE SONG");
+        var config = new Config { Device = "m8", SourceFolder = source, BackupFolder = Path.Combine(source, "unused"), SettingsDirectory = Folder(root, "settings"), Preview = false };
+        using (var form = new MainForm(true, config))
+        {
+            form.Show(); Application.DoEvents();
+            var types = (ComboBox)form.Controls.Find("BackupOperation", true)[0];
+            ((TextBox)form.Controls.Find("SourceFolder", true)[0]).Text = source;
+            types.SelectedIndex = 2;
+            var name = (TextBox)form.Controls.Find("FullBackupName", true)[0];
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var state = (Label)form.Controls.Find("OperationStatus", true)[0];
+            Assert(types.Text == "Zip archive" && name.Visible && start.Text == "Create ZIP" && !form.Controls.Find("ZipBackup", true)[0].Visible,
+                "ZIP archive type exposes an optional name and its own action without the extra ZIP checkbox");
+            string suggested = null;
+            form.ArchiveDestinationPicker = value => { suggested = value; return destination; };
+            ((Button)form.Controls.Find("PreviewOperation", true)[0]).PerformClick(); DriveGui(form, state, "Preview complete", false);
+            Assert(suggested.StartsWith("M8_") && suggested.EndsWith(".zip") && !File.Exists(destination) && !Directory.Exists(config.BackupFolder),
+                "ZIP preview suggests device/date/time and creates no archive or backup history");
+            name.Text = "Live set";
+            start.PerformClick(); DriveGui(form, state, "Complete", false);
+            Assert(suggested == "Live set.zip" && File.Exists(destination) && !Directory.Exists(config.BackupFolder),
+                "standalone GUI ZIP uses the custom name and selected save path without a separate backup");
+            using (var zip = new System.IO.Compression.ZipArchive(File.OpenRead(destination), System.IO.Compression.ZipArchiveMode.Read))
+                Assert(zip.GetEntry("Songs/one.m8s") != null, "GUI ZIP contains the complete source tree");
+            Assert(form.Controls.Find("OpenOutputFolder", true)[0].Text == "Open archive folder", "ZIP result links to its selected destination folder");
+            form.ArchiveDestinationPicker = value => null;
+            start.PerformClick(); DriveGui(form, state, "Cancelled", false);
+            Assert(Directory.GetFiles(root, "*.zip").Length == 1 && !Directory.Exists(config.BackupFolder), "cancelling the save picker starts no archive or backup history");
+            form.ShowDevice(Devices.X100VI, "settings", true);
+            Assert(types.SelectedIndex == 2 && types.Items.Count == 4, "showing X100VI settings preserves the ZIP selection");
+            form.ShowDevice(null);
+            Assert(types.SelectedIndex == 2 && types.Items.Count == 3, "clearing camera detection retains ZIP archive in the dropdown");
+            form.Close();
         }
     }
 

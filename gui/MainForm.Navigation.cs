@@ -98,7 +98,7 @@ internal sealed partial class MainForm
                 {
                     workflowTabs.SelectedTab.Controls.Add(inputs);
                     SelectOperation(workflowTabs.SelectedIndex == 2 ? (restoreMode.SelectedIndex == 2 ? GuiOperation.Check : GuiOperation.Restore)
-                        : (backupMode.SelectedIndex == 2 ? GuiOperation.CameraSettings : backupMode.SelectedIndex == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup), false);
+                        : BackupOperationForIndex(backupMode.SelectedIndex), false);
                     backupMode.Visible = workflowTabs.SelectedIndex == 1;
                     restoreMode.Visible = workflowTabs.SelectedIndex == 2;
                 }
@@ -116,11 +116,11 @@ internal sealed partial class MainForm
     {
         GuiTheme.StyleComboBox(backupMode); GuiTheme.StyleComboBox(restoreMode);
         backupMode.AccessibleName = "Backup type"; restoreMode.AccessibleName = "Restore or check";
-        backupMode.Items.AddRange(new object[] { "Full backup", "Incremental backup" });
+        backupMode.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Zip archive" });
         restoreMode.Items.AddRange(new object[] { "Restore full backup", "Restore individual files", "Check backups" });
         backupMode.SelectedIndex = restoreMode.SelectedIndex = 0;
         backupMode.SelectedIndexChanged += delegate {
-            if (!synchronizingNavigation) SelectOperation(backupMode.SelectedIndex == 2 ? GuiOperation.CameraSettings : backupMode.SelectedIndex == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup);
+            if (!synchronizingNavigation) SelectOperation(BackupOperationForIndex(backupMode.SelectedIndex));
         };
         restoreMode.SelectedIndexChanged += delegate {
             if (!synchronizingNavigation)
@@ -155,12 +155,17 @@ internal sealed partial class MainForm
             bool restore = Selected == GuiOperation.Restore || Selected == GuiOperation.Check;
             backupMode.Visible = !restore; restoreMode.Visible = restore;
             if (restore) restoreMode.SelectedIndex = Selected == GuiOperation.Check ? 2 : rememberedRestoreScope;
-            else backupMode.SelectedIndex = Selected == GuiOperation.CameraSettings ? 2 : (int)Selected;
+            else backupMode.SelectedIndex = Selected == GuiOperation.CameraSettings ? 3 : Selected == GuiOperation.ZipArchive ? 2 : (int)Selected;
             workflowTabs.SelectedIndex = restore ? 2 : 1;
             workflowTabs.SelectedTab.Controls.Add(inputs);
         }
         finally { synchronizingNavigation = false; }
         RefreshWorkflowLayout();
+    }
+
+    static GuiOperation BackupOperationForIndex(int index)
+    {
+        return index == 3 ? GuiOperation.CameraSettings : index == 2 ? GuiOperation.ZipArchive : index == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup;
     }
 
     internal void SelectOperation(GuiOperation value, bool navigate = true)
@@ -180,11 +185,11 @@ internal sealed partial class MainForm
         bool previous = synchronizingNavigation; synchronizingNavigation = true;
         try
         {
-            if (available && backupMode.Items.Count == 2) backupMode.Items.Add("Back up X100VI settings");
-            else if (!available && backupMode.Items.Count == 3)
+            if (available && backupMode.Items.Count == 3) backupMode.Items.Add("Back up X100VI settings");
+            else if (!available && backupMode.Items.Count == 4)
             {
-                if (backupMode.SelectedIndex == 2) backupMode.SelectedIndex = 0;
-                backupMode.Items.RemoveAt(2);
+                if (backupMode.SelectedIndex == 3) backupMode.SelectedIndex = 0;
+                backupMode.Items.RemoveAt(3);
                 if (Selected == GuiOperation.CameraSettings) selectedOperation = GuiOperation.FullBackup;
             }
         }

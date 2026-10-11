@@ -6,6 +6,12 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+### Added
+- **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
+
+### Changed
+- Restore works without a connected device: all available device backups are listed and can be restored to a folder. Detection still filters the list to that device type; restore requests retain and revalidate the selected backup's identity.
+
 ## [0.9.4] - 2026-10-11
 
 ### Added

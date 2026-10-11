@@ -33,6 +33,8 @@ For an ordinary folder or a card that is not detected, open **More options** on 
 
 You can click **Preview** first to inspect the plan without saving a backup. Leave the history/profile name blank unless you want a fixed name for a particular card or source.
 
+For one ZIP file instead of a backup set, choose **Zip archive** in Type, optionally enter a filename, then click **Create ZIP** and choose where to save it. Blank filename uses the device name plus date and time. Extract the resulting archive with Windows; it contains the current files and folders, without restore-point history.
+
 **With the default settings, restore files through Gear Backup.** Backups use a single content store rather than a separate browsable copy. Every successful run saves a restore point; unchanged content is shared within that full backup set.
 
 ## 3. Back up later changes
@@ -48,7 +50,7 @@ Choose a new **Full backup** when you want an independent set. Separate full set
 
 ## 4. Restore what you need
 
-Detect the device first, then open **Restore**. Backups are filtered by the detected device type, with the latest backup and restore point selected initially.
+Open **Restore** with or without a connected device. Without a detected device, you can choose from all available backups and restore to a PC folder, including when your device is broken. If you detect a device first, backups are filtered by that device type. The latest backup and restore point are selected initially.
 
 **For a whole backup:**
 

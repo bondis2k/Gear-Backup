@@ -38,7 +38,7 @@ static class Session
     }
 
     // Checks the source and works out its device, preferences and history. Sets the current device.
-    internal static PreparedSource PrepareSource(Config global, SourceChoice choice)
+    internal static PreparedSource PrepareSource(Config global, SourceChoice choice, bool needsHistory = true)
     {
         if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
         string path = Rooted(choice.Path);
@@ -47,7 +47,7 @@ static class Session
         OperationContext.Current.Device = device;
         Config config = ResolveSourceSettings(global, path);
         return new PreparedSource { Source = choice, Path = path, Device = device, Global = global, Config = config,
-            Histories = HistoriesRoot(config), History = HistoryFor(config, path) };
+            Histories = HistoriesRoot(config), History = needsHistory ? HistoryFor(config, path) : null };
     }
 
     // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP

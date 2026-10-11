@@ -8,7 +8,7 @@ using static Workflow;
 using static DeviceSelection;
 using static Snapshots;
 
-// The GUI's device-filtered restore inventory. SQLite supplies paths and saved run membership;
+// The GUI's restore inventory, optionally filtered by the detected device. SQLite supplies paths and saved run membership;
 // manifests and checksum files are read only when the catalog cannot safely supply them.
 internal static class RestoreCatalog
 {
@@ -16,14 +16,13 @@ internal static class RestoreCatalog
     {
         var result = new List<string>();
         var times = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        if (device == null) return result;
         foreach (string history in AvailableHistories(config)) foreach (string backup in Backups.ListBackups(history))
         {
             OperationContext.Current.CheckCancellation();
             try
             {
                 DeviceProfile recorded = BackupDevice(backup);
-                if (recorded != null && recorded.Id == device.Id)
+                if (recorded != null && (device == null || recorded.Id == device.Id))
                 {
                     string success = Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt");
                     DateTime time;
@@ -48,9 +47,10 @@ internal static class RestoreCatalog
     {
         RejectRootLinks(backup);
         DeviceProfile recorded = BackupDevice(backup);
-        if (device == null || recorded == null || recorded.Id != device.Id)
+        if (recorded == null) throw new IOException("This backup has no recognized device record.");
+        if (device != null && recorded.Id != device.Id)
             throw new IOException("This backup does not match the identified device. Detect the device and choose its backup again.");
-        var set = new RestoreSet { Backup = backup };
+        var set = new RestoreSet { Backup = backup, Device = recorded };
         bool single = ContentStoreBackup.IsSingle(backup);
         set.Single = single;
         try
@@ -58,7 +58,7 @@ internal static class RestoreCatalog
             var inventoryPaths = new InventoryPathCache(backup);
             var objectPaths = new InventoryPathCache(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"));
             CatalogData data = BackupDatabase.Read(backup, false, inventoryPaths);
-            if (BackupStatus(backup).Unfinished || data.DeviceId != device.Id || !BackupDatabase.IsCurrentInventory(backup, data))
+            if (BackupStatus(backup).Unfinished || data.DeviceId != recorded.Id || !BackupDatabase.IsCurrentInventory(backup, data))
                 throw new IOException("catalog is stale or incomplete");
             set.Sqlite = true;
             var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
@@ -165,6 +165,7 @@ internal static class RestoreCatalog
     internal static OperationResult Run(string target, Config config, RestoreRequest request)
     {
         DeviceProfile device = Devices.Find(request.DeviceId);
+        if (device == null) throw new IOException("The selected backup has no recognized device type. Refresh the restore selection.");
         if (!BackupsForDevice(config, device).Exists(path => Rooted(path) == Rooted(request.Backup)))
             throw new IOException("The selected backup is no longer available for the identified device.");
         string history = Path.GetDirectoryName(request.Backup);
@@ -188,6 +189,6 @@ internal static class RestoreCatalog
         }
     }
 }
-internal sealed class RestoreSet { internal string Backup, Notice; internal bool Sqlite, Single; internal readonly List<RestorePoint> Points = new List<RestorePoint>(); }
+internal sealed class RestoreSet { internal string Backup, Notice; internal DeviceProfile Device; internal bool Sqlite, Single; internal readonly List<RestorePoint> Points = new List<RestorePoint>(); }
 internal sealed class RestorePoint { internal string Id, Label; internal Snapshot Snapshot; public override string ToString() { return Label; } }
 internal sealed class RestoreRequest { internal string Backup, DeviceId, Point, Stamp; internal string[] Paths; internal bool Exact; }

@@ -4,6 +4,8 @@ Back up your music gear, camera and local folders on Windows. Gear Backup provid
 
 Make full or incremental backups, review changes before copying, and restore the files you need. Optional point-in-time history lets you return to an earlier state; turn it off when you prefer a smaller backup of the current files.
 
+Restore does not require a connected device. Choose any available backup and recover it to a PC folder; detecting a device filters the list to that device type.
+
 [Quick start guide](QuickStartGuide.md) · [User manual](MANUAL.md) · [FAQ](FAQ.md) · [Complete feature list](FEATURES.md) · [Downloads](https://github.com/bondis2k/Gear-Backup/releases)
 
 Before version 1.0.0, only the current settings and backup formats are supported. No automatic migration or compatibility with earlier formats is provided.

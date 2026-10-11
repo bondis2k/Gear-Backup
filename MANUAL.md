@@ -31,6 +31,8 @@ All app pictures in this manual use **Original**, the default light gray and tea
 
 The default backup location is `%USERPROFILE%\Backup`. The default storage mode is a **single content store**: files are stored once within a backup set, and each successful backup run saves a restore point. Use the app to restore files; this mode does not create a separate folder of ordinary backup files.
 
+For a single file you can extract with Windows, choose **Zip archive** on Backup instead, then choose where to save it.
+
 For later backups, choose **Incremental backup** and select the full backup to update. This adds a restore point to that set while copying only new or changed content.
 
 ## Installing and finding your files
@@ -79,7 +81,7 @@ OP-XY backups contain content exposed over MTP; factory content that the device 
 
 ### Device tab
 
-Click **Detect device** before choosing an operation. The device card shows its name, icon, and connection mode. For USB drives, it can show capacity, used space, and free space. Available information depends on the connection; an MTP mirror's disk capacity is not presented as the device's capacity.
+Click **Detect device** before backing up a connected device. You can open Restore without connecting or detecting a device. The device card shows its name, icon, and connection mode. For USB drives, it can show capacity, used space, and free space. Available information depends on the connection; an MTP mirror's disk capacity is not presented as the device's capacity.
 
 ![Device tab with an example detected M8 in Original](assets/manual/current-device-original.png)
 
@@ -112,6 +114,16 @@ A full backup creates a new dated folder under the source's history. An optional
 Each full backup is independent. Content is shared between restore points **inside one set**, not between separate full backups. Creating several full backups therefore uses more space even with a single content store.
 
 With **Also save as zip**, a successful full backup additionally creates a ZIP beside the backup folder. It contains ordinary exported files, not the internal content-store history. It is useful for transfer or manual extraction; it uses extra space and does not preserve the set's restore points. Incremental backups do not update or create ZIP archives.
+
+### Zip archive: save a standalone full backup
+
+1. Detect your device, or choose the source folder under **More options**.
+2. Select **Zip archive** in **Type**.
+3. Optionally enter a **ZIP filename**. Blank uses the device name plus date and time, for example `M8_2026-10-11_12.34.56.zip`.
+4. Click **Create ZIP** and choose the ZIP file's save location outside the source folder. The suggested name can be changed in the save window.
+5. Review the contents and wait for **Complete**. Replacing an existing archive requires confirmation.
+
+This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
 
 ### Incremental backup: update a chosen set
 
@@ -151,7 +163,7 @@ With browsable point-in-time history, `HardLinks=yes` can reduce duplication on 
 
 ## Restore
 
-First detect a device so the Restore tab can list backups matching its **device type**. The list is not restricted to one physical unit's serial number. It includes matching histories at the current backup location and locations configured in device/profile preferences. The newest backup and its latest restore point are selected by default.
+Open Restore to recover files even when your device is unavailable or broken. Without a detected device, the tab lists **all available backups**, labelled with their device type, and you can restore to an ordinary PC folder. If a device is detected, the list is filtered to its **device type**, rather than one physical unit's serial number. Both lists include histories at the current backup location and locations configured in device/profile preferences. The newest backup and its latest restore point are selected by default.
 
 ### Restore a full backup
 
@@ -345,7 +357,7 @@ Use `Mode=full` or `Mode=incremental` to choose a CLI backup mode without its mo
 | --- | --- |
 | Device not detected | Check its USB mode and data cable. Retry Detect device. For a drive/card, browse to it under More options. For a local source, select the appropriate device type. |
 | X100VI settings option missing | Connect one X100VI in USB RAW CONV./BACKUP RESTORE and detect again. Close camera applications that may hold the connection. |
-| Restore list empty | Detect the correct device type and confirm the backup location/profile locations. Backups need valid explicit device metadata; folder names alone do not identify them. |
+| Restore list empty | Confirm the backup location/profile locations. If a device is detected, only matching device types appear; with no detected device, all types appear. Backups need valid explicit device metadata; folder names alone do not identify them. |
 | Restore points cannot load | Inspect the error in the app. Keep the entire metadata/content folder intact; try a catalog rebuild if the index is damaged. Rebuild does not restore missing objects. |
 | Files unexpectedly marked changed | Check size and timestamp differences. The normal comparison tolerates two seconds. Enable content comparison when timestamps are unreliable; MTP mirroring can add read time. |
 | Backup occupies more space than expected | Count separate full sets, retained changed content, ZIP exports, and MTP mirrors. Browsable point-in-time history can add a second copy; a single store avoids that duplicate inside its set. |

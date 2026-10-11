@@ -43,12 +43,13 @@ internal sealed partial class MainForm
 
     void RefreshBackupSetField()
     {
-        bool full = Selected == GuiOperation.FullBackup, incremental = Selected == GuiOperation.IncrementalBackup;
+        bool archive = Selected == GuiOperation.ZipArchive;
+        bool full = Selected == GuiOperation.FullBackup || archive, incremental = Selected == GuiOperation.IncrementalBackup;
         backupSetField.Visible = full || incremental;
         fullBackupName.Parent.Visible = full;
         incrementalBackup.Visible = incremental;
         incrementalNameCaption.Visible = incrementalName.Parent.Visible = incremental;
-        backupSetCaption.Text = full ? "Name for this backup (optional)" : "Full backup to update";
+        backupSetCaption.Text = archive ? "ZIP filename (optional)" : full ? "Name for this backup (optional)" : "Full backup to update";
         if (incremental && !runner.IsBusy) RefreshBackupSets();
     }
 
