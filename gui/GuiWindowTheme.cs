@@ -38,7 +38,7 @@ static partial class GuiTheme
         else return;
         control.HandleCreated -= NativeControlCreated;
         control.HandleCreated += NativeControlCreated;
-        if (control.IsHandleCreated) SetWindowTheme(control.Handle, ThemeName == "original-dark" ? name : null, null);
+        if (control.IsHandleCreated) SetWindowTheme(control.Handle, IsDark ? name : null, null);
     }
 
     // Windows draws a disabled check box or radio button's text in its own dark grey, which vanishes on
@@ -52,7 +52,7 @@ static partial class GuiTheme
     static void PaintDisabledText(object sender, PaintEventArgs e)
     {
         var button = (ButtonBase)sender;
-        if (button.Enabled || ThemeName != "original-dark" || string.IsNullOrEmpty(button.Text)) return;
+        if (button.Enabled || !IsDark || string.IsNullOrEmpty(button.Text)) return;
         float scale = e.Graphics.DpiX / 96f;
         // The text starts a fixed distance after the check box, 16 pixels at 96 DPI.
         int left = (int)Math.Round(16 * scale);
@@ -73,13 +73,14 @@ static partial class GuiTheme
 
     static void ApplyTitleBar(Form form)
     {
-        int dark = ThemeName == "original-dark" ? 1 : 0;
+        int dark = IsDark ? 1 : 0;
         // Unsupported Windows versions return an HRESULT and retain their normal title bar.
         DwmSetWindowAttribute(form.Handle, ImmersiveDarkMode, ref dark, sizeof(int));
         // Windows 11 supports explicit caption colours, avoiding its near-black dark default.
-        int caption = ColorTranslator.ToWin32(ThemeName == "retro" ? Accent : Background);
-        int text = ColorTranslator.ToWin32(ThemeName == "retro" ? Color.White : Ink);
-        int border = ColorTranslator.ToWin32(Border);
+        // Let Windows choose its own caption/accent and inactive-window colours in system mode.
+        int caption = ThemeName == "windows" ? -1 : ColorTranslator.ToWin32(ThemeName == "retro" ? Accent : Background);
+        int text = ThemeName == "windows" ? -1 : ColorTranslator.ToWin32(ThemeName == "retro" ? Color.White : Ink);
+        int border = ThemeName == "windows" ? -1 : ColorTranslator.ToWin32(Border);
         DwmSetWindowAttribute(form.Handle, CaptionColor, ref caption, sizeof(int));
         DwmSetWindowAttribute(form.Handle, CaptionTextColor, ref text, sizeof(int));
         DwmSetWindowAttribute(form.Handle, WindowBorderColor, ref border, sizeof(int));

@@ -22,7 +22,7 @@ internal abstract class ToolsDialog : Form
     OperationProgress latestProgress;
     readonly System.Windows.Forms.Timer progressTimer = new System.Windows.Forms.Timer { Interval = 200 };
 
-    protected ToolsDialog(MainForm main, string title, string description)
+    protected ToolsDialog(MainForm main, string title, string description, bool browserHeader = false)
     {
         owner = main;
         Text = title + " · " + AppIdentity.Name;
@@ -51,7 +51,14 @@ internal abstract class ToolsDialog : Form
         heading.MaximumSize = new Size(940, 0);
         top.Controls.Add(titleLabel);
         top.Controls.Add(heading);
-        ToolLayout.Controls.Add(top, 0, 0);
+        if (browserHeader)
+        {
+            var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 16) };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            header.Controls.Add(new BrowserIcon { Size = new Size(48, 48), Margin = new Padding(0, 0, 16, 0) }, 0, 0);
+            top.Margin = Padding.Empty; header.Controls.Add(top, 1, 0); ToolLayout.Controls.Add(header, 0, 0);
+        }
+        else ToolLayout.Controls.Add(top, 0, 0);
         Notice = GuiTheme.Label("", 9, GuiTheme.Muted);
         Notice.MaximumSize = new Size(940, 130);
         Notice.Margin = new Padding(0, 10, 0, 0);
@@ -92,7 +99,7 @@ internal abstract class ToolsDialog : Form
         // Wrap the description and notice to the window's width.
         ToolLayout.SizeChanged += delegate {
             int width = Math.Max(100, ToolLayout.ClientSize.Width - ToolLayout.Padding.Horizontal);
-            heading.MaximumSize = new Size(width, 0);
+            heading.MaximumSize = new Size(Math.Max(100, width - (browserHeader ? 64 : 0)), 0);
             Notice.MaximumSize = new Size(width, 180);
         };
         // Closing while work runs cancels it; the window closes once the work has stopped.

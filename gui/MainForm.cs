@@ -440,7 +440,7 @@ internal sealed partial class MainForm : Form
     }
     internal static string ManualPath(string root, string theme)
     {
-        string name = theme == "original-dark" ? "Manual-original-dark.html" : theme == "retro" ? "Manual-retro.html" : "Manual-original.html";
+        string name = theme == "windows" ? "Manual-windows.html" : theme == "original-dark" ? "Manual-original-dark.html" : theme == "retro" ? "Manual-retro.html" : "Manual-original.html";
         string path = Path.Combine(root, name);
         return File.Exists(path) ? path : Path.Combine(root, "Manual.html");
     }

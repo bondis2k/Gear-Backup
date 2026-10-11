@@ -27,8 +27,9 @@ $themeStyles = @{
     retro = ''
     original = ':root{--desktop:#f3f5f7;--background:#f3f5f7;--surface:#fff;--ink:#1c2a33;--border:#dde3e8;--accent:#00756a;--heading:#005e55;--soft:#e2f2ef;--link:#00756a;--visited:#635286;--title-ink:#fff;color-scheme:light}'
     'original-dark' = ':root{--desktop:#13191e;--background:#1a2228;--surface:#202a31;--ink:#e8eef1;--border:#465660;--accent:#22a090;--heading:#6ddccb;--soft:#1f403d;--link:#6ddccb;--visited:#c5abe8;--title-ink:#13191e;color-scheme:dark}'
+    windows = ':root{--desktop:#f3f3f3;--background:#f3f3f3;--surface:#fff;--ink:#1a1a1a;--border:#d7d7d7;--accent:#0067c0;--heading:#005a9e;--soft:#e5f0fa;--link:#005a9e;--visited:#635286;--title-ink:#fff;color-scheme:light dark}@media(prefers-color-scheme:dark){:root{--desktop:#181818;--background:#181818;--surface:#202020;--ink:#f2f2f2;--border:#4e4e4e;--accent:#60cdff;--heading:#60cdff;--soft:#233845;--link:#60cdff;--visited:#c5abe8;--title-ink:#181818}}'
 }
-foreach ($theme in @('retro', 'original', 'original-dark')) {
+foreach ($theme in @('original', 'original-dark', 'windows', 'retro')) {
     $themeCss = $themeStyles[$theme]
     if ($theme -ne 'retro') { $themeCss += "`n$modernStyles" }
     $themedBody = $manualBody
@@ -67,7 +68,7 @@ $themeCss
 </style></head><body><div class="help-window">
 <header class="title-bar">Gear Backup Help — User's Manual</header>
 <nav class="menu-bar" aria-label="Manual sections"><a href="#contents">Contents</a><a href="#getting-started">Getting started</a><a href="#graphical-interface">Using the GUI</a><a href="#full-and-incremental-backup">Backup</a><a href="#restore">Restore</a><a href="#all-ini-settings">Settings</a></nav>
-<nav class="menu-bar" aria-label="Color themes"><span>Color theme:</span><a href="Manual-original.html">Original</a><a href="Manual-original-dark.html">Original (dark)</a><a href="Manual-retro.html">Retro</a></nav>
+<nav class="menu-bar" aria-label="Color themes"><span>Color theme:</span><a href="Manual-original.html">Original</a><a href="Manual-original-dark.html">Original (dark)</a><a href="Manual-windows.html">Windows</a><a href="Manual-retro.html">Retro</a></nav>
 <main><details class="contents" id="contents" open><summary>Contents — click to collapse or expand</summary>$contents</details>$themedBody</main>
 <footer class="status-bar"><span>Gear Backup · Offline reference</span><a href="#gear-backup-manual">Back to top</a></footer>
 </div></body></html>

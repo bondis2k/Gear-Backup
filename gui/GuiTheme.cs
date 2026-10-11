@@ -8,7 +8,7 @@ using static GearGui;
 // and cards, flat tabs, light tables). Windows and dialogs build their controls through these.
 static partial class GuiTheme
 {
-    public static Color Danger { get { return ThemeName == "original-dark" ? Color.FromArgb(255, 156, 139) : Color.FromArgb(175, 69, 47); } }
+    public static Color Danger { get { return IsDark ? Color.FromArgb(255, 156, 139) : Color.FromArgb(175, 69, 47); } }
     public const int Radius = 8;
 
     public static Font Font(float size, FontStyle style = FontStyle.Regular) { return new Font("Segoe UI", size, style); }
@@ -111,9 +111,9 @@ static partial class GuiTheme
         box.ItemHeight = box.Font.Height + 4;
         box.DrawItem += delegate(object sender, DrawItemEventArgs e) {
             bool selected = (e.State & DrawItemState.Selected) != 0;
-            Color background = ThemeName == "original-dark" ? (selected ? AccentSoft : Surface) :
+            Color background = IsDark ? (selected ? AccentSoft : Surface) :
                 selected ? SystemColors.Highlight : SystemColors.Window;
-            Color text = ThemeName != "original-dark" && selected ? SystemColors.HighlightText : Ink;
+            Color text = !IsDark && selected ? SystemColors.HighlightText : Ink;
             using (var brush = new SolidBrush(background)) e.Graphics.FillRectangle(brush, e.Bounds);
             string value = e.Index >= 0 && e.Index < box.Items.Count ? box.GetItemText(box.Items[e.Index]) : box.Text;
             var bounds = new Rectangle(e.Bounds.X + 3, e.Bounds.Y, Math.Max(0, e.Bounds.Width - 6), e.Bounds.Height);

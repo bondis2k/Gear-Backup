@@ -55,9 +55,10 @@ static class AppSettings
     // In the order explanations are added to a new GearBackup.ini; preferences are listed in the same order.
     internal static readonly Setting[] Settings =
     {
-        Choice("Theme", null, new[] { "original", "original-dark", "retro" }, c => c.Theme, (c, v) => c.Theme = v,
+        Choice("Theme", null, new[] { "original", "original-dark", "windows", "retro" }, c => c.Theme, (c, v) => c.Theme = v,
             "; Theme: GUI colour palette. original = light gray and teal (default); original-dark = charcoal and teal;\r\n" +
-            "; retro = teal, navy, gray and cream. Help opens the matching offline manual.\r\n"),
+            "; windows = follow Windows app light/dark mode and accent; retro = teal, navy, gray and cream.\r\n" +
+            "; Help opens the matching offline manual.\r\n"),
         new Setting { Key = "BackupFolder", Label = "Backup location", Location = true,
             Get = c => c.BackupFolder,
             Set = (c, value) => { c.BackupFolder = Path.GetFullPath(Environment.ExpandEnvironmentVariables(value)); return null; },

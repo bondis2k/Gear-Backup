@@ -93,7 +93,7 @@ build.cmd --no-pause
 build-gui.cmd --no-pause
 ```
 
-These produce `GearBackup.exe`, `GearBackup.GUI.exe` and four offline manuals (`Manual.html`, `Manual-original.html`, `Manual-original-dark.html`, `Manual-retro.html`). Generated executables and personal settings are excluded from Git.
+These produce `GearBackup.exe`, `GearBackup.GUI.exe` and five offline manuals (`Manual.html`, `Manual-original.html`, `Manual-original-dark.html`, `Manual-windows.html`, `Manual-retro.html`). Generated executables and personal settings are excluded from Git.
 
 To build both installer packages, also install **Inno Setup 6.3 or newer**, then run:
 
