@@ -30,10 +30,10 @@ internal sealed class SettingsDialog : Form
         appearance.Controls.Add(GuiTheme.Label("Color theme", 10, GuiTheme.Ink));
         var theme = new ComboBox { Name = "ColorTheme", AccessibleName = "Color theme", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top };
         GuiTheme.StyleComboBox(theme);
-        theme.Items.AddRange(new object[] { "Original — light gray and teal", "Original (dark) — charcoal and teal", "Retro — teal, navy, gray and cream" });
-        theme.SelectedIndex = config.Theme == "original-dark" ? 1 : config.Theme == "retro" ? 2 : 0;
+        theme.Items.AddRange(new object[] { "Original — light gray and teal", "Original (dark) — charcoal and teal", "Windows — follow system appearance", "Retro — teal, navy, gray and cream" });
+        theme.SelectedIndex = config.Theme == "original-dark" ? 1 : config.Theme == "windows" ? 2 : config.Theme == "retro" ? 3 : 0;
         appearance.Controls.Add(theme);
-        appearance.Controls.Add(Explanation("Applies when you save. Help opens the manual matching your selected theme."));
+        appearance.Controls.Add(Explanation("Applies when you save. Windows follows your app light/dark setting and accent color, including changes while Gear Backup is open. Help opens the matching manual."));
         var verify = Check("Verify copied files", "VerifyCopies", config.Verify);
         var thorough = Check("Compare file contents", "CompareContents", config.Thorough);
         var review = Check("Review changes before copying", "ReviewChanges", config.Preview);
@@ -88,7 +88,7 @@ internal sealed class SettingsDialog : Form
                 config.SingleContentStore = single.Checked;
                 config.KeepOldVersions = (int)versions.Value; config.MaxNameLength = (int)length.Value;
                 config.Eject = (EjectMode)eject.SelectedIndex;
-                config.Theme = theme.SelectedIndex == 1 ? "original-dark" : theme.SelectedIndex == 2 ? "retro" : "original";
+                config.Theme = theme.SelectedIndex == 1 ? "original-dark" : theme.SelectedIndex == 2 ? "windows" : theme.SelectedIndex == 3 ? "retro" : "original";
                 DialogResult = DialogResult.OK; Close();
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Check recovery location"); }

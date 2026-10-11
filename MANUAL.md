@@ -1,6 +1,6 @@
 # Gear Backup Manual
 
-This manual describes Gear Backup 0.9.3 for Windows. Gear Backup saves device files, keeps backup history, checks integrity, and restores whole backups or selected files. The graphical app and command-line app use the same backup engine and settings.
+This manual describes Gear Backup 0.9.4 for Windows. Gear Backup saves device files, keeps backup history, checks integrity, and restores whole backups or selected files. The graphical app and command-line app use the same backup engine and settings.
 
 All app pictures in this manual use **Original**, the default light gray and teal theme. They show example devices, paths, and backup data rather than a live connected device.
 
@@ -56,7 +56,7 @@ The normal installer offers optional **Create a desktop shortcut** and **Add CLI
 
 An installed copy is identified by `GearBackup.installed` beside its executables. It reads settings from AppData; it does not import INI files from the executable folder. The installer does not overwrite your personal INI files.
 
-**Help** opens the offline HTML manual matching your chosen appearance. `Manual.html` is the Original edition; `Manual-original-dark.html` and `Manual-retro.html` use the other document styles. App pictures remain in Original in every edition.
+**Help** opens the offline HTML manual matching your chosen appearance. `Manual.html` is the Original edition; `Manual-original-dark.html`, `Manual-windows.html` and `Manual-retro.html` use the other document styles. The Windows edition follows the browser's system light/dark preference. App pictures remain in Original in every edition.
 
 ## Connecting a device
 
@@ -88,6 +88,8 @@ Use **Go to Backup** or **Go to Restore**, or click the corresponding tab. When 
 ### Backup tab
 
 The main controls are **Type**, the backup name or full-backup selector, **Preview**, and **Back up**. **More options** reveals the source folder, backup location, history/profile name, and ZIP option. Normally, detection provides the source and you can leave the history name blank.
+
+**Browse…** opens the shared folder picker for source, backup, restore, and recovery locations. Use the Home, Desktop, and Documents shortcuts, expand folders in the tree, or enter a path and click **Go**. **Up** opens the parent folder; **Select folder** accepts your choice. **New folder…** appears where creating a destination is allowed. The picker follows your selected appearance.
 
 ![Full backup controls in Original](assets/manual/current-backup-original.png)
 
@@ -180,6 +182,8 @@ MTP device restores go to a PC folder; Gear Backup does not upload to the device
 
 Changing the backup or restore point clears the previous file selection. Individual restores do not remove unrelated target files.
 
+In the file browser, folders load their visible contents when you open them, keeping large backups quick to browse. **Expand all** and **Collapse all** control the tree without changing your checks. **Select all** and **Clear selection** change what will be restored. The summary counts the selected files and folders, including unopened descendants of checked folders; **Use selection** is enabled when at least one item is checked.
+
 The CLI additionally offers device-specific choices: an M8 bundle, an M8 song with its referenced samples, and a Tracker Mini whole project folder. The GUI checkbox browser restores what you select; it does not automatically add sample dependencies when you tick a song.
 
 ## Checking and managing backups
@@ -250,7 +254,7 @@ A history/profile name groups backup sets. A full or incremental backup's option
 
 | Key | Default | Meaning / accepted values |
 | --- | --- | --- |
-| `Theme` | `original` | `original`, `original-dark`, or `retro`. |
+| `Theme` | `original` | `original`, `original-dark`, `windows`, or `retro`. Windows follows the current Windows app light/dark mode and accent color, updating open windows when system preferences change. |
 | `BackupFolder` | Empty in generated INI | Empty uses `%USERPROFILE%\Backup`; otherwise a backup parent folder. |
 | `SingleContentStore` | `yes` | Use one content store with restore points for new full backups. |
 | `PointInTimeHistory` | `no` | Add snapshots/history content to browsable backups; ignored in single-store mode. |

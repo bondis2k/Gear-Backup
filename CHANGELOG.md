@@ -6,15 +6,22 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-10-11
+
 ### Added
+- **Windows** appearance, listed above Retro, follows Windows app light/dark mode, accent color and high-contrast colors. System preference changes update open windows, and Help has a matching manual that follows the browser's system light/dark preference.
 - Gear Backup is released under the GNU General Public License, version 3: a `LICENSE` file in the repository and the installer, a License section in the README and a line in the About window.
 - An incremental backup can be given an optional name on the Backup tab. The Restore tab lists it beside the date and time (`Incremental · Studio jam · 2026-10-11_14.32.08`), and the command-line restore picker shows it too. It is saved with the restore point in both storage layouts.
 
 ### Changed
+- The shared folder picker has a clearer header, quick-access shortcuts, folder and drive icons, larger selection rows, and Up/Go navigation. Restore, backup, recovery and other folder Browse buttons use the same design in all three themes.
+- Restore's **Choose files…** window uses the matching browser style, with file/folder icons, a selection summary, and Select/Clear and Expand/Collapse controls above the tree. Expanded folders and selection survive font/DPI changes.
 - The About window is larger and shows the app icon beside the name, version and license.
 - Backups with a single content store are much faster, most of all when little has changed. Every backup rebuilds its catalog from all saved restore points, and each entry was re-checked for links by walking its whole path, so the time grew with every restore point saved. Each content object and folder is now checked once. A backup of an M8 card with 3,167 unchanged files went from 76 s to about 2 s.
 
 ### Fixed
+- Restore's file selector creates file rows when their folder is opened, avoiding startup delays on large backups. Folder selections and selection counts include unopened contents.
+- File and folder browsers open faster by caching native icons and preparing restore nodes before displaying them. Native checkbox/icon placement prevents overlap during scaling.
 - Switching between the Restore and Backup tabs no longer makes the window flicker. The window now holds its repainting while the new tab is arranged and paints once, which cut the number of pictures shown during a switch from about 9 to 2 or 3.
 - The **Browse…** buttons (restore destination, source folder, backup and recovery locations, per-device settings and the X100VI settings folder) open a folder picker that follows the colour theme, instead of the light-only Windows folder dialog. It shows your folders and drives as a tree with an editable path, and a **New folder…** button where a new folder makes sense. The **Open XML** file chooser is still the standard Windows one.
 
@@ -149,7 +156,8 @@ First release of Gear Backup.
 - Graphical and command-line interfaces, Setup and Portable packages, and an illustrated offline
   manual in three themes (Original, Original (dark), Retro).
 
-[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.0A...v0.9.1

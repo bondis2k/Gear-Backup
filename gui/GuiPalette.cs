@@ -6,6 +6,8 @@ static partial class GuiTheme
 {
     sealed class Palette
     {
+        public bool Dark;
+        public Color PrimaryText;
         public Color Ink, Muted, Accent, AccentDark, AccentSoft, Desktop, Background, Surface, Border, DisabledSurface, DisabledInk;
     }
     static readonly Palette original = new Palette {
@@ -21,12 +23,15 @@ static partial class GuiTheme
         Border = Color.FromArgb(128, 128, 128), DisabledSurface = Color.FromArgb(224, 224, 224), DisabledInk = Color.FromArgb(128, 128, 128)
     };
     static readonly Palette dark = new Palette {
+        Dark = true, PrimaryText = Color.FromArgb(19, 25, 30),
         Ink = Color.FromArgb(232, 238, 241), Muted = Color.FromArgb(168, 183, 193),
         Accent = Color.FromArgb(34, 160, 144), AccentDark = Color.FromArgb(109, 220, 203), AccentSoft = Color.FromArgb(31, 64, 61),
         Desktop = Color.FromArgb(19, 25, 30), Background = Color.FromArgb(26, 34, 40), Surface = Color.FromArgb(32, 42, 49),
         Border = Color.FromArgb(70, 86, 96), DisabledSurface = Color.FromArgb(38, 46, 52), DisabledInk = Color.FromArgb(126, 142, 152)
     };
     static Palette palette = original;
+    static string themeName = "original";
+    public static bool IsDark { get { return palette.Dark; } }
     public static Color Ink { get { return palette.Ink; } }
     public static Color Muted { get { return palette.Muted; } }
     public static Color Accent { get { return palette.Accent; } }
@@ -39,8 +44,8 @@ static partial class GuiTheme
     public static Color DisabledSurface { get { return palette.DisabledSurface; } }
     public static Color DisabledInk { get { return palette.DisabledInk; } }
     public static Color ButtonSurface { get { return palette == retro ? Background : Surface; } }
-    public static string ThemeName { get { return palette == dark ? "original-dark" : palette == retro ? "retro" : "original"; } }
-    public static Color PrimaryInk { get { return palette == dark ? Desktop : Color.White; } }
+    public static string ThemeName { get { return themeName; } }
+    public static Color PrimaryInk { get { return palette.PrimaryText.IsEmpty ? Color.White : palette.PrimaryText; } }
     public static void ApplyTo(Control control) { Recolor(control, palette); }
 
     // Native controls retain assigned colours. Remap those alongside owner-drawn controls,
@@ -48,7 +53,8 @@ static partial class GuiTheme
     public static void ApplyTheme(string name, Control newlyCreated = null)
     {
         Palette previous = palette;
-        palette = name == "original-dark" ? dark : name == "retro" ? retro : original;
+        themeName = name == "windows" || name == "original-dark" || name == "retro" ? name : "original";
+        palette = themeName == "windows" ? WindowsPalette(ReadWindowsAppearance()) : themeName == "original-dark" ? dark : themeName == "retro" ? retro : original;
         var roots = new List<Control>();
         foreach (Form form in Application.OpenForms) roots.Add(form);
         if (newlyCreated != null && !roots.Contains(newlyCreated)) roots.Add(newlyCreated);
@@ -75,7 +81,7 @@ static partial class GuiTheme
     static Color ForegroundColor(Color color, Palette old)
     {
         if (color.IsEmpty) return color;
-        if (color == (old == dark ? Color.FromArgb(255, 156, 139) : Color.FromArgb(175, 69, 47))) return Danger;
+        if (color == (old.Dark ? Color.FromArgb(255, 156, 139) : Color.FromArgb(175, 69, 47))) return Danger;
         if (color == old.Ink) return Ink;
         if (color == old.Muted) return Muted;
         if (color == old.Accent) return Accent;
@@ -96,10 +102,12 @@ static partial class GuiTheme
         if (control is CheckBox || control is RadioButton) { control.ForeColor = Ink; StyleDisabledText((ButtonBase)control); }
         if (control is ComboBox || control is NumericUpDown || control is ListBox || control is TextBox)
         {
-            control.BackColor = palette == dark || control.Parent is FieldPanel ? Surface : SystemColors.Window;
+            control.BackColor = IsDark || control.Parent is FieldPanel ? Surface : SystemColors.Window;
             control.ForeColor = Ink;
         }
         if (control is MainForm) control.BackColor = Desktop;
+        var browser = control as BrowserTree;
+        if (browser != null) browser.RefreshAppearance();
         var grid = control as DataGridView;
         if (grid != null)
         {

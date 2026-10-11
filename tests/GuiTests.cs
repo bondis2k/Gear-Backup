@@ -294,8 +294,10 @@ partial class Tests
         Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
         TestPreviewFiltering();
         TestRestoreFileBrowser();
+        TestLazyRestoreBrowser();
         TestSettingsInteraction(root);
         TestGuiThemes(root);
+        TestWindowsTheme(Path.Combine(root, "windows-theme"));
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
         TestThemeReadability();
         TestActionButtonsFollowOperation();
@@ -443,7 +445,7 @@ partial class Tests
                 File.WriteAllText(themedManual, "test");
                 Assert(MainForm.ManualPath(settingsPath, "original-dark") == themedManual, "Help selects the matching dark manual");
                 Assert(MainForm.ManualPath(settingsPath, "original") == Path.Combine(settingsPath, "Manual.html"), "Help falls back when a themed manual is absent");
-                SetGuiTheme(form, 2, true);
+                SetGuiTheme(form, 3, true);
                 CheckNativeTitleBar(form, false);
                 CheckNativeTitleBar(table, false);
                 Assert(form.BackColor == Color.FromArgb(0, 128, 128) && grid.BackgroundColor == Color.FromArgb(255, 255, 240),
@@ -463,10 +465,10 @@ partial class Tests
         if (DwmGetWindowAttribute(form.Handle, 20, out value, sizeof(int)) == 0)
             Assert(value == (dark ? 1 : 0), "native title bar follows theme for " + form.GetType().Name);
         if (DwmGetWindowAttribute(form.Handle, 35, out value, sizeof(int)) == 0)
-            Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? GuiTheme.Accent : GuiTheme.Background),
+            Assert(value == (GuiTheme.ThemeName == "windows" ? -1 : ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? GuiTheme.Accent : GuiTheme.Background)),
                 "native caption exactly matches the selected palette");
         if (DwmGetWindowAttribute(form.Handle, 36, out value, sizeof(int)) == 0)
-            Assert(value == ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink),
+            Assert(value == (GuiTheme.ThemeName == "windows" ? -1 : ColorTranslator.ToWin32(GuiTheme.ThemeName == "retro" ? Color.White : GuiTheme.Ink)),
                 "native caption text matches the selected palette");
     }
 
@@ -535,6 +537,15 @@ partial class Tests
                             Assert(tree.SelectedNode != null && tree.SelectedNode.Text == "Demos" && path.Text == deep, "the folder picker opens on the current folder");
                             Assert(picker.Controls.Find("NewFolder", true).Length == 1, "the folder picker can make a new folder when asked to");
                             Assert(tree.BackColor == GuiTheme.Surface && tree.ForeColor == GuiTheme.Ink, "the folder picker uses the theme's colours");
+                            var up = (Button)picker.Controls.Find("FolderUp", true)[0];
+                            var go = (Button)picker.Controls.Find("FolderGo", true)[0];
+                            up.PerformClick();
+                            Assert(path.Text == Path.Combine(top, "Songs") && tree.SelectedNode.Text == "Songs", "Up navigates to the selected folder's parent");
+                            path.Text = deep; go.PerformClick();
+                            Assert(tree.SelectedNode.Text == "Demos" && path.Text == deep, "Go navigates to the entered path without accepting the dialog");
+                            path.Text = Path.Combine(top, "Missing"); go.PerformClick();
+                            Assert(picker.Visible && message.Text.Contains("not found") && tree.SelectedNode.Text == "Demos", "an invalid address keeps the current selection and reports the error");
+                            path.Text = deep; go.PerformClick();
                             TreeNode songs = tree.SelectedNode.Parent;
                             foreach (TreeNode sibling in songs.Parent.Nodes) if (sibling.Text == "Samples") tree.SelectedNode = sibling;
                             Assert(path.Text == Path.Combine(top, "Samples"), "choosing a folder in the tree fills in its path");
@@ -583,11 +594,64 @@ partial class Tests
     }
 
     // Every theme's text colours stay readable on the surfaces they are drawn on.
+    static void TestWindowsTheme(string root)
+    {
+        Directory.CreateDirectory(root);
+        var provider = GuiTheme.ReadWindowsAppearance;
+        var appearance = new GuiTheme.WindowsAppearance { Accent = Color.FromArgb(0, 103, 192) };
+        GuiTheme.ReadWindowsAppearance = () => appearance;
+        try
+        {
+            var config = new Config { SettingsDirectory = root, BackupFolder = root };
+            using (var form = new MainForm(false, config))
+            using (var browser = new RestoreBrowserDialog(form, new Snapshot { Name = "Theme test", Folders = new List<string> { "Songs" } }, new[] { "Songs" }))
+            {
+                form.Show(); browser.Show(form); Application.DoEvents();
+                SetGuiTheme(form, 2, true);
+                Assert(GuiTheme.ThemeName == "windows" && !GuiTheme.IsDark && GuiTheme.Accent == appearance.Accent && GuiTheme.Surface == Color.White,
+                    "third appearance option follows the Windows light mode and accent");
+                Config loaded = null; WithUi(() => loaded = LoadConfig(root));
+                Assert(loaded.Theme == "windows", "Windows preference persists as Theme=windows");
+                File.WriteAllText(Path.Combine(root, "Manual-windows.html"), "fixture");
+                Assert(MainForm.ManualPath(root, loaded.Theme) == Path.Combine(root, "Manual-windows.html"), "Windows appearance opens the system manual");
+                var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+                tree.Nodes[0].Checked = true;
+                appearance = new GuiTheme.WindowsAppearance { Dark = true, Accent = Color.FromArgb(255, 185, 0) };
+                // Simulate Windows' notification without changing the user's registry or system theme.
+                var message = Message.Create(form.Handle, 0x001A, IntPtr.Zero, IntPtr.Zero);
+                typeof(MainForm).GetMethod("WndProc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .Invoke(form, new object[] { message });
+                Application.DoEvents();
+                Assert(GuiTheme.ThemeName == "windows" && GuiTheme.IsDark && GuiTheme.Accent == appearance.Accent && form.BackColor == GuiTheme.Desktop && tree.BackColor == GuiTheme.Surface,
+                    "Windows preference changes recolor the main window and open browsers");
+                CheckNativeTitleBar(form, true); CheckNativeTitleBar(browser, true);
+                Assert(tree.Nodes[0].Checked && browser.SelectedPaths.Length == 1 && loaded.Theme == "windows",
+                    "system changes preserve browser checks and the saved automatic preference");
+                foreach (bool darkMode in new[] { false, true })
+                foreach (Color accent in new[] { Color.Black, Color.White, Color.Yellow, Color.Blue, Color.FromArgb(0, 103, 192) })
+                {
+                    appearance = new GuiTheme.WindowsAppearance { Dark = darkMode, Accent = accent };
+                    GuiTheme.RefreshWindowsTheme();
+                    Assert(ThemeContrast(GuiTheme.PrimaryInk, GuiTheme.Accent) >= 4.5 && ThemeContrast(GuiTheme.AccentDark, GuiTheme.Surface) >= 4.5,
+                        "Windows buttons and text accents stay readable with light and dark system accents");
+                }
+                appearance = new GuiTheme.WindowsAppearance { HighContrast = true };
+                GuiTheme.RefreshWindowsTheme();
+                Assert(GuiTheme.Surface == SystemColors.Window && GuiTheme.Ink == SystemColors.WindowText && GuiTheme.PrimaryInk == SystemColors.HighlightText,
+                    "Windows appearance honors system high-contrast colors");
+                GuiTheme.ApplyTheme("original"); appearance = new GuiTheme.WindowsAppearance { Dark = true };
+                GuiTheme.RefreshWindowsTheme();
+                Assert(GuiTheme.ThemeName == "original" && !GuiTheme.IsDark, "system changes leave explicit themes unchanged");
+            }
+        }
+        finally { GuiTheme.ReadWindowsAppearance = provider; GuiTheme.ApplyTheme("original"); }
+    }
+
     static void TestThemeReadability()
     {
         try
         {
-            foreach (string theme in new[] { "original", "original-dark", "retro" })
+            foreach (string theme in new[] { "original", "original-dark", "windows", "retro" })
             {
                 GuiTheme.ApplyTheme(theme);
                 foreach (Color surface in new[] { GuiTheme.Background, GuiTheme.Surface })
@@ -622,7 +686,7 @@ partial class Tests
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
         try
         {
-            foreach (string initial in new[] { "original", "original-dark", "retro" })
+            foreach (string initial in new[] { "original", "original-dark", "windows", "retro" })
             using (var owner = new MainForm(true, new Config { SingleContentStore = false, Theme = initial }))
             using (var profiles = new ProfileSettingsDialog(owner, config))
             {
@@ -639,17 +703,17 @@ partial class Tests
                 {
                     foreach (Form window in windows)
                     {
-                        CheckNativeTitleBar(window, initial == "original-dark");
+                        CheckNativeTitleBar(window, GuiTheme.IsDark);
                         Assert(object.ReferenceEquals(owner.Icon, window.Icon), "window has app icon before opening: " + window.Text);
                         window.Show(owner);
                     }
                     profiles.Show(owner);
-                    foreach (string theme in new[] { "original-dark", "retro", "original" })
+                    foreach (string theme in new[] { "original-dark", "windows", "retro", "original" })
                     {
                         GuiTheme.ApplyTheme(theme);
-                        CheckNativeTitleBar(owner, theme == "original-dark");
-                        CheckNativeTitleBar(profiles, theme == "original-dark");
-                        foreach (Form window in windows) CheckNativeTitleBar(window, theme == "original-dark");
+                        CheckNativeTitleBar(owner, GuiTheme.IsDark);
+                        CheckNativeTitleBar(profiles, GuiTheme.IsDark);
+                        foreach (Form window in windows) CheckNativeTitleBar(window, GuiTheme.IsDark);
                         var preferences = (SettingsDialog)windows[1];
                         foreach (string name in new[] { "VerifyCopies", "CompareContents", "ReviewChanges", "PointInTimeHistory", "RecoveryCopies" })
                             Assert(preferences.Controls.Find(name, true)[0].ForeColor == GuiTheme.Ink,
@@ -676,8 +740,9 @@ partial class Tests
                     {
                         var tabs = FindGuiControl<TabControl>(owned); tabs.SelectedIndex = 3;
                         var theme = (ComboBox)owned.Controls.Find("ColorTheme", true)[0];
-                        Assert(theme.Items.Count == 3 && ((string)theme.Items[0]).StartsWith("Original —") && ((string)theme.Items[1]).StartsWith("Original (dark)") &&
-                            ((string)theme.Items[2]).StartsWith("Retro"), "Settings lists Original, Original (dark) and Retro, in that order");
+                        Assert(theme.Items.Count == 4 && ((string)theme.Items[0]).StartsWith("Original —") && ((string)theme.Items[1]).StartsWith("Original (dark)") &&
+                            ((string)theme.Items[2]).StartsWith("Windows") && ((string)theme.Items[3]).StartsWith("Retro"),
+                            "Settings lists Original, Original (dark), Windows and Retro, in that order");
                         theme.SelectedIndex = selected;
                         if (save) ((Button)owned.Controls.Find("SaveSettings", true)[0]).PerformClick();
                         else ((Button)owned.CancelButton).PerformClick();
@@ -1252,9 +1317,32 @@ partial class Tests
         {
             browser.Show(); Application.DoEvents();
             var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+            var useSelection = (Button)browser.Controls.Find("UseRestoreSelection", true)[0];
+            Assert(!useSelection.Enabled, "the restore browser requires a selection before accepting");
             TreeNode songs = null, samples = null;
             foreach (TreeNode node in tree.Nodes) { if ((string)node.Tag == "Songs") songs = node; if ((string)node.Tag == "Samples") samples = node; }
             Assert(!songs.IsExpanded && !samples.IsExpanded && browser.ClientSize.Width <= 720, "the file browser starts with its folders collapsed in a moderate-width window");
+            ((Button)browser.Controls.Find("ExpandRestoreFolders", true)[0]).PerformClick();
+            Assert(songs.IsExpanded && samples.IsExpanded && browser.SelectedPaths.Length == 0, "expanding folders does not select files");
+            tree.SelectedNode = songs;
+            tree.Font = new Font(tree.Font.FontFamily, tree.Font.Size + 1);
+            Application.DoEvents();
+            int checkboxRight = -1, imageLeft = -1;
+            for (int x = 0; x < songs.Bounds.Left; x++)
+            {
+                var hit = tree.HitTest(x, songs.Bounds.Top + songs.Bounds.Height / 2);
+                if ((hit.Location & TreeViewHitTestLocations.StateImage) != 0) checkboxRight = x;
+                if (imageLeft < 0 && (hit.Location & TreeViewHitTestLocations.Image) != 0) imageLeft = x;
+            }
+            Assert(checkboxRight >= 0 && imageLeft > checkboxRight && songs.Bounds.Left > imageLeft,
+                "Windows keeps the checkbox, native icon and custom text in separate areas after scaling");
+            IntPtr imagesBefore = tree.ImageList.Handle;
+            tree.Font = new Font(tree.Font.FontFamily, tree.Font.Size, tree.Font.Style);
+            Assert(tree.ImageList.Handle == imagesBefore, "equivalent font layout passes reuse the cached native icons");
+            Assert(songs.IsExpanded && samples.IsExpanded && tree.SelectedNode == songs && browser.SelectedPaths.Length == 0,
+                "a browser font change preserves expanded folders, focus and checkbox selection");
+            ((Button)browser.Controls.Find("CollapseRestoreFolders", true)[0]).PerformClick();
+            Assert(!songs.IsExpanded && !samples.IsExpanded, "the restore browser can collapse folders again");
             var closeButton = (Button)browser.CancelButton;
             Assert(browser.RectangleToClient(closeButton.RectangleToScreen(closeButton.ClientRectangle)).Bottom >= browser.ClientSize.Height - 40,
                 "tool window buttons sit at the bottom of the window with no dead space beneath them");
@@ -1266,6 +1354,7 @@ partial class Tests
                 "unchecking one child preserves the other selected files and empty folder");
             ((Button)browser.Controls.Find("ClearRestoreFiles", true)[0]).PerformClick();
             Assert(browser.SelectedPaths.Length == 0, "clear selection clears every subtree");
+            Assert(!useSelection.Enabled, "clearing the restore selection disables acceptance again");
             one.Checked = true;
             ((Button)browser.Controls.Find("UseRestoreSelection", true)[0]).PerformClick();
             Assert(browser.DialogResult == DialogResult.OK && browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == @"Songs\one.m8s", "file browser accepts an individual file");
@@ -1277,6 +1366,43 @@ partial class Tests
             Assert(browser.SelectedPaths.Length == 1 && browser.SelectedPaths[0] == @"Songs\Empty", "opening the browser again restores the previous empty-folder selection");
             ((Button)browser.Controls.Find("SelectAllRestoreFiles", true)[0]).PerformClick();
             Assert(browser.SelectedPaths.Length == 2, "select all selects complete top-level subtrees");
+            browser.Close();
+        }
+    }
+
+    static void TestLazyRestoreBrowser()
+    {
+        var snapshot = new Snapshot { Name = "Large backup" };
+        snapshot.Folders.Add("Samples");
+        for (int i = 0; i < 20000; i++)
+            snapshot.Files.Add(new RestoreEntry { Relative = "Samples\\Group " + (i / 100).ToString("D3") + "\\Sample " + i.ToString("D5") + ".wav", Size = 1 });
+        using (var owner = new MainForm(true))
+        using (var browser = new RestoreBrowserDialog(owner, snapshot, new[] { "Samples" }))
+        {
+            browser.Show(); Application.DoEvents();
+            var tree = (TreeView)browser.Controls.Find("RestoreFileTree", true)[0];
+            TreeNode samples = tree.Nodes[0];
+            Assert(tree.GetNodeCount(true) == 2 && samples.Checked && browser.SelectedPaths.Length == 1,
+                "large backups initially create only root rows and placeholders, preserving unopened selections");
+            Assert(browser.SelectedPaths[0] == "Samples", "unopened selection retains the complete folder path");
+            samples.Expand();
+            Assert(samples.Nodes.Count == 200 && tree.GetNodeCount(true) == 401,
+                "opening a folder loads only its direct children and their placeholders");
+            TreeNode group = samples.Nodes[0]; group.Expand();
+            Assert(group.Nodes.Count == 100 && group.Nodes[0].Checked && tree.GetNodeCount(true) == 500,
+                "newly opened files inherit the checked inventory without loading neighboring folders");
+            group.Nodes[0].Checked = false;
+            Assert(!samples.Checked && !group.Checked && browser.SelectedPaths.Length == 298 &&
+                Array.IndexOf(browser.SelectedPaths, (string)group.Nodes[0].Tag) < 0 && samples.Nodes[1].Checked,
+                "partial selections preserve unopened sibling subtrees");
+            ((Button)browser.Controls.Find("ClearRestoreFiles", true)[0]).PerformClick();
+            ((Button)browser.Controls.Find("SelectAllRestoreFiles", true)[0]).PerformClick();
+            Assert(browser.SelectedPaths.Length == 1 && tree.GetNodeCount(true) == 500,
+                "select and clear operate on the inventory without creating hidden file rows");
+            ((Button)browser.Controls.Find("ClearRestoreFiles", true)[0]).PerformClick();
+            samples.Nodes[1].Expand();
+            Assert(!samples.Nodes[1].Nodes[0].Checked && browser.SelectedPaths.Length == 0,
+                "folders opened after clearing show unchecked files");
             browser.Close();
         }
     }

@@ -160,7 +160,7 @@ The main window has **Device**, **Backup** and **Restore** tabs and starts on De
 
 Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
 
-**Settings → Appearance** offers **Original** (light gray and teal; default), **Original (dark)** (charcoal and teal) and **Retro** (teal, navy, gray and cream). Saving applies the theme immediately and persists it as `Theme=original`, `Theme=original-dark` or `Theme=retro` in the global INI. Help opens the matching themed manual. Windows 11 title bars, title text and borders match the selected palette. Supported earlier Windows versions use standard dark title bars for Original (dark). App dialogs share the Gear Backup icon.
+**Settings → Appearance** offers **Original** (light gray and teal; default), **Original (dark)** (charcoal and teal), **Windows** and **Retro** (teal, navy, gray and cream), in that order. Windows follows the user's app light/dark mode, accent color and high-contrast colors, updating open windows when system preferences change. Saving applies the theme immediately and persists `Theme=original`, `Theme=original-dark`, `Theme=windows` or `Theme=retro` in the global INI. Help opens the matching themed manual; the Windows manual follows the browser's system light/dark preference. Windows appearance uses system title-bar colors; other themes use the selected palette on Windows 11, with standard dark title bars on supported earlier Windows versions. App dialogs share the Gear Backup icon.
 
 ## Distribution
 
