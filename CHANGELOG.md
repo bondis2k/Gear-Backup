@@ -12,6 +12,9 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ### Changed
 - Backups with a single content store are much faster, most of all when little has changed. Every backup rebuilds its catalog from all saved restore points, and each entry was re-checked for links by walking its whole path, so the time grew with every restore point saved. Each content object and folder is now checked once. A backup of an M8 card with 3,167 unchanged files went from 76 s to about 2 s.
 
+### Fixed
+- Switching between the Restore and Backup tabs no longer makes the window flicker. The window now holds its repainting while the new tab is arranged and paints once, which cut the number of pictures shown during a switch from about 9 to 2 or 3.
+
 ## [0.9.3] - 2026-10-11
 
 ### Added
