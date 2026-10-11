@@ -9,7 +9,7 @@ static partial class GuiTheme
         public Color Ink, Muted, Accent, AccentDark, AccentSoft, Desktop, Background, Surface, Border, DisabledSurface, DisabledInk;
     }
     static readonly Palette original = new Palette {
-        Ink = Color.FromArgb(28, 42, 51), Muted = Color.FromArgb(102, 117, 127),
+        Ink = Color.FromArgb(28, 42, 51), Muted = Color.FromArgb(96, 110, 120),
         Accent = Color.FromArgb(0, 117, 106), AccentDark = Color.FromArgb(0, 94, 85), AccentSoft = Color.FromArgb(226, 242, 239),
         Desktop = Color.FromArgb(243, 245, 247), Background = Color.FromArgb(243, 245, 247), Surface = Color.White,
         Border = Color.FromArgb(221, 227, 232), DisabledSurface = Color.FromArgb(238, 241, 243), DisabledInk = Color.FromArgb(160, 170, 176)
@@ -87,12 +87,13 @@ static partial class GuiTheme
     {
         var window = control as Form;
         if (window != null) StyleWindow(window);
+        ApplyNativeTheme(control);
         // Standard input controls use Windows' field colours; FieldPanel inputs use ours.
         if (!(control is ComboBox) && !(control is NumericUpDown) && (!(control is TextBox) || control.Parent is FieldPanel))
             control.BackColor = BackgroundColor(control.BackColor, old);
         control.ForeColor = ForegroundColor(control.ForeColor, old);
         // Checkboxes can inherit Windows' black ControlText rather than a palette colour.
-        if (control is CheckBox || control is RadioButton) control.ForeColor = Ink;
+        if (control is CheckBox || control is RadioButton) { control.ForeColor = Ink; StyleDisabledText((ButtonBase)control); }
         if (control is ComboBox || control is NumericUpDown || control is ListBox || control is TextBox)
         {
             control.BackColor = palette == dark || control.Parent is FieldPanel ? Surface : SystemColors.Window;

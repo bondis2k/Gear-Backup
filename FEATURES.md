@@ -61,7 +61,7 @@ Point-in-time history records the files and folders present during each backup, 
 
 Turning history off preserves existing snapshots. Dated old versions, separate full backups, ZIPs and MTP mirrors have separate storage costs. Hard-linked files share content, so editing or damaging one can also affect its history copy.
 
-`SingleContentStore=yes` is optional and defaults to off. Start a full backup to select the new layout; existing sets keep their layout during incremental runs. Contents are shared within one set, not between separate full backups. In this mode, `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` do not apply. Every point remains until its whole set is removed; `KeepBackups` still limits full backup sets. New points omit deleted source files while older points retain them. Interrupted captures do not replace the latest point, though unused content objects can remain after interruption. The X100VI recipe viewer reads the latest recipes directly from this store.
+`SingleContentStore=yes` is the default for new full backups; set it to `no` for plain, browsable backup folders. Contents are shared within one set, not between separate full backups. In this mode, `PointInTimeHistory`, `HardLinks` and `KeepOldVersions` do not apply. Every point remains until its whole set is removed; `KeepBackups` still limits full backup sets. New points omit deleted source files while older points retain them. Interrupted captures do not replace the latest point, though unused content objects can remain after interruption. The X100VI recipe viewer reads the latest recipes directly from this store.
 
 ## Restore and recovery
 

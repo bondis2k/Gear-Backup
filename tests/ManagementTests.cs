@@ -23,7 +23,7 @@ partial class Tests
     static void TestBackupDestination(string root)
     {
         string expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
-        Assert(new Config().BackupFolder == expected, "new configurations use the user profile Backup folder");
+        Assert(new Config { SingleContentStore = false }.BackupFolder == expected, "new configurations use the user profile Backup folder");
         Config loaded = null;
         WithUi(() => loaded = LoadConfig(root));
         Assert(loaded.BackupFolder == expected, "a new INI uses the user profile Backup folder");
@@ -31,7 +31,7 @@ partial class Tests
         WithUi(() => loaded = LoadConfig(root));
         Assert(loaded.BackupFolder == expected, "an empty INI backup location uses the same default");
         string source = Folder(root, "source"); Put(Path.Combine(source, "song.txt"), "SONG");
-        var config = new Config { BackupFolder = Path.Combine(root, "missing", "backups"), SettingsDirectory = root, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "missing", "backups"), SettingsDirectory = root, Preview = false };
         PreparedSource prepared = null;
         OperationResult result = null;
         TestInteraction declined = WithUi(() => {
@@ -65,7 +65,7 @@ partial class Tests
 
     static void TestProfilePreferences(string root)
     {
-        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, PointInTimeHistory = true };
+        var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, PointInTimeHistory = true };
         WithUi(() => {
             SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "BackupFolder", Path.Combine(root, "device-store") }, { "PointInTimeHistory", "no" }, { "KeepBackups", "3" } });
             SaveProfileSettings(global, "profile:Studio", new Dictionary<string, string> { { "KeepBackups", "5" }, { "Verify", "yes" } });
@@ -92,7 +92,7 @@ partial class Tests
     }
     static BackupCatalog ManagementFixture(string root, out Config config)
     {
-        config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false, Thorough = true, PointInTimeHistory = true };
+        config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false, Thorough = true, PointInTimeHistory = true };
         string source = Rooted(Path.Combine(root, "source")); Put(Path.Combine(source, "song.txt"), "AAAA");
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-test");
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
@@ -112,7 +112,7 @@ partial class Tests
     // cleanup that fails part-way still takes out what it already recycled.
     static void TestCleanupChecksums(string root)
     {
-        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false };
         string source = Rooted(Path.Combine(root, "source")), song = Path.Combine(source, "song.txt");
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-test");
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
@@ -241,7 +241,7 @@ partial class Tests
         string card = Rooted(Path.Combine(root, "tracker-card"));
         Put(Path.Combine(card, "trackerConfig"), "EEPROM");
         Put(Path.Combine(card, "Projects", "User", "Jam", "project.mt"), "JAM");
-        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
         WithUi(() => SaveProfileSettings(global, "device:tracker-mini", new Dictionary<string, string> { { "BackupFolder", Path.Combine(root, "tracker-store") } }));
         PreparedSource prepared = null;
         using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())

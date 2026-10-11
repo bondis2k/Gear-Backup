@@ -28,6 +28,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
   `GearBackup.ini`) and opens there next time; it opens centred if that place is no longer on a screen.
 
 ### Changed
+- **Use a single content store** is now on by default for new full backups (`SingleContentStore=yes`). Turn it off in Settings for plain, browsable backup folders. Files are stored by content, so a file with the same name but different content never overwrites another; each restore point records the original names and restores them.
 - Incremental restore points use `HH.mm.ss` names, with collision suffixes to preserve existing points. Capture timestamps are stored independently in metadata and SQLite, keeping latest defaults correct across days and midnight.
 - Pre-1.0 builds support the current settings, metadata, snapshot and SQLite formats only. Removed former product-name aliases, settings-location migrations, history renaming/reuse, device inference from history names and snapshot-based old-version inference.
 - "Profiles" are now called what they are: the main window's field is **Backup name (optional)**, which
@@ -53,6 +54,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ### Fixed
 - Restore picker background reads no longer overwrite the main operation display or leave a stale “Scanning backup” status. Idle/completed operation displays ignore late queued progress.
+- Dark theme: drop-down buttons and scroll bars use Windows' dark look, and the selected row in the backup chooser uses the theme's selection colour instead of Windows blue. The Cleanup tab's **Remove** header is no longer cut off, and Original's grey secondary text is slightly darker for readability. Disabled check boxes and radio buttons (such as Restore's **Remove extra target files**) no longer show near-black text on the dark background.
 - SQLite restore loading validates repeated inventory paths and content objects once per read, avoiding thousands of redundant disk checks across saved runs. Restore rechecks source paths before opening files.
 - Restore checks the target's folders again right before committing files, instead of trusting
   checks cached during the preview. (#51)

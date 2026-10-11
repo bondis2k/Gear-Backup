@@ -78,7 +78,7 @@ Change previews are enabled by default. Point-in-time history (`PointInTimeHisto
 
 The default `PointInTimeHistory=no` avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Enable **Save point-in-time history** in Settings or set `PointInTimeHistory=yes` if you want to restore earlier states. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
 
-For restore points without a second content copy, enable **Use a single content store** in **Settings → Backup** (`SingleContentStore=yes`) and start a full backup. Each distinct file content is stored once within that backup set. Every successful incremental run saves a restore point dated by the backup run, including runs with no changes. Restore or export files through the app; this layout has no browsable file tree. Separate full backups remain independent. This option defaults to off.
+By default new full backups use a single content store (**Settings → Backup → Use a single content store**, `SingleContentStore=yes`); turn it off for plain, browsable backup folders. Each distinct file content is stored once within that backup set. Every successful incremental run saves a restore point dated by the backup run, including runs with no changes. Restore or export files through the app; this layout has no browsable file tree. Separate full backups remain independent.
 
 See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, retention, recovery locations and other options.
 

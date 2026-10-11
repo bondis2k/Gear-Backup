@@ -25,7 +25,7 @@ partial class Tests
         try
         {
             Throws(() => new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false,
-                new Config { Preview = true }, new OperationContext(ui, CancellationToken.None)),
+                new Config { SingleContentStore = false, Preview = true }, new OperationContext(ui, CancellationToken.None)),
                 "restore rejects a child replaced with a junction during review");
             Assert(ui.Plans == 1 && Directory.GetFileSystemEntries(outside).Length == 0,
                 "approved preview never writes through the substituted folder");
@@ -58,7 +58,7 @@ partial class Tests
         };
         OperationResult result;
         using (new OperationContext(ui, CancellationToken.None).Activate())
-            result = RunBackup(source, history, null, false, new Config { Preview = false, MaxNameLength = 0 });
+            result = RunBackup(source, history, null, false, new Config { SingleContentStore = false, Preview = false, MaxNameLength = 0 });
         string stats = Path.Combine(ListBackups(history)[0], "backup-statistics.txt");
         Assert(planted && result.ExitCode == 0, "backup completes with a planted statistics hard link");
         Assert(File.ReadAllText(victim) == "UNRELATED", "statistics replacement preserves the other hard-link name");

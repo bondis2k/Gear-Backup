@@ -20,7 +20,7 @@ partial class Tests
         DateTime oldTime = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(Path.Combine(source, "Songs", "one.txt"), oldTime);
         Directory.CreateDirectory(Path.Combine(source, "Empty"));
-        string history = Path.Combine(HistoriesRoot(new Config { BackupFolder = root }), "profiles", "Single");
+        string history = Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = root }), "profiles", "Single");
         var config = new Config { SingleContentStore = true, Preview = false, PointInTimeHistory = false, HardLinks = false, Verify = true };
         var result = RunBackup(source, history, null, false, config);
         string backup = result.OutputFolder;
@@ -60,7 +60,7 @@ partial class Tests
             "unchanged incremental creates a restore point without copying content or asking to proceed");
         result = new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(new TestInteraction(), CancellationToken.None));
         Assert(result.ExitCode == 0 && BackupDatabase.Read(backup).Files.Exists(e => e.SnapshotId == "current" && e.Result == "ok"), "integrity checks verify stored objects and update logical current-file results");
-        var storage = StorageCatalog.ScanBackupCatalog(new Config { BackupFolder = root }, Path.Combine(root, "no-mirrors"));
+        var storage = StorageCatalog.ScanBackupCatalog(new Config { SingleContentStore = false, BackupFolder = root }, Path.Combine(root, "no-mirrors"));
         Assert(storage.Warnings.Count == 0 && storage.Backups[0].FilesBytes == 0 && storage.Backups[0].ObjectsBytes == 15, "Storage counts physical content once, not logical snapshot copies");
         string archive = BackupZip.ZipBackup(backup);
         using (var zip = new ZipArchive(File.OpenRead(archive), ZipArchiveMode.Read))
@@ -84,6 +84,7 @@ partial class Tests
 
     static void TestSingleContentStoreSafety(string dir)
     {
+        Assert(new Config().SingleContentStore, "new full backups use a single content store by default");
         string root = Folder(dir, "single-safety"), source = Folder(root, "source"), history = Path.Combine(root, "history");
         Put(Path.Combine(source, "one.txt"), "ONE"); Put(Path.Combine(source, "two.txt"), "TWO");
         var config = new Config { SingleContentStore = true, Preview = false };
@@ -107,11 +108,6 @@ partial class Tests
         int count = Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length;
         result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true });
         Assert(result.Title == null && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == count, "preview-only single-store backup is read-only");
-        string regularHistory = Path.Combine(root, "regular");
-        result = RunBackup(source, regularHistory, null, false, new Config { Preview = false });
-        string regular = result.OutputFolder;
-        Throws(() => RunBackup(source, regularHistory, regular, true, config), "switching an existing browsable set requires a new full backup");
-        Assert(File.Exists(Path.Combine(regular, "one.txt")), "existing browsable backup is preserved");
         result = RunBackup(source, history, backup, true, new Config { Preview = false, SingleContentStore = false });
         Assert(result.ExitCode == 0 && !File.Exists(Path.Combine(backup, "one.txt")), "an existing single-store set keeps its layout when preferences change");
         string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");

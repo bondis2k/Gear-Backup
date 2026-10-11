@@ -67,8 +67,8 @@ static class AppSettings
                   "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" },
         YesNo("SingleContentStore", "Single content store", c => c.SingleContentStore, (c, v) => c.SingleContentStore = v,
             "; SingleContentStore: yes = store each distinct file content once and save a restore point for every backup run.\r\n" +
-            "; Restore through the app; there is no separate browsable copy. Start with a full backup.\r\n" +
-            "; Existing incremental backups retain their original storage layout. Default no.\r\n"),
+            "; Restore through the app; there is no separate browsable copy. Set no for plain, browsable backup folders.\r\n" +
+            "; Default yes.\r\n"),
         YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
             "; PointInTimeHistory: yes = save restorable snapshots and a history content store.\r\n" +
             "; no (default) = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
@@ -279,7 +279,7 @@ internal class Config
     public bool Preview = true;
     public bool HardLinks = false;  // share history content with the backup files (NTFS)
     public bool PointInTimeHistory = false; // opt in to snapshots and their content store
-    public bool SingleContentStore = false; // snapshots backed by one immutable content store
+    public bool SingleContentStore = true; // snapshots backed by one immutable content store
     public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
     public string Theme = "original"; // global GUI colour palette
     public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)

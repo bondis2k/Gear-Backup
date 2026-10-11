@@ -200,7 +200,7 @@ partial class Tests
     static Fixture BackedUpCard(string root, bool edited)
     {
         var f = new Fixture { Root = root, Source = Rooted(Path.Combine(root, "card")), History = Path.Combine(root, "history") };
-        f.Config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
+        f.Config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
         Put(Path.Combine(f.Source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(f.Source, "Songs", "removed.m8s"), "REMOVED");
         Put(Path.Combine(f.Source, "Songs", "dated_2026-01-01_120000.m8s"), "REAL DATED SONG");

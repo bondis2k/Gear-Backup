@@ -147,7 +147,7 @@ partial class Tests
         Put(Path.Combine(mirror, "projects", "user", "backups", "ziiamed 1.xy", "0000.xy"), "AUTO BACKUP");
         Put(Path.Combine(mirror, "samples", "user", "kick.wav"), "WAVE");
         string history = Path.Combine(dir, "opxy-history");
-        var config = new Config { BackupFolder = dir, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
         string backup = ListBackups(history)[0];
@@ -200,7 +200,7 @@ partial class Tests
         Put(Path.Combine(card, "Projects", "User", "Other", "project.mt"), "OTHER");
         Put(Path.Combine(card, "Workspace", "project.mt"), "OPEN");
         string history = Path.Combine(dir, "tracker-history");
-        var config = new Config { BackupFolder = dir, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(card, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = tracker });
         string backup = ListBackups(history)[0];
@@ -256,7 +256,7 @@ partial class Tests
             Put(Path.Combine(mirror, "DCIM", "100_FUJI", shot + ".RAF"), "RAW " + shot);
         }
         string history = Path.Combine(dir, "x100vi-history");
-        var config = new Config { BackupFolder = dir, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = camera });
         string backup = ListBackups(history)[0];
@@ -327,7 +327,7 @@ partial class Tests
         string history = Path.Combine(dir, "op1-history");
         var ui = new TestInteraction();
         var context = new OperationContext(ui, CancellationToken.None) { Device = Devices.OP1Field };
-        var config = new Config { BackupFolder = dir, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config, context);
         string backup = ListBackups(history)[0];
         string report = File.ReadAllText(Path.Combine(backup, "backup-statistics.txt"));
@@ -351,15 +351,15 @@ partial class Tests
 
         // Which device a source is: a named Device setting wins, then detection, then the default.
         var other = new DeviceProfile { Id = "other", Name = "Other Synth", SongExtensions = new[] { ".song" }, SongsFolder = "projects" };
-        Assert(DeviceFor(new Config { Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
-        Assert(DeviceFor(new Config(), other) == other && DeviceFor(new Config(), null) == Devices.M8, "auto uses the detected device, else the default");
+        Assert(DeviceFor(new Config { SingleContentStore = false, Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
+        Assert(DeviceFor(new Config { SingleContentStore = false }, other) == other && DeviceFor(new Config { SingleContentStore = false }, null) == Devices.M8, "auto uses the detected device, else the default");
         string trackerCard = Rooted(Path.Combine(dir, "tracker-card-in-reader"));
         Put(Path.Combine(trackerCard, "trackerConfig"), "EEPROM");
-        Assert(DeviceFor(new Config(), null, trackerCard) == Devices.TrackerMini, "a Tracker card in a reader is recognised by its trackerConfig");
-        Assert(DeviceFor(new Config(), Devices.M8, trackerCard) == Devices.M8 && DeviceFor(new Config { Device = "m8" }, null, trackerCard) == Devices.M8,
+        Assert(DeviceFor(new Config { SingleContentStore = false }, null, trackerCard) == Devices.TrackerMini, "a Tracker card in a reader is recognised by its trackerConfig");
+        Assert(DeviceFor(new Config { SingleContentStore = false }, Devices.M8, trackerCard) == Devices.M8 && DeviceFor(new Config { SingleContentStore = false, Device = "m8" }, null, trackerCard) == Devices.M8,
             "detection and the Device setting win over the marker file");
-        Assert(DeviceFor(new Config(), null, Rooted(dir)) == Devices.M8, "a folder without a marker file is the default device");
-        var config = new Config();
+        Assert(DeviceFor(new Config { SingleContentStore = false }, null, Rooted(dir)) == Devices.M8, "a folder without a marker file is the default device");
+        var config = new Config { SingleContentStore = false };
         TestInteraction ui = WithUi(() => { ApplySetting(config, "Device", "M8"); ApplySetting(config, "Device", "toaster"); });
         Assert(config.Device == "m8" && ui.Output.ToString().Contains("Device=toaster isn't valid"), "the Device setting accepts known devices only");
 
@@ -431,7 +431,7 @@ partial class Tests
             Info = new MtpDeviceInfo { InstanceId = @"USB\VID_2367&PID_0102\TEST", FriendlyName = "OP-1" },
             Open = () => { opened++; return device; } };
         Directory.CreateDirectory(mtp.Mirror);
-        var global = new Config { BackupFolder = Folder(dir, "backups"), SettingsDirectory = dir, Preview = false };
+        var global = new Config { SingleContentStore = false, BackupFolder = Folder(dir, "backups"), SettingsDirectory = dir, Preview = false };
         var choice = new SourceChoice { Path = mtp.Mirror, Detected = Devices.OP1Field, Mtp = mtp };
         PreparedSource prepared = null;
         OperationResult first = null, second = null;

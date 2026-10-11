@@ -47,7 +47,8 @@ partial class Tests
         {
             form.Show();
             // This workflow exercises snapshot restore; normal startup leaves history off.
-            ((Config)typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form)).PointInTimeHistory = true;
+            var formConfig = (Config)typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            formConfig.PointInTimeHistory = true; formConfig.SingleContentStore = false; // this workflow checks browsable backup folders
             Assert(form.Text == AppIdentity.Name, "GUI window uses the shared Gear Backup identity");
             using (var about = new AboutDialog())
             {
@@ -85,7 +86,7 @@ partial class Tests
             Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
             moreOptions.PerformClick();
             Assert(!optionalFields.Visible, "optional fields can be collapsed again");
-            using (var configured = new MainForm(true, new Config { SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
+            using (var configured = new MainForm(true, new Config { SingleContentStore = false, SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
             {
                 configured.Show(); Application.DoEvents();
                 ((TabControl)configured.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
@@ -280,7 +281,7 @@ partial class Tests
         }
         string ini = Path.Combine(root, "shared-settings.ini");
         Put(ini, "; keep this comment\nVerify=no\nCustomOption=unchanged\nVerify=no\n");
-        var saved = new Config { BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio", HardLinks = true };
+        var saved = new Config { SingleContentStore = false, BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio", HardLinks = true };
         SaveConfig(saved, ini);
         string text = File.ReadAllText(ini);
         Assert(text.Contains("; keep this comment") && text.Contains("CustomOption=unchanged"), "GUI settings save preserves comments and unrelated keys");
@@ -293,6 +294,7 @@ partial class Tests
         TestSettingsInteraction(root);
         TestGuiThemes(root);
         TestAllWindowThemes(Path.Combine(root, "window-themes"));
+        TestThemeReadability();
         TestGuiProgress();
         TestManagementGui(Path.Combine(root, "management-tools"));
         TestDashboardDeviceFilter();
@@ -343,7 +345,7 @@ partial class Tests
 
     static void TestSettingsInteraction(string root)
     {
-        var config = new Config { HardLinks = true, RecoveryFolder = Path.Combine(root, "recovery") };
+        var config = new Config { SingleContentStore = false, HardLinks = true, RecoveryFolder = Path.Combine(root, "recovery") };
         using (var dialog = new SettingsDialog(config))
         {
             dialog.Show(); Application.DoEvents();
@@ -376,7 +378,7 @@ partial class Tests
     static void TestGuiThemes(string root)
     {
         string settingsPath = Path.Combine(root, "theme-settings"); Directory.CreateDirectory(settingsPath);
-        var config = new Config { BackupFolder = root, SettingsDirectory = settingsPath, SourceFolder = Path.Combine(root, "card") };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, SettingsDirectory = settingsPath, SourceFolder = Path.Combine(root, "card") };
         try
         {
             using (var form = new MainForm(false, config))
@@ -463,13 +465,58 @@ partial class Tests
                 "native caption text matches the selected palette");
     }
 
+    static double ThemeContrast(Color a, Color b)
+    {
+        Func<Color, double> luminance = delegate(Color c) {
+            Func<int, double> channel = delegate(int v) { double s = v / 255.0; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); };
+            return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B);
+        };
+        double x = luminance(a), y = luminance(b);
+        return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+    }
+
+    // Every theme's text colours stay readable on the surfaces they are drawn on.
+    static void TestThemeReadability()
+    {
+        try
+        {
+            foreach (string theme in new[] { "original", "original-dark", "retro" })
+            {
+                GuiTheme.ApplyTheme(theme);
+                foreach (Color surface in new[] { GuiTheme.Background, GuiTheme.Surface })
+                    foreach (Color ink in new[] { GuiTheme.Ink, GuiTheme.Muted, GuiTheme.AccentDark })
+                        Assert(ThemeContrast(ink, surface) >= 4.5, "text is readable in " + theme + ": " + ink.Name + " on " + surface.Name);
+                Assert(ThemeContrast(GuiTheme.PrimaryInk, GuiTheme.Accent) >= 4.5, "primary button text is readable in " + theme);
+            }
+            // A disabled check box keeps readable text in the dark theme (Windows would draw it dark grey on dark).
+            GuiTheme.ApplyTheme("original-dark");
+            using (var panel = new Panel { Size = new Size(260, 30), BackColor = GuiTheme.Surface })
+            using (var box = new CheckBox { Text = "Remove extra target files", AutoSize = true, Enabled = false })
+            {
+                panel.Controls.Add(box); GuiTheme.ApplyTo(panel);
+                panel.CreateControl(); box.CreateControl();
+                using (var bitmap = new Bitmap(box.Width, box.Height))
+                {
+                    box.DrawToBitmap(bitmap, new Rectangle(Point.Empty, box.Size));
+                    double best = 0;
+                    for (int x = 24; x < bitmap.Width; x++)
+                        for (int y = 0; y < bitmap.Height; y++) best = Math.Max(best, ThemeContrast(bitmap.GetPixel(x, y), GuiTheme.Surface));
+                    Assert(best >= 2.0, "disabled check box text stays visible in the dark theme");
+                }
+            }
+            using (var dialog = new SelectionDialog("Choose", new List<string> { "One" }))
+                Assert(dialog.List.DrawMode == DrawMode.OwnerDrawFixed, "choice list draws its selection in the theme's colours");
+        }
+        finally { GuiTheme.ApplyTheme("original"); }
+    }
+
     static void TestAllWindowThemes(string root)
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
         try
         {
             foreach (string initial in new[] { "original", "original-dark", "retro" })
-            using (var owner = new MainForm(true, new Config { Theme = initial }))
+            using (var owner = new MainForm(true, new Config { SingleContentStore = false, Theme = initial }))
             using (var profiles = new ProfileSettingsDialog(owner, config))
             {
                 owner.Show();
@@ -560,7 +607,7 @@ partial class Tests
     // backup settings lists histories by nickname or readable name while keeping the folder name as key.
     static void TestHistoryNamesGui(string root)
     {
-        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
         string histories = HistoriesRoot(config), named = Path.Combine(histories, "profiles", "m8-card-DCE92C2E");
         Directory.CreateDirectory(Path.Combine(named, "2026-10-01"));
         Directory.CreateDirectory(Path.Combine(histories, "2026-09-01"));
@@ -660,8 +707,8 @@ partial class Tests
         catalog.Backups.Add(new CatalogBackup { Profile = "x100vi-settings-1", History = Path.GetDirectoryName(settings), Path = settings,
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.X100VI });
         foreach (bool storageMode in new[] { false, true })
-        using (var owner = new MainForm(true, new Config()))
-        using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog))
+        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
+        using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog))
         {
             window.Show(); Application.DoEvents();
             string where = storageMode ? "Storage" : "Dashboard";
@@ -688,8 +735,8 @@ partial class Tests
                                        new { Profile = "op-xy-ABC", Device = Devices.OPXY }, new { Profile = "Old card", Device = (DeviceProfile)null } })
             catalog.Backups.Add(new CatalogBackup { Profile = history.Profile, History = @"C:\Backups\" + history.Profile,
                 Path = @"C:\Backups\" + history.Profile + @"\2026-10-01", Status = Status.Complete, CheckResult = "OK", Latest = true, Device = history.Device });
-        using (var owner = new MainForm(true, new Config()))
-        using (var dashboard = new CatalogDialog(owner, new Config(), false, catalog))
+        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
+        using (var dashboard = new CatalogDialog(owner, new Config { SingleContentStore = false }, false, catalog))
         {
             dashboard.Show(); Application.DoEvents();
             var filter = (ComboBox)dashboard.Controls.Find("DashboardDevice", true)[0];
@@ -719,8 +766,8 @@ partial class Tests
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.OlderBackup, History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01", Bytes = 100, Folder = true });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Zip, History = @"C:\Backups\op-xy-ABC", Path = @"C:\Backups\op-xy-ABC\2026-10-01.zip", Bytes = 30 });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Mirror, History = @"C:\Mirrors", Path = @"C:\Mirrors\x100vi-SERIAL", Bytes = 500, Folder = true });
-        using (var owner = new MainForm(true, new Config()))
-        using (var storage = new CatalogDialog(owner, new Config(), true, catalog))
+        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
+        using (var storage = new CatalogDialog(owner, new Config { SingleContentStore = false }, true, catalog))
         {
             storage.Show(); Application.DoEvents();
             var filter = (ComboBox)storage.Controls.Find("StorageDevice", true)[0];
@@ -775,10 +822,10 @@ partial class Tests
 
         // A device detected in the main window is where both windows' filters start.
         foreach (bool storageMode in new[] { false, true })
-        using (var owner = new MainForm(true, new Config()))
+        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
         {
             string where = storageMode ? "Storage" : "Dashboard";
-            using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog, Devices.OPXY))
+            using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog, Devices.OPXY))
             {
                 window.Show(); Application.DoEvents();
                 var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
@@ -787,7 +834,7 @@ partial class Tests
                 window.Populate(catalog);
                 Assert((string)filter.SelectedItem == "M8", where + ": after choosing another device, a refresh keeps that choice");
             }
-            using (var window = new CatalogDialog(owner, new Config(), storageMode, catalog, Devices.TrackerMini))
+            using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog, Devices.TrackerMini))
             {
                 window.Show(); Application.DoEvents();
                 var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
@@ -941,7 +988,7 @@ partial class Tests
                 }
             });
             Assert(askedToCreate, "GUI presents the missing-folder creation question");
-            string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { BackupFolder = profileLocation }), "profiles", "Studio"));
+            string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = profileLocation }), "profiles", "Studio"));
             Assert(backup != null && File.Exists(Path.Combine(backup, "song.txt")) && !Directory.Exists(SnapshotRoot(backup)),
                 "GUI backup applies profile location and inherited device history preferences before running");
             Assert(!Directory.Exists(deviceLocation), "profile destination takes priority over the device destination");
@@ -952,7 +999,7 @@ partial class Tests
     static void TestRestoreLocationsGui(string root)
     {
         Directory.CreateDirectory(root);
-        var config = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
         string alternate = Path.Combine(root, "tracker");
         SaveProfileSettings(config, "device:tracker-mini", new Dictionary<string, string> {
             { "BackupFolder", alternate }, { "PointInTimeHistory", "no" }, { "Verify", "yes" }
@@ -960,7 +1007,7 @@ partial class Tests
         string source = Folder(root, "source"), relative = "Projects\\Demo\\take_2026-01-01_120000.wav";
         Put(Path.Combine(source, "Projects", "Demo", "project.mt"), "PROJECT");
         Put(Path.Combine(source, relative), "SAMPLE");
-        string history = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
+        string history = Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = alternate }), "profiles", "Studio");
         new BackupEngine().Run(source, history, null, false, ResolveProfileSettings(config, "tracker-mini", "Studio"),
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini });
         using (var form = new MainForm(true))
@@ -1010,34 +1057,34 @@ partial class Tests
                 form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 2;
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-restore-" + percent + ".png"));
             }
-            using (var form = new SettingsDialog(new Config())) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
-            using (var form = new SettingsDialog(new Config()))
+            using (var form = new SettingsDialog(new Config { SingleContentStore = false })) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
+            using (var form = new SettingsDialog(new Config { SingleContentStore = false }))
             {
                 FindGuiControl<TabControl>(form).SelectedIndex = 3;
                 CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + percent + ".png"));
             }
-            using (var form = new MainForm(true, new Config { Theme = "original" }))
+            using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = "original" }))
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-original-" + percent + ".png"));
             GuiTheme.ApplyTheme("retro");
             foreach (string theme in new[] { "original", "original-dark" })
             {
-                using (var form = new MainForm(true, new Config { Theme = theme }))
+                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-" + theme + "-" + percent + ".png"));
-                using (var form = new MainForm(true, new Config { Theme = theme }))
+                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
                 {
                     form.ShowDevice(Devices.OP1Field, "MTP");
                     form.ShowDeviceInformation(DeviceInformation.Read(new SourceChoice { Mtp = new MtpSource { Device = Devices.OP1Field } }));
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + theme + "-" + percent + ".png"));
                 }
-                using (var form = new MainForm(true, new Config { Theme = theme }))
+                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
                 {
                     form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
                     ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + theme + "-" + percent + ".png"));
                 }
-                using (var form = new SettingsDialog(new Config { Theme = theme }))
+                using (var form = new SettingsDialog(new Config { SingleContentStore = false, Theme = theme }))
                     CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + theme + "-" + percent + ".png"));
-                using (var form = new SettingsDialog(new Config { Theme = theme }))
+                using (var form = new SettingsDialog(new Config { SingleContentStore = false, Theme = theme }))
                 {
                     FindGuiControl<TabControl>(form).SelectedIndex = 3;
                     CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + theme + "-" + percent + ".png"));

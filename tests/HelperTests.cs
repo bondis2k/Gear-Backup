@@ -107,7 +107,7 @@ partial class Tests
         Directory.CreateDirectory(Path.Combine(backup, ".m8backup"));
         Assert(AppIdentity.MetadataRoot(backup) == Path.Combine(backup, ".gearbackup"), "only current metadata paths are used");
         string old = Folder(root, "M8 Backups");
-        Assert(HistoriesRoot(new Config { BackupFolder = root }) == Path.Combine(root, "Gear Backups"), "former backup roots are ignored");
+        Assert(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = root }) == Path.Combine(root, "Gear Backups"), "former backup roots are ignored");
         string manifest = Path.Combine(root, "former.manifest");
         Put(manifest, "M8SNAPSHOT\t1\n");
         Throws(() => ReadSnapshot(backup, manifest), "former snapshot headers are rejected");
@@ -306,12 +306,12 @@ partial class Tests
     static void TestSettings(string dir)
     {
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
-        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
+        var saved = new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
             MaxNameLength = 40, Eject = EjectMode.Ask, KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
             SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, PointInTimeHistory = false, Theme = "original", Zip = true };
         string ini = Path.Combine(dir, "roundtrip.ini");
         WithUi(() => SaveConfig(saved, ini));
-        var loaded = new Config();
+        var loaded = new Config { SingleContentStore = false };
         WithUi(() => {
             foreach (string line in File.ReadAllLines(ini))
             {
@@ -325,7 +325,7 @@ partial class Tests
         Assert(!loaded.Zip && !File.ReadAllText(ini).Contains("Zip="), "the zip choice isn't saved");
 
         // Invalid values warn and keep the default.
-        var config = new Config();
+        var config = new Config { SingleContentStore = false };
         TestInteraction ui = WithUi(() => {
             ApplySetting(config, "Mode", "sometimes");
             ApplySetting(config, "KeepBackups", "-1");
@@ -354,7 +354,7 @@ partial class Tests
             Assert(written.Split(new[] { "\n" + setting.Key + "=" }, StringSplitOptions.None).Length == 2, "a new INI documents " + setting.Key + " once");
         Assert(written.StartsWith("; " + AppIdentity.Name + " settings") && written.Contains("\nMaxNameLength=64\r\n") && written.Contains("\nDevice=auto\r\n"),
             "a new INI starts with its title and lists defaults");
-        var global = new Config { BackupFolder = dir, SettingsDirectory = dir };
+        var global = new Config { SingleContentStore = false, BackupFolder = dir, SettingsDirectory = dir };
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "KeepBackups", "-1" } }), "invalid preference values aren't saved");
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "Eject", "maybe" } }), "list preferences only take their values");
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "Mode", "full" } }), "settings that aren't preferences can't be overridden");
@@ -415,7 +415,7 @@ partial class Tests
     {
         string backup = Path.Combine(dir, "resume-backup");
         Directory.CreateDirectory(backup);
-        var config = new Config();
+        var config = new Config { SingleContentStore = false };
         bool? answer = true;
         TestInteraction ui = WithUi(() => { answer = ConfirmResume(backup, true, config); });
         Assert(answer == true && ui.Questions.Count == 0, "no question when the latest backup has no unfinished status");
@@ -433,9 +433,9 @@ partial class Tests
         Assert(ConfirmResume(null, true, config) == true, "with no backup yet, nothing is asked");
         Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Unknown, "missing status metadata is unknown");
 
-        var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
+        var paths = new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "card-inside") };
         Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "Gear Backups", "card")), "a source inside the backup location is rejected");
-        Throws(() => HistoryFor(new Config { BackupFolder = Path.Combine(dir, "outer", "inner") }, Path.Combine(dir, "outer")),
+        Throws(() => HistoryFor(new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "outer", "inner") }, Path.Combine(dir, "outer")),
             "a backup location inside the source is rejected");
     }
 
@@ -444,7 +444,7 @@ partial class Tests
         string source = Rooted(Path.Combine(dir, "zipfail-card"));
         Put(Path.Combine(source, "Songs", "a.m8s"), "A");
         string history = Path.Combine(dir, "zipfail-history");
-        var config = new Config { BackupFolder = dir, Preview = false, Zip = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false, Zip = true };
 
         // ZipPathFor never overwrites an existing zip.
         string folder = Path.Combine(history, "2026-10-10");
@@ -553,7 +553,7 @@ partial class Tests
         foreach (var pair in expected)
             Assert(HistoryNames.AutomaticName(pair.Key) == pair.Value, "automatic name of " + pair.Key + ": " + HistoryNames.AutomaticName(pair.Key));
 
-        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-card-DCE92C2E");
         Directory.CreateDirectory(Path.Combine(history, "2026-10-01"));
         Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E" && HistoryNames.Nickname(history) == null, "without a nickname the automatic name is shown");

@@ -103,7 +103,7 @@ partial class Tests
         }
         string plain = Folder(dir, "restore-current-only"), plainSource = Folder(plain, "source");
         Put(Path.Combine(plainSource, "one.txt"), "ORIGINAL");
-        var plainConfig = new Config { BackupFolder = plain, Preview = false };
+        var plainConfig = new Config { SingleContentStore = false, BackupFolder = plain, Preview = false };
         string plainHistory = Path.Combine(Session.HistoriesRoot(plainConfig), "profiles", "Plain");
         string first = RunBackup(plainSource, plainHistory, null, false, plainConfig).OutputFolder;
         string second = RunBackup(plainSource, plainHistory, first, false, plainConfig).OutputFolder;
@@ -139,7 +139,7 @@ partial class Tests
     {
         string root = Folder(dir, "clock-point-names"), source = PathSafety.Rooted(Folder(root, "source"));
         Put(Path.Combine(source, "one.m8s"), "SONG");
-        var config = new Config { BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
         string backup = RunBackup(source, Path.Combine(Session.HistoriesRoot(config), "profiles", "Clock"), null, false, config).OutputFolder;
         string full = Path.GetFileNameWithoutExtension(Directory.GetFiles(SnapshotRoot(backup), "*.manifest")[0]);
         var started = new DateTime(2026, 10, 1, 23, 59, 58, DateTimeKind.Local);
