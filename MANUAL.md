@@ -123,7 +123,9 @@ With **Also save as zip**, a successful full backup additionally creates a ZIP b
 4. Click **Create ZIP** and choose the ZIP file's save location outside the source folder. The suggested name can be changed in the save window.
 5. Review the contents and wait for **Complete**. Replacing an existing archive requires confirmation.
 
-This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. A root-level `checksums.sha256` lists the SHA-256 hash and ZIP-relative path of every backed-up file in sha256sum format. Hashes are always included, even with verification disabled; the manifest excludes itself and folders. The source must not contain a root-level file or folder named `checksums.sha256`. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
+This creates one ZIP containing the source files and empty folders, using the normal backup exclusions. A root-level `checksums.sha256` lists the SHA-256 hash and ZIP-relative path of every backed-up file and `gearbackup-info.txt` in sha256sum format. Hashes are always included, even with verification disabled; the manifest excludes itself and folders. The source must not contain a root-level file or folder named `checksums.sha256` or `gearbackup-info.txt`. It does not create a full backup set or point-in-time history; extract it with Windows or another ZIP tool. MTP sources are refreshed through their PC mirror first. **Preview** asks for a save location and shows the contents without creating the archive. **Verify copied files** also verifies archived content when enabled. Cancellation or a failure removes the temporary archive and leaves any existing destination archive intact.
+
+`gearbackup-info.txt` identifies the backup device profile and source name, connection type, available device name/identifier and volume details, profile name, application version, UTC backup time, and source file/folder counts. Device identifiers are recorded when reported by detection; a manually chosen folder does not establish a physical device's identity. **Backup content size (bytes)** counts the backed-up source files. **Total extracted size (bytes)** includes every uncompressed file in the ZIP, including the information file and checksum manifest; it excludes filesystem allocation overhead.
 
 The CLI supports the same operation with `--zip-archive`. Supply `--output` with an existing folder or a `.zip` file path, or omit it to be asked where to save; a blank answer cancels. When selecting a folder, `--name` supplies the filename, otherwise the device name plus date/time is used. An explicit `.zip` output path takes precedence over `--name`. The destination's parent folder must already exist. `--profile` still selects device/profile preferences without creating a backup history. `--preview` shows the plan without writing the archive.
 
@@ -182,6 +184,18 @@ The default is a **merge**: files in the selected point are restored as needed, 
 Enable **Keep recovery copies before restoring** under Settings → Restore if you want PC copies of files about to be overwritten or removed. Recovery is off by default. An enabled recovery copy that fails stops the restore before the associated target changes.
 
 MTP device restores go to a PC folder; Gear Backup does not upload to the device. Restore an OP-1 Field or OP-XY backup to a folder and transfer the desired files with Explorer. The X100VI card warning explains why returning old photos to a camera card may be undesirable.
+
+### Restore a ZIP archive
+
+1. On **Device**, detect the destination device.
+2. On **Restore**, select **Restore ZIP archive**. The file picker opens; choose a standalone ZIP created by Gear Backup. **Browse…** lets you choose another archive later.
+3. The app reads `gearbackup-info.txt` and displays its device type, backup time, file count and extracted size. Restore is enabled only when the detected device type matches. Archives missing the information file or checksum manifest are rejected.
+4. Leave **Restore destination** blank to use the detected USB drive/card, or select a PC folder. For MTP devices you must choose a PC folder and transfer restored files manually; direct MTP upload is not supported.
+5. Click **Preview** or **Restore**. The app checks target and temporary extraction space, verifies every archived file against `checksums.sha256`, then shows the restore plan. Device identity is checked again before copying.
+
+ZIP restore merges the archive's files and empty folders into the destination. Extra target files remain, and the two generated metadata files are not restored. Existing overwrite choices, comparison settings and optional recovery copies still apply. Checksum verification of ZIP content is mandatory even when **Verify copied files** is off. A preview may extract files into temporary PC storage for verification, then removes them; it does not change the target. Temporary extraction files are also removed after completion, cancellation or failure. Completed target copies remain if copying is interrupted.
+
+Free-space checks use the ZIP's validated file sizes and include temporary replacement space. If the extraction folder and destination share a drive, their simultaneous space requirements are combined. This check measures the PC folder's drive when restoring for an MTP device; it cannot measure the MTP device's available capacity.
 
 ### Restore individual files or folders
 
@@ -380,7 +394,7 @@ Source, backup, and recovery locations must not overlap in unsafe ways. Junction
 
 ## Building and testing
 
-For source builds, install **Visual Studio Build Tools** with **.NET desktop build tools**. The shared compiler script selects a supported C# compiler (C# 7.3); no NuGet packages or .NET SDK are required for the app. **PowerShell 7** is required for HTML manual generation. Packaging also requires the **Inno Setup** compiler.
+For source builds, install **Visual Studio Build Tools** with **.NET desktop build tools**. The shared compiler script selects a supported C# compiler (C# 7.3); no NuGet packages or .NET SDK are required for the app. **PowerShell 7** is required for HTML manual generation. The GUI also needs the **Rust** toolchain (https://rustup.rs, default settings) to build `m8_reader.dll`, the M8 song reader in `native/m8-reader`; `build\build-native.ps1` builds it, and `-Test` runs its tests. Packaging also requires the **Inno Setup** compiler.
 
 From the repository root:
 

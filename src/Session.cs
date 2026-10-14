@@ -80,7 +80,7 @@ static class Session
         using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
         {
             string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
-            return ArchiveBackup.Run(source, destination, prepared.Config);
+            return ArchiveBackup.Run(source, destination, prepared.Config, prepared.Source);
         }
     }
 

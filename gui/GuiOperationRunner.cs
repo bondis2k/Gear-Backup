@@ -16,7 +16,7 @@ using static Workflow;
 using static MtpMirror;
 
 // Shared operations offered by the Backup and Restore tabs.
-internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings, ZipArchive }
+internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings, ZipArchive, RestoreZip }
 
 // Owns the worker lifetime and operation orchestration; the form owns display.
 internal sealed class GuiOperationRunner
@@ -25,6 +25,7 @@ internal sealed class GuiOperationRunner
     CancellationTokenSource cancellation;
     // The last drive found by detection, so a source typed as that same drive can still be ejected.
     SourceChoice detectedDrive;
+    SourceChoice detectedSource;
     public GuiOperationRunner(MainForm owner) { form = owner; }
     public bool IsBusy { get { return cancellation != null; } }
     public bool CancellationRequested { get { return cancellation != null && cancellation.IsCancellationRequested; } }
@@ -52,6 +53,7 @@ internal sealed class GuiOperationRunner
     {
         string information = DeviceInformation.Read(found);
         detectedDrive = found != null && found.Mtp == null ? found : null;
+        detectedSource = found;
         form.OnUi(delegate {
             form.SetDetectedSource(found != null && found.Mtp == null ? found.Path : "");
             form.SetBackupSetSource(found);
@@ -79,7 +81,7 @@ internal sealed class GuiOperationRunner
 
     public void Run(Config options, GuiOperation operation, bool previewOnly)
     {
-        SourceChoice known = detectedDrive;
+        SourceChoice known = operation == GuiOperation.RestoreZip ? detectedSource : detectedDrive;
         RunWorker(delegate(OperationContext context) {
             context.OverallProgressOnly = operation == GuiOperation.FullBackup || operation == GuiOperation.ZipArchive;
             return Execute(options, operation, known, context);
@@ -88,6 +90,23 @@ internal sealed class GuiOperationRunner
 
     OperationResult Execute(Config options, GuiOperation operation, SourceChoice known, OperationContext context)
     {
+        if (operation == GuiOperation.RestoreZip)
+        {
+            if (known == null || known.Detected == null) throw new IOException("Detect the destination device before restoring a ZIP archive.");
+            string target = options.SourceFolder;
+            if (string.IsNullOrEmpty(target))
+            {
+                if (known.Mtp != null) throw new IOException("Choose a PC restore folder for this MTP device; transfer files back manually.");
+                target = known.Path;
+            }
+            context.Device = known.Detected;
+            Config effective = ProfileSettings.ResolveSourceSettings(options, target);
+            var restoredZip = ZipRestore.Run(options.RestoreArchive, known, target, effective,
+                delegate { form.ValidateArchiveRestoreDevice(known); });
+            if (known.Mtp == null && Rooted(known.Path) == Rooted(target))
+                EjectIfWanted(new PreparedSource { Source = known, Path = target, Device = known.Detected, Config = effective }, restoredZip, context);
+            return restoredZip;
+        }
         if (operation == GuiOperation.CameraSettings)
         {
             OperationResult settingsResult = RunFujiSettingsBackup(options);

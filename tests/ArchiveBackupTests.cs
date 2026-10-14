@@ -25,7 +25,7 @@ partial class Tests
             "archive backup publishes only a ZIP without creating a history or full backup folder");
         using (var zip = new ZipArchive(File.OpenRead(output), ZipArchiveMode.Read))
         {
-            Assert(zip.Entries.Count == 6 && zip.GetEntry("Empty/") != null && zip.GetEntry("Thumbs.db") == null,
+            Assert(zip.Entries.Count == 7 && zip.GetEntry("Empty/") != null && zip.GetEntry("Thumbs.db") == null,
                 "archive includes files and empty folders with normal backup exclusions");
             using (var reader = new StreamReader(zip.GetEntry("Songs/one.m8s").Open()))
                 Assert(reader.ReadToEnd() == "ARCHIVE SONG", "ZIP entries preserve the source contents");
@@ -60,14 +60,35 @@ partial class Tests
             "destination races preserve the other file and clean incomplete output");
         config.Verify = false;
         Put(Path.Combine(source, "Samples", "empty.wav"), "");
+        Put(Path.Combine(source, "æøå.txt"), "Unicode content");
         string uncheckedZip = Path.Combine(root, "unchecked.zip");
         WithUi(() => ArchiveBackup.Run(source, uncheckedZip, config));
-        using (var zip = new ZipArchive(File.OpenRead(uncheckedZip), ZipArchiveMode.Read)) AssertArchiveManifest(zip, 3);
+        using (var zip = new ZipArchive(File.OpenRead(uncheckedZip), ZipArchiveMode.Read)) AssertArchiveManifest(zip, 4);
         string emptySource = Folder(root, "empty-source"), emptyZip = Path.Combine(root, "empty.zip");
         WithUi(() => ArchiveBackup.Run(emptySource, emptyZip, config));
         using (var zip = new ZipArchive(File.OpenRead(emptyZip), ZipArchiveMode.Read)) AssertArchiveManifest(zip, 0);
         Put(Path.Combine(source, "CHECKSUMS.SHA256"), "USER CONTENT");
         Throws(() => WithUi(() => ArchiveBackup.Run(source, uncheckedZip, config)), "source manifest name collision is rejected without silently replacing user content");
+        File.Delete(Path.Combine(source, "CHECKSUMS.SHA256"));
+        Put(Path.Combine(source, "GEARBACKUP-INFO.TXT"), "USER CONTENT");
+        Throws(() => WithUi(() => ArchiveBackup.Run(source, uncheckedZip, config)), "source identity metadata name collision is rejected without replacing user content");
+        File.Delete(Path.Combine(source, "GEARBACKUP-INFO.TXT"));
+        var choice = new SourceChoice { Detected = Devices.OP1Field, Mtp = new MtpSource {
+            Info = new MtpDeviceInfo { FriendlyName = "OP-1 Field · Æ", InstanceId = "USB\\TEST\\SERIAL-123" } } };
+        string identifiedZip = Path.Combine(root, "identified.zip");
+        WithUi(() => {
+            using (OperationContext.Current.UseDevice(Devices.OP1Field)) ArchiveBackup.Run(source, identifiedZip, config, choice);
+        });
+        using (var zip = new ZipArchive(File.OpenRead(identifiedZip), ZipArchiveMode.Read))
+        {
+            AssertArchiveManifest(zip, 4);
+            using (var reader = new StreamReader(zip.GetEntry(ArchiveMetadata.FileName).Open()))
+            {
+                string info = reader.ReadToEnd();
+                Assert(info.Contains("Device name: OP-1 Field · Æ") && info.Contains("Device identifier: SERIAL-123") &&
+                    info.Contains("Connection: MTP") && info.Contains("Backup device profile: " + Devices.OP1Field.Name), "metadata identifies the original MTP device rather than the mirror's PC drive");
+            }
+        }
     }
 
     static void AssertArchiveManifest(ZipArchive zip, int expectedFiles)
@@ -91,7 +112,21 @@ partial class Tests
                 count++;
             }
         }
-        Assert(count == expectedFiles, "manifest covers every source file, including empty files, without hashing itself or folders");
+        Assert(count == expectedFiles + 1, "manifest covers every source file and the identity report, without hashing itself or folders");
+        long extracted = 0, content = 0;
+        foreach (var entry in zip.Entries)
+        {
+            extracted += entry.Length;
+            if (entry.FullName != ArchiveMetadata.FileName && entry.FullName != Checksums.ChecksumFileName) content += entry.Length;
+        }
+        using (var reader = new StreamReader(zip.GetEntry(ArchiveMetadata.FileName).Open()))
+        {
+            string info = reader.ReadToEnd();
+            Assert(info.Contains("Total extracted size (bytes): " + extracted + "\n"), "report extracted size matches all uncompressed ZIP entries, including metadata");
+            Assert(info.Contains("Backup content size (bytes): " + content + "\n") && info.Contains("Source files: " + expectedFiles + "\n"), "report content size and count include only source files");
+            Assert(info.Contains("Backup taken (UTC): ") && info.Contains("Application version: " + AppIdentity.Version) &&
+                info.Contains("Backup device profile: "), "report contains device profile, application version and capture time");
+        }
     }
 
     static void TestCliArchive(string root)

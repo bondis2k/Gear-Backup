@@ -290,6 +290,7 @@ internal class Config
     internal string IncrementalBackupName { get; set; }
     internal string IncrementalBackup { get; set; }
     internal RestoreRequest RestoreSelection { get; set; }
+    internal string RestoreArchive { get; set; }
     internal string SettingsDirectory { get; set; }
 }
 

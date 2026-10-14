@@ -113,7 +113,7 @@ internal sealed partial class MainForm : Form
         about.Click += delegate { using (var dialog = new AboutDialog()) dialog.ShowDialog(this); };
         help.Click += delegate { OpenManual(); };
         source.TextChanged += delegate { backupSetSource = null; ShowDevice(null); RefreshDestinationSummary(); RefreshBackupSets(); };
-        restoreDestination.TextChanged += delegate { RefreshDestinationSummary(); };
+        restoreDestination.TextChanged += delegate { RefreshDestinationSummary(); RefreshRestoreActionState(); };
         backupFolder.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); RefreshRestoreBackups(); };
         profile.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); };
         optionsToggle.Click += delegate { SetOptionsExpanded(!optionsExpanded); };
@@ -207,11 +207,13 @@ internal sealed partial class MainForm : Form
         actions.Controls.Add(BuildOperationSelectors(), 0, 0);
         actions.Controls.Add(BuildBackupSetField(), 1, 0);
         actions.Controls.Add(BuildRestoreBackupField(), 1, 0);
+        actions.Controls.Add(BuildArchiveRestoreField(), 1, 0);
         preview.Anchor = start.Anchor = AnchorStyles.Bottom;
         actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0);
         cancel.Enabled = false; cancel.Visible = false;
         inputLayout.Controls.Add(actions, 0, 0);
         inputLayout.Controls.Add(BuildRestoreDetails(), 0, 1);
+        inputLayout.Controls.Add(BuildArchiveRestoreDetails(), 0, 1);
         inputLayout.Controls.Add(destinationSummary, 0, 2);
         optionsToggle.Name = "ToggleBackupOptions"; optionsToggle.Margin = new Padding(0, 4, 0, 4);
         inputLayout.Controls.Add(optionsToggle, 0, 3);
@@ -267,8 +269,8 @@ internal sealed partial class MainForm : Form
         var browse = GuiTheme.Button("Browse…", false); browse.MinimumSize = new Size(110, 36);
         fields.Controls.Add(browse, 1, row + 1);
         browse.AccessibleName = destination ? "Browse backup location" : "Browse source folder";
-        browse.Click += delegate { BrowseFolder(this, text == source && Selected == GuiOperation.Restore ? restoreDestination : text, destination || Selected == GuiOperation.Restore,
-            destination ? "Choose the backup location" : Selected == GuiOperation.Restore ? "Choose the restore destination" : "Choose the card or source folder"); };
+        browse.Click += delegate { BrowseFolder(this, text == source && Restoring ? restoreDestination : text, destination || Restoring,
+            destination ? "Choose the backup location" : Restoring ? "Choose the restore destination" : "Choose the card or source folder"); };
         return browse;
     }
 
@@ -330,11 +332,16 @@ internal sealed partial class MainForm : Form
         copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
             ? DefaultBackupFolder() : ExpandPath(backupFolder.Text);
         copy.SourceFolder = forOperation && (Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings) ? "" :
-            ExpandPath(forOperation && Selected == GuiOperation.Restore ? restoreDestination.Text : source.Text);
+            ExpandPath(forOperation && Restoring ? restoreDestination.Text : source.Text);
         copy.Profile = profile.Text.Trim();
         copy.Zip = zip.Checked && ZipApplies;
         if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
         if (forOperation && Selected == GuiOperation.Restore) copy.RestoreSelection = CaptureRestoreSelection();
+        if (forOperation && Selected == GuiOperation.RestoreZip)
+        {
+            if (!ArchiveRestoreReady) throw new IOException("Choose a valid ZIP archive and detect a matching destination device.");
+            copy.RestoreArchive = restoreArchive.Text;
+        }
         if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
         if (forOperation && Selected == GuiOperation.IncrementalBackup)
         {
@@ -349,7 +356,7 @@ internal sealed partial class MainForm : Form
     {
         RefreshBackupSetField();
         RefreshRestoreControls();
-        bool checking = Selected == GuiOperation.Check, restoring = Selected == GuiOperation.Restore, cameraSettings = Selected == GuiOperation.CameraSettings;
+        bool checking = Selected == GuiOperation.Check, restoring = Restoring, cameraSettings = Selected == GuiOperation.CameraSettings;
         sourceCaption.Text = cameraSettings ? "X100VI · USB RAW CONV./BACKUP RESTORE · C1–C7 and shooting settings" :
             checking ? "Source not needed · select backups from the backup location" :
             restoring ? "Restore destination · folder or connected card" : "Source folder · leave blank to detect a device";
@@ -367,7 +374,7 @@ internal sealed partial class MainForm : Form
         foreach (Control control in optionalFields.Controls)
         {
             int row = optionalFields.GetRow(control);
-            if (row == 2 || row == 3) control.Visible = Selected != GuiOperation.ZipArchive;
+            if (row == 2 || row == 3) control.Visible = Selected != GuiOperation.ZipArchive && Selected != GuiOperation.RestoreZip;
         }
         sourceBrowse.Visible = !checking;
         RefreshSourceField(restoring);
@@ -375,7 +382,8 @@ internal sealed partial class MainForm : Form
         else if (!checking) SetOptionsExpanded(backupOptionsExpanded);
         RefreshDestinationSummary();
         if (!elapsed.IsRunning && status.Text == "Ready")
-            detail.Text = restoring ? "Choose a backup and a restore folder. Detect a device to filter the backups." :
+            detail.Text = Selected == GuiOperation.RestoreZip ? "Choose a ZIP archive and detect its matching device. MTP restores use a PC folder." :
+                restoring ? "Choose a backup and a restore folder. Detect a device to filter the backups." :
                 checking ? "Check saved backups without connecting a device." :
                 cameraSettings ? "Connect X100VI in settings mode, then Back up." :
                 Selected == GuiOperation.ZipArchive ? "Create a full ZIP archive. You will choose where to save it." :
@@ -384,7 +392,7 @@ internal sealed partial class MainForm : Form
     }
     void SetOptionsExpanded(bool expanded)
     {
-        if (Selected != GuiOperation.Restore && Selected != GuiOperation.Check) backupOptionsExpanded = expanded;
+        if (!Restoring && Selected != GuiOperation.Check) backupOptionsExpanded = expanded;
         optionsExpanded = expanded;
         optionalFields.Visible = expanded;
         optionsToggle.Text = expanded ? "Fewer options ▴" : "More options ▾";
@@ -405,12 +413,18 @@ internal sealed partial class MainForm : Form
         }
         catch (Exception) { /* Keep partially edited paths visible; validation happens when starting. */ }
         // A source folder set in More options replaces device detection, so it's shown even while collapsed.
-        string sourceFolder = (Selected == GuiOperation.Restore ? restoreDestination : source).Text.Trim();
+        string sourceFolder = (Restoring ? restoreDestination : source).Text.Trim();
         string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
-            : (Selected == GuiOperation.Restore ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
+            : (Restoring ? "Restore to: " : "Source: ") + sourceFolder + "   ·   ";
         if (Selected == GuiOperation.ZipArchive)
         {
             destinationSummary.Text = sourcePart + "Choose the ZIP save location when you click Create ZIP or Preview.";
+            hints.SetToolTip(destinationSummary, destinationSummary.Text);
+            return;
+        }
+        if (Selected == GuiOperation.RestoreZip)
+        {
+            destinationSummary.Text = sourcePart + "A matching detected device is required. Leave the destination blank to use its USB drive; MTP requires a PC folder.";
             hints.SetToolTip(destinationSummary, destinationSummary.Text);
             return;
         }
@@ -425,6 +439,7 @@ internal sealed partial class MainForm : Form
         finally { synchronizingNavigation = previous; }
     }
     GuiOperation Selected { get { return selectedOperation; } }
+    bool Restoring { get { return Selected == GuiOperation.Restore || Selected == GuiOperation.RestoreZip; } }
     // A zip is made of a full backup, including a camera-settings snapshot.
     bool ZipApplies { get { return Selected == GuiOperation.FullBackup || Selected == GuiOperation.CameraSettings; } }
     void RefreshProgressMetrics()
@@ -513,8 +528,9 @@ internal sealed partial class MainForm : Form
     public void ShowDevice(DeviceProfile device, string mode = null, bool cameraSettingsMode = false)
     {
         displayedDevice = device;
+        UpdateArchiveRestoreNotice(); RefreshRestoreActionState();
         restoreContextKey = null;
-        RefreshRestoreBackups();
+        if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();
         UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);
         deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also back up a local folder or restore saved files without connecting a device." :
             "Click Detect device to refresh storage and connection details.";
@@ -569,7 +585,7 @@ internal sealed partial class MainForm : Form
             result.Counts.Copied, result.Counts.Unchanged, result.Counts.Removed, result.Counts.Failed);
         counts.Visible = result.Counts != null;
         outputFolder = previewOnly ? null : result.OutputFolder;
-        openFolder.Text = Selected == GuiOperation.Restore ? "Open restore folder" : Selected == GuiOperation.ZipArchive ? "Open archive folder" : "Open backup folder";
+        openFolder.Text = Restoring ? "Open restore folder" : Selected == GuiOperation.ZipArchive ? "Open archive folder" : "Open backup folder";
         openFolder.Visible = !string.IsNullOrEmpty(outputFolder) && Directory.Exists(outputFolder);
         metrics.Text = "Elapsed " + FormatTime(result.Elapsed > TimeSpan.Zero ? result.Elapsed : elapsed.Elapsed);
         metrics.Visible = true;

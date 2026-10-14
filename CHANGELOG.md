@@ -7,6 +7,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- The Restore tab supports standalone ZIP archives, with a file picker, device-type matching, mandatory checksum verification, validated extracted sizes, target/temporary-space checks, merge restore and existing recovery preferences. MTP restores use a PC folder for manual transfer.
+- Standalone ZIP backups include `gearbackup-info.txt` identifying the source device and recording backup details, source-content size and exact total extracted size, with checksum coverage for the information file.
 - The CLI supports standalone ZIP backups with `--zip-archive`, an optional output file/folder and suggested filename, using the same archive engine as the GUI.
 - Standalone ZIP archives include `checksums.sha256` with hashes of all backed-up files, computed while archiving regardless of the verification setting.
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
