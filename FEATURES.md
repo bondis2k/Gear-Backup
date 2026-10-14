@@ -9,6 +9,7 @@ Gear Backup is a Windows application for backing up music gear, camera content, 
 | Full and incremental file backups | Yes | Yes |
 | Standalone ZIP archive backup | Yes | Yes, with `--zip-archive` |
 | Restore files and saved snapshots | Yes | Yes |
+| Restore a standalone ZIP with device matching | Yes | — |
 | Check backup integrity | Yes | Yes |
 | Capture X100VI recipes and shooting settings | Yes | Yes |
 | Preview backup and restore plans | Yes | Yes |
@@ -50,6 +51,8 @@ MTP transfers first refresh a local PC mirror, downloading new or changed conten
 
 Incremental previews list actions rather than skipped files. If there are no new or changed files to copy, the normal run skips the proceed prompt. Full-backup progress suppresses individual file paths.
 
+Standalone ZIP archives include `gearbackup-info.txt` with the device profile, source name, connection type, available device identifiers, backup time, app version and file/folder counts. It records source-content bytes and the exact total extracted bytes, including both generated metadata files but excluding filesystem allocation overhead. The information file is covered by `checksums.sha256`. Both metadata filenames are reserved at the source root.
+
 ## History and storage choices
 
 Point-in-time history records the files and folders present during each backup, so a saved state can be selected later. Identical content is shared within a backup folder's history store.
@@ -67,9 +70,11 @@ Turning history off preserves existing snapshots. Dated old versions, separate f
 
 ## Restore and recovery
 
-The GUI Restore tab offers **Restore full backup** and **Restore individual files**. Without a detected device it lists all available backups, labelled by device type, across configured backup locations. After detection it lists only matching backups. Both full and individual restores can recover files to a PC folder without the original device. SQLite supplies the file/folder browser and saved-run membership; missing, stale or damaged databases fall back to checksum lists and manifests. The most recently successful backup set and its newest saved run are selected by default. Saved full and incremental runs are labelled by their capture time; older runs without type metadata are labelled Saved run. Backups without retained history offer their latest files only.
+The GUI Restore tab offers **Restore full backup**, **Restore individual files** and **Restore ZIP archive**. Without a detected device it lists all available backups, labelled by device type, across configured backup locations. After detection it lists only matching backups. Both full and individual restores can recover files to a PC folder without the original device. SQLite supplies the file/folder browser and saved-run membership; missing, stale or damaged databases fall back to checksum lists and manifests. The most recently successful backup set and its newest saved run are selected by default. Saved full and incremental runs are labelled by their capture time; older runs without type metadata are labelled Saved run. Backups without retained history offer their latest files only.
 
 **Choose files…** opens a checked folder/file tree for the selected backup and point. Checking a folder includes its subtree and empty folders; unchecking a child retains the other checked content. Changing the backup or point clears the file selection. Full restore merges by default; **Remove extra target files** enables exact restore for complete saved points and still requires removal confirmation. The operation rechecks device match, allowed backup location and selected inventory before touching the target. The CLI keeps its device-specific choices for bundles, songs with referenced samples and Tracker Mini project folders; retained old versions can be restored under their original or dated names.
+
+**Restore ZIP archive** opens a ZIP picker, reads `gearbackup-info.txt`, and requires a matching detected device type. It validates entry paths, metadata, inventory sizes and checksum coverage, verifies every file before target changes, and checks device/PC destination and temporary extraction space. Files and empty folders are merged; generated metadata is excluded. USB drive/card restores can use the detected destination directly. MTP restores require a PC folder for manual transfer, and the device's own capacity cannot be checked. Preview leaves target files unchanged; temporary extraction files are cleaned up. Restore preferences and recovery copies still apply, and the detected device is rechecked after approval.
 
 Current-file restores distinguish recorded old versions from genuine filenames containing dates. Device-specific restore choices and preferences follow the selected backup; new backups record the device even when a custom profile name is used.
 
@@ -161,7 +166,7 @@ Backup reports contain counts, sizes, speed, warnings, failures and free space, 
 
 Keyboard shortcuts, accessible control names, tooltips and DPI-aware layouts support GUI navigation. **Help** and **F1** open the illustrated offline HTML manual.
 
-The main window has **Device**, **Backup** and **Restore** tabs and starts on Device. Detection shows the device picture, connection/camera mode, and drive capacity, used/free space, volume label and filesystem where available. MTP connections show available identity and backup scope without substituting the PC mirror's storage statistics. Backup exposes only backup types, with folders, profile and ZIP under **More options**. X100VI settings backup appears only when detection identifies that camera in USB RAW CONV./BACKUP RESTORE mode; switching modes or clearing detection removes it. Restore has backup/run selectors (all devices without detection, matching devices after detection), full/individual choices, a checked file browser, a separate destination field and a check-backups choice. Changing restore destinations preserves the backup source. Progress, activity and Cancel remain shared across tabs.
+The main window has **Device**, **Backup** and **Restore** tabs and starts on Device. Detection shows the device picture, connection/camera mode, and drive capacity, used/free space, volume label and filesystem where available. MTP connections show available identity and backup scope without substituting the PC mirror's storage statistics. Backup exposes only backup types, with folders, profile and ZIP under **More options**. X100VI settings backup appears only when detection identifies that camera in USB RAW CONV./BACKUP RESTORE mode; switching modes or clearing detection removes it. Restore has backup/run selectors (all devices without detection, matching devices after detection), full/individual/ZIP choices, a checked file browser, a separate destination field and a check-backups choice. Changing restore destinations preserves the backup source. Progress, activity and Cancel remain shared across tabs.
 
 Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
 

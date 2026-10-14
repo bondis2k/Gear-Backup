@@ -296,6 +296,7 @@ partial class Tests
         TestRestoreFileBrowser();
         TestOfflineRestore(Path.Combine(root, "offline-restore"));
         TestGuiArchive(Path.Combine(root, "zip-archive"));
+        TestGuiZipRestore(Path.Combine(root, "zip-restore"));
         TestLazyRestoreBrowser();
         TestSettingsInteraction(root);
         TestGuiThemes(root);
@@ -1460,6 +1461,72 @@ partial class Tests
             Assert(types.SelectedIndex == 2 && types.Items.Count == 4, "showing X100VI settings preserves the ZIP selection");
             form.ShowDevice(null);
             Assert(types.SelectedIndex == 2 && types.Items.Count == 3, "clearing camera detection retains ZIP archive in the dropdown");
+            form.Close();
+        }
+    }
+
+    static void TestGuiZipRestore(string root)
+    {
+        string source = Folder(root, "source"), target = Folder(root, "target"), archive = Path.Combine(root, "backup.zip");
+        Put(Path.Combine(source, "Songs", "one.m8s"), "GUI ZIP RESTORE");
+        var config = new Config { Device = "m8", BackupFolder = Folder(root, "backup-location"), SettingsDirectory = Folder(root, "settings"), Preview = false };
+        WithUi(() => ArchiveBackup.Run(source, archive, config));
+        using (var form = new MainForm(true, config))
+        {
+            form.Show(); Application.DoEvents();
+            int picked = 0; form.ArchiveSourcePicker = () => { picked++; return archive; };
+            form.ArchiveRestoreDeviceValidator = known => { };
+            var runner = (GuiOperationRunner)typeof(MainForm).GetField("runner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            var types = (ComboBox)form.Controls.Find("RestoreOperation", true)[0];
+            form.SelectOperation(GuiOperation.RestoreZip); Application.DoEvents();
+            var start = (Button)form.Controls.Find("StartOperation", true)[0];
+            var preview = (Button)form.Controls.Find("PreviewOperation", true)[0];
+            var state = (Label)form.Controls.Find("OperationStatus", true)[0];
+            var path = (TextBox)form.Controls.Find("RestoreArchivePath", true)[0];
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < until && !(bool)typeof(MainForm).GetProperty("ArchiveRestoreReady", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form))
+            {
+                // No device is detected yet, so wait for the read itself rather than readiness.
+                if (!(bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form)) break;
+                Application.DoEvents(); Thread.Sleep(10);
+            }
+            Assert(picked == 1 && types.Text == "Restore ZIP archive" && path.Visible && path.Text == archive && !start.Enabled &&
+                !form.Controls.Find("RestoreBackup", true)[0].Visible && !form.Controls.Find("RestorePoint", true)[0].Visible,
+                "selecting ZIP restore opens the picker, replaces backup selectors and requires detection");
+            runner.ShowDetected(new SourceChoice { Path = target, Detected = Devices.OP1Field }); Application.DoEvents();
+            Assert(!start.Enabled, "ZIP restore is disabled for a mismatching detected device");
+            runner.ShowDetected(new SourceChoice { Path = target, Detected = Devices.M8 }); Application.DoEvents();
+            Assert(start.Enabled && preview.Enabled && form.Controls.Find("RestoreDestination", true)[0].Visible,
+                "matching device enables ZIP restore and exposes the destination field");
+            preview.PerformClick(); DriveGui(form, state, "Preview complete", false);
+            Assert(Directory.GetFileSystemEntries(target).Length == 0, "GUI ZIP restore preview leaves device files unchanged");
+            start.PerformClick(); DriveGui(form, state, "Complete", false);
+            Assert(File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "GUI ZIP RESTORE" &&
+                form.Controls.Find("OpenOutputFolder", true)[0].Text == "Open restore folder", "GUI restores ZIP files to the matching device and links to the result");
+            form.ArchiveSourcePicker = () => null;
+            ((Button)form.Controls.Find("BrowseRestoreArchive", true)[0]).PerformClick();
+            Assert(path.Text == archive && start.Enabled, "cancelling ZIP selection preserves the previous valid archive");
+            runner.ShowDetected(null); Application.DoEvents();
+            Assert(!start.Enabled, "clearing detection disables ZIP restore again");
+            form.SelectOperation(GuiOperation.Check);
+            Assert(types.Text == "Check backups", "ZIP restore does not change the existing check operation mapping");
+            string mtpArchive = Path.Combine(root, "op1.zip"), mirror = Folder(root, "mirror"), pcTarget = Folder(root, "mtp-target");
+            WithUi(() => { using (OperationContext.Current.UseDevice(Devices.OP1Field)) ArchiveBackup.Run(source, mtpArchive, config); });
+            form.ArchiveSourcePicker = () => mtpArchive;
+            form.SelectOperation(GuiOperation.RestoreZip); Application.DoEvents();
+            until = DateTime.UtcNow.AddSeconds(10);
+            while ((bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form) && DateTime.UtcNow < until)
+            { Application.DoEvents(); Thread.Sleep(10); }
+            runner.ShowDetected(new SourceChoice { Path = mirror, Detected = Devices.OP1Field, Mtp = new MtpSource {
+                Mirror = mirror, Device = Devices.OP1Field, Info = new MtpDeviceInfo { FriendlyName = "OP-1 Field", InstanceId = "USB\\TEST\\123" } } });
+            Application.DoEvents();
+            Assert(!start.Enabled, "matching MTP ZIP requires an explicit PC destination");
+            ((TextBox)form.Controls.Find("RestoreDestination", true)[0]).Text = pcTarget;
+            Assert(start.Enabled && ((Label)form.Controls.Find("ZipRestoreNotice", true)[0]).Text.Contains("direct MTP restore is unavailable"),
+                "MTP ZIP restore explains manual transfer and enables when a PC folder is provided");
+            start.PerformClick(); DriveGui(form, state, "Complete", false);
+            Assert(File.ReadAllText(Path.Combine(pcTarget, "Songs", "one.m8s")) == "GUI ZIP RESTORE" && Directory.GetFileSystemEntries(mirror).Length == 0,
+                "GUI MTP ZIP restore writes only to the chosen PC folder");
             form.Close();
         }
     }

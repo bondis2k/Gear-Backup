@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
-using System.Text;
 using static PathSafety;
 
 // A standalone full backup: stream the source into a ZIP, then publish the completed archive.
@@ -24,10 +23,11 @@ internal static class ArchiveBackup
         return name + ".zip";
     }
 
-    internal static OperationResult Run(string source, string destination, Config config)
+    internal static OperationResult Run(string source, string destination, Config config, SourceChoice choice = null)
     {
         var context = OperationContext.Current;
         var timer = System.Diagnostics.Stopwatch.StartNew();
+        DateTime takenUtc = DateTime.UtcNow;
         source = Rooted(source); destination = Path.GetFullPath(destination);
         RejectRootLinks(source); RejectRootLinks(destination);
         if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
@@ -37,8 +37,9 @@ internal static class ArchiveBackup
         if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
         var scan = new ScanResult(); Backups.CollectFiles(source, scan);
         foreach (var item in Directory.EnumerateFileSystemEntries(source))
-            if (string.Equals(Path.GetFileName(item), Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase))
-                throw new IOException("The source contains the reserved archive manifest name: " + Checksums.ChecksumFileName + ". Rename it before creating the ZIP.");
+            if (string.Equals(Path.GetFileName(item), Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("The source contains a reserved archive metadata name: " + Path.GetFileName(item) + ". Rename it before creating the ZIP.");
         var actions = new List<string>(); var sizes = new Dictionary<string, long>(); long total = 0;
         foreach (string folder in scan.Folders) actions.Add("Create folder: " + Relative(source, folder));
         foreach (FileInfo file in scan.Files)
@@ -93,14 +94,15 @@ internal static class ArchiveBackup
                         context.Progress(Stage.Zipping, path, done, total, ++count, scan.Files.Count);
                     }
                     context.CheckCancellation();
-                    var names = new List<string>(hashes.Keys);
-                    names.Sort(StringComparer.Ordinal);
-                    using (var writer = new StreamWriter(zip.CreateEntry(Checksums.ChecksumFileName, CompressionLevel.Fastest).Open(), new UTF8Encoding(false)))
-                        foreach (string name in names)
-                        {
-                            context.CheckCancellation();
-                            writer.Write(hashes[name] + "  " + name + "\n");
-                        }
+                    // A placeholder has the same length as the report's eventual SHA-256 checksum.
+                    hashes.Add(ArchiveMetadata.FileName, new string('0', 64));
+                    int checksumBytes = ArchiveMetadata.Utf8.GetByteCount(ArchiveMetadata.Checksums(hashes));
+                    byte[] info = ArchiveMetadata.Utf8.GetBytes(ArchiveMetadata.Create(source, config, choice, takenUtc,
+                        scan.Files.Count, scan.Folders.Count, total, checksumBytes));
+                    using (var hash = SHA256.Create()) hashes[ArchiveMetadata.FileName] = FileCopy.ToHex(hash.ComputeHash(info));
+                    using (var output = zip.CreateEntry(ArchiveMetadata.FileName, CompressionLevel.Fastest).Open()) output.Write(info, 0, info.Length);
+                    using (var writer = new StreamWriter(zip.CreateEntry(Checksums.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
+                        writer.Write(ArchiveMetadata.Checksums(hashes));
                 }
             }
             if (config.Verify) Verify(temp, hashes);

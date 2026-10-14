@@ -62,6 +62,8 @@ internal sealed partial class MainForm
     void RefreshRestoreControls()
     {
         bool restoring = Selected == GuiOperation.Restore;
+        archiveRestoreField.Visible = archiveRestoreDetails.Visible = Selected == GuiOperation.RestoreZip;
+        archiveRestoreField.Enabled = !runner.IsBusy; UpdateArchiveRestoreNotice();
         restoreBackupField.Visible = restoreDetails.Visible = restoring;
         browseRestore.Visible = restoring && rememberedRestoreScope == 1;
         restoreExact.Visible = restoring && rememberedRestoreScope == 0;
@@ -83,6 +85,7 @@ internal sealed partial class MainForm
     }
     void RefreshRestoreActionState()
     {
+        if (Selected == GuiOperation.RestoreZip) { start.Enabled = preview.Enabled = ArchiveRestoreReady; return; }
         // Restore holds its action buttons back until a point is chosen; the other operations take them back.
         if (Selected != GuiOperation.Restore)
         {

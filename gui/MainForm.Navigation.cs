@@ -97,7 +97,7 @@ internal sealed partial class MainForm
                 if (workflowTabs.SelectedIndex != 0)
                 {
                     workflowTabs.SelectedTab.Controls.Add(inputs);
-                    SelectOperation(workflowTabs.SelectedIndex == 2 ? (restoreMode.SelectedIndex == 2 ? GuiOperation.Check : GuiOperation.Restore)
+                    SelectOperation(workflowTabs.SelectedIndex == 2 ? RestoreOperationForIndex(restoreMode.SelectedIndex)
                         : BackupOperationForIndex(backupMode.SelectedIndex), false);
                     backupMode.Visible = workflowTabs.SelectedIndex == 1;
                     restoreMode.Visible = workflowTabs.SelectedIndex == 2;
@@ -117,7 +117,7 @@ internal sealed partial class MainForm
         GuiTheme.StyleComboBox(backupMode); GuiTheme.StyleComboBox(restoreMode);
         backupMode.AccessibleName = "Backup type"; restoreMode.AccessibleName = "Restore or check";
         backupMode.Items.AddRange(new object[] { "Full backup", "Incremental backup", "Zip archive" });
-        restoreMode.Items.AddRange(new object[] { "Restore full backup", "Restore individual files", "Check backups" });
+        restoreMode.Items.AddRange(new object[] { "Restore full backup", "Restore individual files", "Restore ZIP archive", "Check backups" });
         backupMode.SelectedIndex = restoreMode.SelectedIndex = 0;
         backupMode.SelectedIndexChanged += delegate {
             if (!synchronizingNavigation) SelectOperation(BackupOperationForIndex(backupMode.SelectedIndex));
@@ -126,7 +126,7 @@ internal sealed partial class MainForm
             if (!synchronizingNavigation)
             {
                 if (restoreMode.SelectedIndex < 2) rememberedRestoreScope = restoreMode.SelectedIndex;
-                SelectOperation(restoreMode.SelectedIndex == 2 ? GuiOperation.Check : GuiOperation.Restore);
+                SelectOperation(RestoreOperationForIndex(restoreMode.SelectedIndex));
                 UpdateRestoreSelectionNotice();
             }
         };
@@ -152,9 +152,9 @@ internal sealed partial class MainForm
         synchronizingNavigation = true;
         try
         {
-            bool restore = Selected == GuiOperation.Restore || Selected == GuiOperation.Check;
+            bool restore = Restoring || Selected == GuiOperation.Check;
             backupMode.Visible = !restore; restoreMode.Visible = restore;
-            if (restore) restoreMode.SelectedIndex = Selected == GuiOperation.Check ? 2 : rememberedRestoreScope;
+            if (restore) restoreMode.SelectedIndex = Selected == GuiOperation.RestoreZip ? 2 : Selected == GuiOperation.Check ? 3 : rememberedRestoreScope;
             else backupMode.SelectedIndex = Selected == GuiOperation.CameraSettings ? 3 : Selected == GuiOperation.ZipArchive ? 2 : (int)Selected;
             workflowTabs.SelectedIndex = restore ? 2 : 1;
             workflowTabs.SelectedTab.Controls.Add(inputs);
@@ -167,9 +167,12 @@ internal sealed partial class MainForm
     {
         return index == 3 ? GuiOperation.CameraSettings : index == 2 ? GuiOperation.ZipArchive : index == 1 ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup;
     }
+    static GuiOperation RestoreOperationForIndex(int index)
+    { return index == 2 ? GuiOperation.RestoreZip : index == 3 ? GuiOperation.Check : GuiOperation.Restore; }
 
     internal void SelectOperation(GuiOperation value, bool navigate = true)
     {
+        bool chooseArchive = value == GuiOperation.RestoreZip && Selected != value;
         if (value == GuiOperation.CameraSettings && !cameraSettingsAvailable) value = GuiOperation.FullBackup;
         using (new RedrawFreeze(this))
         {
@@ -177,6 +180,7 @@ internal sealed partial class MainForm
             if (navigate) SynchronizeOperationTab();
             RefreshOperationControls();
         }
+        if (chooseArchive && IsHandleCreated) BeginInvoke((Action)delegate { if (!IsDisposed && !Disposing && Selected == GuiOperation.RestoreZip && !runner.IsBusy) ChooseRestoreArchive(); });
     }
 
     void UpdateCameraSettingsAvailability(bool available)

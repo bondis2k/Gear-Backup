@@ -28,6 +28,7 @@ MTP devices are read through a local PC mirror. Their backups restore to a PC fo
 - **Flexible backups:** full and incremental copies, separate source profiles, optional ZIP archives, and resumable interrupted backups.
 - **History when you need it:** dated snapshots, retained file versions and optional NTFS hard links. Disable point-in-time history to avoid its additional content copy.
 - **Selective restore:** the GUI lists backups for the detected device, defaults to the latest saved run and uses SQLite for full restore or a checked folder/file browser. The CLI also offers M8 bundles, songs with samples and Tracker Mini projects.
+- **ZIP restore:** the GUI can restore a standalone ZIP to a matching detected device or PC folder, with mandatory checksum validation and free-space checks. MTP files are restored to a PC folder for manual transfer.
 - **Checks and control:** change previews, backup integrity checks, optional SHA-256 change comparison, optional copy verification and recovery copies before restore.
 - **Backup file catalog:** SQLite supplies the primary inventory for incremental backups and records snapshot membership and integrity results. Checksum lists and manifests provide recovery records if the database is missing, stale or damaged.
 - **Backup management:** a dashboard showing backup health and age, a storage breakdown, and previewed cleanup to the Recycle Bin.

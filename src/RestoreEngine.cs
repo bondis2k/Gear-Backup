@@ -14,7 +14,7 @@ using static Workflow;
 internal sealed class RestoreEngine
 {
     public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode,
-        string bundle, bool exact, Config config, OperationContext context)
+        string bundle, bool exact, Config config, OperationContext context, Action beforeRestore = null)
     {
         var timer = System.Diagnostics.Stopwatch.StartNew();
         using (context.Activate())
@@ -24,7 +24,7 @@ internal sealed class RestoreEngine
                 context.CheckCancellation();
                 targetRoot = Rooted(targetRoot);
                 RejectRootLinks(targetRoot);
-                OperationResult result = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config);
+                OperationResult result = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config, beforeRestore);
                 result.Cancelled |= context.Cancellation.IsCancellationRequested;
                 result.Elapsed = timer.Elapsed;
                 return result;
@@ -62,7 +62,7 @@ internal sealed class RestoreEngine
 
     // Returns a result with no title when the user cancels at a prompt (nothing was changed).
     OperationResult PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode, string bundle, bool exact,
-        Config config)
+        Config config, Action beforeRestore)
     {
         var removals = new List<string>();
         var extraFolders = new List<string>();
@@ -184,6 +184,7 @@ internal sealed class RestoreEngine
         OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
         if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config, sizes)) return new OperationResult();
         if (exact && !AskYesNo("Remove " + removals.Count + " extra file(s) from the selected target?")) return new OperationResult();
+        if (beforeRestore != null) beforeRestore();
         OperationResult result = new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
         if (result.Counts != null) result.Counts.Unchanged = identical;
         return result;
