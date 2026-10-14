@@ -22,10 +22,10 @@ sealed class NativeM8SongReader : IM8SongReader
 {
     internal const string LibraryName = "m8_reader.dll";
     internal const string LibraryOverride = "GEARBACKUP_M8_READER";
-    const uint AbiVersion = 1;
+    const uint AbiVersion = 2;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate uint AbiVersionFunction();
-    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr ReadSongFunction([MarshalAs(UnmanagedType.LPWStr)] string path, out UIntPtr length);
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr ReadSongFunction([MarshalAs(UnmanagedType.LPWStr)] string path, UIntPtr pathLength, out UIntPtr length);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void FreeFunction(IntPtr buffer, UIntPtr length);
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
@@ -53,7 +53,7 @@ sealed class NativeM8SongReader : IM8SongReader
         if (string.IsNullOrWhiteSpace(path)) throw new M8SongException("Choose an M8 song file first.");
         Load();
         UIntPtr length;
-        IntPtr buffer = readSong(path, out length);
+        IntPtr buffer = readSong(path, (UIntPtr)path.Length, out length);
         if (buffer == IntPtr.Zero) throw new M8SongException("The M8 reader returned no result.");
         string json;
         try

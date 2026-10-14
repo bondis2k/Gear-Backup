@@ -20,3 +20,5 @@ codegen-units = 1
 strip = true
 # catch_unwind must stay usable: a parser panic becomes an error result, never a crashed GUI.
 panic = "unwind"
+# Arithmetic overflow in the parser panics (and is reported as an error) instead of silently wrapping.
+overflow-checks = true

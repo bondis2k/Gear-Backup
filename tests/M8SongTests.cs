@@ -61,6 +61,10 @@ partial class Tests
             File.WriteAllText(notSong, "this is not an M8 song");
             ThrowsSong(() => native.Read(notSong), "a file that is not a song is refused");
             ThrowsSong(() => native.Read(Path.Combine(scratch, "gone.m8s")), "a missing song is refused");
+            string cut = Path.Combine(scratch, "cut.m8s");
+            File.WriteAllBytes(cut, File.ReadAllBytes(M8Fixture("TEST-FILE.m8s")).Take(50000).ToArray());
+            ThrowsSong(() => native.Read(cut), "a song cut short is refused, not a crash");
+            ThrowsSong(() => native.Read(scratch), "a folder is refused");
             // Non-ASCII folder names must reach the DLL intact, so the path is passed as UTF-16.
             string unicode = Path.Combine(scratch, "sång æøå");
             Directory.CreateDirectory(unicode);

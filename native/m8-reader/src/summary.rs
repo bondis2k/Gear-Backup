@@ -23,10 +23,13 @@ pub fn error_json(message: &str) -> String {
 }
 
 pub fn song_json(bytes: &[u8]) -> String {
-    let mut cursor = std::io::Cursor::new(bytes);
-    match Song::read(&mut cursor) {
-        Ok(song) => json!({ "schema": SCHEMA, "song": describe(&song) }).to_string(),
-        Err(err) => error_json(&format!("Not a readable M8 song: {}", err.0)),
+    // The parser indexes straight into the file's contents and panics on a truncated or damaged file (found by
+    // the damaged-song test). That is an ordinary "not a readable song" answer, not an application failure.
+    let parsed = std::panic::catch_unwind(|| Song::read(&mut std::io::Cursor::new(bytes)));
+    match parsed {
+        Ok(Ok(song)) => crate::guarded(|| json!({ "schema": SCHEMA, "song": describe(&song) }).to_string()),
+        Ok(Err(err)) => error_json(&format!("Not a readable M8 song: {}", err.0)),
+        Err(_) => error_json("Not a readable M8 song: the file is damaged or cut short."),
     }
 }
 
@@ -50,7 +53,7 @@ fn describe(song: &Song) -> Value {
         "name": song.name,
         "directory": song.directory,
         "firmware": song.version.to_string(),
-        "tempo": song.tempo,
+        "tempo": if song.tempo.is_finite() { song.tempo } else { 0.0 },
         "transpose": song.transpose,
         "quantize": song.quantize,
         "key": song.key,
