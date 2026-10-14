@@ -22,6 +22,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: M8 reader tests (Rust)
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test
+
       - name: Core tests
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1

@@ -1,0 +1,22 @@
+[package]
+name = "m8-reader"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI wrapper that reads Dirtywave M8 files and returns a JSON summary for Gear Backup."
+publish = false
+
+[lib]
+name = "m8_reader"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+m8-file-parser = "0.7.0"
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+# catch_unwind must stay usable: a parser panic becomes an error result, never a crashed GUI.
+panic = "unwind"

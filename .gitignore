@@ -3,6 +3,8 @@
 .test-output.txt
 tests/.build/
 .tools/
+# Rust build output for the M8 song reader (native/m8-reader); Cargo.lock stays tracked.
+native/m8-reader/target/
 dist/
 *.exe
 GearBackup.ini

@@ -28,7 +28,7 @@ if ($SourceRef) {
 }
 $sources += Join-Path $PSScriptRoot 'PerformanceBenchmarks.cs'
 $runner = Join-Path $build 'GearBackup.Benchmarks.exe'
-& $compiler /nologo "/langversion:$CSharpLanguageVersion" /main:PerformanceBenchmarks "/out:$runner" /r:System.Management.dll /r:Microsoft.VisualBasic.dll /r:System.IO.Compression.dll $sources
+& $compiler /nologo "/langversion:$CSharpLanguageVersion" /main:PerformanceBenchmarks "/out:$runner" /r:System.Management.dll /r:Microsoft.VisualBasic.dll /r:System.IO.Compression.dll /r:System.Web.Extensions.dll $sources
 if ($LASTEXITCODE -ne 0) { throw 'Benchmark compilation failed.' }
 if (-not [IO.Path]::IsPathRooted($Output)) { $Output = Join-Path $projectRoot $Output }
 New-Item -ItemType Directory -Path (Split-Path $Output -Parent) -Force | Out-Null
