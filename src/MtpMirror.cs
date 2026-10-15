@@ -27,11 +27,11 @@ static class MtpMirror
     }
 
     // The first connected MTP device that matches a device profile, or null.
-    internal static MtpSource FindMtpSource()
+    internal static MtpSource FindMtpSource(DeviceProfile only = null)
     {
         foreach (DeviceProfile profile in Devices.All)
         {
-            if (!profile.Mtp) continue;
+            if (!profile.Mtp || (only != null && profile.Id != only.Id)) continue;
             foreach (MtpDeviceInfo info in FindMtpDevices(profile.MtpVendor))
                 if (profile.MtpName == null || string.Equals(info.FriendlyName, profile.MtpName, StringComparison.OrdinalIgnoreCase))
                     return new MtpSource { Device = profile, Info = info, Mirror = MirrorFolder(profile, info) };

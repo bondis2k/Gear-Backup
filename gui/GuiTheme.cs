@@ -209,6 +209,12 @@ internal sealed class TabStripItem : Control
         MouseEnter += delegate { hover = true; Invalidate(); };
         MouseLeave += delegate { hover = false; Invalidate(); };
         Click += delegate { tabs.SelectedIndex = index; tabs.Focus(); };
+        // A page can be renamed (the gear modes swap Backup and Restore for placeholders).
+        tabs.TabPages[page].TextChanged += delegate {
+            Text = AccessibleName = tabs.TabPages[index].Text;
+            Size = new Size(TextRenderer.MeasureText(Text, Font).Width + 36, 41);
+            Invalidate();
+        };
     }
 
     protected override void OnPaint(PaintEventArgs e)

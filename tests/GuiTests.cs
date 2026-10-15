@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
@@ -314,9 +315,94 @@ partial class Tests
         TestHistoryNamesGui(Path.Combine(root, "history-names"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
+        TestGearIcons();
         TestSongTab();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
+    }
+
+    static void TestGearIcons()
+    {
+        using (var form = new MainForm(true))
+        {
+            form.Show(); Application.DoEvents();
+            var strip = (GearIconStrip)form.Controls.Find("GearIcons", true)[0];
+            var buttons = strip.Controls.Cast<Control>().ToList();
+            Assert(buttons.Select(b => b.AccessibleName).SequenceEqual(new[] { "Gear Backup", "M8", "Tracker Mini", "OP-XY", "OP-1 Field" }),
+                "the header offers the Gear Backup, M8, Tracker Mini, OP-XY and OP-1 icons in that order");
+            Assert(buttons.All(b => b is GearIconButton && b.Visible && b.Width > 0), "every gear icon is a visible button");
+            Assert(strip.Active.Device == null, "Gear Backup is the active gear");
+            Control help = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Button>().First(b => b.Text == "Help");
+            Control title = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Label>().First(l => l.Text == AppIdentity.Name);
+            Point left = form.PointToClient(title.PointToScreen(new Point(title.Width, 0)));
+            Point icons = form.PointToClient(strip.PointToScreen(Point.Empty));
+            Point right = form.PointToClient(help.PointToScreen(Point.Empty));
+            Assert(icons.X >= left.X && icons.X + strip.Width <= right.X, "the icons sit between the title and the Help, About and Settings buttons");
+            var runner = (GuiOperationRunner)typeof(MainForm).GetField("runner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            string folder = Path.Combine(Environment.CurrentDirectory, ".test-runs", "gear-icons-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+                Func<string> titles = () => string.Join("|", tabs.TabPages.Cast<TabPage>().Select(page => page.Text));
+                Func<string, Control> named = name => form.Controls.Find(name, true).FirstOrDefault();
+                Assert(titles() == "Device|Backup|Restore|Song" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup, Restore and Song");
+
+                runner.ShowDetected(new SourceChoice { Path = folder, Detected = Devices.M8 });
+                Application.DoEvents();
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0,
+                    "identifying a device in Gear Backup mode keeps every backup tool");
+                strip.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
+                Assert(titles() == "Device|Coming soon|Planned|Song" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
+                    "a device mode replaces Backup and Restore with placeholder tabs and drops the shortcuts to them: " + titles());
+                Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("GearPlaceholder1").Text.Contains("M8"),
+                    "the backup controls are gone from a device mode, while Detect device and the placeholder text remain");
+                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
+                form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
+                form.ShowDevice(Devices.X100VI);
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
+                    "a device without a mode of its own uses Gear Backup, with Backup and Restore back as they were");
+
+                tabs.SelectedIndex = 2; Application.DoEvents();
+                strip.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
+                Assert(titles() == "Device|Coming soon|Planned|Song" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
+                strip.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
+                Assert(tabs.SelectedIndex == 2 && tabs.SelectedTab.Controls.Find("StartOperation", true).Length > 0 && named("RestoreOperation").Visible && !named("BackupOperation").Visible,
+                    "returning to Gear Backup puts the restore controls back on the Restore tab");
+                tabs.SelectedIndex = 0;
+
+                var asked = new List<DeviceProfile>();
+                bool available = true;
+                runner.Detector = only => { asked.Add(only); return available ? new SourceChoice { Path = folder, Detected = only ?? Devices.M8 } : null; };
+                Action<int> click = index => {
+                    int before = asked.Count;
+                    ((Button)buttons[index]).PerformClick();
+                    var timer = Stopwatch.StartNew();
+                    while ((asked.Count == before || runner.IsBusy) && timer.Elapsed.TotalSeconds < 20) { Application.DoEvents(); Thread.Sleep(10); }
+                    Application.DoEvents();
+                    Assert(asked.Count == before + 1, "clicking a gear icon looks for a device");
+                };
+                click(3);
+                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned|Song",
+                    "clicking OP-XY enters the OP-XY mode and looks for an OP-XY");
+                available = false;
+                click(1);
+                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Coming soon|Planned|Song",
+                    "clicking M8 selects the M8 mode even when no M8 is connected");
+                click(0);
+                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore|Song",
+                    "clicking Gear Backup returns to the full app and looks for any device");
+                Assert(form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible, "Gear Backup behaves as it did before");
+                runner.Detector = Session.DetectSource;
+            }
+            finally { RemoveFixtures(folder); }
+        }
+    }
+
+    static IEnumerable<Control> Descendants(Control parent)
+    {
+        yield return parent;
+        foreach (Control child in parent.Controls) foreach (Control inner in Descendants(child)) yield return inner;
     }
 
     sealed class FakeSongReader : IM8SongReader

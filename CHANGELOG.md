@@ -7,6 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- The header shows gear icons between the title and Help, About and Settings: Gear Backup, M8, Tracker Mini, OP-XY and OP-1 Field. Gear Backup is the whole app as before (Device, Backup, Restore). Choosing a device icon enters that device's mode: it looks for a connected device of that type, keeps the Device tab without the Go to Backup and Restore shortcuts, and replaces the Backup and Restore tabs with Coming soon and Planned placeholders until the dedicated tools exist. Detecting a device from Gear Backup mode leaves every backup tool in place.
 - A **Song** tab after Restore opens a Dirtywave M8 song (`.m8s`) and shows its name, firmware, tempo, transpose, quantize, song length, chain/phrase/table counts, rows used per track and every instrument with its type, name and sample. Songs are only read, never changed.
 - M8 songs are read by `m8_reader.dll`, a small Rust library (`native/m8-reader`, built on the `m8-file-parser` crate) that ships next to the GUI. The app talks to it through a reader interface and a versioned JSON summary, so the reader can be replaced later without changing the window.
 - The Restore tab supports standalone ZIP archives, with a file picker, device-type matching, mandatory checksum verification, validated extracted sizes, target/temporary-space checks, merge restore and existing recovery preferences. MTP restores use a PC folder for manual transfer.

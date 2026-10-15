@@ -14,6 +14,8 @@ internal sealed partial class MainForm
     readonly Label deviceDetails = GuiTheme.Label("", 10, GuiTheme.Ink);
     FieldPanel sourceField, restoreField;
     Control workflowHost, deviceOverview;
+    Button goToBackup, goToRestore;
+    readonly Label[] devicePlaceholders = new Label[2];
     bool synchronizingNavigation, backupOptionsExpanded, sizingWorkflow;
     bool cameraSettingsAvailable;
     int redrawFreezes;
@@ -73,8 +75,8 @@ internal sealed partial class MainForm
         var information = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         information.Controls.Add(deviceName); information.Controls.Add(deviceConnection); information.Controls.Add(deviceDetails);
         var shortcuts = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
-        var toBackup = GuiTheme.Button("Go to Backup", false); toBackup.Name = "GoToBackup";
-        var toRestore = GuiTheme.Button("Go to Restore", false); toRestore.Name = "GoToRestore";
+        var toBackup = goToBackup = GuiTheme.Button("Go to Backup", false); toBackup.Name = "GoToBackup";
+        var toRestore = goToRestore = GuiTheme.Button("Go to Restore", false); toRestore.Name = "GoToRestore";
         toBackup.Click += delegate { workflowTabs.SelectedIndex = 1; };
         toRestore.Click += delegate { workflowTabs.SelectedIndex = 2; };
         detect.Name = "DetectDevice";
@@ -95,14 +97,7 @@ internal sealed partial class MainForm
             try
             {
                 if (synchronizingNavigation) return;
-                if (workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2)
-                {
-                    workflowTabs.SelectedTab.Controls.Add(inputs);
-                    SelectOperation(workflowTabs.SelectedIndex == 2 ? RestoreOperationForIndex(restoreMode.SelectedIndex)
-                        : BackupOperationForIndex(backupMode.SelectedIndex), false);
-                    backupMode.Visible = workflowTabs.SelectedIndex == 1;
-                    restoreMode.Visible = workflowTabs.SelectedIndex == 2;
-                }
+                if ((workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2) && !InDeviceMode) ShowOperationTab();
                 RefreshWorkflowLayout();
             }
             finally { ReleaseTabSwitch(); }
@@ -111,6 +106,62 @@ internal sealed partial class MainForm
         workflowHost.Dock = DockStyle.Top; workflowHost.Margin = Padding.Empty;
         Resize += delegate { RefreshWorkflowLayout(); };
         return workflowHost;
+    }
+
+    // The backup and restore operations live on the Backup and Restore tabs; this puts the shared controls on the
+    // selected one and selects the operation that goes with it.
+    void ShowOperationTab()
+    {
+        workflowTabs.SelectedTab.Controls.Add(inputs);
+        SelectOperation(workflowTabs.SelectedIndex == 2 ? RestoreOperationForIndex(restoreMode.SelectedIndex)
+            : BackupOperationForIndex(backupMode.SelectedIndex), false);
+        backupMode.Visible = workflowTabs.SelectedIndex == 1;
+        restoreMode.Visible = workflowTabs.SelectedIndex == 2;
+    }
+
+    // Gear Backup mode is the whole app: Device, Backup and Restore. A device mode (M8, Tracker Mini, OP-XY,
+    // OP-1 Field) keeps Device but swaps Backup and Restore for placeholders until its own tools exist.
+    bool InDeviceMode { get { return gearIcons != null && gearIcons.Active.Device != null; } }
+    const string FirstDeviceTab = "Coming soon", SecondDeviceTab = "Planned";
+
+    void ApplyGearMode()
+    {
+        if (workflowTabs.TabPages.Count < 3 || goToBackup == null) return;
+        bool device = InDeviceMode;
+        using (new RedrawFreeze(this))
+        {
+            bool previous = synchronizingNavigation; synchronizingNavigation = true;
+            try
+            {
+                goToBackup.Visible = goToRestore.Visible = !device;
+                TabPage first = workflowTabs.TabPages[1], second = workflowTabs.TabPages[2];
+                for (int i = 0; i < 2; i++)
+                {
+                    if (devicePlaceholders[i] == null)
+                        devicePlaceholders[i] = new Label { Name = "GearPlaceholder" + (i + 1), AutoSize = true, Dock = DockStyle.Top,
+                            ForeColor = GuiTheme.Muted, Font = GuiTheme.Font(10), Padding = new Padding(4, 12, 0, 0), MaximumSize = new Size(700, 0) };
+                    TabPage page = i == 0 ? first : second;
+                    if (devicePlaceholders[i].Parent != null) devicePlaceholders[i].Parent.Controls.Remove(devicePlaceholders[i]);
+                    if (device) page.Controls.Add(devicePlaceholders[i]);
+                }
+                if (device)
+                {
+                    if (inputs.Parent != null) inputs.Parent.Controls.Remove(inputs);
+                    first.Text = FirstDeviceTab; second.Text = SecondDeviceTab;
+                    string name = gearIcons.Active.Name;
+                    devicePlaceholders[0].Text = "Tools for the " + name + " will be placed here.";
+                    devicePlaceholders[1].Text = "More " + name + " features are planned for this tab.";
+                }
+                else
+                {
+                    first.Text = "Backup"; second.Text = "Restore";
+                    (workflowTabs.SelectedIndex == 2 ? second : first).Controls.Add(inputs);
+                }
+            }
+            finally { synchronizingNavigation = previous; }
+            if (!device && (workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2)) ShowOperationTab();
+            RefreshWorkflowLayout();
+        }
     }
 
     Control BuildOperationSelectors()
@@ -149,7 +200,7 @@ internal sealed partial class MainForm
 
     void SynchronizeOperationTab()
     {
-        if (synchronizingNavigation) return;
+        if (synchronizingNavigation || InDeviceMode) return;
         synchronizingNavigation = true;
         try
         {
@@ -222,7 +273,7 @@ internal sealed partial class MainForm
         {
             int desired = workflowTabs.SelectedIndex == 0 ? Math.Max(Font.Height * 17, deviceOverview.Height + Font.Height * 5)
                 : workflowTabs.SelectedIndex == SongTabIndex ? Math.Max(Font.Height * 13, songContent.Height + Font.Height * 5)
-                : Math.Max(Font.Height * 13, inputs.Height + Font.Height * 5);
+                : InDeviceMode ? Font.Height * 13 : Math.Max(Font.Height * 13, inputs.Height + Font.Height * 5);
             int reserved = workflowTabs.SelectedIndex == 2 && Selected == GuiOperation.Restore ? 20 : 23;
             workflowHost.Height = Math.Min(desired, Math.Max(Font.Height * 14, ClientSize.Height - Font.Height * reserved));
         }
