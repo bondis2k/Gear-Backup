@@ -39,6 +39,7 @@ partial class Tests
         RunTest("Standalone ZIP archive backup", () => TestArchiveBackup(Folder(root, "archive-backup")));
         RunTest("CLI standalone ZIP archive", () => TestCliArchive(Folder(root, "cli-archive")));
         RunTest("ZIP archive restore", () => TestZipRestore(Folder(root, "zip-restore")));
+        RunTest("M8 song reader", () => TestM8Song());
         RunTest("Security hardening", () => TestSecurity(dir));
         RunTest("Security: MTP mirror links", () => TestMirrorLinks(dir));
         RunTest("Security: additional mirror link types", () => TestAdditionalMirrorLinks(dir));

@@ -13,7 +13,7 @@ $compilerPath = Get-CSharpCompiler
 if (-not $Output) { $Output = if ($Target -eq 'GUI') { 'GearBackup.GUI.exe' } else { 'GearBackup.exe' } }
 if (-not [IO.Path]::IsPathRooted($Output)) { $Output = Join-Path $projectRoot $Output }
 $arguments = @('/nologo', "/langversion:$CSharpLanguageVersion", "/out:$Output", "/win32icon:$projectRoot\assets\Backup.ico",
-    '/r:System.Management.dll', '/r:Microsoft.VisualBasic.dll', '/r:System.IO.Compression.dll')
+    '/r:System.Management.dll', '/r:Microsoft.VisualBasic.dll', '/r:System.IO.Compression.dll', '/r:System.Web.Extensions.dll')
 foreach ($reference in @('Windows.Data.winmd', 'Windows.UI.winmd', 'Windows.Foundation.winmd')) {
     $arguments += "/r:$(Join-Path $metadataPath $reference)"
 }
@@ -35,6 +35,8 @@ if ($Target -eq 'GUI') {
 & $compilerPath $arguments $sources
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 if ($Target -eq 'GUI') {
+    # The Song tab reads M8 files through m8_reader.dll, which ships next to the GUI executable.
+    & (Join-Path $PSScriptRoot 'build-native.ps1') -OutputDirectory (Split-Path $Output -Parent) | Out-Null
     & $manualShell.Source -NoProfile -File (Join-Path $PSScriptRoot 'build-manual.ps1') -OutputDirectory (Split-Path $Output -Parent)
     if ($LASTEXITCODE -ne 0) { throw 'HTML manual generation failed.' }
 }

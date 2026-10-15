@@ -7,6 +7,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- A **Song** tab after Restore opens a Dirtywave M8 song (`.m8s`) and shows its name, firmware, tempo, transpose, quantize, song length, chain/phrase/table counts, rows used per track and every instrument with its type, name and sample. Songs are only read, never changed.
+- M8 songs are read by `m8_reader.dll`, a small Rust library (`native/m8-reader`, built on the `m8-file-parser` crate) that ships next to the GUI. The app talks to it through a reader interface and a versioned JSON summary, so the reader can be replaced later without changing the window.
 - The Restore tab supports standalone ZIP archives, with a file picker, device-type matching, mandatory checksum verification, validated extracted sizes, target/temporary-space checks, merge restore and existing recovery preferences. MTP restores use a PC folder for manual transfer.
 - Standalone ZIP backups include `gearbackup-info.txt` identifying the source device and recording backup details, source-content size and exact total extracted size, with checksum coverage for the information file.
 - The CLI supports standalone ZIP backups with `--zip-archive`, an optional output file/folder and suggested filename, using the same archive engine as the GUI.

@@ -78,8 +78,9 @@ partial class Tests
             var optionalFields = form.Controls.Find("OptionalBackupFields", true)[0];
             var workflowTabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
             var restoreTargetBox = (TextBox)form.Controls.Find("RestoreDestination", true)[0];
-            Assert(workflowTabs.TabPages.Count == 3 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" && workflowTabs.SelectedIndex == 0,
-                "main window starts with Device, followed by separate Backup and Restore tabs");
+            Assert(workflowTabs.TabPages.Count == 4 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" &&
+                workflowTabs.TabPages[3].Text == "Song" && workflowTabs.SelectedIndex == 0,
+                "main window starts with Device, followed by separate Backup and Restore tabs and a Song tab");
             Assert(!optionalFields.Visible && !sourceBox.Visible && !backupBox.Visible && !form.Controls.Find("Profile", true)[0].Visible && !cancel.Visible,
                 "main window initially focuses on detection and backup instead of optional fields");
             workflowTabs.SelectedIndex = 1;
@@ -313,8 +314,72 @@ partial class Tests
         TestHistoryNamesGui(Path.Combine(root, "history-names"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
+        TestSongTab();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
+    }
+
+    sealed class FakeSongReader : IM8SongReader
+    {
+        public string LastPath;
+        public M8SongSummary Read(string path)
+        {
+            LastPath = path;
+            if (path.EndsWith("bad.m8s")) throw new M8SongException("Not a readable M8 song: test");
+            var song = new M8SongSummary { Name = "DEMO", Firmware = "6.2.0", Tempo = 128, Transpose = 12, SongRows = 3, Chains = 2, Phrases = 4, Tables = 1 };
+            song.TrackRows[0] = 3;
+            song.Instruments.Add(new M8InstrumentInfo { Slot = 10, Kind = "Sampler", Name = "KICK", Sample = "/Samples/kick.wav" });
+            song.Instruments.Add(new M8InstrumentInfo { Slot = 11, Kind = "FM Synth", Name = "BASS" });
+            return song;
+        }
+    }
+
+    static void WaitForGui(Func<bool> done, string message)
+    {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        while (!done())
+        {
+            if (timer.Elapsed.TotalSeconds > 10) throw new Exception("GUI timed out: " + message);
+            Application.DoEvents(); Thread.Sleep(10);
+        }
+    }
+
+    static void TestSongTab()
+    {
+        IM8SongReader original = M8SongReaders.Current;
+        var fake = new FakeSongReader();
+        M8SongReaders.Current = fake;
+        try
+        {
+            using (var form = new MainForm(true))
+            {
+                form.Show(); Application.DoEvents();
+                var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+                var pathBox = (TextBox)form.Controls.Find("SongFilePath", true)[0];
+                var notice = form.Controls.Find("SongNotice", true)[0];
+                var summary = form.Controls.Find("SongSummary", true)[0];
+                var grid = (DataGridView)form.Controls.Find("SongInstruments", true)[0];
+                var browse = (Button)form.Controls.Find("BrowseSong", true)[0];
+                tabs.SelectedIndex = 3; Application.DoEvents();
+                Assert(tabs.SelectedTab.Text == "Song" && tabs.SelectedTab.Contains(browse) && notice.Visible && !summary.Visible && !grid.Visible && pathBox.ReadOnly,
+                    "the Song tab starts with a prompt to choose a song");
+                form.SongFilePicker = () => @"C:\Music\demo.m8s";
+                browse.PerformClick();
+                WaitForGui(() => summary.Visible, "song details");
+                Assert(fake.LastPath == @"C:\Music\demo.m8s" && pathBox.Text == @"C:\Music\demo.m8s" && !notice.Visible, "choosing a song reads it through the reader");
+                Assert(summary.Text.Contains("DEMO") && summary.Text.Contains("128 BPM") && summary.Text.Contains("firmware 6.2.0") && summary.Text.Contains("1: 3") && summary.Text.Contains("2 instruments"),
+                    "the song's name, firmware, tempo, tracks and counts are shown: " + summary.Text);
+                Assert(grid.Visible && grid.Rows.Count == 2 && (string)grid.Rows[0].Cells[0].Value == "0A" && (string)grid.Rows[0].Cells[1].Value == "Sampler" &&
+                    (string)grid.Rows[0].Cells[3].Value == "/Samples/kick.wav", "instruments are listed with hex slot, type, name and sample");
+                form.SongFilePicker = () => @"C:\Music\bad.m8s";
+                browse.PerformClick();
+                WaitForGui(() => notice.Text.StartsWith("Not a readable"), "error message");
+                Assert(notice.Text.Contains("Not a readable M8 song") && !summary.Visible && !grid.Visible && grid.Rows.Count == 0, "an unreadable song shows the reason and clears the old details");
+                tabs.SelectedIndex = 1; Application.DoEvents();
+                Assert(tabs.SelectedTab.Text == "Backup" && form.Controls.Find("StartOperation", true)[0].Visible, "switching back to Backup still shows its controls");
+            }
+        }
+        finally { M8SongReaders.Current = original; }
     }
 
     static void TestPreviewFiltering()

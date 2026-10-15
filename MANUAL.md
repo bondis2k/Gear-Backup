@@ -97,6 +97,10 @@ The main controls are **Type**, the backup name or full-backup selector, **Previ
 
 **Preview** shows the plan without carrying out the backup. Clicking **Back up** also requests approval when **Review changes before copying** is enabled, as it is by default. The review window supports searching and filtering the planned actions; unchanged files are excluded from the incremental action list.
 
+### Song tab
+
+The Song tab opens a Dirtywave M8 song file (`.m8s`) from anywhere on the PC and shows what is inside: name, firmware version, tempo, transpose and quantize (in hex, as on the M8), song length, how many chains, phrases and tables are in use, the rows each track uses, and a list of instruments with their slot, type, name and sample path. The file is only read, never changed. It works without a connected device and needs `m8_reader.dll`, which is installed next to the application.
+
 ### Restore tab and activity
 
 Restore offers **Restore full backup**, **Restore individual files**, and **Check backups**. The selected operation changes the controls shown. See [Restore](#restore) for the backup and restore-point selectors.
