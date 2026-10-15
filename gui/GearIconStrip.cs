@@ -17,7 +17,7 @@ internal sealed class GearIconStrip : FlowLayoutPanel
 
     internal static readonly Gear[] Gears = {
         new Gear { Key = "Backup", Name = AppIdentity.Name, Picture = "Backup-256.png" },
-        Of(Devices.M8), Of(Devices.OPXY), Of(Devices.OP1Field) };
+        Of(Devices.M8), Of(Devices.TrackerMini), Of(Devices.OPXY), Of(Devices.OP1Field) };
 
     static Gear Of(DeviceProfile device)
     {
