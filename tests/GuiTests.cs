@@ -329,17 +329,47 @@ partial class Tests
             Assert(buttons.Select(b => b.AccessibleName).SequenceEqual(new[] { "Gear Backup", "M8", "Tracker Mini", "OP-XY", "OP-1 Field" }),
                 "the header offers the Gear Backup, M8, Tracker Mini, OP-XY and OP-1 icons in that order");
             Assert(buttons.All(b => b is GearIconButton && b.Visible && b.Width > 0), "every gear icon is a visible button");
-            Assert(strip.Active == "Backup", "Gear Backup is the active gear");
+            Assert(strip.Active.Device == null, "Gear Backup is the active gear");
             Control help = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Button>().First(b => b.Text == "Help");
             Control title = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Label>().First(l => l.Text == AppIdentity.Name);
             Point left = form.PointToClient(title.PointToScreen(new Point(title.Width, 0)));
             Point icons = form.PointToClient(strip.PointToScreen(Point.Empty));
             Point right = form.PointToClient(help.PointToScreen(Point.Empty));
             Assert(icons.X >= left.X && icons.X + strip.Width <= right.X, "the icons sit between the title and the Help, About and Settings buttons");
-            GearIconStrip.Gear clicked = null;
-            strip.GearClicked += gear => clicked = gear;
-            ((Button)buttons[3]).PerformClick();
-            Assert(clicked != null && clicked.Device == Devices.OPXY, "clicking an icon reports which gear was chosen");
+            var runner = (GuiOperationRunner)typeof(MainForm).GetField("runner", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            string folder = Path.Combine(Environment.CurrentDirectory, ".test-runs", "gear-icons-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(folder);
+            try
+            {
+                runner.ShowDetected(new SourceChoice { Path = folder, Detected = Devices.M8 });
+                Application.DoEvents();
+                Assert(strip.Active.Device == Devices.M8, "an identified M8 switches to the M8 mode");
+                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini, "an identified Tracker Mini switches to its mode");
+                form.ShowDevice(Devices.X100VI); Assert(strip.Active.Device == null, "a device without a mode of its own uses Gear Backup");
+                form.ShowDevice(Devices.OP1Field); form.ShowDevice(null); Assert(strip.Active.Device == null, "no device returns to Gear Backup");
+
+                var asked = new List<DeviceProfile>();
+                bool available = true;
+                runner.Detector = only => { asked.Add(only); return available ? new SourceChoice { Path = folder, Detected = only ?? Devices.M8 } : null; };
+                Action<int> click = index => {
+                    int before = asked.Count;
+                    ((Button)buttons[index]).PerformClick();
+                    var timer = Stopwatch.StartNew();
+                    while ((asked.Count == before || runner.IsBusy) && timer.Elapsed.TotalSeconds < 20) { Application.DoEvents(); Thread.Sleep(10); }
+                    Application.DoEvents();
+                    Assert(asked.Count == before + 1, "clicking a gear icon looks for a device");
+                };
+                click(3);
+                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY, "clicking OP-XY looks for an OP-XY and switches to its mode when found");
+                available = false;
+                click(1);
+                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.OPXY, "when no M8 is connected the current mode and device stay");
+                available = true;
+                click(0);
+                Assert(asked[asked.Count - 1] == null && strip.Active.Device == Devices.M8, "clicking Gear Backup looks for any device and follows what it finds");
+                runner.Detector = Session.DetectSource;
+            }
+            finally { RemoveFixtures(folder); }
         }
     }
 

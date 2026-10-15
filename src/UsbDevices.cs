@@ -16,7 +16,8 @@ static class UsbDevices
 {
     // Returns the drive of the first connected device that matches a known device profile, and which
     // device it is. pnpId is the disk's device instance ID, needed to eject it (null if found by label only).
-    internal static string FindDevice(out DeviceProfile device, out string pnpId)
+    // "only" limits the search to one device type (the GUI gear icons).
+    internal static string FindDevice(out DeviceProfile device, out string pnpId, DeviceProfile only = null)
     {
         device = null;
         pnpId = null;
@@ -28,7 +29,7 @@ static class UsbDevices
             string model = (disk["Model"] ?? "").ToString().ToUpperInvariant();
             DeviceProfile match = null;
             foreach (DeviceProfile profile in Devices.All)
-                if (profile.MatchesDisk(pnp, model)) { match = profile; break; }
+                if ((only == null || profile.Id == only.Id) && profile.MatchesDisk(pnp, model)) { match = profile; break; }
             if (match == null) continue;
 
             string partQuery = "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='" + disk["DeviceID"] +
@@ -50,7 +51,7 @@ static class UsbDevices
         foreach (DriveInfo d in DriveInfo.GetDrives())
             if (d.IsReady && d.DriveType == DriveType.Removable)
                 foreach (DeviceProfile profile in Devices.All)
-                    if (profile.VolumeLabel != null && string.Equals(d.VolumeLabel, profile.VolumeLabel, StringComparison.OrdinalIgnoreCase))
+                    if ((only == null || profile.Id == only.Id) && profile.VolumeLabel != null && string.Equals(d.VolumeLabel, profile.VolumeLabel, StringComparison.OrdinalIgnoreCase))
                     {
                         device = profile;
                         return d.RootDirectory.FullName;

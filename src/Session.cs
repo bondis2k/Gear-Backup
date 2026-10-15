@@ -18,14 +18,14 @@ using static Session;
 static class Session
 {
     // The first connected supported device: a USB drive, otherwise an MTP device (whose mirror folder
-    // is created). Null when none is connected.
-    internal static SourceChoice DetectSource()
+    // is created). Null when none is connected. "only" looks for one device type.
+    internal static SourceChoice DetectSource(DeviceProfile only = null)
     {
         DeviceProfile device;
         string pnp;
-        string drive = FindDevice(out device, out pnp);
+        string drive = FindDevice(out device, out pnp, only);
         if (drive != null) return new SourceChoice { Path = drive, PnpId = pnp, Detected = device };
-        MtpSource mtp = FindMtpSource();
+        MtpSource mtp = FindMtpSource(only);
         if (mtp == null) return null;
         Directory.CreateDirectory(mtp.Mirror);
         var found = new SourceChoice { Path = mtp.Mirror, Detected = mtp.Device, Mtp = mtp };

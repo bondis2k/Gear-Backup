@@ -65,11 +65,17 @@ internal sealed class GuiOperationRunner
         });
     }
 
-    public void DetectSource()
+    // Replaced by tests so detection doesn't depend on attached hardware.
+    internal Func<DeviceProfile, SourceChoice> Detector = Session.DetectSource;
+
+    // "only" looks for that device type (a gear icon was clicked); without it any supported device is found.
+    // When a specific type isn't there the current device display stays as it is.
+    public void DetectSource(DeviceProfile only = null)
     {
         RunWorker(delegate(OperationContext context) {
-            SourceChoice found = Session.DetectSource();
+            SourceChoice found = Detector(only);
             context.CheckCancellation();
+            if (found == null && only != null) throw new IOException("No " + only.Name + " detected. Enable USB drive mode, or browse to a card or folder.");
             ShowDetected(found);
             if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
             if (found.CameraSettingsMode) return new OperationResult { Summary = "X100VI detected in settings mode. Back up C1–C7 recipes and shooting settings with the selected operation." };

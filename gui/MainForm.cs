@@ -49,6 +49,7 @@ internal sealed partial class MainForm : Form
     FieldPanel profileField;
     bool optionsExpanded;
     DeviceProfile displayedDevice;
+    GearIconStrip gearIcons;
     // Worker threads add log text and progress here; the display timer moves them into the window every
     // 150 ms, so a fast copy doesn't flood the UI thread with updates.
     readonly object queueLock = new object();
@@ -174,7 +175,10 @@ internal sealed partial class MainForm : Form
         branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
         deviceName.Margin = new Padding(0, 0, 0, 0);
         header.Controls.Add(branding, 0, 0);
-        header.Controls.Add(new GearIconStrip(hints) { Anchor = AnchorStyles.Left }, 1, 0);
+        gearIcons = new GearIconStrip(hints) { Anchor = AnchorStyles.Left };
+        // A gear icon looks for a device of that type; the icon of the device that is found becomes active (ShowDevice).
+        gearIcons.GearClicked += gear => { if (!runner.IsBusy) runner.DetectSource(gear.Device); };
+        header.Controls.Add(gearIcons, 1, 0);
         var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
         headerActions.Controls.Add(help); headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
         header.Controls.Add(headerActions, 2, 0);
@@ -495,6 +499,7 @@ internal sealed partial class MainForm : Form
     {
         optionalFields.Enabled = !busy; optionsToggle.Enabled = !busy; detect.Enabled = !busy;
         start.Enabled = !busy; settings.Enabled = !busy;
+        if (gearIcons != null) gearIcons.Enabled = !busy;
         workflowTabs.Enabled = !busy; backupMode.Enabled = restoreMode.Enabled = !busy;
         backupSetField.Enabled = !busy;
         restoreBackupField.Enabled = restoreDetails.Enabled = !busy;
@@ -529,6 +534,7 @@ internal sealed partial class MainForm : Form
     public void ShowDevice(DeviceProfile device, string mode = null, bool cameraSettingsMode = false)
     {
         displayedDevice = device;
+        if (gearIcons != null) gearIcons.SetActive(GearIconStrip.For(device));
         UpdateArchiveRestoreNotice(); RefreshRestoreActionState();
         restoreContextKey = null;
         if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();
