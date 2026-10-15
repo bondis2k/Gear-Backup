@@ -177,7 +177,12 @@ internal sealed partial class MainForm : Form
         header.Controls.Add(branding, 0, 0);
         gearIcons = new GearIconStrip(hints) { Anchor = AnchorStyles.Left };
         // A gear icon looks for a device of that type; the icon of the device that is found becomes active (ShowDevice).
-        gearIcons.GearClicked += gear => { if (!runner.IsBusy) runner.DetectSource(gear.Device); };
+        gearIcons.GearClicked += gear => {
+            if (runner.IsBusy) return;
+            gearIcons.SetActive(gear); // the mode is the user's choice; detection then looks for that type of device
+            runner.DetectSource(gear.Device);
+        };
+        gearIcons.ActiveChanged += delegate { ApplyGearMode(); };
         header.Controls.Add(gearIcons, 1, 0);
         var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
         headerActions.Controls.Add(help); headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
@@ -488,8 +493,9 @@ internal sealed partial class MainForm : Form
         if (keyData == Keys.Escape && runner.IsBusy) { RequestCancel(); return true; }
         if (!runner.IsBusy)
         {
-            if (keyData == (Keys.Control | Keys.Enter)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; start.PerformClick(); return true; }
-            if (keyData == (Keys.Control | Keys.P)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; preview.PerformClick(); return true; }
+            // Backup and restore belong to the Gear Backup mode; a device mode has none of them yet.
+            if (!InDeviceMode && keyData == (Keys.Control | Keys.Enter)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; start.PerformClick(); return true; }
+            if (!InDeviceMode && keyData == (Keys.Control | Keys.P)) { if (workflowTabs.SelectedIndex == 0) workflowTabs.SelectedIndex = 1; preview.PerformClick(); return true; }
             if (keyData == (Keys.Control | Keys.D)) { workflowTabs.SelectedIndex = 0; detect.PerformClick(); return true; }
             if (keyData == (Keys.Control | Keys.Oemcomma)) { settings.PerformClick(); return true; }
         }
@@ -534,7 +540,8 @@ internal sealed partial class MainForm : Form
     public void ShowDevice(DeviceProfile device, string mode = null, bool cameraSettingsMode = false)
     {
         displayedDevice = device;
-        if (gearIcons != null) gearIcons.SetActive(GearIconStrip.For(device));
+        // Gear Backup mode keeps all its tools when a device is identified; a device mode follows the device that is found.
+        if (gearIcons != null && device != null && InDeviceMode) gearIcons.SetActive(GearIconStrip.For(device));
         UpdateArchiveRestoreNotice(); RefreshRestoreActionState();
         restoreContextKey = null;
         if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();

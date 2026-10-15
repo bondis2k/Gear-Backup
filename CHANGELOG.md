@@ -7,7 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
-- The header shows gear icons between the title and Help, About and Settings: Gear Backup, M8, Tracker Mini, OP-XY and OP-1 Field. The highlighted icon is the active mode: when a device is detected its icon is selected, and clicking an icon looks for a connected device of that type (Gear Backup looks for any). If that device is not connected the current mode stays. The dedicated per-gear views are planned next.
+- The header shows gear icons between the title and Help, About and Settings: Gear Backup, M8, Tracker Mini, OP-XY and OP-1 Field. Gear Backup is the whole app as before (Device, Backup, Restore). Choosing a device icon enters that device's mode: it looks for a connected device of that type, keeps the Device tab without the Go to Backup and Restore shortcuts, and replaces the Backup and Restore tabs with Coming soon and Planned placeholders until the dedicated tools exist. Detecting a device from Gear Backup mode leaves every backup tool in place.
 - The Restore tab supports standalone ZIP archives, with a file picker, device-type matching, mandatory checksum verification, validated extracted sizes, target/temporary-space checks, merge restore and existing recovery preferences. MTP restores use a PC folder for manual transfer.
 - Standalone ZIP backups include `gearbackup-info.txt` identifying the source device and recording backup details, source-content size and exact total extracted size, with checksum coverage for the information file.
 - The CLI supports standalone ZIP backups with `--zip-archive`, an optional output file/folder and suggested filename, using the same archive engine as the GUI.

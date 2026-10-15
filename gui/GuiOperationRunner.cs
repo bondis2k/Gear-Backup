@@ -69,15 +69,13 @@ internal sealed class GuiOperationRunner
     internal Func<DeviceProfile, SourceChoice> Detector = Session.DetectSource;
 
     // "only" looks for that device type (a gear icon was clicked); without it any supported device is found.
-    // When a specific type isn't there the current device display stays as it is.
     public void DetectSource(DeviceProfile only = null)
     {
         RunWorker(delegate(OperationContext context) {
             SourceChoice found = Detector(only);
             context.CheckCancellation();
-            if (found == null && only != null) throw new IOException("No " + only.Name + " detected. Enable USB drive mode, or browse to a card or folder.");
             ShowDetected(found);
-            if (found == null) throw new IOException("No " + Devices.Names + " detected. Enable USB drive mode, or browse to a card or folder.");
+            if (found == null) throw new IOException("No " + (only == null ? Devices.Names : only.Name) + " detected. Enable USB drive mode, or browse to a card or folder.");
             if (found.CameraSettingsMode) return new OperationResult { Summary = "X100VI detected in settings mode. Back up C1–C7 recipes and shooting settings with the selected operation." };
             if (found.Detected == Devices.X100VI) return new OperationResult { Summary = "X100VI detected in photo-transfer mode (USB card reader / MTP). Leave the source empty to back up photos and videos." };
             if (found.Mtp != null) return new OperationResult { Summary = found.Detected.Name + " detected over MTP. Leave the source empty to back it up." };

@@ -341,12 +341,33 @@ partial class Tests
             Directory.CreateDirectory(folder);
             try
             {
+                var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+                Func<string> titles = () => string.Join("|", tabs.TabPages.Cast<TabPage>().Select(page => page.Text));
+                Func<string, Control> named = name => form.Controls.Find(name, true).FirstOrDefault();
+                Assert(titles() == "Device|Backup|Restore" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup and Restore");
+
                 runner.ShowDetected(new SourceChoice { Path = folder, Detected = Devices.M8 });
                 Application.DoEvents();
-                Assert(strip.Active.Device == Devices.M8, "an identified M8 switches to the M8 mode");
-                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini, "an identified Tracker Mini switches to its mode");
-                form.ShowDevice(Devices.X100VI); Assert(strip.Active.Device == null, "a device without a mode of its own uses Gear Backup");
-                form.ShowDevice(Devices.OP1Field); form.ShowDevice(null); Assert(strip.Active.Device == null, "no device returns to Gear Backup");
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0,
+                    "identifying a device in Gear Backup mode keeps every backup tool");
+                strip.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
+                Assert(titles() == "Device|Coming soon|Planned" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
+                    "a device mode replaces Backup and Restore with placeholder tabs and drops the shortcuts to them: " + titles());
+                Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("GearPlaceholder1").Text.Contains("M8"),
+                    "the backup controls are gone from a device mode, while Detect device and the placeholder text remain");
+                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
+                form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
+                form.ShowDevice(Devices.X100VI);
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
+                    "a device without a mode of its own uses Gear Backup, with Backup and Restore back as they were");
+
+                tabs.SelectedIndex = 2; Application.DoEvents();
+                strip.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
+                Assert(titles() == "Device|Coming soon|Planned" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
+                strip.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
+                Assert(tabs.SelectedIndex == 2 && tabs.SelectedTab.Controls.Find("StartOperation", true).Length > 0 && named("RestoreOperation").Visible && !named("BackupOperation").Visible,
+                    "returning to Gear Backup puts the restore controls back on the Restore tab");
+                tabs.SelectedIndex = 0;
 
                 var asked = new List<DeviceProfile>();
                 bool available = true;
@@ -360,13 +381,16 @@ partial class Tests
                     Assert(asked.Count == before + 1, "clicking a gear icon looks for a device");
                 };
                 click(3);
-                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY, "clicking OP-XY looks for an OP-XY and switches to its mode when found");
+                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned",
+                    "clicking OP-XY enters the OP-XY mode and looks for an OP-XY");
                 available = false;
                 click(1);
-                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.OPXY, "when no M8 is connected the current mode and device stay");
-                available = true;
+                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Coming soon|Planned",
+                    "clicking M8 selects the M8 mode even when no M8 is connected");
                 click(0);
-                Assert(asked[asked.Count - 1] == null && strip.Active.Device == Devices.M8, "clicking Gear Backup looks for any device and follows what it finds");
+                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore",
+                    "clicking Gear Backup returns to the full app and looks for any device");
+                Assert(form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible, "Gear Backup behaves as it did before");
                 runner.Detector = Session.DetectSource;
             }
             finally { RemoveFixtures(folder); }

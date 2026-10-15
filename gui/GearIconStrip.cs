@@ -36,6 +36,8 @@ internal sealed class GearIconStrip : FlowLayoutPanel
     // The mode that is showing.
     internal Gear Active { get; private set; }
     internal event Action<Gear> GearClicked;
+    // Raised when the active mode changes, whether by a click or by an identified device.
+    internal event Action<Gear> ActiveChanged;
 
     internal GearIconStrip(ToolTip hints)
     {
@@ -57,6 +59,7 @@ internal sealed class GearIconStrip : FlowLayoutPanel
         if (gear == Active) return;
         Active = gear;
         foreach (GearIconButton button in Controls) button.Active = button.Gear == gear;
+        var handler = ActiveChanged; if (handler != null) handler(gear);
     }
 }
 
