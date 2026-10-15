@@ -32,7 +32,7 @@ internal sealed class GearIconStrip : FlowLayoutPanel
     {
         Name = "GearIcons"; AccessibleName = "Gear";
         AutoSize = true; WrapContents = false; FlowDirection = FlowDirection.LeftToRight;
-        Margin = new Padding(24, 0, 0, 0); Padding = Padding.Empty;
+        Margin = new Padding(16, 0, 0, 0); Padding = Padding.Empty;
         Active = Gears[0].Key;
         foreach (Gear gear in Gears)
         {
@@ -56,8 +56,8 @@ internal sealed class GearIconButton : Button
         active = isActive;
         picture = MainForm.LoadImage(gear.Picture);
         AccessibleName = gear.Name;
-        Size = new Size(52, 52);
-        Margin = new Padding(0, 0, 6, 0);
+        Size = new Size(73, 73); // 40% larger than the first 52px version
+        Margin = new Padding(0, 0, 4, 0);
         FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0;
         Cursor = Cursors.Hand;
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);

@@ -68,7 +68,7 @@ internal sealed partial class MainForm : Form
         ForeColor = GuiTheme.Ink;
         BackColor = GuiTheme.Desktop;
         ClientSize = new Size(1000, 720);
-        MinimumSize = new Size(840, 620);
+        MinimumSize = new Size(940, 620); // wide enough for the header gear icons beside the title and Help
         StartPosition = FormStartPosition.CenterScreen;
         AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
         if (GuiHeadless) { Opacity = 0; ShowInTaskbar = false; }
