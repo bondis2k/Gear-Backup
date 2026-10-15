@@ -173,7 +173,8 @@ internal sealed partial class MainForm : Form
         branding.Controls.Add(title);
         branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
         deviceName.Margin = new Padding(0, 0, 0, 0);
-        header.Controls.Add(branding, 1, 0);
+        header.Controls.Add(branding, 0, 0);
+        header.Controls.Add(new GearIconStrip(hints) { Anchor = AnchorStyles.Left }, 1, 0);
         var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
         headerActions.Controls.Add(help); headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
         header.Controls.Add(headerActions, 2, 0);

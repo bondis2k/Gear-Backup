@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
@@ -313,8 +314,39 @@ partial class Tests
         TestHistoryNamesGui(Path.Combine(root, "history-names"));
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
+        TestGearIcons();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
+    }
+
+    static void TestGearIcons()
+    {
+        using (var form = new MainForm(true))
+        {
+            form.Show(); Application.DoEvents();
+            var strip = (GearIconStrip)form.Controls.Find("GearIcons", true)[0];
+            var buttons = strip.Controls.Cast<Control>().ToList();
+            Assert(buttons.Select(b => b.AccessibleName).SequenceEqual(new[] { "Gear Backup", "M8", "OP-XY", "OP-1 Field" }),
+                "the header offers the Gear Backup, M8, OP-XY and OP-1 icons in that order");
+            Assert(buttons.All(b => b is GearIconButton && b.Visible && b.Width > 0), "every gear icon is a visible button");
+            Assert(strip.Active == "Backup", "Gear Backup is the active gear");
+            Control help = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Button>().First(b => b.Text == "Help");
+            Control title = form.Controls.Cast<Control>().SelectMany(Descendants).OfType<Label>().First(l => l.Text == AppIdentity.Name);
+            Point left = form.PointToClient(title.PointToScreen(new Point(title.Width, 0)));
+            Point icons = form.PointToClient(strip.PointToScreen(Point.Empty));
+            Point right = form.PointToClient(help.PointToScreen(Point.Empty));
+            Assert(icons.X >= left.X && icons.X + strip.Width <= right.X, "the icons sit between the title and the Help, About and Settings buttons");
+            GearIconStrip.Gear clicked = null;
+            strip.GearClicked += gear => clicked = gear;
+            ((Button)buttons[2]).PerformClick();
+            Assert(clicked != null && clicked.Device == Devices.OPXY, "clicking an icon reports which gear was chosen");
+        }
+    }
+
+    static IEnumerable<Control> Descendants(Control parent)
+    {
+        yield return parent;
+        foreach (Control child in parent.Controls) foreach (Control inner in Descendants(child)) yield return inner;
     }
 
     static void TestPreviewFiltering()

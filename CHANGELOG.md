@@ -7,6 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- The header shows gear icons between the title and Help, About and Settings: Gear Backup, M8, OP-XY and OP-1 Field. They are the entry points for the dedicated per-gear views planned next; for now Gear Backup is the active one and the device icons only show a tooltip.
 - The Restore tab supports standalone ZIP archives, with a file picker, device-type matching, mandatory checksum verification, validated extracted sizes, target/temporary-space checks, merge restore and existing recovery preferences. MTP restores use a PC folder for manual transfer.
 - Standalone ZIP backups include `gearbackup-info.txt` identifying the source device and recording backup details, source-content size and exact total extracted size, with checksum coverage for the information file.
 - The CLI supports standalone ZIP backups with `--zip-archive`, an optional output file/folder and suggested filename, using the same archive engine as the GUI.
