@@ -32,7 +32,7 @@ New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
 $uninstaller = Join-Path $installPath 'unins000.exe'
 try {
     RunSetup 'install.log'
-    foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe', 'Manual.html', 'Manual-original.html', 'Manual-original-dark.html', 'Manual-windows.html', 'Manual-retro.html', 'MANUAL.md', 'README.md')) {
+    foreach ($file in @('GearBackup.GUI.exe', 'GearBackup.exe', 'm8_reader.dll', 'Manual.html', 'Manual-original.html', 'Manual-original-dark.html', 'Manual-windows.html', 'Manual-retro.html', 'MANUAL.md', 'README.md')) {
         Assert (Test-Path -LiteralPath (Join-Path $installPath $file)) "Missing installed file: $file"
     }
     $setupMetadata = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($InstallerPath)

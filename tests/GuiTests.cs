@@ -79,8 +79,9 @@ partial class Tests
             var optionalFields = form.Controls.Find("OptionalBackupFields", true)[0];
             var workflowTabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
             var restoreTargetBox = (TextBox)form.Controls.Find("RestoreDestination", true)[0];
-            Assert(workflowTabs.TabPages.Count == 3 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" && workflowTabs.SelectedIndex == 0,
-                "main window starts with Device, followed by separate Backup and Restore tabs");
+            Assert(workflowTabs.TabPages.Count == 4 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" &&
+                workflowTabs.TabPages[3].Text == "Song" && workflowTabs.SelectedIndex == 0,
+                "main window starts with Device, followed by separate Backup and Restore tabs and a Song tab");
             Assert(!optionalFields.Visible && !sourceBox.Visible && !backupBox.Visible && !form.Controls.Find("Profile", true)[0].Visible && !cancel.Visible,
                 "main window initially focuses on detection and backup instead of optional fields");
             workflowTabs.SelectedIndex = 1;
@@ -315,6 +316,7 @@ partial class Tests
         TestRestoreLocationsGui(Path.Combine(root, "restore-locations"));
         TestScaledGuiLayouts();
         TestGearIcons();
+        TestSongTab();
         Console.WriteLine("PASS: " + assertions + " GUI assertions.");
         RemoveFixtures(root);
     }
@@ -344,26 +346,26 @@ partial class Tests
                 var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
                 Func<string> titles = () => string.Join("|", tabs.TabPages.Cast<TabPage>().Select(page => page.Text));
                 Func<string, Control> named = name => form.Controls.Find(name, true).FirstOrDefault();
-                Assert(titles() == "Device|Backup|Restore" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup and Restore");
+                Assert(titles() == "Device|Backup|Restore|Song" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup, Restore and Song");
 
                 runner.ShowDetected(new SourceChoice { Path = folder, Detected = Devices.M8 });
                 Application.DoEvents();
-                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0,
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0,
                     "identifying a device in Gear Backup mode keeps every backup tool");
                 strip.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
-                Assert(titles() == "Device|Coming soon|Planned" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
+                Assert(titles() == "Device|Coming soon|Planned|Song" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
                     "a device mode replaces Backup and Restore with placeholder tabs and drops the shortcuts to them: " + titles());
                 Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("GearPlaceholder1").Text.Contains("M8"),
                     "the backup controls are gone from a device mode, while Detect device and the placeholder text remain");
                 form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
                 form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
                 form.ShowDevice(Devices.X100VI);
-                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
                     "a device without a mode of its own uses Gear Backup, with Backup and Restore back as they were");
 
                 tabs.SelectedIndex = 2; Application.DoEvents();
                 strip.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
-                Assert(titles() == "Device|Coming soon|Planned" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
+                Assert(titles() == "Device|Coming soon|Planned|Song" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
                 strip.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
                 Assert(tabs.SelectedIndex == 2 && tabs.SelectedTab.Controls.Find("StartOperation", true).Length > 0 && named("RestoreOperation").Visible && !named("BackupOperation").Visible,
                     "returning to Gear Backup puts the restore controls back on the Restore tab");
@@ -381,14 +383,14 @@ partial class Tests
                     Assert(asked.Count == before + 1, "clicking a gear icon looks for a device");
                 };
                 click(3);
-                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned",
+                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned|Song",
                     "clicking OP-XY enters the OP-XY mode and looks for an OP-XY");
                 available = false;
                 click(1);
-                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Coming soon|Planned",
+                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Coming soon|Planned|Song",
                     "clicking M8 selects the M8 mode even when no M8 is connected");
                 click(0);
-                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore",
+                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore|Song",
                     "clicking Gear Backup returns to the full app and looks for any device");
                 Assert(form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible, "Gear Backup behaves as it did before");
                 runner.Detector = Session.DetectSource;
@@ -401,6 +403,69 @@ partial class Tests
     {
         yield return parent;
         foreach (Control child in parent.Controls) foreach (Control inner in Descendants(child)) yield return inner;
+    }
+
+    sealed class FakeSongReader : IM8SongReader
+    {
+        public string LastPath;
+        public M8SongSummary Read(string path)
+        {
+            LastPath = path;
+            if (path.EndsWith("bad.m8s")) throw new M8SongException("Not a readable M8 song: test");
+            var song = new M8SongSummary { Name = "DEMO", Firmware = "6.2.0", Tempo = 128, Transpose = 12, SongRows = 3, Chains = 2, Phrases = 4, Tables = 1 };
+            song.TrackRows[0] = 3;
+            song.Instruments.Add(new M8InstrumentInfo { Slot = 10, Kind = "Sampler", Name = "KICK", Sample = "/Samples/kick.wav" });
+            song.Instruments.Add(new M8InstrumentInfo { Slot = 11, Kind = "FM Synth", Name = "BASS" });
+            return song;
+        }
+    }
+
+    static void WaitForGui(Func<bool> done, string message)
+    {
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        while (!done())
+        {
+            if (timer.Elapsed.TotalSeconds > 10) throw new Exception("GUI timed out: " + message);
+            Application.DoEvents(); Thread.Sleep(10);
+        }
+    }
+
+    static void TestSongTab()
+    {
+        IM8SongReader original = M8SongReaders.Current;
+        var fake = new FakeSongReader();
+        M8SongReaders.Current = fake;
+        try
+        {
+            using (var form = new MainForm(true))
+            {
+                form.Show(); Application.DoEvents();
+                var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+                var pathBox = (TextBox)form.Controls.Find("SongFilePath", true)[0];
+                var notice = form.Controls.Find("SongNotice", true)[0];
+                var summary = form.Controls.Find("SongSummary", true)[0];
+                var grid = (DataGridView)form.Controls.Find("SongInstruments", true)[0];
+                var browse = (Button)form.Controls.Find("BrowseSong", true)[0];
+                tabs.SelectedIndex = 3; Application.DoEvents();
+                Assert(tabs.SelectedTab.Text == "Song" && tabs.SelectedTab.Contains(browse) && notice.Visible && !summary.Visible && !grid.Visible && pathBox.ReadOnly,
+                    "the Song tab starts with a prompt to choose a song");
+                form.SongFilePicker = () => @"C:\Music\demo.m8s";
+                browse.PerformClick();
+                WaitForGui(() => summary.Visible, "song details");
+                Assert(fake.LastPath == @"C:\Music\demo.m8s" && pathBox.Text == @"C:\Music\demo.m8s" && !notice.Visible, "choosing a song reads it through the reader");
+                Assert(summary.Text.Contains("DEMO") && summary.Text.Contains("128 BPM") && summary.Text.Contains("firmware 6.2.0") && summary.Text.Contains("1: 3") && summary.Text.Contains("2 instruments"),
+                    "the song's name, firmware, tempo, tracks and counts are shown: " + summary.Text);
+                Assert(grid.Visible && grid.Rows.Count == 2 && (string)grid.Rows[0].Cells[0].Value == "0A" && (string)grid.Rows[0].Cells[1].Value == "Sampler" &&
+                    (string)grid.Rows[0].Cells[3].Value == "/Samples/kick.wav", "instruments are listed with hex slot, type, name and sample");
+                form.SongFilePicker = () => @"C:\Music\bad.m8s";
+                browse.PerformClick();
+                WaitForGui(() => notice.Text.StartsWith("Not a readable"), "error message");
+                Assert(notice.Text.Contains("Not a readable M8 song") && !summary.Visible && !grid.Visible && grid.Rows.Count == 0, "an unreadable song shows the reason and clears the old details");
+                tabs.SelectedIndex = 1; Application.DoEvents();
+                Assert(tabs.SelectedTab.Text == "Backup" && form.Controls.Find("StartOperation", true)[0].Visible, "switching back to Backup still shows its controls");
+            }
+        }
+        finally { M8SongReaders.Current = original; }
     }
 
     static void TestPreviewFiltering()

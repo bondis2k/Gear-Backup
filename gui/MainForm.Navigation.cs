@@ -60,7 +60,7 @@ internal sealed partial class MainForm
 
     Control BuildWorkflowTabs()
     {
-        foreach (string title in new[] { "Device", "Backup", "Restore" })
+        foreach (string title in new[] { "Device", "Backup", "Restore", "Song" })
             workflowTabs.TabPages.Add(new TabPage(title) { BackColor = GuiTheme.Surface, Padding = new Padding(12), AutoScroll = true });
         deviceDetails.Name = "DeviceStorageDetails";
         deviceDetails.MaximumSize = new Size(650, 0);
@@ -85,6 +85,7 @@ internal sealed partial class MainForm
         deviceCard.Controls.Add(information, 1, 0);
         workflowTabs.TabPages[0].Controls.Add(deviceCard);
         workflowTabs.TabPages[1].Controls.Add(inputs);
+        workflowTabs.TabPages[SongTabIndex].Controls.Add(BuildSongTab());
         // The tab control shows the new (still empty) page before our handler can move the inputs onto it, so the
         // window stops painting as soon as a switch is requested and paints once when the new page is ready.
         workflowTabs.Selecting += delegate {
@@ -96,7 +97,7 @@ internal sealed partial class MainForm
             try
             {
                 if (synchronizingNavigation) return;
-                if (workflowTabs.SelectedIndex != 0 && !InDeviceMode) ShowOperationTab();
+                if ((workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2) && !InDeviceMode) ShowOperationTab();
                 RefreshWorkflowLayout();
             }
             finally { ReleaseTabSwitch(); }
@@ -158,7 +159,7 @@ internal sealed partial class MainForm
                 }
             }
             finally { synchronizingNavigation = previous; }
-            if (!device && workflowTabs.SelectedIndex != 0) ShowOperationTab();
+            if (!device && (workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2)) ShowOperationTab();
             RefreshWorkflowLayout();
         }
     }
@@ -271,6 +272,7 @@ internal sealed partial class MainForm
         try
         {
             int desired = workflowTabs.SelectedIndex == 0 ? Math.Max(Font.Height * 17, deviceOverview.Height + Font.Height * 5)
+                : workflowTabs.SelectedIndex == SongTabIndex ? Math.Max(Font.Height * 13, songContent.Height + Font.Height * 5)
                 : InDeviceMode ? Font.Height * 13 : Math.Max(Font.Height * 13, inputs.Height + Font.Height * 5);
             int reserved = workflowTabs.SelectedIndex == 2 && Selected == GuiOperation.Restore ? 20 : 23;
             workflowHost.Height = Math.Min(desired, Math.Max(Font.Height * 14, ClientSize.Height - Font.Height * reserved));
