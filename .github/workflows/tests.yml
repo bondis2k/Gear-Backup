@@ -30,20 +30,6 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test
 
-      - name: M8 reader lint and deeper fuzzing (Rust)
-        shell: powershell
-        working-directory: native\m8-reader
-        run: |
-          cargo clippy --locked --all-targets -- -D warnings
-          cargo test --locked --release -- --ignored
-
-      - name: Rust dependency audit
-        shell: powershell
-        working-directory: native\m8-reader
-        run: |
-          cargo install cargo-audit --version 0.22.2 --locked
-          cargo audit
-
       - name: Core tests
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
@@ -61,3 +47,33 @@ jobs:
           path: .test-runs
           if-no-files-found: ignore
           retention-days: 7
+
+  # Runs beside the tests so the slower Rust checks don't extend the wait.
+  rust-checks:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: M8 reader lint and deeper fuzzing (Rust)
+        shell: powershell
+        working-directory: native\m8-reader
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --release -- --ignored
+
+      # Compiling cargo-audit takes minutes; its binary is cached under its version.
+      - name: Cache cargo-audit
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/bin/cargo-audit.exe
+          key: cargo-audit-0.22.2-${{ runner.os }}
+
+      - name: Rust dependency audit
+        shell: powershell
+        working-directory: native\m8-reader
+        run: |
+          if (-not (Test-Path "$env:USERPROFILE\.cargoin\cargo-audit.exe")) { cargo install cargo-audit --version 0.22.2 --locked }
+          cargo audit
