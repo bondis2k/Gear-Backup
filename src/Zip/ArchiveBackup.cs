@@ -108,7 +108,7 @@ namespace GearBackup
                             writer.Write(ArchiveMetadata.Checksums(hashes));
                     }
                 }
-                if (config.Verify) Verify(temp, hashes);
+                if (config.Verify) Verify(temp, hashes, context);
                 context.CheckCancellation(); RejectRootLinks(destination);
                 var current = File.Exists(destination) ? new FileInfo(destination) : null;
                 if ((current != null) != (previous != null) || (current != null && (current.Length != previousSize || current.LastWriteTimeUtc.Ticks != previousTime)))
@@ -122,7 +122,7 @@ namespace GearBackup
 
         static string Relative(string root, string path) { return path.Substring(root.Length).TrimStart('\\', '/'); }
 
-        static void Verify(string path, Dictionary<string, string> hashes)
+        static void Verify(string path, Dictionary<string, string> hashes, OperationContext context)
         {
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var zip = new ZipArchive(stream, ZipArchiveMode.Read))
@@ -130,7 +130,7 @@ namespace GearBackup
                 var buffer = new byte[65536]; int count = 0;
                 foreach (var expected in hashes)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     var entry = zip.GetEntry(expected.Key);
                     if (entry == null) throw new IOException("Archive verification failed: " + expected.Key);
                     using (var hash = SHA256.Create())
@@ -138,11 +138,11 @@ namespace GearBackup
                     {
                         int read;
                         while ((read = input.Read(buffer, 0, buffer.Length)) != 0)
-                        { OperationContext.Current.CheckCancellation(); hash.TransformBlock(buffer, 0, read, buffer, 0); }
+                        { context.CheckCancellation(); hash.TransformBlock(buffer, 0, read, buffer, 0); }
                         hash.TransformFinalBlock(new byte[0], 0, 0);
                         if (FileCopy.ToHex(hash.Hash) != expected.Value) throw new IOException("Archive verification failed: " + expected.Key);
                     }
-                    OperationContext.Current.Progress(Stage.Verifying, expected.Key, 0, 0, ++count, hashes.Count);
+                    context.Progress(Stage.Verifying, expected.Key, 0, 0, ++count, hashes.Count);
                 }
             }
         }

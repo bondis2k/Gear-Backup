@@ -49,7 +49,7 @@ namespace GearBackup
                 {
                     context.CheckCancellation();
                     string title, summary;
-                    int code = CheckSelected(backups, out title, out summary);
+                    int code = CheckSelected(backups, context, out title, out summary);
                     return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed,
                         OutputFolder = backups.Count == 0 ? null : backups.Count == 1 ? backups[0] : Path.GetDirectoryName(backups[0]) };
                 }
@@ -60,12 +60,12 @@ namespace GearBackup
                 }
             }
         }
-        int CheckSelected(List<string> toCheck, out string title, out string summary)
+        int CheckSelected(List<string> toCheck, OperationContext context, out string title, out string summary)
         {
             int ok = 0, damaged = 0, missing = 0, unchecked_ = 0;
             foreach (string backup in toCheck)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 OperationOutput.WriteLine("  " + Path.GetFileName(backup));
                 if (!ContentStore.IsContentStore(backup))
                 {

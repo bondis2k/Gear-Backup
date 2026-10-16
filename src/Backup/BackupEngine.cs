@@ -36,7 +36,7 @@ namespace GearBackup
                         throw new IOException("An incremental backup needs an existing backup folder.");
                     // An incremental backup updates the backup it names, which must be a content store.
                     if (incremental) ContentStore.RequireContentStore(previous);
-                    return new ContentStoreBackup().Run(source, backupRoot, previous, incremental, config);
+                    return new ContentStoreBackup(context).Run(source, backupRoot, previous, incremental, config);
                 }
                 catch (OperationCanceledException)
                 {

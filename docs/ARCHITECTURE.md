@@ -49,7 +49,7 @@ A layer may use its own layer and the ones below it, never the ones above. `buil
 
 Engines never read the console or show windows. They talk to an `IOperationInteraction` (questions, output, plan approval, progress), which the CLI implements with the console, the GUI with dialogs, and the tests with a scripted fake.
 
-The running operation is reached through `OperationContext.Current`, a per-thread ambient value, so helpers do not need it passed to every call. It carries the interaction, the cancellation token, preview mode, the current device and per-operation caches. Every operation starts its own context (`new OperationContext(...).Activate()`): the CLI's `Main`, the GUI's operation runner and tool windows, and each test. Nothing in it outlives the operation.
+The running operation is reached through `OperationContext.Current`, a per-thread ambient value, so helpers do not need it passed to every call. It carries the interaction, the cancellation token, preview mode, the current device and per-operation caches. The engines (`BackupEngine`, `ContentStoreBackup`, `RestoreEngine`, `IntegrityEngine`, `ArchiveBackup`) take the context as a parameter and use that, not the ambient value; only the shared helpers they call (file copying, console output, plan review) read `OperationContext.Current`. New engine code should take the context the same way. Every operation starts its own context (`new OperationContext(...).Activate()`): the CLI's `Main`, the GUI's operation runner and tool windows, and each test. Nothing in it outlives the operation.
 
 Rules of thumb: ask the context for interaction and cancellation; pass a `DeviceProfile` explicitly when you have one rather than reading `CurrentDevice`, which is only for code that cannot easily be given it.
 

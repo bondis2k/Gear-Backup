@@ -37,6 +37,7 @@ namespace GearBackup
         }
 
         // One run's state, shared by the phases below (a ContentStoreBackup is made for each run).
+    readonly OperationContext context;
         string source, history, backup, pointName, manifest;
         bool incremental;
         Config config;
@@ -55,7 +56,9 @@ namespace GearBackup
         int doneFiles, copied, unchanged;
         bool committed;
 
-        internal OperationResult Run(string source, string history, string previous, bool incremental, Config config)
+        internal ContentStoreBackup(OperationContext context) { this.context = context; }
+
+    internal OperationResult Run(string source, string history, string previous, bool incremental, Config config)
         {
             this.source = source; this.history = history; this.incremental = incremental; this.config = config;
             started = DateTime.Now;
@@ -146,7 +149,7 @@ namespace GearBackup
             length.File(Path.Combine(AppIdentity.MetadataRoot(backup), ".gearcatalog-" + new string('0', 32) + ".tmp"));
             foreach (var file in scan.Files)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 string relative = file.FullName.Substring(source.Length);
                 CheckedPath(nameRoot, relative); // Validate logical names; no files are created under them, so only the name rules apply.
                 names.Add(relative); sizes[relative] = file.Length;
@@ -211,7 +214,7 @@ namespace GearBackup
         // From here on the backup folder exists and is marked unfinished until the restore point is committed.
         void PrepareBackupFolder()
         {
-            OperationContext.Current.CheckCancellation();
+            context.CheckCancellation();
             Directory.CreateDirectory(backup);
             AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt"), "single\n");
             SetBackupStatus(backup, Status.Incomplete);
@@ -233,7 +236,6 @@ namespace GearBackup
             RejectRootLinks(objectsFolder); Directory.CreateDirectory(objectsFolder);
             if (small.Count > 1)
             {
-                OperationContext context = OperationContext.Current;
                 try
                 {
                     Parallel.ForEach(small, new ParallelOptions { MaxDegreeOfParallelism = CopyWorkers, CancellationToken = context.Cancellation }, index =>
@@ -263,8 +265,8 @@ namespace GearBackup
         RestoreEntry CaptureFile(int index)
         {
             PlannedFile item = files[index];
-            OperationContext.Current.CheckCancellation();
-            OperationContext.Current.Progress(Stage.Copying, item.Relative, Interlocked.Read(ref addedBytes), needed, Interlocked.CompareExchange(ref doneFiles, 0, 0), files.Count);
+            context.CheckCancellation();
+            context.Progress(Stage.Copying, item.Relative, Interlocked.Read(ref addedBytes), needed, Interlocked.CompareExchange(ref doneFiles, 0, 0), files.Count);
             item.Source.Refresh();
             if (!item.Source.Exists || item.Source.Length != item.Size || item.Source.LastWriteTimeUtc.Ticks != item.Modified)
                 throw new IOException("Source changed since the preview: " + item.Relative);
@@ -306,7 +308,7 @@ namespace GearBackup
         // Nothing names a new restore point until every referenced object has been captured; the pointer to it is published last.
         void CommitRestorePoint()
         {
-            OperationContext.Current.CheckCancellation();
+            context.CheckCancellation();
             var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
             foreach (string folder in snapshot.Folders) rows.Append("D\t").Append(Encode(folder)).Append('\n');
             foreach (var item in snapshot.Files)
