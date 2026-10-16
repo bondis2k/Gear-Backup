@@ -20,7 +20,7 @@ foreach ($reference in @('Windows.Data.winmd', 'Windows.UI.winmd', 'Windows.Foun
 foreach ($reference in @('System.Runtime.WindowsRuntime.dll', 'System.Runtime.dll', 'System.Runtime.InteropServices.WindowsRuntime.dll')) {
     $arguments += "/r:$(Join-Path $frameworkPath $reference)"
 }
-$sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' | ForEach-Object FullName)
+$sources = @(Get-ChildItem -LiteralPath (Join-Path $projectRoot 'src') -Filter '*.cs' -Recurse | ForEach-Object FullName)
 if ($Target -eq 'GUI') {
     $manualShell = Get-Command pwsh.exe -ErrorAction SilentlyContinue
     if (-not $manualShell) { throw 'PowerShell 7 is required to generate the HTML manual. Install it from https://aka.ms/powershell.' }

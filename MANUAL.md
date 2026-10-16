@@ -425,4 +425,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-portable-tests
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-cli-path-tests.ps1
 ```
 
-The installer build refreshes both executables and the manuals before packaging them. App version information comes from `src/AppIdentity.cs`. Gear Backup is licensed under **GPL-3.0**; see the included `LICENSE` and the [project repository](https://github.com/bondis2k/Gear-Backup).
+The installer build refreshes both executables and the manuals before packaging them. App version information comes from `src/Foundation/AppIdentity.cs`. The code layout and its layering rules are described in `docs/ARCHITECTURE.md`. Gear Backup is licensed under **GPL-3.0**; see the included `LICENSE` and the [project repository](https://github.com/bondis2k/Gear-Backup).

@@ -16,7 +16,9 @@ using static StorageCatalog;
 using static AppSettings;
 using static ProfileSettings;
 using static Session;
-using static Workflow;
+using static BackupStatuses;
+using static Histories;
+using static ProfileNaming;
 
 partial class Tests
 {

@@ -8,7 +8,7 @@ using static AppSettings;
 using static DeviceSelection;
 using static ProfileSettings;
 using static Session;
-using static Workflow;
+using static ProfileNaming;
 using static GearGui;
 
 internal sealed class ProfileSettingsDialog : ToolsDialog

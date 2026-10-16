@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using static ConsoleUi;
+using static Formatting;
 
 // Small, read-only overview: no recursive scan or MTP transfer just to detect a device.
 internal static class DeviceInformation

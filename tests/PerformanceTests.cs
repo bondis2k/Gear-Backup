@@ -66,9 +66,9 @@ partial class Tests
         File.Delete(checksums);
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
         Assert(File.Exists(checksums), "missing checksum list is rebuilt");
-        Workflow.SetBackupStatus(backup, Status.Incomplete);
+        BackupStatuses.SetBackupStatus(backup, Status.Incomplete);
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(Workflow.BackupStatus(backup) == Status.Complete, "unfinished backup still completes normal recovery");
+        Assert(BackupStatuses.BackupStatus(backup) == Status.Complete, "unfinished backup still completes normal recovery");
         config.PointInTimeHistory = true;
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
         Assert(Directory.GetFiles(Snapshots.SnapshotRoot(backup), "*.manifest").Length == 1, "enabling history still writes a snapshot");

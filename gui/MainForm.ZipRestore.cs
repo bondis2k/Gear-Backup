@@ -77,7 +77,7 @@ internal sealed partial class MainForm
     {
         if (loadingArchive || archiveRestoreInfo == null) return;
         string summary = archiveRestoreInfo.Device.Name + " · " + archiveRestoreInfo.Files + " files · " +
-            ConsoleUi.FormatSize(archiveRestoreInfo.ContentBytes) + " content · " + ConsoleUi.FormatSize(archiveRestoreInfo.ExtractedBytes) + " extracted · taken " +
+            Formatting.FormatSize(archiveRestoreInfo.ContentBytes) + " content · " + Formatting.FormatSize(archiveRestoreInfo.ExtractedBytes) + " extracted · taken " +
             archiveRestoreInfo.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") + ". ";
         archiveRestoreNotice.Text = summary + (displayedDevice == null ? "Detect the destination device to enable restore." :
             displayedDevice.Id != archiveRestoreInfo.Device.Id ? "Device mismatch: detected " + displayedDevice.Name + ". Restore is blocked." :

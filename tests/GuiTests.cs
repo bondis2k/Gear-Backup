@@ -8,6 +8,7 @@ using System.Threading;
 using System.Windows.Forms;
 using static PathSafety;
 using static ConsoleUi;
+using static Formatting;
 using static Snapshots;
 using static Backups;
 using static FujiSettings;
@@ -16,7 +17,7 @@ using static StorageCatalog;
 using static AppSettings;
 using static ProfileSettings;
 using static Session;
-using static Workflow;
+using static ProfileNaming;
 using static GearGui;
 
 class GuiTestRunner

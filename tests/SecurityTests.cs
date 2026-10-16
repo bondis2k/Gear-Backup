@@ -11,7 +11,8 @@ using static Backups;
 using static SampleDependencies;
 using static MtpMirror;
 using static UsbDevices;
-using static Workflow;
+using static AtomicFile;
+using static BackupStatuses;
 
 partial class Tests
 {

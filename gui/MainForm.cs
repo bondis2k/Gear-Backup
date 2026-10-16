@@ -8,8 +8,9 @@ using static SettingsLocation;
 using static PathSafety;
 using static AppSettings;
 using static ConsoleUi;
+using static Formatting;
 using static ProfileSettings;
-using static Workflow;
+using static ProfileNaming;
 using static FolderPicker;
 using static GearGui;
 
