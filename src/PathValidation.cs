@@ -38,12 +38,25 @@ static class PathSafety
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
             throw new IOException("Invalid relative path: " + relative);
         foreach (string part in relative.Replace('/', '\\').Split('\\'))
+        {
             if (part.Length == 0 || part == "." || part == ".." || part.EndsWith(".") || part.EndsWith(" "))
                 throw new IOException("Non-canonical relative path: " + relative);
+            if (IsReservedName(part)) throw new IOException("Reserved Windows name: " + relative);
+        }
         string full = Path.GetFullPath(Path.Combine(root, relative));
         if (!Within(full, root) || Rooted(full) == Rooted(root))
             throw new IOException("Path escapes its folder: " + relative);
         return full;
+    }
+
+    // Names Windows treats as devices (CON, NUL, COM1, ...) whatever the extension, which older Windows versions open
+    // as the device instead of a file. The stem is what comes before the first dot, ignoring spaces at its end.
+    internal static bool IsReservedName(string part)
+    {
+        string stem = part.Split('.')[0].TrimEnd(' ').ToUpperInvariant();
+        if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" || stem == "CONIN$" || stem == "CONOUT$") return true;
+        return stem.Length == 4 && (stem.StartsWith("COM") || stem.StartsWith("LPT")) &&
+            ((stem[3] >= '0' && stem[3] <= '9') || stem[3] == '\u00b9' || stem[3] == '\u00b2' || stem[3] == '\u00b3');
     }
 
     // Fails when a file sits where one of path's parent folders must be created.

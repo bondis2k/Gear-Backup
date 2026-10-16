@@ -55,6 +55,38 @@ partial class Tests
         }
     }
 
+    static void TestMtpDeviceLimits(string dir)
+    {
+        string mirror = Path.Combine(dir, "limits-mirror");
+        var day = new DateTime(2026, 1, 1, 10, 0, 0);
+        var device = new FakeMtpSource();
+        device.File("small.wav", "data", day);
+        // A device that claims more than any disk holds is refused before anything is downloaded.
+        device.Items.Add(new MtpObject { Id = "huge.bin", Name = "huge.bin", RelativePath = "huge.bin", Size = long.MaxValue / 4, Modified = day });
+        device.Content["huge.bin"] = new byte[1];
+        Throws(() => WithUi(() => SyncMirror(device, mirror)), "a device claiming more than the disk can hold is refused");
+        Assert(device.Downloads == 0 && !File.Exists(Path.Combine(mirror, "small.wav")), "nothing is downloaded when the space check fails");
+        device.Items.RemoveAll(i => i.Id == "huge.bin");
+
+        string asked = null; long needed = -1;
+        Throws(() => WithUi(() => SyncMirror(device, mirror, (where, bytes) => { asked = where; needed = bytes; return "Not enough space (test)"; })), "a space shortage stops the sync");
+        Assert(asked == mirror && needed == 4 && device.Downloads == 0, "the space check is asked for the mirror drive and the bytes to download");
+        WithUi(() => SyncMirror(device, mirror, (where, bytes) => null));
+        Assert(device.Downloads == 1 && File.ReadAllText(Path.Combine(mirror, "small.wav")) == "data", "with room, the files are downloaded");
+
+        device.Items.Add(new MtpObject { Id = "neg.wav", Name = "neg.wav", RelativePath = "neg.wav", Size = -5, Modified = day });
+        device.Items.Add(new MtpObject { Id = "long", Name = "long", RelativePath = new string('a', MtpMirror.MaxRelativePath + 1), Size = 1, Modified = day });
+        MirrorResult skipped = null;
+        WithUi(() => { skipped = SyncMirror(device, mirror, (where, bytes) => null); });
+        Assert(skipped.Skipped.Count == 2 && skipped.Skipped.TrueForAll(name => name.Length <= 80) && !File.Exists(Path.Combine(mirror, "neg.wav")),
+            "a negative size or an overlong path is skipped, and long names are shortened in the report");
+
+        int original = MtpMirror.MaxItems;
+        MtpMirror.MaxItems = 2;
+        try { Throws(() => WithUi(() => SyncMirror(device, mirror, (where, bytes) => null)), "a device listing too many items is refused"); }
+        finally { MtpMirror.MaxItems = original; }
+    }
+
     static void TestMtpMirror(string dir)
     {
         string mirror = Path.Combine(dir, "op1-mirror");

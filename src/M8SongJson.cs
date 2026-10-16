@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using System.Web.Script.Serialization;
 
 // Turns the native reader's JSON (schema 1, documented in native/m8-reader/src/summary.rs) into an M8SongSummary.
@@ -59,7 +60,21 @@ static class M8SongJson
     static string Text(Dictionary<string, object> source, string key)
     {
         object value;
-        return source.TryGetValue(key, out value) && value != null ? Convert.ToString(value, CultureInfo.InvariantCulture) : "";
+        return source.TryGetValue(key, out value) && value != null ? Clean(Convert.ToString(value, CultureInfo.InvariantCulture)) : "";
+    }
+
+    // Names and paths come from a file anyone can hand you and are shown as they are, so control characters,
+    // zero-width characters and bidirectional overrides (which make text read differently from how it is stored) are dropped.
+    internal static string Clean(string text)
+    {
+        var result = new StringBuilder(text.Length);
+        foreach (char c in text)
+        {
+            if (char.IsControl(c) || c == '\u061C' || (c >= '\u200B' && c <= '\u200F') || (c >= '\u202A' && c <= '\u202E') ||
+                c == '\u2060' || (c >= '\u2066' && c <= '\u2069') || c == '\uFEFF') continue;
+            result.Append(c);
+        }
+        return result.ToString();
     }
 
     static double Number(Dictionary<string, object> source, string key)

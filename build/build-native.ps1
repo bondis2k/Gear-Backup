@@ -23,6 +23,14 @@ if (-not $cargo) {
     throw 'Rust is required to build the M8 song reader. Install it from https://rustup.rs (default settings), then build again.'
 }
 
+# Panic messages embed source paths, which would put the builder's user name and folders into the shipped
+# DLL. These remaps replace them (later flags win, so the more specific ones come last). The variable
+# replaces the crate's .cargo\config.toml rustflags, so crt-static and Control Flow Guard are repeated here.
+$cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
+$flags = @('-Ctarget-feature=+crt-static', '-Ccontrol-flow-guard', "--remap-path-prefix=$env:USERPROFILE=~",
+    "--remap-path-prefix=$cargoHome=~\.cargo", "--remap-path-prefix=$projectRoot=gearbackup")
+$previousFlags = $env:CARGO_ENCODED_RUSTFLAGS
+$env:CARGO_ENCODED_RUSTFLAGS = $flags -join [string][char]0x1f
 Push-Location $crate
 try {
     # --locked builds exactly the dependency versions in Cargo.lock.
@@ -32,10 +40,26 @@ try {
     }
     & $cargo build --release --locked --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Building the M8 song reader failed.' }
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    $env:CARGO_ENCODED_RUSTFLAGS = $previousFlags
+}
 
 $dll = Join-Path $crate 'target\release\m8_reader.dll'
 if (-not (Test-Path -LiteralPath $dll)) { throw "Expected $dll after the build." }
+
+# Refuse to ship a DLL that still carries the builder's folders, or lacks the protections it is built with.
+$bytes = [IO.File]::ReadAllBytes($dll)
+$characteristics = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 24 + 70)
+foreach ($required in @(@{ Bit = 0x0040; Name = 'ASLR' }, @{ Bit = 0x0100; Name = 'DEP' }, @{ Bit = 0x4000; Name = 'Control Flow Guard' })) {
+    if (-not ($characteristics -band $required.Bit)) { throw "m8_reader.dll was built without $($required.Name)." }
+}
+$text = [Text.Encoding]::GetEncoding(28591).GetString($bytes)
+foreach ($private in @($env:USERPROFILE, $projectRoot)) {
+    if ($private -and $text.IndexOf($private, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        throw "m8_reader.dll contains the build path '$private'. Check the path remapping in build-native.ps1."
+    }
+}
 if ($OutputDirectory) {
     New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
     $dll = (Copy-Item -LiteralPath $dll -Destination $OutputDirectory -PassThru -Force).FullName

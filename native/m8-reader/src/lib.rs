@@ -230,7 +230,20 @@ mod tests {
     // out of the reader. Truncations and seeded random corruption of real songs stand in for damaged SD cards.
     #[test]
     fn damaged_songs_never_crash_the_reader() {
-        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        damage_songs(150, 0x9E37_79B9_7F4A_7C15);
+    }
+
+    // Many more seeded rounds; run with `cargo test --release -- --ignored` (CI does).
+    #[test]
+    #[ignore]
+    fn damaged_songs_deep_fuzz() {
+        for seed in [0x1234_5678_9ABC_DEF1u64, 0xDEAD_BEEF_CAFE_F00D, 0x0BAD_C0DE_1357_9BDF] {
+            damage_songs(4000, seed);
+        }
+    }
+
+    fn damage_songs(rounds: usize, seed: u64) {
+        let mut state = seed;
         let mut next = move || {
             state ^= state << 13;
             state ^= state >> 7;
@@ -245,7 +258,7 @@ mod tests {
                 .iter()
                 .map(|&cut| original[..cut].to_vec())
                 .collect();
-            for _ in 0..150 {
+            for _ in 0..rounds {
                 let mut bytes = original.clone();
                 for _ in 0..1 + next() % 16 {
                     let at = (next() % bytes.len() as u64) as usize;

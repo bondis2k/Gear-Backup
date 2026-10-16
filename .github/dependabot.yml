@@ -1,0 +1,11 @@
+# Weekly update pull requests for what the build downloads: the Rust reader's crates and the pinned GitHub Actions.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /native/m8-reader
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

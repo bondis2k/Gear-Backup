@@ -19,6 +19,16 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ### Changed
 - Restore works without a connected device: all available device backups are listed and can be restored to a folder. Detection still filters the list to that device type; restore requests retain and revalidate the selected backup's identity.
 
+### Security
+- The M8 reader DLL is built with source paths remapped, so it no longer contains the builder's user name or folders, and the build refuses to produce a DLL that does.
+- `m8_reader.dll` is loaded by full path with its own dependencies restricted to System32. The `GEARBACKUP_M8_READER` override is removed, so the load path cannot be redirected through the environment.
+- Windows device names (CON, PRN, AUX, NUL, COM0-9, LPT0-9, CONIN$, CONOUT$, with any extension) are refused in every path from a backup, ZIP or MTP device, not only in ZIPs.
+- Song names, instrument names and sample paths shown on the Song tab have control, zero-width and bidirectional characters removed, and an & is shown literally instead of as a shortcut key.
+- Reading an MTP device checks free space before the first download, and refuses a device that lists more than a million items, negative sizes or overlong paths. A ZIP with more than a million entries is refused.
+- The M8 reader DLL is built with Control Flow Guard, and the build checks that it has ASLR, DEP and Control Flow Guard.
+- The Rust reader has a pinned toolchain, weekly Dependabot updates (crates and GitHub Actions), clippy, a deeper fuzz run and `cargo audit` in CI.
+- Added `SECURITY.md` with how to report a vulnerability, and a manual note that ZIP checksums detect damage, not tampering.
+
 ## [0.9.4] - 2026-10-11
 
 ### Added

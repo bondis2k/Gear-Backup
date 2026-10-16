@@ -412,7 +412,7 @@ partial class Tests
         {
             LastPath = path;
             if (path.EndsWith("bad.m8s")) throw new M8SongException("Not a readable M8 song: test");
-            var song = new M8SongSummary { Name = "DEMO", Firmware = "6.2.0", Tempo = 128, Transpose = 12, SongRows = 3, Chains = 2, Phrases = 4, Tables = 1 };
+            var song = new M8SongSummary { Name = "DEMO & CO", Firmware = "6.2.0", Tempo = 128, Transpose = 12, SongRows = 3, Chains = 2, Phrases = 4, Tables = 1 };
             song.TrackRows[0] = 3;
             song.Instruments.Add(new M8InstrumentInfo { Slot = 10, Kind = "Sampler", Name = "KICK", Sample = "/Samples/kick.wav" });
             song.Instruments.Add(new M8InstrumentInfo { Slot = 11, Kind = "FM Synth", Name = "BASS" });
@@ -453,6 +453,7 @@ partial class Tests
                 browse.PerformClick();
                 WaitForGui(() => summary.Visible, "song details");
                 Assert(fake.LastPath == @"C:\Music\demo.m8s" && pathBox.Text == @"C:\Music\demo.m8s" && !notice.Visible, "choosing a song reads it through the reader");
+                Assert(!((Label)summary).UseMnemonic && !((Label)notice).UseMnemonic && summary.Text.Contains("DEMO & CO"), "song text shows an & literally instead of as a shortcut key");
                 Assert(summary.Text.Contains("DEMO") && summary.Text.Contains("128 BPM") && summary.Text.Contains("firmware 6.2.0") && summary.Text.Contains("1: 3") && summary.Text.Contains("2 instruments"),
                     "the song's name, firmware, tempo, tracks and counts are shown: " + summary.Text);
                 Assert(grid.Visible && grid.Rows.Count == 2 && (string)grid.Rows[0].Cells[0].Value == "0A" && (string)grid.Rows[0].Cells[1].Value == "Sampler" &&
