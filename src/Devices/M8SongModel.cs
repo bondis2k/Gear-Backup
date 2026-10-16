@@ -22,6 +22,8 @@ namespace GearBackup
     {
         public int Slot;
         public string Kind = "", Name = "", Sample = "";
+        // Keep the original reference for filesystem checks; display cleaning must never change what we look up.
+        public string RawSample;
     }
 
     // Raised when a song can't be read: the native reader is missing, or the file isn't a readable M8 song.

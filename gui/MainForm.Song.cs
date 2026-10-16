@@ -15,6 +15,8 @@ namespace GearBackup.Gui
         const int SongTabIndex = 3;
 
         readonly SongTab songTab;
+        readonly M8SamplesTab samplesTab;
+        readonly M8MigrationTab migrationTab;
 
 
 

@@ -10,12 +10,14 @@ namespace GearBackup.Gui
     internal sealed partial class MainForm
     {
         readonly TabControl workflowTabs = new TabControl { Name = "WorkflowTabs", Dock = DockStyle.Fill };
+        // Keep inactive device tools owned by the form so theme and DPI changes reach their inputs too.
+        readonly Panel deviceToolParking = new Panel { Visible = false };
         readonly ComboBox backupMode = new ComboBox { Name = "BackupOperation", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill },
             restoreMode = new ComboBox { Name = "RestoreOperation", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
         readonly TextBox restoreDestination = new TextBox { Name = "RestoreDestination", AccessibleName = "Restore destination" };
         readonly Label deviceDetails = GuiTheme.Label("", 10, GuiTheme.Ink);
         FieldPanel sourceField, restoreField;
-        Control workflowHost, deviceOverview;
+        Control workflowHost, deviceOverview, operationState, activityArea;
         Button goToBackup, goToRestore;
         readonly Label[] devicePlaceholders = new Label[2];
         bool synchronizingNavigation, backupOptionsExpanded, sizingWorkflow;
@@ -88,6 +90,9 @@ namespace GearBackup.Gui
             workflowTabs.TabPages[0].Controls.Add(deviceCard);
             workflowTabs.TabPages[1].Controls.Add(inputs);
             workflowTabs.TabPages[SongTabIndex].Controls.Add(songTab.Build());
+            deviceToolParking.Controls.Add(samplesTab.Build());
+            deviceToolParking.Controls.Add(migrationTab.Build());
+            Controls.Add(deviceToolParking);
             // The tab control shows the new (still empty) page before our handler can move the inputs onto it, so the
             // window stops painting as soon as a switch is requested and paints once when the new page is ready.
             workflowTabs.Selecting += delegate {
@@ -122,7 +127,7 @@ namespace GearBackup.Gui
         }
 
         // Gear Backup mode is the whole app: Device, Backup and Restore. A device mode (M8, Tracker Mini, OP-XY,
-        // OP-1 Field) keeps Device but swaps Backup and Restore for placeholders until its own tools exist.
+        // OP-1 Field) keeps Device and shows its own tools (or placeholders).
         bool InDeviceMode { get { return gearIcons != null && gearIcons.Active.Device != null; } }
         const string FirstDeviceTab = "Coming soon", SecondDeviceTab = "Planned";
 
@@ -137,6 +142,9 @@ namespace GearBackup.Gui
                 {
                     goToBackup.Visible = goToRestore.Visible = !device;
                     TabPage first = workflowTabs.TabPages[1], second = workflowTabs.TabPages[2];
+                    Control sampleContent = samplesTab.BuildContent;
+                    deviceToolParking.Controls.Add(sampleContent);
+                    deviceToolParking.Controls.Add(migrationTab.Content);
                     for (int i = 0; i < 2; i++)
                     {
                         if (devicePlaceholders[i] == null)
@@ -153,6 +161,17 @@ namespace GearBackup.Gui
                         string name = gearIcons.Active.Name;
                         devicePlaceholders[0].Text = "Tools for the " + name + " will be placed here.";
                         devicePlaceholders[1].Text = "More " + name + " features are planned for this tab.";
+                        if (gearIcons.Active.Device == Devices.M8)
+                        {
+                            first.Controls.Remove(devicePlaceholders[0]);
+                            first.Text = "Sample check";
+                            first.Controls.Add(sampleContent);
+                            samplesTab.Activate();
+                            second.Controls.Remove(devicePlaceholders[1]);
+                            second.Text = "Card migration";
+                            second.Controls.Add(migrationTab.Content);
+                            migrationTab.Activate();
+                        }
                     }
                     else
                     {
@@ -273,10 +292,25 @@ namespace GearBackup.Gui
             sizingWorkflow = true;
             try
             {
+                bool samplePage = InDeviceMode && workflowTabs.SelectedIndex == 1 && gearIcons.Active.Device == Devices.M8;
+                bool migrationPage = InDeviceMode && workflowTabs.SelectedIndex == 2 && gearIcons.Active.Device == Devices.M8;
+                // The read-only M8 tool owns its status and results; give it the space normally used by backup activity.
+                if (operationState != null) operationState.Visible = !(samplePage || migrationPage) || runner.IsBusy;
+                if (activityArea != null) activityArea.Visible = !(samplePage || migrationPage) || runner.IsBusy;
                 int desired = workflowTabs.SelectedIndex == 0 ? Math.Max(Font.Height * 17, deviceOverview.Height + Font.Height * 5)
                     : workflowTabs.SelectedIndex == SongTabIndex ? Math.Max(Font.Height * 13, songTab.ContentHeight + Font.Height * 5)
+                    : InDeviceMode && workflowTabs.SelectedIndex == 1 && gearIcons.Active.Device == Devices.M8 ? samplesTab.ContentHeight + Font.Height * 5
                     : InDeviceMode ? Font.Height * 13 : Math.Max(Font.Height * 13, inputs.Height + Font.Height * 5);
                 int reserved = workflowTabs.SelectedIndex == 2 && Selected == GuiOperation.Restore ? 20 : 23;
+                if ((samplePage || migrationPage) && !runner.IsBusy)
+                {
+                    var layout = workflowHost.Parent as TableLayoutPanel;
+                    Control header = layout == null ? null : layout.GetControlFromPosition(0, 0);
+                    int available = ClientSize.Height - (header == null ? Font.Height * 7 : header.Height + header.Margin.Vertical) -
+                        (layout == null ? 60 : layout.Padding.Vertical) - 8;
+                    workflowHost.Height = Math.Max(Font.Height * 14, available);
+                    return;
+                }
                 workflowHost.Height = Math.Min(desired, Math.Max(Font.Height * 14, ClientSize.Height - Font.Height * reserved));
             }
             finally { sizingWorkflow = false; }
