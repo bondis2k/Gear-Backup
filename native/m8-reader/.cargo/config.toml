@@ -1,3 +1,4 @@
-# Link the C runtime statically so m8_reader.dll runs without the Visual C++ redistributable.
+# Link the C runtime statically so m8_reader.dll runs without the Visual C++ redistributable, and enable
+# Control Flow Guard (build\build-native.ps1 repeats these flags and checks the result).
 [target.'cfg(all(windows, target_env = "msvc"))']
-rustflags = ["-C", "target-feature=+crt-static"]
+rustflags = ["-C", "target-feature=+crt-static", "-C", "control-flow-guard"]

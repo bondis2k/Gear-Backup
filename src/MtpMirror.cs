@@ -75,7 +75,12 @@ static class MtpMirror
     // changed, and removes files and folders that are no longer on the device. Names from the device
     // go through SafePath, so a strange name can't write outside the mirror; such items are skipped.
     // Nothing is ever written to the device.
-    internal static MirrorResult SyncMirror(IMtpSource source, string mirror)
+    // A device decides how many items it lists and how big they are; these keep a faulty or hostile one from
+    // exhausting memory (a list this long is far beyond any camera or sampler) or the disk.
+    internal static int MaxItems = 1000000;
+    internal const int MaxRelativePath = 1024;
+
+    internal static MirrorResult SyncMirror(IMtpSource source, string mirror, Func<string, long, string> checkSpace = null)
     {
         var result = new MirrorResult();
         Directory.CreateDirectory(mirror);
@@ -86,6 +91,7 @@ static class MtpMirror
         var folders = new List<string>();
         ReadMirrorTree(mirror, files, folders);
         List<MtpObject> items = source.ListAll();
+        if (items.Count > MaxItems) throw new IOException("The device lists " + items.Count.ToString("N0") + " items, more than the " + MaxItems.ToString("N0") + " Gear Backup will read.");
 
         var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var cleanFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -94,6 +100,7 @@ static class MtpMirror
         foreach (MtpObject item in items)
         {
             string path;
+            if (item.Size < 0 || (item.RelativePath ?? "").Length > MaxRelativePath) { result.Skipped.Add(Shorten(item.RelativePath)); continue; }
             try { path = SafePath(mirror, item.RelativePath); }
             catch (IOException) { result.Skipped.Add(item.RelativePath); continue; }
             onDevice.Add(item.RelativePath);
@@ -107,8 +114,11 @@ static class MtpMirror
                 continue;
             }
             downloads.Add(new KeyValuePair<MtpObject, string>(item, path));
-            total += item.Size;
+            total = checked(total + item.Size);
         }
+        // Sizes come from the device, so check the room before the first download rather than part-way through.
+        string shortage = (checkSpace ?? ((where, needed) => DiskSpace.Shortage(where, needed, "the download from the device")))(mirror, total);
+        if (shortage != null) throw new IOException(shortage);
 
         long done = 0;
         foreach (var download in downloads)
@@ -159,6 +169,12 @@ static class MtpMirror
                 Directory.Delete(folder);
         }
         return result;
+    }
+
+    static string Shorten(string text)
+    {
+        text = text ?? "";
+        return text.Length <= 80 ? text : text.Substring(0, 77) + "...";
     }
 
     // Rejects path, or a folder between it and the mirror (checked on its own at the start of a sync), if

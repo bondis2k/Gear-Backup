@@ -6,6 +6,22 @@ using System.Threading;
 
 partial class Tests
 {
+    static void TestZipEntryLimit(string root)
+    {
+        string source = Folder(root, "source"), archive = Path.Combine(root, "limit.zip");
+        Put(Path.Combine(source, "Songs", "one.m8s"), "SONG");
+        Put(Path.Combine(source, "Samples", "kick.wav"), "KICK");
+        var config = new Config { Preview = false, BackupFolder = root };
+        WithUi(() => ArchiveBackup.Run(source, archive, config, new SourceChoice { Path = source, Detected = Devices.M8 }));
+        ZipRestoreInfo info = null;
+        WithUi(() => info = ZipRestore.Inspect(archive));
+        Assert(info.Files == 2, "a normal ZIP is inspected");
+        int original = ZipRestore.MaxEntries;
+        ZipRestore.MaxEntries = 3; // the ZIP has two files, folders and two metadata entries
+        try { Throws(() => WithUi(() => ZipRestore.Inspect(archive)), "a ZIP with more entries than the limit is refused"); }
+        finally { ZipRestore.MaxEntries = original; }
+    }
+
     static void TestZipRestore(string root)
     {
         string source = Folder(root, "source"), target = Folder(root, "target"), scratch = Folder(root, "scratch"), archive = Path.Combine(root, "backup.zip");

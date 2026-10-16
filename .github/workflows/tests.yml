@@ -26,6 +26,20 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test
 
+      - name: M8 reader lint and deeper fuzzing (Rust)
+        shell: powershell
+        working-directory: native\m8-reader
+        run: |
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --release -- --ignored
+
+      - name: Rust dependency audit
+        shell: powershell
+        working-directory: native\m8-reader
+        run: |
+          cargo install cargo-audit --version 0.22.2 --locked
+          cargo audit
+
       - name: Core tests
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1

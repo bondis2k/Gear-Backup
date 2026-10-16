@@ -201,6 +201,8 @@ ZIP restore merges the archive's files and empty folders into the destination. E
 
 Free-space checks use the ZIP's validated file sizes and include temporary replacement space. If the extraction folder and destination share a drive, their simultaneous space requirements are combined. This check measures the PC folder's drive when restoring for an MTP device; it cannot measure the MTP device's available capacity.
 
+The checksums in a ZIP detect damage and incomplete copies. They do not prove who made the ZIP, because anyone can change a ZIP and its checksum list together. Only restore ZIPs you made yourself or otherwise trust, and note that a ZIP listing more than a million entries is refused.
+
 ### Restore individual files or folders
 
 1. Select **Restore individual files** and choose the backup and point.

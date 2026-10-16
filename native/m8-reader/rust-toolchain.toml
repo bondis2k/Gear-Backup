@@ -1,0 +1,5 @@
+# The Rust toolchain the M8 song reader is built and tested with. Update it on purpose, not by accident.
+[toolchain]
+channel = "1.99.0"
+profile = "minimal"
+components = ["clippy"]

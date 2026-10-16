@@ -27,6 +27,10 @@ internal static class ZipRestore
         internal readonly List<string> Folders = new List<string>();
     }
 
+    // A ZIP's central directory is read into memory, so a ZIP listing millions of entries is refused; real device
+    // backups hold far fewer.
+    internal static int MaxEntries = 1000000;
+
     internal static ZipRestoreInfo Inspect(string path)
     {
         RejectRootLinks(path);
@@ -153,10 +157,7 @@ internal static class ZipRestore
 
     internal static string CheckSpace(string path, long needed)
     {
-        long free;
-        try { free = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))).AvailableFreeSpace; }
-        catch (Exception ex) { throw new IOException("Cannot determine free space for the restore: " + path, ex); }
-        return needed > free ? "Not enough space for ZIP restore on " + Path.GetPathRoot(path) + ": needs " + ConsoleUi.FormatSize(needed) + ", but only " + ConsoleUi.FormatSize(free) + " is free." : null;
+        return DiskSpace.Shortage(path, needed, "ZIP restore");
     }
 
     static void RequireSpace(Func<string, long, string> check, string path, long needed)
@@ -170,6 +171,7 @@ internal static class ZipRestore
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string validationRoot = Rooted(Path.Combine(Path.GetTempPath(), "GearBackup-ZipValidation"));
         long content = 0, total = 0;
+        if (zip.Entries.Count > MaxEntries) throw new IOException("This ZIP lists " + zip.Entries.Count.ToString("N0") + " entries, more than the " + MaxEntries.ToString("N0") + " Gear Backup will restore.");
         foreach (var entry in zip.Entries)
         {
             OperationContext.Current.CheckCancellation();
