@@ -134,6 +134,8 @@ Failures that callers may want to tell apart have their own types in `Foundation
 
 Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure.
 
+The namespace commit re-indented every source file, so `git blame` would credit it for most lines. `.git-blame-ignore-revs` lists it (and any later mechanical rewrite); run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, and `git diff -w` hides the indentation in that commit.
+
 ## Where does new code go?
 
 - A rule about paths, files or records: `Foundation`.
