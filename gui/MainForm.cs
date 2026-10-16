@@ -63,6 +63,7 @@ internal sealed partial class MainForm : Form
     public MainForm(bool designPreview, Config startupOptions = null)
     {
         runner = new GuiOperationRunner(this);
+        songTab = new SongTab(this);
         Text = AppIdentity.Name;
         // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
         // assets\Backup.ico); only the header picture changes when a device is detected.

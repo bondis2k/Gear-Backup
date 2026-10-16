@@ -94,6 +94,8 @@ The Song tab calls `IM8SongReader` (`Devices\M8SongReader.cs`). The one implemen
 
 `MainForm` is split over several files by concern: `MainForm.cs` (window, header, activity area), `.Navigation` (tabs and gear modes), `.Restore`, `.ZipRestore`, `.BackupSets`, `.Song` and `.WindowsTheme`. `GuiOperationRunner` owns the worker thread and talks to the engines; the form only displays. `GuiTheme`, `GuiPalette` and the `Gui*Theme` files give the four appearances. Several form fields are `internal` hooks (such as `SongFilePicker`) so tests can replace dialogs.
 
+A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` and `ContentHeight`) is the module's side, and `IWorkflowTabHost` is the small set of window services it may use (fonts, tooltips, the owner for dialogs, running on the UI thread, relayout, redraw freezing); `MainForm` implements the host in `MainForm.Song.cs`. The Song tab (`SongTab`) is the first module. Move another tab over by giving it the same shape, rather than adding more fields and partial files to `MainForm`.
+
 ## Building and testing
 
 | Script | What it does |
