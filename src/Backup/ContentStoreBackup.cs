@@ -19,7 +19,9 @@ using static Formatting;
 // current pointer is published last. SQLite is rebuilt from those records and is never needed to restore.
 internal sealed class ContentStoreBackup
 {
-    internal static bool IsSingle(string backup)
+    // Every backup is a content store, marked by storage-mode.txt (written first, so even a first backup that failed has it).
+    // Backups made by older versions in a plain-folder layout have no marker and are no longer supported.
+    internal static bool IsContentStore(string backup)
     {
         if (backup == null) return false;
         string path = Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt");
@@ -32,6 +34,13 @@ internal sealed class ContentStoreBackup
         string mode = Records.ReadText(path, Records.SmallLimit, "Backup storage mode").Trim();
         if (mode != "single") throw new IOException("Unknown backup storage mode.");
         return true;
+    }
+
+    internal static void RequireContentStore(string backup)
+    {
+        if (!IsContentStore(backup))
+            throw new IOException("This backup was made in a layout older versions of Gear Backup used, which is no longer supported: " + backup +
+                ". Make a new full backup; the old folder can stay for reference.");
     }
     internal static Snapshot Current(string backup, ObjectChecks objects = null)
     {
@@ -81,6 +90,7 @@ internal sealed class ContentStoreBackup
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         long needed = 0, logicalBytes = 0;
         var length = new PathLengthCheck();
+        string nameRoot = Path.GetPathRoot(Path.GetFullPath(backup));
         string pointName = RestorePointNames.Create(backup, started, incremental);
         length.File(Path.Combine(AppIdentity.MetadataRoot(backup), "objects", new string('0', 64)), 5);
         length.File(Path.Combine(SnapshotRoot(backup), pointName + ".manifest"));
@@ -89,7 +99,7 @@ internal sealed class ContentStoreBackup
         {
             OperationContext.Current.CheckCancellation();
             string relative = file.FullName.Substring(source.Length);
-            CheckedPath(backup, relative); // Validate logical names even though no browsable files are created.
+            CheckedPath(nameRoot, relative); // Validate logical names; no files are created under them, so only the name rules apply.
             names.Add(relative); sizes[relative] = file.Length;
             logicalBytes += file.Length;
             RestoreEntry prior;
@@ -109,6 +119,13 @@ internal sealed class ContentStoreBackup
             files.Add(planned);
         }
         foreach (string relative in old.Keys) if (!names.Contains(relative)) actions.Add("Removed from new restore point: " + relative);
+        List<string> nameWarnings = CurrentDevice.NameWarnings ? ChangeSummary.CheckNames(scan, source, config.MaxNameLength) : new List<string>();
+        if (nameWarnings.Count > 0)
+        {
+            WriteColored("  " + nameWarnings.Count + " name(s) the " + CurrentDevice.Name + " may not handle well:", ConsoleColor.Yellow);
+            for (int i = 0; i < nameWarnings.Count && i < 10; i++) OperationOutput.WriteLine("    " + nameWarnings[i]);
+            if (nameWarnings.Count > 10) OperationOutput.WriteLine("    ... and " + (nameWarnings.Count - 10) + " more");
+        }
         string problem = length.Problem("Choose a shorter backup location.");
         if (problem != null) return new OperationResult { ExitCode = 1, Summary = problem };
         // Changes to a source folder's membership also belong to the new point.
@@ -119,7 +136,7 @@ internal sealed class ContentStoreBackup
             { string relative = folder.Substring(source.Length); if (!folders.Remove(relative)) actions.Add("New folder: " + relative); }
             foreach (string folder in folders) actions.Add("Removed folder from new restore point: " + folder);
         }
-        foreach (string folder in scan.Folders) CheckedPath(backup, folder.Substring(source.Length));
+        foreach (string folder in scan.Folders) CheckedPath(nameRoot, folder.Substring(source.Length));
         string free = CheckFreeSpace(history, needed + (config.Zip && !incremental ? logicalBytes + logicalBytes / 100 + 65536 : 0) + 1024 * 1024);
         if (free != null) return new OperationResult { ExitCode = 1, Summary = free };
         if (PreviewOnly || actions.Count != 0)
@@ -189,11 +206,22 @@ internal sealed class ContentStoreBackup
             SetBackupStatus(backup, Status.Complete);
             AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt"), DateTime.UtcNow.ToString("O") + "\n");
             BackupDatabase.TryRefresh(backup);
-            if (config.Zip && !incremental) OperationOutput.WriteLine("  Saving ZIP export: " + BackupZip.ZipBackup(backup));
+            string zipPath = null; bool zipFailed = false;
+            if (config.Zip && incremental) OperationOutput.WriteLine("  --zip applies to full backups; no zip made for this incremental backup.");
+            else if (config.Zip)
+            {
+                try { OperationOutput.WriteLine("  Saving zip..."); zipPath = BackupZip.ZipBackup(backup); OperationOutput.WriteLine("  Zip saved to " + zipPath); }
+                catch (Exception ex)
+                {
+                    if (ex is OperationCanceledException) throw;
+                    zipFailed = true; OperationOutput.WriteLine("  Could not save the zip: " + ex.Message);
+                }
+            }
             if (config.KeepBackups > 0) PruneBackups(history, config.KeepBackups, backup);
-            string summary = "Restore point saved: " + (incremental ? snapshot.Name : started.ToString("yyyy-MM-dd HH:mm:ss")) + ". " + copied + " new/changed, " + unchanged + " unchanged; " + FormatSize(added) + " added to the content store.";
+            string summary = "Restore point saved: " + (incremental ? snapshot.Name : started.ToString("yyyy-MM-dd HH:mm:ss")) + ". " + copied + " new/changed, " + unchanged + " unchanged; " + FormatSize(added) + " added to the content store." +
+                (zipPath != null ? " Zip: " + Path.GetFileName(zipPath) + "." : "") + (zipFailed ? " The zip could not be saved." : "");
             OperationOutput.WriteLine("  " + summary);
-            return new OperationResult { Title = AppIdentity.Name + " complete", Summary = summary, ExitCode = 0, OutputFolder = backup,
+            return new OperationResult { Title = AppIdentity.Name + " complete", Summary = summary, ExitCode = zipFailed ? 2 : 0, OutputFolder = backup,
                 Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged } };
         }
         catch (OperationCanceledException) { throw; }

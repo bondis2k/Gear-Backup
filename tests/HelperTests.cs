@@ -7,7 +7,6 @@ using System.IO;
 using System.Threading;
 using static FileCopy;
 using static PathSafety;
-using static Checksums;
 using static Snapshots;
 using static Backups;
 using static ChangeSummary;
@@ -69,7 +68,7 @@ partial class Tests
         Directory.CreateDirectory(Path.Combine(backup, ".m8backup"));
         Assert(AppIdentity.MetadataRoot(backup) == Path.Combine(backup, ".gearbackup"), "only current metadata paths are used");
         string old = Folder(root, "M8 Backups");
-        Assert(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = root }) == Path.Combine(root, "Gear Backups"), "former backup roots are ignored");
+        Assert(HistoriesRoot(new Config { BackupFolder = root }) == Path.Combine(root, "Gear Backups"), "former backup roots are ignored");
         string manifest = Path.Combine(root, "former.manifest");
         Put(manifest, "M8SNAPSHOT\t1\n");
         Throws(() => ReadSnapshot(backup, manifest), "former snapshot headers are rejected");
@@ -147,16 +146,9 @@ partial class Tests
             Assert(!IsLeftover(name, false), "ordinary file kept: " + name);
         Assert(!IsLeftover("Songs", true) && !IsLeftover("lost+found", false), "ordinary folder kept; lost+found only skipped as a folder");
 
-        Assert(IsOldVersion(@"Songs\Jam_2026-10-01_143000.m8s") && IsOldVersion(@"Songs\Jam_2026-10-01_143000_2.m8s"),
-            "dated old versions recognised, including _2 duplicates");
-        Assert(!IsOldVersion(@"Songs\Jam.m8s") && !IsOldVersion(@"Songs\Jam_2026-10-01.m8s"), "names without a full date and time are not old versions");
-        Assert(OriginalName(@"Songs\Jam_2026-10-01_143000_2.m8s") == @"Songs\Jam.m8s", "old version maps back to its original name");
         Assert(IsSong("a.M8S") && !IsSong("a.m8i"), "songs are .m8s files, case-insensitive");
         Assert(SongName(@"Songs\Live\Jam.m8s") == @"Live\Jam" && SongName(@"Bundles\b\x.m8s") == @"Bundles\b\x",
             "song display names drop the Songs folder and extension");
-        Assert(IsStatisticsFile(@"x\backup-statistics_2026.txt") && !IsStatisticsFile(@"x\backup-statistics.log"), "statistics files recognised");
-        Assert(IsBackupMetaFile(@"b\.gearbackup\objects\abc") && IsBackupMetaFile(@"b\checksums.sha256.tmp") && !IsBackupMetaFile(@"b\Songs\a.m8s"),
-            "program metadata recognised; card files are not metadata");
 
         string hash = new string('a', 64);
         Assert(ValidHash(hash) && !ValidHash(hash.ToUpperInvariant()) && !ValidHash(hash.Substring(1)) && !ValidHash(null),
@@ -198,8 +190,8 @@ partial class Tests
         Throws(() => CheckParents(safeRoot, Path.Combine(safeRoot, @"blocker\a.m8s")), "a file where a folder must go is reported");
     }
 
-    [Test("Helpers: change summary and name warnings", Folder = "helpers")]
-    static void TestChangesAndNames(string dir)
+    [Test("Helpers: name warnings", Folder = "helpers")]
+    static void TestNameWarnings(string dir)
     {
         string source = Rooted(Path.Combine(dir, "changes-card"));
         Put(Path.Combine(source, "Songs", "A.m8s"), "A");
@@ -207,27 +199,8 @@ partial class Tests
         Put(Path.Combine(source, "Samples", "Café.wav"), "x");
         Put(Path.Combine(source, "Samples", new string('n', 70) + ".wav"), "x");
         Put(Path.Combine(source, "Samples", " padded.wav"), "x");
-        string baseline = Path.Combine(dir, "changes-baseline");
-        Put(Path.Combine(baseline, "Songs", "A.m8s"), "old A");
-        Put(Path.Combine(baseline, "Songs", "Gone.m8s"), "gone");
-        Put(Path.Combine(baseline, "Songs", "A_2026-01-01_120000.m8s"), "old version");
-
         var scan = new ScanResult();
         CollectFiles(source, scan);
-        var states = new FileState[scan.Files.Count];
-        for (int i = 0; i < states.Length; i++)
-        {
-            string name = scan.Files[i].Name;
-            states[i] = name == "A.m8s" ? FileState.Changed : name == "B.m8s" ? FileState.New : FileState.Same;
-        }
-        Changes changes = FindChanges(scan, source, states, baseline);
-        Assert(changes.NewSongs.Count == 1 && changes.NewSongs[0] == "B" && changes.EditedSongs.Count == 1 && changes.EditedSongs[0] == "A",
-            "change summary finds new and edited songs");
-        Assert(changes.RemovedSongs.Count == 1 && changes.RemovedSongs[0] == "Gone", "songs gone from the card are reported; old versions are not");
-        Assert(ShortSongSummary(changes) == " Songs: 1 new (B), 1 edited (A).", "notification summary names the songs");
-        Assert(ShortSongSummary(new Changes { HasBaseline = true }) == " No songs changed." && ShortSongSummary(new Changes()) == "",
-            "summary says when nothing changed, and nothing on a first backup");
-        Assert(FirstNames(new List<string> { "a", "b", "c", "d" }) == "a, b, c, ...", "long name lists are shortened");
 
         List<string> warnings = CheckNames(scan, source, 64);
         Assert(warnings.Exists(w => w.Contains("Café.wav")) && warnings.Exists(w => w.Contains("characters long")) &&
@@ -236,51 +209,16 @@ partial class Tests
         Assert(!CheckNames(scan, source, 0).Exists(w => w.Contains("characters long")), "MaxNameLength=0 turns off the length check");
     }
 
-    [Test("Helpers: checksum lists", Folder = "helpers")]
-    static void TestChecksumLists(string dir)
-    {
-        string backup = Path.Combine(dir, "sums-backup");
-        Put(Path.Combine(backup, "Songs", "a.m8s"), "A");
-        string good = HashFile(Path.Combine(backup, "Songs", "a.m8s"));
-        Put(Path.Combine(backup, ChecksumFileName), good + "  Songs/a.m8s\nnot a checksum line\n" + good + " *Songs/b.m8s\n");
-        Dictionary<string, string> sums = LoadChecksums(backup);
-        Assert(sums.Count == 2 && sums[@"Songs\a.m8s"] == good && sums.ContainsKey(@"Songs\b.m8s"),
-            "checksum lists accept both sha256sum line styles and skip lines that aren't checksums");
-        Put(Path.Combine(backup, ChecksumFileName), good + "  ../outside.m8s\n");
-        Throws(() => LoadChecksums(backup), "a checksum list can't point outside its backup");
-        Put(Path.Combine(backup, ChecksumFileName), new string('Z', 64) + "  Songs/a.m8s\n");
-        Throws(() => LoadChecksums(backup), "a malformed checksum is rejected");
-        Assert(LoadChecksums(Path.Combine(dir, "no-such-backup")) == null, "a backup without a list has no checksums");
-
-        // A check of a backup without a list offers to create one; afterwards it compares against it.
-        File.Delete(Path.Combine(backup, ChecksumFileName));
-        Put(Path.Combine(backup, "Samples", "kick.wav"), "KICK");
-        int ok = 0, damaged = 0, missing = 0, unchecked_ = 0;
-        WithUi(() => CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_), 'y');
-        Assert(LoadChecksums(backup).Count == 2 && unchecked_ == 0, "checking a backup without a list can create one");
-        Put(Path.Combine(backup, "Samples", "kick.wav"), "KICX");
-        File.Delete(Path.Combine(backup, "Songs", "a.m8s"));
-        Put(Path.Combine(backup, "extra.txt"), "added by hand");
-        TestInteraction ui = WithUi(() => CheckBackup(backup, ref ok, ref damaged, ref missing, ref unchecked_));
-        Assert(damaged == 1 && missing == 1, "a check reports damaged and missing files");
-        Assert(ui.Output.ToString().Contains("1 file(s) in the folder aren't in the checksum list"), "files added by hand are mentioned, not checked");
-        int ok2 = 0, damaged2 = 0, missing2 = 0, unchecked2 = 0;
-        string bare = Path.Combine(dir, "sums-bare");
-        Put(Path.Combine(bare, "a.m8s"), "A");
-        WithUi(() => CheckBackup(bare, ref ok2, ref damaged2, ref missing2, ref unchecked2), 'n');
-        Assert(unchecked2 == 1 && LoadChecksums(bare) == null, "declining to create a list counts the backup as unchecked");
-    }
-
     [Test("Helpers: settings", Folder = "helpers")]
     static void TestSettings(string dir)
     {
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
-        var saved = new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
-            MaxNameLength = 40, Eject = EjectMode.Ask, KeepOldVersions = 3, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
-            SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, HardLinks = true, PointInTimeHistory = false, Theme = "original", Zip = true };
+        var saved = new Config { BackupFolder = Path.Combine(dir, "store"), Mode = BackupMode.Incremental, Verify = true, KeepBackups = 4,
+            MaxNameLength = 40, Eject = EjectMode.Ask, Recovery = true, RecoveryFolder = Path.Combine(dir, "rec"),
+            SourceFolder = Path.Combine(dir, "card"), Profile = "Studio", Thorough = true, Preview = false, Theme = "original", Zip = true };
         string ini = Path.Combine(dir, "roundtrip.ini");
         WithUi(() => SaveConfig(saved, ini));
-        var loaded = new Config { SingleContentStore = false };
+        var loaded = new Config { };
         WithUi(() => {
             foreach (string line in File.ReadAllLines(ini))
             {
@@ -294,7 +232,7 @@ partial class Tests
         Assert(!loaded.Zip && !File.ReadAllText(ini).Contains("Zip="), "the zip choice isn't saved");
 
         // Invalid values warn and keep the default.
-        var config = new Config { SingleContentStore = false };
+        var config = new Config { };
         TestInteraction ui = WithUi(() => {
             ApplySetting(config, "Mode", "sometimes");
             ApplySetting(config, "KeepBackups", "-1");
@@ -323,7 +261,7 @@ partial class Tests
             Assert(written.Split(new[] { "\n" + setting.Key + "=" }, StringSplitOptions.None).Length == 2, "a new INI documents " + setting.Key + " once");
         Assert(written.StartsWith("; " + AppIdentity.Name + " settings") && written.Contains("\nMaxNameLength=64\r\n") && written.Contains("\nDevice=auto\r\n"),
             "a new INI starts with its title and lists defaults");
-        var global = new Config { SingleContentStore = false, BackupFolder = dir, SettingsDirectory = dir };
+        var global = new Config { BackupFolder = dir, SettingsDirectory = dir };
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "KeepBackups", "-1" } }), "invalid preference values aren't saved");
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "Eject", "maybe" } }), "list preferences only take their values");
         Throws(() => SaveProfileSettings(global, "device:m8", new Dictionary<string, string> { { "Mode", "full" } }), "settings that aren't preferences can't be overridden");
@@ -357,28 +295,6 @@ partial class Tests
         ui = WithUi(() => PruneBackups(history, 5, backups[2]));
         Assert(ui.Questions.Count == 0, "no question when there are no extra backups");
 
-        // KeepOldVersions groups old versions per file and offers the oldest ones.
-        string backup = Path.Combine(dir, "versions");
-        var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string name in new[] { "Jam_2026-01-01_120000", "Jam_2026-02-01_120000", "Jam_2026-03-01_120000", "Solo_2026-01-01_120000", "Jam" })
-        {
-            Put(Path.Combine(backup, "Songs", name + ".m8s"), name);
-            if (name != "Jam") known.Add(@"Songs\" + name + ".m8s");
-        }
-        // The user's own dated files, which the program never recorded as kept versions.
-        Put(Path.Combine(backup, "Songs", "Take_2025-01-01_120000.m8s"), "own");
-        Put(Path.Combine(backup, "Songs", "Take_2025-02-01_120000.m8s"), "own");
-        int moved = 0;
-        ui = WithUi(() => { moved = PruneOldVersions(backup, 1, new HashSet<string>(StringComparer.OrdinalIgnoreCase), known); }, 'n');
-        string listed = ui.Output.ToString();
-        Assert(moved == 0 && listed.Contains("Jam_2026-01-01_120000") && listed.Contains("Jam_2026-02-01_120000") &&
-            !listed.Contains("Jam_2026-03-01_120000") && !listed.Contains("Solo_"), "KeepOldVersions offers each file's oldest extra versions");
-        Assert(!listed.Contains("Take_"), "dated files the program didn't keep are never offered");
-        ui = WithUi(() => PruneOldVersions(backup, 1, new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-            @"Songs\Jam_2026-01-01_120000.m8s", @"Songs\Jam_2026-02-01_120000.m8s" }, known), 'n');
-        Assert(ui.Questions.Count == 0, "dated files that are also on the card aren't treated as old versions");
-        Assert(VersionedName(Path.Combine(backup, "Songs", "Jam.m8s"), new DateTime(2026, 1, 1, 12, 0, 0)).EndsWith("Jam_2026-01-01_120000_2.m8s"),
-            "a taken old-version name gets _2");
     }
 
     [Test("Helpers: resume question", Folder = "helpers")]
@@ -386,7 +302,7 @@ partial class Tests
     {
         string backup = Path.Combine(dir, "resume-backup");
         Directory.CreateDirectory(backup);
-        var config = new Config { SingleContentStore = false };
+        var config = new Config { };
         bool? answer = true;
         TestInteraction ui = WithUi(() => { answer = ConfirmResume(backup, true, config); });
         Assert(answer == true && ui.Questions.Count == 0, "no question when the latest backup has no unfinished status");
@@ -404,9 +320,9 @@ partial class Tests
         Assert(ConfirmResume(null, true, config) == true, "with no backup yet, nothing is asked");
         Assert(BackupStatus(Path.Combine(dir, "never-backed-up")) == Status.Unknown, "missing status metadata is unknown");
 
-        var paths = new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "card-inside") };
+        var paths = new Config { BackupFolder = Path.Combine(dir, "card-inside") };
         Throws(() => HistoryFor(paths, Path.Combine(dir, "card-inside", "Gear Backups", "card")), "a source inside the backup location is rejected");
-        Throws(() => HistoryFor(new Config { SingleContentStore = false, BackupFolder = Path.Combine(dir, "outer", "inner") }, Path.Combine(dir, "outer")),
+        Throws(() => HistoryFor(new Config { BackupFolder = Path.Combine(dir, "outer", "inner") }, Path.Combine(dir, "outer")),
             "a backup location inside the source is rejected");
     }
 
@@ -416,7 +332,7 @@ partial class Tests
         string source = Rooted(Path.Combine(dir, "zipfail-card"));
         Put(Path.Combine(source, "Songs", "a.m8s"), "A");
         string history = Path.Combine(dir, "zipfail-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false, Zip = true };
+        var config = new Config { BackupFolder = dir, Preview = false, Zip = true };
 
         // ZipPathFor never overwrites an existing zip.
         string folder = Path.Combine(history, "2026-10-10");
@@ -428,13 +344,13 @@ partial class Tests
 
         // A zip that can't be written: the backup still completes, the run reports exit code 2.
         string date = DateTime.Now.ToString("yyyy-MM-dd");
-        Directory.CreateDirectory(Path.Combine(history, date + ".zip.tmp"));
+        Directory.CreateDirectory(Path.Combine(history, date + ".zip")); // a folder where the zip belongs
         var ui = new TestInteraction();
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         string backup = ListBackups(history)[0];
         Assert(result.ExitCode == 2 && result.Summary.Contains("zip could not be saved") && BackupStatus(backup) == Status.Complete,
-            "a zip that can't be saved gives exit code 2, but the backup stays complete");
-        Directory.Delete(Path.Combine(history, date + ".zip.tmp"));
+            "a zip that can't be saved gives exit code 2, but the backup stays complete: " + result.ExitCode + " " + result.Summary);
+        Directory.Delete(Path.Combine(history, date + ".zip"));
 
         // Cancelling while zipping leaves no partial zip; the finished backup stays complete.
         var cts = new CancellationTokenSource();
@@ -529,7 +445,7 @@ partial class Tests
         foreach (var pair in expected)
             Assert(HistoryNames.AutomaticName(pair.Key) == pair.Value, "automatic name of " + pair.Key + ": " + HistoryNames.AutomaticName(pair.Key));
 
-        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
         string history = Path.Combine(HistoriesRoot(config), "profiles", "m8-card-DCE92C2E");
         Directory.CreateDirectory(Path.Combine(history, "2026-10-01"));
         Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E" && HistoryNames.Nickname(history) == null, "without a nickname the automatic name is shown");

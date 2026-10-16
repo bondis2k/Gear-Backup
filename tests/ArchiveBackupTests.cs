@@ -94,7 +94,7 @@ partial class Tests
 
     static void AssertArchiveManifest(ZipArchive zip, int expectedFiles)
     {
-        var manifest = zip.GetEntry(Checksums.ChecksumFileName);
+        var manifest = zip.GetEntry(ArchiveMetadata.ChecksumFileName);
         Assert(manifest != null, "ZIP always contains checksums.sha256, including when verification is disabled");
         int count = 0;
         using (var reader = new StreamReader(manifest.Open()))
@@ -104,7 +104,7 @@ partial class Tests
             {
                 Assert(line.Length >= 67 && line.Substring(64, 2) == "  ", "manifest uses sha256sum format");
                 string name = line.Substring(66);
-                Assert(name != Checksums.ChecksumFileName && !name.Contains("\\"), "manifest lists only backed-up files using ZIP-relative paths");
+                Assert(name != ArchiveMetadata.ChecksumFileName && !name.Contains("\\"), "manifest lists only backed-up files using ZIP-relative paths");
                 var entry = zip.GetEntry(name);
                 Assert(entry != null, "each manifest path names an archived file");
                 using (var hash = System.Security.Cryptography.SHA256.Create())
@@ -118,7 +118,7 @@ partial class Tests
         foreach (var entry in zip.Entries)
         {
             extracted += entry.Length;
-            if (entry.FullName != ArchiveMetadata.FileName && entry.FullName != Checksums.ChecksumFileName) content += entry.Length;
+            if (entry.FullName != ArchiveMetadata.FileName && entry.FullName != ArchiveMetadata.ChecksumFileName) content += entry.Length;
         }
         using (var reader = new StreamReader(zip.GetEntry(ArchiveMetadata.FileName).Open()))
         {

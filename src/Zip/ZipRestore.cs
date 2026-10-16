@@ -163,7 +163,7 @@ internal static class ZipRestore
     static void RequireSpace(Func<string, long, string> check, string path, long needed)
     { string error = check(path, needed); if (error != null) throw new IOException(error); }
     static bool IsMetadata(string name)
-    { return name.Equals(ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase) || name.Equals(Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase); }
+    { return name.Equals(ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase) || name.Equals(ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase); }
 
     static Inventory Read(ZipArchive zip)
     {
@@ -201,7 +201,7 @@ internal static class ZipRestore
             }
         }
         ZipArchiveEntry info, sums;
-        if (!result.Files.TryGetValue(ArchiveMetadata.FileName, out info) || !result.Files.TryGetValue(Checksums.ChecksumFileName, out sums))
+        if (!result.Files.TryGetValue(ArchiveMetadata.FileName, out info) || !result.Files.TryGetValue(ArchiveMetadata.ChecksumFileName, out sums))
             throw new IOException("Select a Gear Backup standalone ZIP containing gearbackup-info.txt and checksums.sha256.");
         byte[] infoBytes = ReadBytes(info, 64 * 1024);
         string manifest = new UTF8Encoding(false, true).GetString(ReadBytes(sums, Records.ListLimit));
@@ -211,7 +211,7 @@ internal static class ZipRestore
             if (line.Length < 67 || line.Substring(64, 2) != "  ") throw new IOException("Invalid ZIP checksum manifest.");
             string hash = line.Substring(0, 64).ToLowerInvariant(), name = line.Substring(66);
             ValidateName(validationRoot, name);
-            if (!Snapshots.ValidHash(hash) || name.Equals(Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
+            if (!Snapshots.ValidHash(hash) || name.Equals(ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
                 !result.Files.ContainsKey(name) || result.Hashes.ContainsKey(name)) throw new IOException("Invalid ZIP checksum entry: " + name);
             result.Hashes.Add(name, hash);
         }

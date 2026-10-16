@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using static PathSafety;
@@ -44,6 +45,19 @@ partial class Tests
         bool threw = false;
         try { action(); } catch (IOException) { threw = true; } catch (ArgumentException) { threw = true; }
         Assert(threw, message);
+    }
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
+    // A second name for an existing file, as a hostile or odd file system layout could present one.
+    static bool TryHardLink(string existing, string link)
+    {
+        try { return CreateHardLink(link, existing, IntPtr.Zero); }
+        catch (Exception) { return false; }
+    }
+    static bool SupportsHardLinks(string path)
+    {
+        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))).DriveFormat == "NTFS"; }
+        catch (Exception) { return false; }
     }
     static void Put(string path, string text)
     {
@@ -116,6 +130,9 @@ partial class Tests
             string where = "";
             foreach (string frame in (ex.StackTrace ?? "").Split('\n'))
                 if (!frame.Contains(".Assert(") && !frame.Contains(".Throws(")) { where = frame.Trim(); break; }
+            // An unexpected exception (not a failed check) shows more of its stack.
+            if (!ex.Message.StartsWith("ASSERTION FAILED"))
+                where = string.Join("\n          ", (ex.StackTrace ?? "").Split((char)10).Take(8).Select(frame => frame.Trim()).ToArray());
             results.Add(string.Format("  FAIL  {0}\n          {1}\n          {2}", name, reason, where));
         }
         finally { Console.SetIn(input); }
@@ -162,7 +179,7 @@ partial class Tests
     static Fixture BackedUpCard(string root, bool edited)
     {
         var f = new Fixture { Root = root, Source = Rooted(Path.Combine(root, "card")), History = Path.Combine(root, "history") };
-        f.Config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
+        f.Config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
         Put(Path.Combine(f.Source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(f.Source, "Songs", "removed.m8s"), "REMOVED");
         Put(Path.Combine(f.Source, "Songs", "dated_2026-01-01_120000.m8s"), "REAL DATED SONG");

@@ -26,7 +26,7 @@ partial class Tests
         try
         {
             Throws(() => new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false,
-                new Config { SingleContentStore = false, Preview = true }, new OperationContext(ui, CancellationToken.None)),
+                new Config { Preview = true }, new OperationContext(ui, CancellationToken.None)),
                 "restore rejects a child replaced with a junction during review");
             Assert(ui.Plans == 1 && Directory.GetFileSystemEntries(outside).Length == 0,
                 "approved preview never writes through the substituted folder");
@@ -44,65 +44,44 @@ partial class Tests
         });
     }
 
-    [Test("Security: statistics hard links", Folder = "helpers")]
-    static void TestStatisticsHardLink(string dir)
-    {
-        string root = Folder(dir, "statistics-hard-link"), source = Folder(root, "source");
-        string history = Path.Combine(root, "history"), victim = Path.Combine(root, "victim.txt");
-        Put(Path.Combine(source, "song.txt"), "SONG"); Put(victim, "UNRELATED");
-        bool planted = false;
-        var ui = new TestInteraction();
-        ui.OnProgress = p => {
-            if (planted || p.Stage != Stage.Copying) return;
-            Assert(TryHardLink(victim, Path.Combine(ListBackups(history)[0], "backup-statistics.txt")),
-                "statistics fixture hard link created");
-            planted = true;
-        };
-        OperationResult result;
-        using (new OperationContext(ui, CancellationToken.None).Activate())
-            result = RunBackup(source, history, null, false, new Config { SingleContentStore = false, Preview = false, MaxNameLength = 0 });
-        string stats = Path.Combine(ListBackups(history)[0], "backup-statistics.txt");
-        Assert(planted && result.ExitCode == 0, "backup completes with a planted statistics hard link");
-        Assert(File.ReadAllText(victim) == "UNRELATED", "statistics replacement preserves the other hard-link name");
-        Assert(File.ReadAllText(stats).Contains("statistics"), "backup receives its own statistics contents");
-    }
-
     [Test("Security: ZIP metadata symbolic links", Folder = "helpers")]
     static void TestZipMetadataLinks(string dir)
     {
-        string root = Folder(dir, "zip-metadata-links"), backup = Folder(root, "backup");
+        string root = Folder(dir, "zip-metadata-links"), source = Folder(root, "source"), history = Path.Combine(root, "history");
         string secret = Path.Combine(root, "secret.txt"); Put(secret, "AUDIT-SECRET");
-        foreach (string name in new[] { "backup-statistics-extra.txt", "checksums.sha256" })
-        {
-            string link = Path.Combine(backup, name);
-            CreateTestFileSymlink(link, secret);
-            try
-            {
-                Throws(() => WithUi(() => ZipBackup(backup)), "ZIP rejects linked metadata: " + name);
-                Assert(Directory.GetFiles(root, "*.zip*").Length == 0, "linked metadata leaves no archive or staging file");
-            }
-            finally { File.Delete(link); }
-        }
+        Put(Path.Combine(source, "a.txt"), "FIRST"); Put(Path.Combine(source, "b.txt"), "SECOND");
+        string backup = RunBackup(source, history, null, false, new Config { Preview = false }).OutputFolder;
+        var entries = ContentStoreBackup.Current(backup).Files;
+        string objectA = entries.Find(e => e.Relative == "a.txt").StoredPath, objectB = entries.Find(e => e.Relative == "b.txt").StoredPath;
+        byte[] savedA = File.ReadAllBytes(objectA), savedB = File.ReadAllBytes(objectB);
 
-        // A metadata entry can change after the initial enumeration, too.
-        string first = Path.Combine(backup, "backup-statistics-a.txt"), second = Path.Combine(backup, "backup-statistics-b.txt");
-        Put(first, "FIRST"); Put(second, "SECOND");
+        // A stored object that is a link is never followed.
+        File.Delete(objectA);
+        CreateTestFileSymlink(objectA, secret);
+        try
+        {
+            Throws(() => WithUi(() => ZipBackup(backup)), "ZIP rejects a linked stored object");
+            Assert(Directory.GetFiles(history, "*.zip*").Length == 0, "a linked stored object leaves no archive or staging file");
+        }
+        finally { File.Delete(objectA); File.WriteAllBytes(objectA, savedA); }
+
+        // An object can change after the export started, too.
         string substituted = null;
         var ui = new TestInteraction();
         ui.OnProgress = p => {
             if (p.Stage != Stage.Zipping || substituted != null) return;
-            substituted = p.Path == Path.GetFileName(first) ? second : first;
+            substituted = p.Path == "a.txt" ? objectB : objectA;
             File.Delete(substituted);
             CreateTestFileSymlink(substituted, secret);
         };
         try
         {
             using (new OperationContext(ui, CancellationToken.None).Activate())
-                Throws(() => ZipBackup(backup), "ZIP rechecks metadata immediately before reading each entry");
-            Assert(substituted != null && Directory.GetFiles(root, "*.zip*").Length == 0,
-                "metadata substituted during export aborts and removes the incomplete archive");
+                Throws(() => ZipBackup(backup), "ZIP rechecks each stored object immediately before reading it");
+            Assert(substituted != null && Directory.GetFiles(history, "*.zip*").Length == 0,
+                "an object substituted during export aborts and removes the incomplete archive");
             Assert(File.ReadAllText(secret) == "AUDIT-SECRET", "ZIP link rejection preserves outside content");
         }
-        finally { if (substituted != null) File.Delete(substituted); }
+        finally { if (substituted != null) { File.Delete(substituted); File.WriteAllBytes(substituted, substituted == objectA ? savedA : savedB); } }
     }
 }

@@ -27,15 +27,15 @@ partial class Tests
     static void TestRestoreLocationsGui(string root)
     {
         Directory.CreateDirectory(root);
-        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        var config = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
         string alternate = Path.Combine(root, "tracker");
         SaveProfileSettings(config, "device:tracker-mini", new Dictionary<string, string> {
-            { "BackupFolder", alternate }, { "PointInTimeHistory", "no" }, { "Verify", "yes" }
+            { "BackupFolder", alternate }, { "Thorough", "yes" }, { "Verify", "yes" }
         });
         string source = Folder(root, "source"), relative = "Projects\\Demo\\take_2026-01-01_120000.wav";
         Put(Path.Combine(source, "Projects", "Demo", "project.mt"), "PROJECT");
         Put(Path.Combine(source, relative), "SAMPLE");
-        string history = Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = alternate }), "profiles", "Studio");
+        string history = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
         new BackupEngine().Run(source, history, null, false, ResolveProfileSettings(config, "tracker-mini", "Studio"),
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini });
         using (var form = new MainForm(true))

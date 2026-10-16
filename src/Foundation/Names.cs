@@ -65,8 +65,7 @@ internal sealed class RestoreMode
 // The kinds of item Storage offers for cleanup; the text is shown in its table.
 internal sealed class StorageKind
 {
-    public static readonly StorageKind OlderBackup = new StorageKind("Older backup"), OldVersion = new StorageKind("Old version"),
-        Zip = new StorageKind("ZIP"), Mirror = new StorageKind("MTP mirror");
+    public static readonly StorageKind OlderBackup = new StorageKind("Older backup"), Zip = new StorageKind("ZIP"), Mirror = new StorageKind("MTP mirror");
 
     readonly string text;
     StorageKind(string text) { this.text = text; }

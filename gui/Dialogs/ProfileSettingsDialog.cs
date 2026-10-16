@@ -179,7 +179,7 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
             bool custom = values != null && values.TryGetValue(setting.Key, out value);
             value = custom ? values[setting.Key] : setting.Get(inherited);
             string section = setting.Key == "Recovery" || setting.Key == "RecoveryFolder" ? "Restore" :
-                setting.Key == "BackupFolder" || setting.Key == "PointInTimeHistory" || setting.Key == "KeepBackups" || setting.Key == "KeepOldVersions" ? "Backup" : "Advanced";
+                setting.Key == "BackupFolder" || setting.Key == "KeepBackups" ? "Backup" : "Advanced";
             AddField(pages[section], setting, inherited, value, custom);
         }
         applies.Text = current.StartsWith("device:", StringComparison.OrdinalIgnoreCase)
@@ -223,13 +223,11 @@ internal sealed class ProfileSettingsDialog : ToolsDialog
         }
         editor.Name = "ProfileValue_" + setting.Key; editor.AccessibleName = setting.Label;
         editorRow.Controls.Add(editor); editor.BringToFront(); row.Controls.Add(editorRow);
-        string help = setting.Key == "KeepBackups" || setting.Key == "KeepOldVersions" ? "0 keeps everything." :
-            setting.Key == "PointInTimeHistory" ? "On keeps earlier states available for restore. Off uses less space." :
+        string help = setting.Key == "KeepBackups" ? "0 keeps everything." :
             setting.Key == "Recovery" ? "Save existing files before restore replaces or removes them." :
             setting.Key == "RecoveryFolder" ? "Leave blank to use the automatic recovery location." :
             setting.Key == "Verify" ? "Read copies back to check their integrity. Adds time." :
             setting.Key == "Thorough" ? "Compare contents instead of size and date. Adds reading time." :
-            setting.Key == "HardLinks" ? "Save history space on NTFS; linked files share the same content." :
             setting.Key == "Preview" ? "Review the file plan before copying." :
             setting.Key == "MaxNameLength" ? "0 disables name-length warnings." : "";
         if (help.Length > 0) row.Controls.Add(GuiTheme.Label(help, 9, GuiTheme.Muted));

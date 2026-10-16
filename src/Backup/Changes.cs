@@ -1,10 +1,7 @@
-// What changed since the last backup, and names the M8 may not handle well.
+// Song names for a device, and the check for file names the device may not handle well.
 using System;
 using System.Collections.Generic;
 using System.IO;
-using static FileCopy;
-using static BackupTraversal;
-using static Backups;
 using static DeviceSelection;
 using static ChangeSummary;
 
@@ -23,117 +20,6 @@ static class ChangeSummary
             : Path.Combine(Path.GetDirectoryName(relative), Path.GetFileNameWithoutExtension(relative));
         string folder = CurrentDevice.SongsFolder == null ? null : CurrentDevice.SongsFolder + "\\";
         return folder != null && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase) ? name.Substring(folder.Length) : name;
-    }
-
-    // Songs are counted by name, so files that share one (a photo's JPG and RAF, "DSCF0689") are one song.
-    internal static Changes FindChanges(ScanResult scan, string source, FileState[] states, string baseline)
-    {
-        var changes = new Changes { HasBaseline = baseline != null };
-        var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var newSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var editedSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        for (int i = 0; i < scan.Files.Count; i++)
-        {
-            string relative = scan.Files[i].FullName.Substring(source.Length);
-            bool song = IsSong(relative);
-            if (song) onDevice.Add(SongName(relative));
-            if (states[i] == FileState.New)
-            {
-                if (song) newSongs.Add(SongName(relative)); else changes.OtherNew++;
-            }
-            else if (states[i] == FileState.Changed)
-            {
-                if (song) editedSongs.Add(SongName(relative)); else changes.OtherChanged++;
-            }
-        }
-        editedSongs.ExceptWith(newSongs);
-        changes.TotalSongs = onDevice.Count;
-
-        var removedSongs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (baseline != null)
-        {
-            // Only the backup's own files: the history store can hold many thousands of objects.
-            foreach (string path in BackupFiles(baseline))
-            {
-                string relative = path.Substring(baseline.Length).TrimStart('\\');
-                if (IsSong(relative) && !IsOldVersion(relative) && !onDevice.Contains(SongName(relative)))
-                    removedSongs.Add(SongName(relative));
-            }
-        }
-        changes.NewSongs = Sorted(newSongs);
-        changes.EditedSongs = Sorted(editedSongs);
-        changes.RemovedSongs = Sorted(removedSongs);
-        return changes;
-    }
-
-    static List<string> Sorted(HashSet<string> names)
-    {
-        var list = new List<string>(names);
-        list.Sort(StringComparer.OrdinalIgnoreCase);
-        return list;
-    }
-
-    internal static void WriteChanges(TextWriter report, Changes changes, string baseline)
-    {
-        // A device without song files (e.g. the OP-1 Field) only gets file counts.
-        if (CurrentDevice.SongExtensions.Length == 0)
-        {
-            if (changes.HasBaseline)
-                report.WriteLine("  Changes since the last backup ({0}): {1:N0} new, {2:N0} changed file(s)",
-                    Path.GetFileName(baseline), changes.OtherNew, changes.OtherChanged);
-            report.WriteLine();
-            return;
-        }
-        if (!changes.HasBaseline)
-        {
-            report.WriteLine("  {0}: {1:N0} (first backup, nothing to compare with)", Capitalized(CurrentDevice.SongsLabel), changes.TotalSongs);
-            report.WriteLine();
-            return;
-        }
-        report.WriteLine("  Changes since the last backup ({0}):", Path.GetFileName(baseline));
-        string songs = CurrentDevice.SongsLabel;
-        WriteNameList(report, "New " + songs, changes.NewSongs);
-        WriteNameList(report, "Edited " + songs, changes.EditedSongs);
-        WriteNameList(report, Capitalized(songs) + " no longer on the " + CurrentDevice.Name, changes.RemovedSongs);
-        report.WriteLine("    Other files: {0:N0} new, {1:N0} changed", changes.OtherNew, changes.OtherChanged);
-        report.WriteLine();
-    }
-
-    static void WriteNameList(TextWriter report, string label, List<string> names)
-    {
-        if (names.Count == 0)
-        {
-            report.WriteLine("    {0}: none", label);
-            return;
-        }
-        report.WriteLine("    {0} ({1}):", label, names.Count);
-        foreach (string name in names) report.WriteLine("      " + name);
-    }
-
-    // For the notification, e.g. " Songs: 2 new (Jam, Idea7), 1 edited (Track01)."
-    internal static string ShortSongSummary(Changes changes)
-    {
-        if (!changes.HasBaseline) return "";
-        if (CurrentDevice.SongExtensions.Length == 0)
-            return changes.OtherNew + changes.OtherChanged == 0 ? " No files changed."
-                : string.Format(" {0} new, {1} changed file(s).", changes.OtherNew, changes.OtherChanged);
-        var parts = new List<string>();
-        if (changes.NewSongs.Count > 0) parts.Add(changes.NewSongs.Count + " new (" + FirstNames(changes.NewSongs) + ")");
-        if (changes.EditedSongs.Count > 0) parts.Add(changes.EditedSongs.Count + " edited (" + FirstNames(changes.EditedSongs) + ")");
-        string songs = CurrentDevice.SongsLabel;
-        return parts.Count == 0 ? " No " + songs + " changed." : " " + Capitalized(songs) + ": " + string.Join(", ", parts.ToArray()) + ".";
-    }
-
-    static string Capitalized(string word)
-    {
-        return word.Length == 0 ? word : char.ToUpperInvariant(word[0]) + word.Substring(1);
-    }
-
-    internal static string FirstNames(List<string> names)
-    {
-        var shown = new List<string>();
-        for (int i = 0; i < names.Count && i < 3; i++) shown.Add(Path.GetFileName(names[i]));
-        return string.Join(", ", shown.ToArray()) + (names.Count > 3 ? ", ..." : "");
     }
 
     // Flags names the M8 may not show or load properly: characters outside plain ASCII, very long names,
@@ -159,11 +45,4 @@ static class ChangeSummary
         }
         return warnings;
     }
-}
-
-internal class Changes
-{
-    public bool HasBaseline;
-    public int TotalSongs, OtherNew, OtherChanged;
-    public List<string> NewSongs = new List<string>(), EditedSongs = new List<string>(), RemovedSongs = new List<string>();
 }

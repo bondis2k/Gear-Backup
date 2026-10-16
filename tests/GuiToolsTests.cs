@@ -26,19 +26,15 @@ partial class Tests
     [Test("Settings dialog", Gui = true, Folder = ".")]
     static void TestSettingsInteraction(string root)
     {
-        var config = new Config { SingleContentStore = false, HardLinks = true, RecoveryFolder = Path.Combine(root, "recovery") };
+        var config = new Config { RecoveryFolder = Path.Combine(root, "recovery") };
         using (var dialog = new SettingsDialog(config))
         {
             dialog.Show(); Application.DoEvents();
             var tabs = FindGuiControl<TabControl>(dialog);
             Assert(tabs.TabCount == 4 && tabs.TabPages[0].Text == "Backup" && tabs.TabPages[1].Text == "Restore" && tabs.TabPages[3].Text == "Appearance", "settings group operations and appearance separately");
-            var history = (CheckBox)dialog.Controls.Find("PointInTimeHistory", true)[0];
-            Assert(!history.Checked, "settings show history disabled by default");
-            history.Checked = true;
-            var single = (CheckBox)dialog.Controls.Find("SingleContentStore", true)[0];
-            Assert(!single.Checked, "single content store is optional by default");
-            single.Checked = true;
-            Assert(!history.Enabled && history.Checked, "single store disables copied history without losing its preference");
+            var compare = (CheckBox)dialog.Controls.Find("CompareContents", true)[0];
+            Assert(!compare.Checked, "settings show content comparison disabled by default");
+            compare.Checked = true;
             tabs.SelectedIndex = 1;
             var recovery = (CheckBox)dialog.Controls.Find("RecoveryCopies", true)[0];
             var path = (TextBox)dialog.Controls.Find("RecoveryLocation", true)[0];
@@ -48,11 +44,10 @@ partial class Tests
             recovery.Checked = false;
             string expectedPath = path.Text;
             ((Button)dialog.Controls.Find("SaveSettings", true)[0]).PerformClick();
-            Assert(config.PointInTimeHistory, "settings save the choice to enable history");
-            Assert(config.SingleContentStore, "settings save the single content store choice");
-            Assert(!config.Recovery && !config.Verify && !config.Thorough && config.HardLinks && config.RecoveryFolder == expectedPath,
-                "saving grouped settings preserves default-off options, recovery location and hidden settings: " +
-                config.Recovery + ", " + config.Verify + ", " + config.Thorough + ", " + config.HardLinks + ", " + config.RecoveryFolder + " / " + expectedPath);
+            Assert(config.Thorough, "settings save the choice to compare contents");
+            Assert(!config.Recovery && !config.Verify && config.RecoveryFolder == expectedPath,
+                "saving grouped settings preserves default-off options and the recovery location: " +
+                config.Recovery + ", " + config.Verify + ", " + config.RecoveryFolder + " / " + expectedPath);
         }
     }
 
@@ -61,7 +56,7 @@ partial class Tests
     [Test("History names in windows", Gui = true, Folder = "history-names")]
     static void TestHistoryNamesGui(string root)
     {
-        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
+        var config = new Config { BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root };
         string histories = HistoriesRoot(config), named = Path.Combine(histories, "profiles", "m8-card-DCE92C2E");
         Directory.CreateDirectory(Path.Combine(named, "2026-10-01"));
         Directory.CreateDirectory(Path.Combine(histories, "2026-09-01"));
@@ -111,8 +106,8 @@ partial class Tests
         catalog.Backups.Add(new CatalogBackup { Profile = "x100vi-settings-1", History = Path.GetDirectoryName(settings), Path = settings,
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.X100VI });
         foreach (bool storageMode in new[] { false, true })
-        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
-        using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog))
+        using (var owner = new MainForm(true, new Config { }))
+        using (var window = new CatalogDialog(owner, new Config { }, storageMode, catalog))
         {
             window.Show(); Application.DoEvents();
             string where = storageMode ? "Storage" : "Dashboard";
@@ -140,8 +135,8 @@ partial class Tests
                                        new { Profile = "op-xy-ABC", Device = Devices.OPXY }, new { Profile = "Old card", Device = (DeviceProfile)null } })
             catalog.Backups.Add(new CatalogBackup { Profile = history.Profile, History = @"C:\Backups\" + history.Profile,
                 Path = @"C:\Backups\" + history.Profile + @"\2026-10-01", Status = Status.Complete, CheckResult = "OK", Latest = true, Device = history.Device });
-        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
-        using (var dashboard = new CatalogDialog(owner, new Config { SingleContentStore = false }, false, catalog))
+        using (var owner = new MainForm(true, new Config { }))
+        using (var dashboard = new CatalogDialog(owner, new Config { }, false, catalog))
         {
             dashboard.Show(); Application.DoEvents();
             var filter = (ComboBox)dashboard.Controls.Find("DashboardDevice", true)[0];
@@ -171,8 +166,8 @@ partial class Tests
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.OlderBackup, History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01", Bytes = 100, Folder = true });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Zip, History = @"C:\Backups\op-xy-ABC", Path = @"C:\Backups\op-xy-ABC\2026-10-01.zip", Bytes = 30 });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Mirror, History = @"C:\Mirrors", Path = @"C:\Mirrors\x100vi-SERIAL", Bytes = 500, Folder = true });
-        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
-        using (var storage = new CatalogDialog(owner, new Config { SingleContentStore = false }, true, catalog))
+        using (var owner = new MainForm(true, new Config { }))
+        using (var storage = new CatalogDialog(owner, new Config { }, true, catalog))
         {
             storage.Show(); Application.DoEvents();
             var filter = (ComboBox)storage.Controls.Find("StorageDevice", true)[0];
@@ -227,10 +222,10 @@ partial class Tests
 
         // A device detected in the main window is where both windows' filters start.
         foreach (bool storageMode in new[] { false, true })
-        using (var owner = new MainForm(true, new Config { SingleContentStore = false }))
+        using (var owner = new MainForm(true, new Config { }))
         {
             string where = storageMode ? "Storage" : "Dashboard";
-            using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog, Devices.OPXY))
+            using (var window = new CatalogDialog(owner, new Config { }, storageMode, catalog, Devices.OPXY))
             {
                 window.Show(); Application.DoEvents();
                 var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
@@ -239,7 +234,7 @@ partial class Tests
                 window.Populate(catalog);
                 Assert((string)filter.SelectedItem == "M8", where + ": after choosing another device, a refresh keeps that choice");
             }
-            using (var window = new CatalogDialog(owner, new Config { SingleContentStore = false }, storageMode, catalog, Devices.TrackerMini))
+            using (var window = new CatalogDialog(owner, new Config { }, storageMode, catalog, Devices.TrackerMini))
             {
                 window.Show(); Application.DoEvents();
                 var filter = (ComboBox)window.Controls.Find(storageMode ? "StorageDevice" : "DashboardDevice", true)[0];
@@ -308,22 +303,22 @@ partial class Tests
                 Assert(dialog.Controls.Find("ProfileCategoryButtons", true)[0].Controls.Count == 3,
                     "profile category buttons are present before and after rebuilding scope fields");
                 var scope = (ComboBox)dialog.Controls.Find("SettingsScope", true)[0]; scope.SelectedIndex = 0;
-                var inherited = (CheckBox)dialog.Controls.Find("ProfileUseDefault_PointInTimeHistory", true)[0];
-                var historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_PointInTimeHistory", true)[0];
+                var inherited = (CheckBox)dialog.Controls.Find("ProfileUseDefault_Thorough", true)[0];
+                var historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_Thorough", true)[0];
                 Assert(inherited.Checked && !historyValue.Enabled, "profile settings clearly disable values while using defaults");
                 inherited.Checked = false; historyValue.SelectedIndex = 1;
                 Assert(historyValue.Enabled && historyValue.Text == "Off", "custom profile values use plain On and Off choices");
                 scope.SelectedIndex = 1; scope.SelectedIndex = 0;
-                historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_PointInTimeHistory", true)[0];
+                historyValue = (ComboBox)dialog.Controls.Find("ProfileValue_Thorough", true)[0];
                 Assert(historyValue.Text == "Off", "switching devices preserves unsaved settings");
                 ((Button)dialog.Controls.Find("SaveProfilePreferences", true)[0]).PerformClick();
-                Assert(!ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory && config.PointInTimeHistory,
+                Assert(!ResolveProfileSettings(config, "m8", "m8-test").Thorough && config.Thorough,
                     "profile GUI saves an override without changing global settings");
                 ((Button)dialog.Controls.Find("ResetProfilePreferences", true)[0]).PerformClick();
                 Assert(historyValue.Text == "On", "reset displays the inherited value in the disabled field");
-                Assert(!ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory, "reset does not change saved preferences before Save changes");
+                Assert(!ResolveProfileSettings(config, "m8", "m8-test").Thorough, "reset does not change saved preferences before Save changes");
                 ((Button)dialog.Controls.Find("SaveProfilePreferences", true)[0]).PerformClick();
-                Assert(ResolveProfileSettings(config, "m8", "m8-test").PointInTimeHistory, "saving a reset returns to inherited preferences");
+                Assert(ResolveProfileSettings(config, "m8", "m8-test").Thorough, "saving a reset returns to inherited preferences");
                 CheckGuiLayout(dialog, 150, Path.Combine(output, "profiles-150.png"));
             }
             Dictionary<string, byte[]> files;
@@ -331,7 +326,7 @@ partial class Tests
             string folder = Path.Combine(root, "recipes"); Directory.CreateDirectory(folder);
             foreach (var file in files) File.WriteAllBytes(Path.Combine(folder, file.Key), file.Value);
             var stored = new BackupEngine().Run(folder, Path.Combine(root, "recipe-content-store"), null, false,
-                new Config { SingleContentStore = true, Preview = false }, new OperationContext(new TestInteraction(), CancellationToken.None));
+                new Config { Preview = false }, new OperationContext(new TestInteraction(), CancellationToken.None));
             Assert(stored.ExitCode == 0 && RecipeViewerDialog.HasRecipes(stored.OutputFolder), "single content store exposes backed-up camera recipes");
             using (var storedViewer = new RecipeViewerDialog(owner, stored.OutputFolder))
                 Assert(((ComboBox)storedViewer.Controls.Find("RecipeSelection", true)[0]).Items.Count == 8, "recipe viewer reads all recipes directly from stored content");
@@ -367,7 +362,7 @@ partial class Tests
         }
         string deviceLocation = Path.Combine(root, "device-location"), profileLocation = Path.Combine(root, "profile-location");
         WithUi(() => {
-            SaveProfileSettings(config, "device:m8", new Dictionary<string, string> { { "BackupFolder", deviceLocation }, { "PointInTimeHistory", "no" }, { "Preview", "no" } });
+            SaveProfileSettings(config, "device:m8", new Dictionary<string, string> { { "BackupFolder", deviceLocation }, { "Thorough", "no" }, { "Preview", "no" } });
             SaveProfileSettings(config, "profile:Studio", new Dictionary<string, string> { { "BackupFolder", profileLocation } });
         });
         using (var form = new MainForm(true))
@@ -394,9 +389,9 @@ partial class Tests
                 }
             });
             Assert(askedToCreate, "GUI presents the missing-folder creation question");
-            string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = profileLocation }), "profiles", "Studio"));
-            Assert(backup != null && File.Exists(Path.Combine(backup, "song.txt")) && !Directory.Exists(SnapshotRoot(backup)),
-                "GUI backup applies profile location and inherited device history preferences before running");
+            string backup = LatestBackup(Path.Combine(HistoriesRoot(new Config { BackupFolder = profileLocation }), "profiles", "Studio"));
+            Assert(backup != null && Snapshots.CurrentBackup(backup).Files.Exists(f => f.Relative == "song.txt"),
+                "GUI backup applies the profile location and inherited device preferences before running");
             Assert(!Directory.Exists(deviceLocation), "profile destination takes priority over the device destination");
             form.Close();
         }

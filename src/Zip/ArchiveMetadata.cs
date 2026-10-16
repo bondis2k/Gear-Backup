@@ -7,6 +7,8 @@ using System.Text;
 // Readable identity and exact uncompressed size for a standalone archive.
 internal static class ArchiveMetadata
 {
+    // The checksum list inside a standalone ZIP: "<sha-256>  <path>" per file, in the sha256sum format.
+    internal const string ChecksumFileName = "checksums.sha256";
     internal const string FileName = "gearbackup-info.txt";
     internal static readonly Encoding Utf8 = new UTF8Encoding(false);
 

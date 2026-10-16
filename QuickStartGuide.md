@@ -35,7 +35,7 @@ You can click **Preview** first to inspect the plan without saving a backup. Lea
 
 For one ZIP file instead of a backup set, choose **Zip archive** in Type, optionally enter a filename, then click **Create ZIP** and choose where to save it. Blank filename uses the device name plus date and time. Extract the resulting archive with Windows; it contains the current files and folders, without restore-point history.
 
-**With the default settings, restore files through Gear Backup.** Backups use a single content store rather than a separate browsable copy. Every successful run saves a restore point; unchanged content is shared within that full backup set.
+**Restore files through Gear Backup.** Backups use a content store rather than a separate browsable copy. Every successful run saves a restore point; unchanged content is shared within that full backup set.
 
 ## 3. Back up later changes
 
@@ -84,6 +84,6 @@ This saves C1–C7 recipes and current shooting settings. It does not export eve
 
 - **Help** or **F1:** open the offline manual.
 - **Settings:** change verification, recovery copies, retention, or appearance. **Original** is the default theme.
-- [Storage choices](MANUAL.md#choosing-how-backups-are-stored): choose between the default content store and browsable backups.
+- [How backups are stored](MANUAL.md#how-backups-are-stored): content stores and restore points.
 - [Troubleshooting](MANUAL.md#troubleshooting): detection, restore lists, paths, and interrupted backups.
 - [Command-line reference](MANUAL.md#command-line-and-exit-codes): use `GearBackup.exe` and its options.

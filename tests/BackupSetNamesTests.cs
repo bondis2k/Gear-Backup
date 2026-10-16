@@ -8,11 +8,11 @@ partial class Tests
     [Test("Named full backup sets and incremental selection", Folder = "helpers")]
     static void TestBackupSetNames(string dir)
     {
-        foreach (bool single in new[] { false, true })
+        foreach (bool single in new[] { true })
         {
             string root = Folder(dir, "named-" + single), source = Folder(root, "source"), history = Folder(root, "history");
             Put(Path.Combine(source, "one.txt"), "first");
-            var config = new Config { Preview = false, SingleContentStore = single, FullBackupName = "  Live set — October  " };
+            var config = new Config { Preview = false, FullBackupName = "  Live set — October  " };
             string first = RunBackup(source, history, null, false, config).OutputFolder;
             Assert(BackupSetNames.Read(first) == "Live set — October", "full backup retains trimmed readable name in both storage modes");
             config.FullBackupName = "Studio";
@@ -22,8 +22,7 @@ partial class Tests
             var result = BackupWithLock(source, history, true, config);
             Assert(result.ExitCode == 0 && result.OutputFolder == first, "incremental updates explicitly selected older full set");
             Assert(BackupSetNames.Read(first) == "Live set — October" && BackupSetNames.Read(second) == "Studio", "incremental preserves set names");
-            if (single) Assert(ContentStoreBackup.Current(first).Files[0].Size != ContentStoreBackup.Current(second).Files[0].Size, "other full set remains unchanged");
-            else Assert(File.ReadAllText(Path.Combine(first, "one.txt")) == "updated file contents" && File.ReadAllText(Path.Combine(second, "one.txt")) == "first", "other full set remains unchanged");
+            Assert(ContentStoreBackup.Current(first).Files[0].Size != ContentStoreBackup.Current(second).Files[0].Size, "other full set remains unchanged");
             config.IncrementalBackup = source;
             bool rejected = false;
             try { BackupWithLock(source, history, true, config); } catch (IOException) { rejected = true; }

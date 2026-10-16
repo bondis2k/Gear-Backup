@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static PathSafety;
-using static Checksums;
 using static Backups;
 using static RestoreFlow;
 using static FujiSettings;
@@ -124,7 +123,7 @@ internal sealed class GuiOperationRunner
             if (history == null) return new OperationResult { Cancelled = true, Summary = "Check cancelled." };
             var backups = ListBackups(history);
             if (backups.Count == 0) throw new IOException("No backups found at this location.");
-            using (LockHistory(history)) return RunCheck(backups);
+            using (LockHistory(history)) return IntegrityEngine.RunCheck(backups);
         }
 
         if (operation == GuiOperation.Restore && options.RestoreSelection != null)

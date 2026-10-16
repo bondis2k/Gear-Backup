@@ -16,9 +16,9 @@ Gear Backup uses **SHA-256 checksums** at three points.
 2. **Verify copied files** (a setting, off by default). After each file is written, Gear Backup reads it back from the backup drive and compares it with the checksum. If the two differ it copies the file once more; if they differ again it stops and tells you to check the USB cable and the SD card.
 3. **Check backups** (on the **Restore** tab, or `GearBackup.exe --check`). This reads every stored file again, recalculates its SHA-256 and compares it with the saved checksum, long after the backup was made. Each file ends up as **OK**, **damaged** (the content no longer matches) or **missing**. The result is saved and the **Dashboard** shows the outcome of the last check.
 
-With the single content store, each stored file is checked once, even if many restore points use it. With plain, browsable backup folders, the files in the folder are checked against its `checksums.sha256` list, and any saved restore points against their own records.
+Each stored file is checked once, even if many restore points use it.
 
-Check does not change or repair the backed-up files; it only records its result. If it finds a damaged file, restore from another copy of the backup if you have one, and start a new full backup from the device. With the single content store, an incremental backup refuses to build on content that is known to be damaged ("Damaged stored content").
+Check does not change or repair the backed-up files; it only records its result. If it finds a damaged file, restore from another copy of the backup if you have one, and start a new full backup from the device. An incremental backup refuses to build on content that is known to be damaged ("Damaged stored content").
 
 ### Do I need both Verify and Check?
 
@@ -46,7 +46,7 @@ Tested on a copy of a real M8 backup in a different folder: **Check backups** re
 
 ### Can I open my backup files in Explorer?
 
-Not with the default single content store. Each distinct file content is stored once under a checksum name, and the original file names, folders and dates are recorded in each restore point, so you restore through Gear Backup (the **Restore** tab), which puts everything back under its original names. If you would rather have plain, browsable folders, turn off **Use a single content store** in **Settings → Backup** before making a new full backup.
+Not directly. Each distinct file content is stored once under a checksum name, and the original file names, folders and dates are recorded in each restore point, so you restore through Gear Backup (the **Restore** tab), which puts everything back under its original names. To get ordinary files, create a ZIP (**Also save as zip**, or the **Zip archive** type) and extract it.
 
 ### Is a deleted file removed from my backups?
 
@@ -77,7 +77,7 @@ When a file is judged changed, its new content is hashed while it is copied. If 
 
 Time, and nothing else.
 
-Normally an incremental backup only looks at each file's size and modified time, which takes a moment even for thousands of files. With **Compare file contents** on, Gear Backup has to **read every file in full** on every backup, even when nothing has changed, to calculate its SHA-256 and compare it with the saved one. The extra time is therefore however long it takes to read the whole device at its read speed. It also applies when you restore or resume an interrupted backup. With plain, browsable backup folders it reads the backup's copy of each file too.
+Normally an incremental backup only looks at each file's size and modified time, which takes a moment even for thousands of files. With **Compare file contents** on, Gear Backup has to **read every file in full** on every backup, even when nothing has changed, to calculate its SHA-256 and compare it with the saved one. The extra time is therefore however long it takes to read the whole device at its read speed. It also applies when you restore or resume an interrupted backup.
 
 For example, an M8 card with about 1 GB in 3,169 files, read through a USB card reader: a backup with nothing changed took under 3 seconds normally. With **Compare file contents** on, the first one took about 2.5 minutes, because the whole card was read. A repeat straight afterwards took about 4 seconds, since Windows still had the files cached. Your numbers will depend on the card, the reader and how much is stored.
 

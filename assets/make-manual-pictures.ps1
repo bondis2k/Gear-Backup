@@ -125,7 +125,7 @@ Picture 'backup-history.png' 'A backup you can browse. A history you can restore
     FileRow 'Jam.m8s' 'v2' 486 250
     FileRow 'Kick.wav' 'kept' 486 326 '#FFF0EB' '#AA4D48'
     Label 'Snapshot 2' 486 428 304 43 28 '#00544C' -Bold
-    Label 'Only Jam v2. Deleted Kick stays in the browsable backup.' 486 477 304 95 24 '#63747B'
+    Label 'Only Jam v2. Deleted Kick stays in earlier restore points.' 486 477 304 95 24 '#63747B'
 
     Badge '3' 904 179
     Label 'Pick a snapshot' 959 179 259 45 27 '#00544C' -Bold

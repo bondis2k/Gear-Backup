@@ -33,8 +33,7 @@ partial class Tests
         {
             form.Show();
             // This workflow exercises snapshot restore; normal startup leaves history off.
-            var formConfig = (Config)typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
-            formConfig.PointInTimeHistory = true; formConfig.SingleContentStore = false; // this workflow checks browsable backup folders
+            var formConfig = (Config)typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form); // this workflow checks browsable backup folders
             Assert(form.Text == AppIdentity.Name, "GUI window uses the shared Gear Backup identity");
             using (var about = new AboutDialog())
             {
@@ -76,7 +75,7 @@ partial class Tests
             Assert(optionalFields.Visible && sourceBox.Visible && backupBox.Visible, "More options exposes the folder and profile controls");
             moreOptions.PerformClick();
             Assert(!optionalFields.Visible, "optional fields can be collapsed again");
-            using (var configured = new MainForm(true, new Config { SingleContentStore = false, SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
+            using (var configured = new MainForm(true, new Config { SourceFolder = @"D:\Card", Profile = "Studio", BackupFolder = @"E:\Backups" }))
             {
                 configured.Show(); Application.DoEvents();
                 ((TabControl)configured.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
@@ -166,7 +165,7 @@ partial class Tests
             Assert(BackupSetNames.Read(backup) == "Live October", "GUI saves full backup name without changing automatic history grouping");
             Assert(resultCounts.Text.Contains("Copied 2") && resultCounts.Text.Contains("Failed 0") && openOutput.Visible,
                 "completed backup shows structured counts and an open-folder action");
-            Assert(File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "GUI TEST SONG", "GUI full backup executes shared engine");
+            Assert(File.ReadAllText(Snapshots.CurrentBackup(backup).Files.Find(f => f.Relative == @"Songs\one.m8s").StoredPath) == "GUI TEST SONG", "GUI full backup executes shared engine");
             Assert(File.Exists(backup + ".zip"), "GUI full backup with the zip option saves a zip");
             zipBox.Checked = false;
             selectOperation(1);
@@ -271,14 +270,13 @@ partial class Tests
         }
         string ini = Path.Combine(root, "shared-settings.ini");
         Put(ini, "; keep this comment\nVerify=no\nCustomOption=unchanged\nVerify=no\n");
-        var saved = new Config { SingleContentStore = false, BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio", HardLinks = true };
+        var saved = new Config { BackupFolder = root, Verify = true, Recovery = false, Thorough = false, Profile = "Studio" };
         SaveConfig(saved, ini);
         string text = File.ReadAllText(ini);
         Assert(text.Contains("; keep this comment") && text.Contains("CustomOption=unchanged"), "GUI settings save preserves comments and unrelated keys");
         Assert(text.Contains("Verify=yes") && !text.Contains("Verify=no") && text.Contains("Recovery=no") && text.Contains("Thorough=no"),
             "shared settings save updates duplicates and keeps checksum/recovery defaults optional");
         Assert(text.Contains("Profile=Studio") && text.Contains("SourceFolder="), "settings save includes paths and profile");
-        Assert(text.Contains("HardLinks=yes"), "settings save keeps HardLinks");
     }
 
     [Test("Preview filtering", Gui = true)]
@@ -517,34 +515,34 @@ partial class Tests
                 form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 2;
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-restore-" + percent + ".png"));
             }
-            using (var form = new SettingsDialog(new Config { SingleContentStore = false })) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
-            using (var form = new SettingsDialog(new Config { SingleContentStore = false }))
+            using (var form = new SettingsDialog(new Config { })) CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + percent + ".png"));
+            using (var form = new SettingsDialog(new Config { }))
             {
                 FindGuiControl<TabControl>(form).SelectedIndex = 3;
                 CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + percent + ".png"));
             }
-            using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = "original" }))
+            using (var form = new MainForm(true, new Config { Theme = "original" }))
                 CheckGuiLayout(form, percent, Path.Combine(output, "main-original-" + percent + ".png"));
             GuiTheme.ApplyTheme("retro");
             foreach (string theme in new[] { "original", "original-dark" })
             {
-                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
+                using (var form = new MainForm(true, new Config { Theme = theme }))
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-" + theme + "-" + percent + ".png"));
-                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
+                using (var form = new MainForm(true, new Config { Theme = theme }))
                 {
                     form.ShowDevice(Devices.OP1Field, "MTP");
                     form.ShowDeviceInformation(DeviceInformation.Read(new SourceChoice { Mtp = new MtpSource { Device = Devices.OP1Field } }));
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-device-" + theme + "-" + percent + ".png"));
                 }
-                using (var form = new MainForm(true, new Config { SingleContentStore = false, Theme = theme }))
+                using (var form = new MainForm(true, new Config { Theme = theme }))
                 {
                     form.Show(); ((TabControl)form.Controls.Find("WorkflowTabs", true)[0]).SelectedIndex = 1;
                     ((Button)form.Controls.Find("ToggleBackupOptions", true)[0]).PerformClick();
                     CheckGuiLayout(form, percent, Path.Combine(output, "main-options-" + theme + "-" + percent + ".png"));
                 }
-                using (var form = new SettingsDialog(new Config { SingleContentStore = false, Theme = theme }))
+                using (var form = new SettingsDialog(new Config { Theme = theme }))
                     CheckGuiLayout(form, percent, Path.Combine(output, "settings-" + theme + "-" + percent + ".png"));
-                using (var form = new SettingsDialog(new Config { SingleContentStore = false, Theme = theme }))
+                using (var form = new SettingsDialog(new Config { Theme = theme }))
                 {
                     FindGuiControl<TabControl>(form).SelectedIndex = 3;
                     CheckGuiLayout(form, percent, Path.Combine(output, "appearance-" + theme + "-" + percent + ".png"));

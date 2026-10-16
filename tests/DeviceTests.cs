@@ -183,28 +183,12 @@ partial class Tests
         Put(Path.Combine(mirror, "projects", "user", "backups", "ziiamed 1.xy", "0000.xy"), "AUTO BACKUP");
         Put(Path.Combine(mirror, "samples", "user", "kick.wav"), "WAVE");
         string history = Path.Combine(dir, "opxy-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
+        var config = new Config { BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
         string backup = ListBackups(history)[0];
-        Assert(first.ExitCode == 0 && File.Exists(Path.Combine(backup, "projects", "user", "backups", "ziiamed 1.xy", "0000.xy")),
+        Assert(first.ExitCode == 0 && Snapshots.CurrentBackup(backup).Files.Exists(f => f.Relative == @"projects\user\backups\ziiamed 1.xy\0000.xy"),
             "the OP-XY's automatic project backups are still backed up");
-        Assert(File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains("Projects: 1 (first backup"),
-            "the first OP-XY report counts projects");
-        Put(Path.Combine(mirror, "projects", "user", "ziiamed 2.xy"), "PROJECT 2");
-        OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config,
-            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
-        Assert(second.Summary.Contains("Projects: 1 new (ziiamed 2)."), "OP-XY summaries name new projects");
-        Put(Path.Combine(backup, ".gearbackup", "quarantine", "x", "projects", "user", "ghost.xy"), "QUARANTINED");
-        File.Delete(Path.Combine(mirror, "projects", "user", "ziiamed 1.xy"));
-        new BackupEngine().Run(mirror, history, backup, true, config,
-            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = xy });
-        bool listed = false;
-        foreach (string report in Directory.GetFiles(backup, "backup-statistics_*.txt"))
-            listed |= File.ReadAllText(report).Contains("Projects no longer on the OP-XY (1):\r\n      ziiamed 1");
-        Assert(listed, "a project removed from the OP-XY is reported");
-        foreach (string report in Directory.GetFiles(backup, "backup-statistics_*.txt"))
-            Assert(!File.ReadAllText(report).Contains("ghost"), "files in program metadata are never reported as removed projects");
     }
 
     [Test("Tracker Mini: project folders", Folder = "helpers")]
@@ -237,19 +221,11 @@ partial class Tests
         Put(Path.Combine(card, "Projects", "User", "Other", "project.mt"), "OTHER");
         Put(Path.Combine(card, "Workspace", "project.mt"), "OPEN");
         string history = Path.Combine(dir, "tracker-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
+        var config = new Config { BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(card, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = tracker });
         string backup = ListBackups(history)[0];
-        Assert(first.ExitCode == 0 && File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains("Projects: 3 (first backup"),
-            "the first Tracker report counts projects");
-        Put(Path.Combine(card, "Projects", "User", "New", "project.mt"), "NEW");
-        OperationResult second = new BackupEngine().Run(card, history, backup, true, config,
-            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = tracker });
-        Assert(second.Summary.Contains("Projects: 1 new (New).") &&
-            File.ReadAllText(Directory.GetFiles(backup, "backup-statistics_*.txt")[0]).Contains("New projects (1):\r\n      User\\New"),
-            "Tracker summaries name new projects by their folder");
-
+        Assert(first.ExitCode == 0 && Snapshots.CurrentBackup(backup).Files.Count == 5, "the Tracker card's files are all backed up");
         // Restoring a whole project brings back its folder (patterns and samples included) and nothing else.
         string target = Rooted(Path.Combine(dir, "tracker-target"));
         Directory.CreateDirectory(target);
@@ -264,7 +240,7 @@ partial class Tests
         OperationResult restored;
         using (new OperationContext(ui, CancellationToken.None) { Device = tracker }.Activate())
             restored = RunRestore(target, ListBackups(history), config);
-        Assert(offered != null && offered.Count == 4 && offered.Contains("Workspace"), "every project folder is offered, the open one too");
+        Assert(offered != null && offered.Count == 3 && offered.Contains("Workspace"), "every project folder is offered, the open one too");
         Assert(restored.ExitCode == 0 && File.ReadAllText(Path.Combine(target, @"Projects\User\Jam\samples\kick.wav")) == "KICK" &&
             File.Exists(Path.Combine(target, @"Projects\User\Jam\patterns\pattern_01.mtp")), "a whole project folder is restored");
         Assert(!Directory.Exists(Path.Combine(target, @"Projects\User\Other")) && !Directory.Exists(Path.Combine(target, "Workspace")),
@@ -294,25 +270,11 @@ partial class Tests
             Put(Path.Combine(mirror, "DCIM", "100_FUJI", shot + ".RAF"), "RAW " + shot);
         }
         string history = Path.Combine(dir, "x100vi-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
+        var config = new Config { BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config,
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = camera });
         string backup = ListBackups(history)[0];
-        Assert(first.ExitCode == 0 && File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains("Photos and videos: 2 (first backup"),
-            "a JPG and RAF of one shot count as one photo");
-        Put(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0003.JPG"), "JPEG 3");
-        Put(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0003.RAF"), "RAW 3");
-        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0001.JPG"));
-        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0001.RAF"));
-        File.Delete(Path.Combine(mirror, "DCIM", "100_FUJI", "DSCF0002.RAF"));
-        OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config,
-            new OperationContext(new TestInteraction(), CancellationToken.None) { Device = camera });
-        string report = File.ReadAllText(Directory.GetFiles(backup, "backup-statistics_*.txt")[0]);
-        Assert(second.Summary.Contains("Photos and videos: 1 new (DSCF0003)."), "a new shot is named once: " + second.Summary);
-        Assert(report.Contains("Photos and videos no longer on the X100VI (1):\r\n      100_FUJI\\DSCF0001"),
-            "a shot deleted on the camera is reported, one with a file left isn't");
-        Assert(File.Exists(Path.Combine(backup, @"DCIM\100_FUJI\DSCF0001.RAF")), "deleted photos stay in the backup");
-
+        Assert(first.ExitCode == 0 && Snapshots.CurrentBackup(backup).Files.Count == 4, "both files of each shot are backed up");
         // Photos going back onto the camera: refused over USB with the reason, and confirmed onto a card.
         Assert(MtpRestoreUnsupported(camera).Contains("rarely put back on a camera") && !MtpRestoreUnsupported(Devices.OPXY).Contains("rarely"),
             "restoring to the camera explains why it isn't offered");
@@ -367,16 +329,14 @@ partial class Tests
         string history = Path.Combine(dir, "op1-history");
         var ui = new TestInteraction();
         var context = new OperationContext(ui, CancellationToken.None) { Device = Devices.OP1Field };
-        var config = new Config { SingleContentStore = false, BackupFolder = dir, Preview = false };
+        var config = new Config { BackupFolder = dir, Preview = false };
         OperationResult first = new BackupEngine().Run(mirror, history, null, false, config, context);
         string backup = ListBackups(history)[0];
-        string report = File.ReadAllText(Path.Combine(backup, "backup-statistics.txt"));
-        Assert(first.ExitCode == 0 && File.Exists(Path.Combine(backup, "mixdown", "side_a.wav")), "a mirrored OP-1 Field backs up like any folder");
-        Assert(report.Contains("Free space on OP-1 Field:  not available over MTP") && !report.Contains("Names the"),
-            "the report names the OP-1 Field, without drive space or M8 name warnings");
+        Assert(first.ExitCode == 0 && Snapshots.CurrentBackup(backup).Files.Exists(f => f.Relative == @"mixdown\side_a.wav"), "a mirrored OP-1 Field backs up like any folder");
+        Assert(!ui.Output.ToString().Contains("may not handle well"), "the OP-1 Field gets no M8 name warnings");
         Put(Path.Combine(mirror, "mixdown", "side_b.wav"), "WAVE B");
         OperationResult second = new BackupEngine().Run(mirror, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.OP1Field });
-        Assert(second.Summary.Contains("1 new, 0 changed file(s)."), "OP-1 Field summaries count files, not songs");
+        Assert(second.ExitCode == 0 && Snapshots.CurrentBackup(backup).Files.Exists(f => f.Relative == @"mixdown\side_b.wav"), "the next OP-1 Field run adds the new file");
     }
 
     [Test("Device profiles", Folder = "helpers")]
@@ -392,15 +352,15 @@ partial class Tests
 
         // Which device a source is: a named Device setting wins, then detection, then the default.
         var other = new DeviceProfile { Id = "other", Name = "Other Synth", SongExtensions = new[] { ".song" }, SongsFolder = "projects" };
-        Assert(DeviceFor(new Config { SingleContentStore = false, Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
-        Assert(DeviceFor(new Config { SingleContentStore = false }, other) == other && DeviceFor(new Config { SingleContentStore = false }, null) == Devices.M8, "auto uses the detected device, else the default");
+        Assert(DeviceFor(new Config { Device = "m8" }, other) == Devices.M8, "a named Device setting wins over detection");
+        Assert(DeviceFor(new Config { }, other) == other && DeviceFor(new Config { }, null) == Devices.M8, "auto uses the detected device, else the default");
         string trackerCard = Rooted(Path.Combine(dir, "tracker-card-in-reader"));
         Put(Path.Combine(trackerCard, "trackerConfig"), "EEPROM");
-        Assert(DeviceFor(new Config { SingleContentStore = false }, null, trackerCard) == Devices.TrackerMini, "a Tracker card in a reader is recognised by its trackerConfig");
-        Assert(DeviceFor(new Config { SingleContentStore = false }, Devices.M8, trackerCard) == Devices.M8 && DeviceFor(new Config { SingleContentStore = false, Device = "m8" }, null, trackerCard) == Devices.M8,
+        Assert(DeviceFor(new Config { }, null, trackerCard) == Devices.TrackerMini, "a Tracker card in a reader is recognised by its trackerConfig");
+        Assert(DeviceFor(new Config { }, Devices.M8, trackerCard) == Devices.M8 && DeviceFor(new Config { Device = "m8" }, null, trackerCard) == Devices.M8,
             "detection and the Device setting win over the marker file");
-        Assert(DeviceFor(new Config { SingleContentStore = false }, null, Rooted(dir)) == Devices.M8, "a folder without a marker file is the default device");
-        var config = new Config { SingleContentStore = false };
+        Assert(DeviceFor(new Config { }, null, Rooted(dir)) == Devices.M8, "a folder without a marker file is the default device");
+        var config = new Config { };
         TestInteraction ui = WithUi(() => { ApplySetting(config, "Device", "M8"); ApplySetting(config, "Device", "toaster"); });
         Assert(config.Device == "m8" && ui.Output.ToString().Contains("Device=toaster isn't valid"), "the Device setting accepts known devices only");
 
@@ -417,17 +377,7 @@ partial class Tests
             Throws(() => SongDependencies(new RestoreEntry { Relative = "projects\\a.song", StoredPath = Path.Combine(dir, "nope.song") }, new Snapshot(), dir, false),
                 "song-with-samples restore is refused for a device without a song reader");
 
-            string source = Rooted(Path.Combine(dir, "other-card"));
-            Put(Path.Combine(source, "projects", "new.song"), "N");
-            Put(Path.Combine(source, "projects", "old.m8s"), "not a song here");
-            var scan = new ScanResult();
-            CollectFiles(source, scan);
-            var states = new FileState[scan.Files.Count];
-            string baseline = Path.Combine(dir, "other-baseline");
-            Directory.CreateDirectory(baseline);
-            Changes changes = FindChanges(scan, source, states, baseline);
-            Assert(changes.NewSongs.Count == 1 && changes.NewSongs[0] == "new" && changes.OtherNew == 1,
-                "the change summary counts the current device's songs");
+            Assert(IsSong(@"projects\new.song") && !IsSong(@"projects\old.m8s"), "the current device's song files are its songs, whatever other devices use");
         }
         Assert(OperationContext.Current.Device == Devices.M8, "the device setting ends with its operation");
     }
@@ -474,7 +424,7 @@ partial class Tests
             Info = new MtpDeviceInfo { InstanceId = @"USB\VID_2367&PID_0102\TEST", FriendlyName = "OP-1" },
             Open = () => { opened++; return device; } };
         Directory.CreateDirectory(mtp.Mirror);
-        var global = new Config { SingleContentStore = false, BackupFolder = Folder(dir, "backups"), SettingsDirectory = dir, Preview = false };
+        var global = new Config { BackupFolder = Folder(dir, "backups"), SettingsDirectory = dir, Preview = false };
         var choice = new SourceChoice { Path = mtp.Mirror, Detected = Devices.OP1Field, Mtp = mtp };
         PreparedSource prepared = null;
         OperationResult first = null, second = null;
@@ -484,10 +434,10 @@ partial class Tests
         });
         string backup = ListBackups(prepared.History)[0];
         Assert(first.ExitCode == 0 && opened == 1 && device.Downloads == 2 && prepared.Device == Devices.OP1Field &&
-            File.ReadAllText(Path.Combine(backup, @"synth\pad.aif")) == "PAD", "a prepared MTP source is synced and backed up");
+            File.ReadAllText(Snapshots.CurrentBackup(backup).Files.Find(f => f.Relative == @"synth\pad.aif").StoredPath) == "PAD", "a prepared MTP source is synced and backed up");
         device.File(@"tapes\track2.aif", "NEW TAPE", day);
         WithUi(() => second = RunPrepared(PrepareSource(global, choice), false, true));
-        Assert(second.ExitCode == 0 && device.Downloads == 3 && File.ReadAllText(Path.Combine(backup, @"tapes\track2.aif")) == "NEW TAPE",
+        Assert(second.ExitCode == 0 && device.Downloads == 3 && File.ReadAllText(Snapshots.CurrentBackup(backup).Files.Find(f => f.Relative == @"tapes\track2.aif").StoredPath) == "NEW TAPE",
             "the next backup downloads only what changed");
 
         Throws(() => WithUi(() => RunPrepared(PrepareSource(global, choice), true, false)), "restoring onto an MTP device is refused");

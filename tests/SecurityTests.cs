@@ -115,7 +115,7 @@ partial class Tests
         try
         {
             result = new RestoreEngine().RunSelected(target, f.First, copies, RestoreMode.All, null, true,
-                new Config { SingleContentStore = false, Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
+                new Config { Preview = false, Verify = true, Thorough = true, Recovery = false }, new OperationContext(ui, CancellationToken.None));
         }
         finally { if (locked != null) locked.Dispose(); }
         Assert(result.ExitCode != 0 && !result.Cancelled && result.Summary.Contains("1 failed"),
@@ -282,26 +282,6 @@ partial class Tests
         try { SamplePaths(huge); } catch (IOException ex) { refusal = ex.Message; }
         Assert(refusal != null && refusal.Contains("too large"), "an oversized song file is refused by size, before reading it");
         File.Delete(huge);
-
-        // 4. The zip's copy of the statistics hides local paths; the backup's own copy keeps them.
-        string source = Rooted(Path.Combine(dir, "redact-card"));
-        Put(Path.Combine(source, "Songs", "a.m8s"), "A");
-        string zipHistory = Path.Combine(dir, "redact-history");
-        new BackupEngine().Run(source, zipHistory, null, false, new Config { SingleContentStore = false, BackupFolder = dir, Preview = false, Zip = true },
-            new OperationContext(new TestInteraction(), CancellationToken.None));
-        string backup = ListBackups(zipHistory)[0];
-        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        string zipped;
-        using (var zip = new System.IO.Compression.ZipArchive(File.OpenRead(backup + ".zip"), System.IO.Compression.ZipArchiveMode.Read))
-        using (var reader = new StreamReader(zip.GetEntry("backup-statistics.txt").Open()))
-            zipped = reader.ReadToEnd();
-        Assert(zipped.Contains("<this backup>") && zipped.IndexOf(backup, StringComparison.OrdinalIgnoreCase) < 0,
-            "the zip's statistics hide the backup folder's path");
-        Assert(!source.StartsWith(profile, StringComparison.OrdinalIgnoreCase) ||
-            (zipped.Contains("%USERPROFILE%") && zipped.IndexOf(profile, StringComparison.OrdinalIgnoreCase) < 0),
-            "the zip's statistics hide the user profile path");
-        Assert(File.ReadAllText(Path.Combine(backup, "backup-statistics.txt")).Contains(backup),
-            "the backup's own statistics keep full paths");
     }
 
     // Metadata reads and writes all check for links and size limits in one place (Records, AtomicText),

@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using static PathSafety;
-using static Checksums;
 using static Snapshots;
-using static BackupTraversal;
 using static AtomicFile;
 using static BackupStatuses;
 using static PlanReview;
@@ -66,31 +64,13 @@ internal static class BackupDatabase
     static string Key(string snapshot, string path) { return snapshot + "\0" + path; }
     static CatalogData Inventory(string backup)
     {
+        ContentStoreBackup.RequireContentStore(backup);
         var data = new CatalogData();
-        bool single = ContentStoreBackup.IsSingle(backup);
         var objects = new ObjectChecks(backup);
-        if (single)
-        {
-            Snapshot current = ContentStoreBackup.Current(backup, objects);
-            foreach (string folder in current.Folders) Add(data, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
-            foreach (var item in current.Files) Add(data, new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
-                ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
-        }
-        var sums = single ? null : LoadChecksums(backup);
-        var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        int prefix = Rooted(backup).Length;
-        if (!single) foreach (var item in BackupEntries(backup))
-        {
-            OperationContext.Current.CheckCancellation();
-            string relative = item.FullName.Substring(prefix), hash = null;
-            if (sums != null) sums.TryGetValue(relative, out hash);
-            var file = item as FileInfo;
-            Add(data, new CatalogEntry { Path = relative, Hash = hash, IsDirectory = file == null, Present = true,
-                Size = file == null ? 0 : file.Length, ModifiedTicks = item.LastWriteTimeUtc.Ticks, CreatedTicks = item.CreationTimeUtc.Ticks });
-            present.Add(relative);
-        }
-        if (sums != null) foreach (var sum in sums)
-            if (!present.Contains(sum.Key)) Add(data, new CatalogEntry { Path = sum.Key, Hash = sum.Value });
+        Snapshot current = ContentStoreBackup.Current(backup, objects);
+        foreach (string folder in current.Folders) Add(data, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
+        foreach (var item in current.Files) Add(data, new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
+            ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
         string snapshots = SnapshotRoot(backup);
         RejectRootLinks(snapshots);
         var validNames = new HashSet<string>(StringComparer.Ordinal);
@@ -309,7 +289,6 @@ internal static class BackupDatabase
         string revision = Path.Combine(AppIdentity.MetadataRoot(backup), "inventory-revision.txt");
         // A missing revision is tracked as missing metadata, so recovery can rebuild a catalog.
         string token = File.Exists(revision) ? Records.ReadText(revision, Records.SmallLimit, "Inventory revision").Trim() : "missing";
-        if (!ContentStoreBackup.IsSingle(backup)) return "files:" + token;
         string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");
         string name = Records.ReadText(pointer, Records.SmallLimit, "Current restore point").Trim();
         return "single:" + token + ":" + name;
@@ -317,7 +296,6 @@ internal static class BackupDatabase
     internal static string InventoryStamp(string backup)
     {
         string generation = InventoryGeneration(backup);
-        if (!ContentStoreBackup.IsSingle(backup)) return generation + ":" + FileStamp(Path.Combine(backup, ChecksumFileName));
         string name = Records.ReadText(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"), Records.SmallLimit, "Current restore point").Trim();
         return generation + ":" + FileStamp(SafePath(SnapshotRoot(backup), name + ".manifest"));
     }
@@ -348,10 +326,7 @@ internal static class BackupDatabase
     }
     internal static bool IsCurrentInventory(string backup, CatalogData data)
     {
-        bool missingChecksum = !ContentStoreBackup.IsSingle(backup) && !File.Exists(Path.Combine(backup, ChecksumFileName));
-        // A deleted recovery export must not discard a valid database's expected hashes.
-        bool canRegenerate = missingChecksum && data.InventoryGeneration != null && data.InventoryGeneration == InventoryGeneration(backup);
-        return data.InventoryStamp != null && (data.InventoryStamp == InventoryStamp(backup) || canRegenerate);
+        return data.InventoryStamp != null && data.InventoryStamp == InventoryStamp(backup);
     }
 }
 

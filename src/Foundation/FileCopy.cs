@@ -103,51 +103,6 @@ static class FileCopy
         }
     }
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern bool CreateHardLink(string newFileName, string existingFileName, IntPtr securityAttributes);
-
-    // Creates `link` as a second name for `existing`. False where hard links aren't supported
-    // (FAT, exFAT, most network shares) or fail for any other reason; callers then copy instead.
-    internal static bool TryHardLink(string existing, string link)
-    {
-        try { return CreateHardLink(link, existing, IntPtr.Zero); }
-        catch (Exception) { return false; }
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct FileInformation
-    {
-        public uint Attributes;
-        public System.Runtime.InteropServices.ComTypes.FILETIME Created, Accessed, Written;
-        public uint VolumeSerial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
-    }
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle file, out FileInformation info);
-
-    // Identifies the file on disk behind a hard-linked name ("volume:index"), so a check can skip
-    // reading the same content twice. Null for a file with only one name, or if it can't be read.
-    internal static string SharedFileId(string path)
-    {
-        try
-        {
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            {
-                FileInformation info;
-                if (!GetFileInformationByHandle(stream.SafeFileHandle, out info) || info.Links < 2) return null;
-                return info.VolumeSerial + ":" + (((ulong)info.IndexHigh << 32) | info.IndexLow);
-            }
-        }
-        catch (Exception) { return null; }
-    }
-
-    // NTFS supports hard links; the history store then needs no extra space for file content.
-    internal static bool SupportsHardLinks(string path)
-    {
-        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(path))).DriveFormat == "NTFS"; }
-        catch (Exception) { return false; }
-    }
-
     internal static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { }
