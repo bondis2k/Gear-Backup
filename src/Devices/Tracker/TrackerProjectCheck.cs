@@ -46,6 +46,33 @@ namespace GearBackup
         public int UnreadableFiles;
     }
 
+    // What a Tracker card holds, checked quickly enough to show when the device is detected.
+    internal sealed class TrackerCardSummary
+    {
+        public int Projects, Checked;
+        public string NewestName = "";
+        public DateTime NewestTime;
+        public readonly List<string> Problems = new List<string>();
+
+        internal string Describe()
+        {
+            if (Projects == 0) return "No Tracker projects (folders with project.mt) were found on this card.";
+            var text = new System.Text.StringBuilder();
+            text.Append("Tracker projects: ").Append(Projects);
+            if (NewestName.Length > 0) text.Append("    Newest: ").Append(NewestName).Append(" (").Append(NewestTime.ToString("yyyy-MM-dd")).Append(")");
+            text.AppendLine();
+            string scope = Checked < Projects ? "The first " + Checked + " projects were checked" : Projects == 1 ? "The project was checked" : "All " + Projects + " projects were checked";
+            if (Problems.Count == 0) text.Append(scope).Append(": no missing instruments or unreadable files.");
+            else
+            {
+                text.Append(scope).Append(". Needs attention:");
+                for (int i = 0; i < Problems.Count && i < 5; i++) text.AppendLine().Append("  ").Append(Problems[i]);
+                if (Problems.Count > 5) text.AppendLine().Append("  … and ").Append(Problems.Count - 5).Append(" more (see the Tracker Mini tabs)");
+            }
+            return text.ToString();
+        }
+    }
+
     static class TrackerProjectCheck
     {
         const int MaxFiles = 2000, MaxProjects = 500, MaxDepth = 4;
@@ -78,6 +105,39 @@ namespace GearBackup
                 }
             }
             catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // an unreadable folder just holds no projects we can list
+        }
+
+        // Counts the projects on a card and checks the first few of them (newest first), so the Device tab can say at a glance
+        // whether anything needs attention.
+        internal static TrackerCardSummary Summarize(string root, OperationContext context = null, int maxChecked = 25)
+        {
+            context = context ?? OperationContext.Current;
+            var summary = new TrackerCardSummary();
+            var projects = new List<KeyValuePair<DateTime, string>>();
+            foreach (string folder in FindProjects(root))
+            {
+                DateTime time = DateTime.MinValue;
+                try { time = File.GetLastWriteTime(Path.Combine(folder, "project.mt")); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // an unreadable date sorts last
+                projects.Add(new KeyValuePair<DateTime, string>(time, folder));
+            }
+            projects.Sort((a, b) => b.Key.CompareTo(a.Key));
+            summary.Projects = projects.Count;
+            foreach (var item in projects)
+            {
+                if (summary.Checked >= maxChecked) break;
+                context.CheckCancellation();
+                TrackerProjectReport report = Inspect(item.Value, context);
+                summary.Checked++;
+                string name = report.Project != null && report.Project.Name.Length > 0 ? report.Project.Name : Path.GetFileName(item.Value);
+                if (summary.NewestName.Length == 0) { summary.NewestName = name; summary.NewestTime = item.Key; }
+                var problems = new List<string>();
+                if (report.Error != null) problems.Add("project.mt cannot be read");
+                if (report.Missing.Count > 0) problems.Add(report.Missing.Count + (report.Missing.Count == 1 ? " instrument" : " instruments") + " played without a usable file");
+                if (report.UnreadableFiles > 0) problems.Add(report.UnreadableFiles + (report.UnreadableFiles == 1 ? " unreadable file" : " unreadable files"));
+                if (report.MissingPatterns.Count > 0) problems.Add(report.MissingPatterns.Count + " song position(s) without a pattern");
+                if (problems.Count > 0) summary.Problems.Add(name + ": " + string.Join(", ", problems));
+            }
+            return summary;
         }
 
         // Reads a project folder. Unreadable files are reported, not thrown, so one damaged pattern never hides the rest.

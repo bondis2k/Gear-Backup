@@ -7,6 +7,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
+- The Tracker Mini view can open a pattern from the **Project inspector** (**View pattern**) as a table of steps with notes, instruments and effects, and the Device tab shows a summary of the detected Tracker card's projects and any that need attention.
 - The Tracker Mini view has a **Project inspector** and an **Instrument check**: they read a Tracker project (`project.mt`, patterns and instrument files) and list its instruments and patterns, and the instruments that notes play without a usable instrument file.
 - Optional **Link replacement card to the original backup history** during M8 migration, saved after successful verification and song checks. Future backups use the original history, location and preferences across drive-letter changes; explicit profiles override linking.
 - M8 **Card migration** restores a selected complete backup point to an empty replacement card or test folder, with mandatory preview/checksums, target identity checks, post-copy file verification, song dependency checks, progress/cancellation and a saveable migration report. It does not format storage or delete existing content.

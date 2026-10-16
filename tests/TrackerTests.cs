@@ -34,6 +34,8 @@ partial class Tests
         {
             int at = 28 + step[0] * (1 + 128 * 6) + 1 + step[1] * 6;
             data[at] = (byte)step[2]; data[at + 1] = (byte)step[3];
+            if (step.Length > 5) { data[at + 4] = (byte)step[4]; data[at + 5] = (byte)step[5]; }       // first effect
+            if (step.Length > 7) { data[at + 2] = (byte)step[6]; data[at + 3] = (byte)step[7]; }       // second effect
         }
         return data;
     }
@@ -144,5 +146,46 @@ partial class Tests
         Assert(found.Count == 1, "a project folder lists itself");
         WithUi(() => found = TrackerProjectCheck.FindProjects(Path.Combine(root, "nothing-here")));
         Assert(found.Count == 0, "a missing folder holds no projects");
+    }
+
+    [Test("Tracker pattern steps and card summary", Folder = "helpers")]
+    static void TestTrackerStepsAndSummary(string dir)
+    {
+        // Track 1 step 1: note 60 on instrument 4, tempo 60 (shown 120) and volume 80; step 2 is a cut; track 2 step 1 a fade.
+        TrackerPatternFile pattern = TrackerPatternFile.Read(TrackerPattern(16, 16, new[] { 0, 0, 60, 3, 15, 60, 18, 80 }, new[] { 0, 1, 253, 0 }, new[] { 1, 0, 254, 0 }));
+        TrackerStep first = pattern.Tracks[0].Steps[0];
+        Assert(first.HasNote && first.Note == 60 && first.Instrument == 3 && TrackerFx.Text(first.Fx0Type, first.Fx0Value) == "T120" && TrackerFx.Text(first.Fx1Type, first.Fx1Value) == "V80",
+            "a step's note, instrument and two effects are read: " + TrackerFx.Text(first.Fx0Type, first.Fx0Value) + "|" + TrackerFx.Text(first.Fx1Type, first.Fx1Value));
+        Assert(!pattern.Tracks[0].Steps[1].HasNote && pattern.Tracks[0].Steps[1].Note == -3 && pattern.Tracks[1].Steps[0].Note == -2, "cut and fade steps are not notes");
+        Assert(pattern.Tracks[0].Length == 16 && pattern.Tracks[0].Steps[127].IsEmpty, "a track keeps its length and its empty steps");
+        Assert(TrackerFx.Text(0, 5) == "" && TrackerFx.Text(17, 60) == "I10" && TrackerFx.Text(31, 25) == "P-25" && TrackerFx.Text(25, 0) == "S1" && TrackerFx.Text(40, 30) == "U6", "effect values are shown as the Tracker shows them");
+        Assert(TrackerFx.Name(15) == "Tempo" && TrackerFx.Name(99).Contains("Unknown") && TrackerFx.Symbol(18) == "V" && TrackerFx.Symbol(99) == "?", "effect names and symbols are looked up");
+
+        string root = Folder(dir, "tracker-summary-card");
+        Func<string, int, string> make = (name, instrumentsPresent) => {
+            string folder = Path.Combine(root, "Projects", name);
+            Directory.CreateDirectory(Path.Combine(folder, "patterns"));
+            File.WriteAllBytes(Path.Combine(folder, "project.mt"), TrackerProject(name, 120f, new[] { 1 }));
+            File.WriteAllBytes(Path.Combine(folder, "patterns", "pattern_01.mtp"), TrackerPattern(16, 16, new[] { 0, 0, 60, 0 }, new[] { 0, 1, 60, 1 }));
+            for (int i = 1; i <= instrumentsPresent; i++) TrackerInstrument(Path.Combine(folder, "instruments", "instrument_0" + i + ".pti"), "s" + i, 100, 1);
+            return folder;
+        };
+        make("Good", 2);
+        string bad = make("Bad", 1);
+        File.SetLastWriteTime(Path.Combine(bad, "project.mt"), DateTime.Now.AddDays(1));
+        TrackerCardSummary summary = null;
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root));
+        Assert(summary.Projects == 2 && summary.Checked == 2 && summary.NewestName == "Bad", "the card's projects are counted and the newest named");
+        Assert(summary.Problems.Count == 1 && summary.Problems[0].StartsWith("Bad: 1 instrument played without a usable file"), "a project with a missing instrument is listed: " + string.Join("|", summary.Problems));
+        string text = summary.Describe();
+        Assert(text.Contains("Tracker projects: 2") && text.Contains("Needs attention:") && text.Contains("Bad:"), "the summary reads: " + text);
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root, null, 1));
+        Assert(summary.Checked == 1 && summary.Describe().Contains("The first 1 projects were checked"), "only the newest projects are checked when there are many");
+        make("Bad", 2);
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root));
+        Assert(summary.Problems.Count == 0 && summary.Describe().Contains("no missing instruments"), "a card with nothing wrong says so");
+        string empty = Folder(dir, "tracker-summary-empty");
+        WithUi(() => summary = TrackerProjectCheck.Summarize(empty));
+        Assert(summary.Projects == 0 && summary.Describe().Contains("No Tracker projects"), "a card without projects says so");
     }
 }

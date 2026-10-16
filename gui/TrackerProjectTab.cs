@@ -26,12 +26,15 @@ namespace GearBackup.Gui
         readonly Label checkNotice = GuiTheme.Label("Inspect a project first, or click Check project.", 9, GuiTheme.Muted);
         readonly DataGridView missing = new DataGridView { Name = "TrackerMissingInstruments", AccessibleName = "Instruments the patterns play without a usable file" };
         readonly TextBox details = new TextBox { Name = "TrackerCheckDetails", ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Top, Height = 80, Visible = false, AccessibleName = "Other findings" };
+        readonly Button viewPattern = GuiTheme.Button("View pattern", false);
         Control inspectorContent, checkContent;
         CancellationTokenSource running;
         bool closed, initialized, filling;
         List<string> projects = new List<string>();
         internal Func<string, string> FolderPicker { get; set; }
         internal TrackerProjectReport Report { get; private set; }
+        // Tests replace the modal window; it receives the dialog instead of showing it.
+        internal Action<TrackerPatternDialog> PatternShown { get; set; }
 
         internal TrackerProjectTab(IWorkflowTabHost host, Func<string> source, IOperationInteraction interaction)
         { this.host = host; this.source = source; this.interaction = interaction; }
@@ -62,6 +65,11 @@ namespace GearBackup.Gui
             ConfigureGrid(instruments, new[] { "Instrument", "File", "Sample", "Length (frames)", "Channels", "Play mode", "Status" }, 190);
             ConfigureGrid(patterns, new[] { "Pattern", "File", "Tracks", "Note steps", "Instruments played", "In the song" }, 150);
             panel.Controls.Add(instruments); panel.Controls.Add(patterns);
+            viewPattern.Name = "TrackerViewPattern"; viewPattern.Enabled = false;
+            viewPattern.Click += delegate { ViewPattern(); };
+            patterns.CellDoubleClick += delegate(object sender, DataGridViewCellEventArgs e) { if (e.RowIndex >= 0) ViewPattern(); };
+            patterns.SelectionChanged += delegate { viewPattern.Enabled = patterns.CurrentRow != null && Report != null && Report.Patterns.Count > patterns.CurrentRow.Index && Report.Patterns[patterns.CurrentRow.Index].Error == null; };
+            panel.Controls.Add(viewPattern);
             path.TextChanged += delegate { if (running == null) ClearResults(); };
             panel.Disposed += delegate { closed = true; if (running != null) running.Cancel(); };
             inspectorContent = panel;
@@ -118,6 +126,23 @@ namespace GearBackup.Gui
             notice.Text = "Choose a Tracker card, or a project folder that holds project.mt, then click Inspect.";
             checkNotice.Text = "Inspect a project first, or click Check project.";
             host.RefreshLayout();
+        }
+
+        // Opens the selected pattern's steps in a window.
+        internal void ViewPattern()
+        {
+            if (Report == null || patterns.CurrentRow == null || patterns.CurrentRow.Index >= Report.Patterns.Count) return;
+            TrackerPatternInfo info = Report.Patterns[patterns.CurrentRow.Index];
+            if (info.Error != null) return;
+            TrackerPatternFile file;
+            try { file = TrackerPatternFile.Read(Records.ReadBytes(System.IO.Path.Combine(Report.Folder, "patterns", info.File), TrackerFiles.PatternLimit, "Tracker pattern")); }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { notice.Text = "Cannot open " + info.File + ": " + ex.Message; return; }
+            string name = Report.Project.Name.Length > 0 ? Report.Project.Name : System.IO.Path.GetFileName(Report.Folder);
+            using (var dialog = new TrackerPatternDialog("Pattern " + info.Number + " · " + name, file, Report.Project.TrackNames))
+            {
+                if (PatternShown != null) PatternShown(dialog);
+                else dialog.ShowDialog(host.Owner);
+            }
         }
 
         void SetBusy(bool busy) { inspect.Enabled = check.Enabled = !busy; }

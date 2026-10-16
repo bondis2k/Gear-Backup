@@ -18,6 +18,10 @@ partial class Tests
         File.WriteAllBytes(Path.Combine(project, "patterns", "pattern_02.mtp"), TrackerPattern(16, 16, new[] { 0, 0, 60, 0 }));
         TrackerInstrument(Path.Combine(project, "instruments", "instrument_01.pti"), "kick", 1000, 1);
 
+        string summaryText = null;
+        WithUi(() => summaryText = DeviceInformation.Read(new SourceChoice { Path = card, Detected = Devices.TrackerMini }));
+        Assert(summaryText.Contains("Tracker projects: 1") && summaryText.Contains("Needs attention:") && summaryText.Contains("Jam"), "detecting a Tracker card adds its project summary to the Device tab: " + summaryText);
+
         using (var form = new MainForm(true))
         {
             form.Show(); Application.DoEvents();
@@ -53,6 +57,20 @@ partial class Tests
             Assert(patterns.Rows.Count == 2 && (string)patterns.Rows[0].Cells[4].Value == "1, 5" && (string)patterns.Rows[1].Cells[5].Value == "Yes", "each pattern lists the instruments it plays");
             Assert(missing.Rows.Count == 1 && (string)missing.Rows[0].Cells[0].Value == "5" && checkNotice.Text.Contains("1 instrument(s)"), "the instrument check lists instrument 5, which has no file: " + checkNotice.Text);
 
+            // The pattern viewer shows a pattern's steps.
+            patterns.CurrentCell = patterns.Rows[0].Cells[0];
+            var viewButton = (Button)form.Controls.Find("TrackerViewPattern", true)[0];
+            Assert(viewButton.Enabled, "View pattern is available once a pattern is selected");
+            var tabUnderTest = (TrackerProjectTab)typeof(MainForm).GetField("trackerTab", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            string[] header = null; string firstCell = null, secondCell = null; int rowCount = 0;
+            tabUnderTest.PatternShown = dialog => {
+                header = dialog.Grid.Columns.Cast<DataGridViewColumn>().Select(c => c.HeaderText).ToArray();
+                rowCount = dialog.Grid.Rows.Count;
+                firstCell = (string)dialog.Grid.Rows[0].Cells[1].Value; secondCell = (string)dialog.Grid.Rows[1].Cells[1].Value;
+            };
+            viewButton.PerformClick();
+            Assert(header != null && header.Length == 2 && header[0] == "Step" && header[1] == "1" && rowCount == 16 && firstCell == "C4 01" && secondCell == "D4 05", "the pattern's steps are shown, one column per track with content: " + (header == null ? "none" : string.Join("|", header)) + " " + firstCell + " " + secondCell);
+            Assert(TrackerPatternDialog.Cell(new TrackerStep { Note = 62, Instrument = 49, Fx0Type = 18, Fx0Value = 80 }) == "D4 M2 V80" && TrackerPatternDialog.Cell(new TrackerStep { Note = -3 }) == "CUT" && TrackerPatternDialog.Cell(new TrackerStep { Note = -1 }) == "", "step cells are written like the Tracker's");
             TrackerInstrument(Path.Combine(project, "instruments", "instrument_05.pti"), "hat", 100, 1);
             tabs.SelectedIndex = 2; Application.DoEvents();
             ((Button)form.Controls.Find("TrackerCheckButton", true)[0]).PerformClick();

@@ -758,6 +758,14 @@ No. Double-click a verified copy in the lower table and confirm to open **Restor
 
 Select the **Tracker Mini** header icon, open **Project inspector**, choose the Tracker card (or one project folder, the one that holds `project.mt`) with **Browse…** and click **Inspect**. If the card holds several projects, pick one from the list that appears. You see the project name, tempo and firmware, the number of patterns and song positions, every instrument file with its sample name, length, channels and play mode, and every pattern with the instruments its notes play and whether the song uses it. Nothing on the card is changed.
 
+### Can I see what is in a Tracker pattern?
+
+Yes. In **Project inspector**, select a pattern and click **View pattern** (or double-click it). The window shows a row per step and a column per track that has content. Each cell holds the note, the instrument and up to two effects, such as `C4 03 V80`. Notes use MIDI names (60 is C4), so the octave may differ from what the Tracker displays. It is a read-only view; nothing is written to the card or the project.
+
+### What is the project summary on the Device tab?
+
+After you detect a Tracker Mini card, the Device tab lists the number of projects, the newest one, and any project that needs attention (an instrument played without a usable file, an unreadable file, or a song position with no pattern). It checks up to 25 projects, newest first; open **Project inspector** and **Instrument check** for the full detail of one project.
+
 ### Can Gear Backup find missing samples in a Tracker project?
 
 A Tracker instrument (`.pti`) keeps its sample inside the file and a project stores no sample paths, so a sample cannot go missing the way it can on the M8. The **Instrument check** tab finds the equivalent problem: a note that plays an instrument number with no usable instrument file in the project's `instruments` folder. It lists each such instrument with the patterns that play it and whether any of them is in the song.
