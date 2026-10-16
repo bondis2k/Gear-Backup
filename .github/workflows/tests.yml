@@ -75,5 +75,5 @@ jobs:
         shell: powershell
         working-directory: native\m8-reader
         run: |
-          if (-not (Test-Path "$env:USERPROFILE\.cargoin\cargo-audit.exe")) { cargo install cargo-audit --version 0.22.2 --locked }
+          if (-not (Test-Path "$env:USERPROFILE\.cargo\bin\cargo-audit.exe")) { cargo install cargo-audit --version 0.22.2 --locked }
           cargo audit
