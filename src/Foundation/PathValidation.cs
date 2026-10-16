@@ -36,16 +36,16 @@ static class PathSafety
     internal static string CheckedPath(string root, string relative)
     {
         if (string.IsNullOrEmpty(relative) || Path.IsPathRooted(relative) || relative.IndexOf(':') >= 0)
-            throw new IOException("Invalid relative path: " + relative);
+            throw new UnsafePathException("Invalid relative path: " + relative);
         foreach (string part in relative.Replace('/', '\\').Split('\\'))
         {
             if (part.Length == 0 || part == "." || part == ".." || part.EndsWith(".") || part.EndsWith(" "))
-                throw new IOException("Non-canonical relative path: " + relative);
-            if (IsReservedName(part)) throw new IOException("Reserved Windows name: " + relative);
+                throw new UnsafePathException("Non-canonical relative path: " + relative);
+            if (IsReservedName(part)) throw new UnsafePathException("Reserved Windows name: " + relative);
         }
         string full = Path.GetFullPath(Path.Combine(root, relative));
         if (!Within(full, root) || Rooted(full) == Rooted(root))
-            throw new IOException("Path escapes its folder: " + relative);
+            throw new UnsafePathException("Path escapes its folder: " + relative);
         return full;
     }
 
@@ -89,7 +89,7 @@ static class PathSafety
             bool isFolder = Directory.Exists(current);
             if ((isFolder || File.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Linked paths are not supported: " + current);
+                throw new UnsafePathException("Linked paths are not supported: " + current);
             if (clean != null && !item) clean.Add(current);
             if (Rooted(current) == Rooted(root)) break;
             current = Path.GetDirectoryName(current.TrimEnd('\\'));
@@ -105,7 +105,7 @@ static class PathSafety
         {
             if ((File.Exists(current) || Directory.Exists(current)) &&
                 (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Linked paths are not supported: " + current);
+                throw new UnsafePathException("Linked paths are not supported: " + current);
             current = Path.GetDirectoryName(current);
         }
     }

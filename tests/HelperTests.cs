@@ -493,4 +493,26 @@ partial class Tests
         CommandLine.Parse(new[] { "--zip-archive", "--output", "a.zip", "--name", "Live" }, archive).Validate(archive);
         Assert(true, "an archive with an output and a name is accepted");
     }
+
+    [Test("Error kinds", Folder = "helpers")]
+    static void TestErrorKinds(string dir)
+    {
+        string root = Folder(dir, "error-kinds"), source = Folder(root, "source"), history = System.IO.Path.Combine(root, "history");
+        Put(System.IO.Path.Combine(source, "one.txt"), "ONE");
+        string backup = RunBackup(source, history, null, false, new Config { Preview = false }).OutputFolder;
+        var entry = ContentStore.Current(backup).Files[0];
+        File.WriteAllText(entry.StoredPath, "XX");
+        Throws(() => ValidateEntry(entry), "a truncated stored file is refused");
+        try { ValidateEntry(entry); Assert(false, "unreachable"); }
+        catch (DamagedContentException ex) { Assert(ErrorHints.For(ex).Contains("Check backups"), "damaged content suggests Check backups"); }
+        using (HistoryLock.LockHistory(history))
+            try { HistoryLock.LockHistory(history); Assert(false, "a second lock is refused"); }
+            catch (HistoryBusyException ex) { Assert(ErrorHints.For(ex) != null, "a busy history suggests waiting"); }
+        string old = Folder(root, "old-layout");
+        try { ContentStore.RequireContentStore(old); Assert(false, "an old layout is refused"); }
+        catch (UnsupportedBackupException ex) { Assert(ErrorHints.For(ex).Contains("full backup"), "an old layout suggests a new full backup"); }
+        try { SafePath(root, ".." + (char)92 + "outside.txt"); Assert(false, "an escaping path is refused"); }
+        catch (UnsafePathException ex) { Assert(ErrorHints.For(ex) != null, "an unsafe path explains links are not followed"); }
+        Assert(ErrorHints.For(new IOException("other")) == null, "other errors get no extra advice");
+    }
 }

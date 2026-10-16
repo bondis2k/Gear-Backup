@@ -189,7 +189,7 @@ static class MtpMirror
         {
             bool isFolder = Directory.Exists(current);
             if ((isFolder || File.Exists(current)) && (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Linked paths are not supported: " + current);
+                throw new UnsafePathException("Linked paths are not supported: " + current);
             if (isFolder) clean.Add(current);
             current = Path.GetDirectoryName(current);
             if (current == null) break;
@@ -209,10 +209,10 @@ static class MtpMirror
             RejectRootLinks(parent);
             foreach (string entry in Directory.GetFileSystemEntries(parent))
             {
-                if (!Within(entry, mirror)) throw new IOException("Path escapes its mirror: " + entry);
+                if (!Within(entry, mirror)) throw new UnsafePathException("Path escapes its mirror: " + entry);
                 FileAttributes attributes = File.GetAttributes(entry);
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
-                    throw new IOException("Linked paths are not supported: " + entry);
+                    throw new UnsafePathException("Linked paths are not supported: " + entry);
                 if ((attributes & FileAttributes.Directory) != 0)
                 {
                     folders.Add(entry);

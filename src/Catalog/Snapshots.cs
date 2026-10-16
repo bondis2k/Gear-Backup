@@ -16,9 +16,9 @@ static class Snapshots
     {
         RejectRootLinks(item.StoredPath);
         if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
-            throw new IOException("Backup file is missing or truncated: " + item.Relative);
+            throw new DamagedContentException("Backup file is missing or truncated: " + item.Relative);
         if (verify && item.Hash != null && HashFile(item.StoredPath) != item.Hash)
-            throw new IOException("Backup file is damaged: " + item.Relative);
+            throw new DamagedContentException("Backup file is damaged: " + item.Relative);
     }
 
     internal static bool ValidHash(string hash)
@@ -211,7 +211,7 @@ internal sealed class ObjectChecks
         bool found;
         if (present.TryGetValue(hash, out found)) return found;
         var info = new FileInfo(PathOf(hash));
-        if (info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked paths are not supported: " + info.FullName);
+        if (info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0) throw new UnsafePathException("Linked paths are not supported: " + info.FullName);
         present[hash] = info.Exists;
         return info.Exists;
     }

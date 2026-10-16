@@ -198,7 +198,7 @@ internal static class ZipRestore
             if (!names.Add(name)) throw new IOException("Duplicate ZIP path: " + name);
             int unixType = (entry.ExternalAttributes >> 16) & 0xf000;
             if (unixType == 0xa000 || (entry.ExternalAttributes & (int)FileAttributes.ReparsePoint) != 0)
-                throw new IOException("Linked ZIP entries are not supported: " + name);
+                throw new UnsafePathException("Linked ZIP entries are not supported: " + name);
             total = checked(total + entry.Length);
             if (directory)
             {

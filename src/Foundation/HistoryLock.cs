@@ -12,6 +12,6 @@ static class HistoryLock
         RejectRootLinks(root);
         Directory.CreateDirectory(root);
         try { return new FileStream(Path.Combine(root, ".history.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
-        catch (IOException) { throw new IOException("This backup history is already in use by another process."); }
+        catch (IOException) { throw new HistoryBusyException("This backup history is already in use by another process."); }
     }
 }
