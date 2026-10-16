@@ -17,7 +17,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed
-- Updating a backup's catalog is faster, and the gain grows with the number of restore points: each distinct file name is validated once instead of once per restore point (about half the manifest-reading time at 30 restore points of 2,000 files), and the temporary catalog is written in one transaction without its own journal or disk syncs, since it is flushed to disk when published. Catalog contents are unchanged.
+- Updating a backup's catalog is faster, and the gain grows with the number of restore points: each distinct file name is validated once instead of once per restore point (about half the manifest-reading time at 30 restore points of 2,000 files), the temporary catalog is written in one transaction without its own journal or disk syncs, since it is flushed to disk when published, and the old catalog is read only for the rows that carry a recorded integrity check instead of in full (35 ms instead of about 500 ms at 30 restore points of 2,000 files). Catalog contents are unchanged.
 - Restore works without a connected device: all available device backups are listed and can be restored to a folder. Detection still filters the list to that device type; restore requests retain and revalidate the selected backup's identity.
 
 ### Security

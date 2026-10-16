@@ -34,7 +34,8 @@ internal static class BackupDatabase
         var previous = new CatalogData();
         if (File.Exists(path))
         {
-            try { previous = Read(backup); }
+            // A rebuild only carries forward recorded checks and the check history, so it reads just those rows.
+            try { previous = Read(backup, false, null, true); }
             catch (OperationCanceledException) { throw; }
             catch (IOException ex) { OperationOutput.WriteLine("  Rebuilding the unreadable catalog from checksum lists and manifests: " + ex.Message); }
         }
@@ -185,7 +186,9 @@ internal static class BackupDatabase
         }
     }
 
-    internal static CatalogData Read(string backup, bool currentOnly = false, InventoryPathCache inventoryPaths = null)
+    // currentOnly: just the current listing. verifiedOnly: just the rows that carry a recorded check, and the check runs, not
+    // the restore point list; what Rebuild needs from the old catalog (every other row is rebuilt from the manifests).
+    internal static CatalogData Read(string backup, bool currentOnly = false, InventoryPathCache inventoryPaths = null, bool verifiedOnly = false)
     {
         inventoryPaths = inventoryPaths ?? new InventoryPathCache(backup);
         string path = CatalogPath(backup);
@@ -210,7 +213,8 @@ internal static class BackupDatabase
                     if (stamp.Read()) result.InventoryStamp = stamp.String(0);
                 using (var generation = db.Prepare("SELECT value FROM metadata WHERE key='inventory_generation'"))
                     if (generation.Read()) result.InventoryGeneration = generation.String(0);
-                using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" : "")))
+                using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" :
+                    verifiedOnly ? " WHERE verification_result IS NOT 'unchecked' OR last_verified_utc IS NOT NULL OR observed_sha256 IS NOT NULL" : "")))
                     while (files.Read())
                     {
                         string relative = files.String(1), hash = files.String(6), observed = files.String(10), status = files.String(9);
@@ -224,7 +228,7 @@ internal static class BackupDatabase
                             Size = files.String(3) == null ? -1 : files.Number(3), ModifiedTicks = files.Number(4), CreatedTicks = files.Number(5),
                             Hash = hash, Present = files.Number(7) != 0, VerifiedUtc = time, Result = status, ObservedHash = observed });
                     }
-                if (!currentOnly)
+                if (!currentOnly && !verifiedOnly)
                 {
                     using (var times = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_taken:%'"))
                         while (times.Read())

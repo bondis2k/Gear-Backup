@@ -106,6 +106,24 @@ partial class Tests
         CatalogData rebuilt = BackupDatabase.Read(backup);
         Assert(rebuilt.Files.Count == data.Files.Count && rebuilt.RestorePoints.Count == 5, "rebuilding an existing catalog gives the same rows");
 
+        // A rebuild reads only the rows that carry a recorded check; everything it keeps must survive.
+        Assert(BackupDatabase.Read(backup, false, null, true).Files.Count == 0, "a catalog without checks has no verified rows");
+        new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(new TestInteraction(), CancellationToken.None));
+        CatalogData verified = BackupDatabase.Read(backup);
+        int okRows = verified.Files.FindAll(e => e.Result == "ok").Count;
+        CatalogData verifiedOnly = BackupDatabase.Read(backup, false, null, true);
+        Assert(okRows > 0 && verifiedOnly.Files.Count == verified.Files.FindAll(e => e.Result != "unchecked" || e.VerifiedUtc != null || e.ObservedHash != null).Count &&
+            verifiedOnly.RestorePoints.Count == 0 && verifiedOnly.Checks.Count == verified.Checks.Count, "the verified-only read returns just checked rows and the check runs");
+        BackupDatabase.Rebuild(backup);
+        CatalogData after = BackupDatabase.Read(backup);
+        bool kept = after.Files.Count == verified.Files.Count && after.Checks.Count == verified.Checks.Count && after.RestorePoints.Count == 5;
+        foreach (CatalogEntry entry in verified.Files)
+        {
+            var again = after.Files.Find(e => e.SnapshotId == entry.SnapshotId && e.Path == entry.Path);
+            kept &= again != null && again.Result == entry.Result && again.VerifiedUtc == entry.VerifiedUtc && again.ObservedHash == entry.ObservedHash;
+        }
+        Assert(kept, "a rebuild keeps every recorded check and the check history exactly");
+
         // A name found valid is remembered across manifests, but a bad name is still refused and never remembered.
         string header = AppIdentity.SnapshotHeader, hash = new string('a', 64);
         string good = Path.Combine(snapshots, "zz-good.manifest"), bad = Path.Combine(snapshots, "zz-bad.manifest"), dup = Path.Combine(snapshots, "zz-dup.manifest");
