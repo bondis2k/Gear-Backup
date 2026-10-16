@@ -25,6 +25,7 @@ partial class Tests
 {
     // ---- Tests ----
 
+    [Test("Settings and profiles", Folder = "settings")]
     static void TestSettingsAndProfiles(string root)
     {
         string source = Rooted(Path.Combine(root, "card"));
@@ -53,6 +54,7 @@ partial class Tests
         Throws(() => SafePath(root, "C:\\escape.txt"), "absolute manifest path rejected");
     }
 
+    [Test("Full and incremental backup", Folder = "backup")]
     static void TestFullAndIncremental(string root)
     {
         string source = Rooted(Path.Combine(root, "card")), history = Path.Combine(root, "history");
@@ -102,6 +104,7 @@ partial class Tests
         Assert(sameDay.Count == 2 && sameDay[0] == firstFull && sameDay[1] != firstFull, "new full backup names sort chronologically without collision");
     }
 
+    [Test("Resume repairs partial copies", Folder = "resume")]
     static void TestResume(string root)
     {
         Fixture f = BackedUpCard(root, true);
@@ -124,6 +127,7 @@ partial class Tests
         Assert(LoadChecksums(f.Backup)["Songs\\one.m8s"] == HashFile(f.Song), "resumed checksum matches repaired file");
     }
 
+    [Test("Command-line entry flow", Folder = "cli")]
     static void TestCommandLine(string root)
     {
         string source = Rooted(Path.Combine(root, "card"));
@@ -149,6 +153,7 @@ partial class Tests
         Throws(() => Run(false, false, new[] { "--source", root }), "overlapping source and backup rejected");
     }
 
+    [Test("History integrity and damage", Folder = "integrity")]
     static void TestHistoryIntegrity(string root)
     {
         Fixture f = BackedUpCard(root, true);
@@ -182,6 +187,7 @@ partial class Tests
         Assert(damaged > 0, "Check backups finds same-size damage in history");
     }
 
+    [Test("Verify=no behaviour", Folder = "verify-off")]
     static void TestVerifyOff(string root)
     {
         Fixture f = BackedUpCard(root, true);
@@ -216,6 +222,7 @@ partial class Tests
         Assert(optionalDamaged > 0, "explicit integrity check still detects corruption with defaults off");
     }
 
+    [Test("Undated files", Folder = "undated")]
     static void TestUndatedFiles(string root)
     {
         string title, summary;
@@ -256,6 +263,7 @@ partial class Tests
         Assert(!EntryMatchesTarget(missingDateEntry, undatedSong, false), "restore detects differing undated contents");
     }
 
+    [Test("Byte comparison, drive space and settings copy", Folder = "small")]
     static void TestSmallHelpers(string root)
     {
         string blockA = Path.Combine(root, "blocks-a.bin"), blockB = Path.Combine(root, "blocks-b.bin");
@@ -278,6 +286,7 @@ partial class Tests
             "settings copy keeps every setting, including ones the GUI window doesn't show");
     }
 
+    [Test("History lock", Folder = "lock")]
     static void TestHistoryLock(string root)
     {
         string history = Path.Combine(root, "history");
@@ -286,6 +295,7 @@ partial class Tests
         Assert(true, "the lock is released when disposed");
     }
 
+    [Test("Zip", Folder = "zip")]
     static void TestZip(string root)
     {
         string source = Rooted(Path.Combine(root, "zip-source"));
@@ -325,6 +335,7 @@ partial class Tests
             ui.Output.ToString().Contains("applies to full backups"), "--zip is skipped, with a note, for incremental backups");
     }
 
+    [Test("Copy pipeline", Folder = "pipeline")]
     static void TestCopyPipeline(string root)
     {
         var random = new Random(8);
@@ -358,6 +369,7 @@ partial class Tests
         Assert(cancelled && !File.Exists(cancelledCopy), "cancelling mid-copy stops and leaves no partial file");
     }
 
+    [Test("Backup without point-in-time history", Folder = "without-history")]
     static void TestWithoutHistory(string root)
     {
         Assert(!new Config { SingleContentStore = false }.PointInTimeHistory, "point-in-time history is disabled by default");
@@ -425,6 +437,7 @@ partial class Tests
             "disabling history preserves existing snapshots without adding one");
     }
 
+    [Test("Optimizations", Folder = "optimizations")]
     static void TestOptimizations(string root)
     {
         // History objects are hard links to the backup files on NTFS: one copy of the content on disk.
@@ -508,6 +521,7 @@ partial class Tests
         Directory.Delete(Path.Combine(linkRoot, "sub"));  // removes only the junction
     }
 
+    [Test("Engine operations", Folder = "engine")]
     static void TestEngineOperations(string root)
     {
         string source = Rooted(Path.Combine(root, "engine-source"));
@@ -647,6 +661,7 @@ partial class Tests
     }
 
     // Paths over Windows' limits are found before anything is copied, with a message saying what to do.
+    [Test("Paths over Windows' length limit", Folder = "long-paths")]
     static void TestLongPaths(string root)
     {
         string source = Rooted(Folder(root, "src"));

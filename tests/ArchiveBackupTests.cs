@@ -5,6 +5,7 @@ using System.Threading;
 
 partial class Tests
 {
+    [Test("Standalone ZIP archive backup", Folder = "archive-backup")]
     static void TestArchiveBackup(string root)
     {
         string source = Folder(root, "source"), output = Path.Combine(root, "standalone.zip");
@@ -129,6 +130,7 @@ partial class Tests
         }
     }
 
+    [Test("CLI standalone ZIP archive", Folder = "cli-archive")]
     static void TestCliArchive(string root)
     {
         string source = Folder(root, "source"), settings = Folder(root, "settings"), output = Folder(root, "output");

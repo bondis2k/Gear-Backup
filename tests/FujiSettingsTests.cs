@@ -9,6 +9,7 @@ using static FujiSettings;
 
 partial class Tests
 {
+    [Test("X100VI: settings capture and selector safety", Folder = "helpers/fuji-settings")]
     static void TestFujiSettings(string root)
     {
         var source = new FakeFujiSettings();

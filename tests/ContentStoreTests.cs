@@ -10,6 +10,7 @@ using static Session;
 
 partial class Tests
 {
+    [Test("Single store: incremental points and restore", Folder = "helpers")]
     static void TestSingleContentStore(string dir)
     {
         string root = Folder(dir, "single-store"), source = Folder(root, "source");
@@ -81,6 +82,7 @@ partial class Tests
         Assert(result.ExitCode == 2 && BackupDatabase.Read(backup).Files.Exists(e => e.SnapshotId == "current" && e.Result == "damaged"), "stored corruption is detected across restore points");
     }
 
+    [Test("Single store: interrupted publication and migration", Folder = "helpers")]
     static void TestSingleContentStoreSafety(string dir)
     {
         Assert(new Config().SingleContentStore, "new full backups use a single content store by default");

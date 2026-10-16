@@ -101,9 +101,11 @@ The Song tab calls `IM8SongReader` (`Devices\M8SongReader.cs`). The one implemen
 | `build.cmd`, `build-gui.cmd` | Compile the CLI and the GUI. Both compile every `.cs` file under `src` (recursively) plus `gui` for the GUI, so the core is built into each executable. The GUI build also builds `m8_reader.dll` and the HTML manual. |
 | `build\build-native.ps1` | Builds the Rust reader (`-Test` runs its tests), remaps build paths and checks the DLL's protections. |
 | `build-installer.cmd` | Builds the installer and portable packages. |
-| `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites (custom runner; a test is a method registered in `HelperTests.cs` or `TestRunner.cs`). |
+| `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |
 | `build\check-layers.ps1` | The layer check, run before the core tests and in CI. |
 | `benchmarks\run-benchmarks.ps1` | Performance scenarios; see `benchmarks\README.md`. |
+
+A test is a method of the `Tests` class marked `[Test("name")]` (`tests\TestHarness.cs`); the runners find them by reflection, so there is no list to keep. A test takes no argument or one fixture folder, and each runs in its own operation context. GUI tests are marked `Gui = true`, live in `tests\Gui*Tests.cs` by area, and run in the GUI test program on an STA thread.
 
 There are no namespaces: every type is in the global namespace, and `internal` means "inside this program". C# is limited to 7.3 because the programs run on .NET Framework.
 

@@ -8,6 +8,7 @@ using static PathSafety;
 
 partial class Tests
 {
+    [Test("Security: restore folder changed after preview", Folder = "helpers")]
     static void TestRestoreFolderSubstitution(string dir)
     {
         string root = Folder(dir, "restore-substitution");
@@ -43,6 +44,7 @@ partial class Tests
         });
     }
 
+    [Test("Security: statistics hard links", Folder = "helpers")]
     static void TestStatisticsHardLink(string dir)
     {
         string root = Folder(dir, "statistics-hard-link"), source = Folder(root, "source");
@@ -65,6 +67,7 @@ partial class Tests
         Assert(File.ReadAllText(stats).Contains("statistics"), "backup receives its own statistics contents");
     }
 
+    [Test("Security: ZIP metadata symbolic links", Folder = "helpers")]
     static void TestZipMetadataLinks(string dir)
     {
         string root = Folder(dir, "zip-metadata-links"), backup = Folder(root, "backup");

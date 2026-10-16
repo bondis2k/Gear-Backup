@@ -16,6 +16,7 @@ using static PlanReview;
 
 partial class Tests
 {
+    [Test("Point-in-time restore with recovery", Folder = "historical")]
     static void TestHistoricalRestore(string root)
     {
         Fixture f = BackedUpCard(root, true);
@@ -39,6 +40,7 @@ partial class Tests
         Assert(File.ReadAllText(Path.Combine(recovery, ".gearbackup", "recovery-status.txt")).StartsWith("complete"), "recovery status complete");
     }
 
+    [Test("Restore safety: no recovery, locked files, changed targets", Folder = "restore-safety")]
     static void TestRestoreSafety(string root)
     {
         Fixture f = BackedUpCard(root, false);
@@ -80,6 +82,7 @@ partial class Tests
         Assert(RestoreSpaceNeeded(growingTarget, growing) == 46, "space estimate includes accumulated growth and staging");
     }
 
+    [Test("Interactive bundle restore and restore preview", Folder = "restore-menus")]
     static void TestRestoreMenus(string root)
     {
         Fixture f = BackedUpCard(root, true);
@@ -100,6 +103,7 @@ partial class Tests
         Assert(!File.Exists(Path.Combine(uiTarget, "Songs", "one.m8s")), "preview never copies files");
     }
 
+    [Test("Song dependencies", Folder = "dependencies")]
     static void TestSongDependencies(string root)
     {
         Fixture f = BackedUpCard(root, false);
@@ -125,6 +129,7 @@ partial class Tests
         Throws(() => SamplePaths(projectPath), "dependency traversal rejected");
     }
 
+    [Test("Exact and keep restore workflows", Folder = "exact")]
     static void TestExactAndKeep(string root)
     {
         Fixture f = BackedUpCard(root, true);

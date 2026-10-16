@@ -12,6 +12,7 @@ using static Histories;
 
 partial class Tests
 {
+    [Test("Current restore preserves dated source names", Folder = "dated-restore")]
     static void TestDatedRestoreNames(string root)
     {
         string source = Folder(root, "source"), history = Path.Combine(root, "history");
@@ -53,6 +54,7 @@ partial class Tests
         Assert(CurrentBackup(backup).OldVersions.Count == 0, "missing version records never infer retained versions from names");
     }
 
+    [Test("History selection across configured locations", Folder = "history-locations")]
     static void TestHistoryLocations(string root)
     {
         var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
@@ -94,6 +96,7 @@ partial class Tests
         }
     }
 
+    [Test("Restore uses saved device and preferences", Folder = "restore-device")]
     static void TestRestoreDevicePreferences(string root)
     {
         var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };

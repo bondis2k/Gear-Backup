@@ -419,6 +419,10 @@ pwsh -NoProfile -File build\build-manual.ps1 -OutputDirectory dist\manual
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-gui-tests.ps1
 
+# Only some tests (names or method names containing the text), or list them
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -Filter zip,mtp
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1 -List
+
 # Packaging and PATH checks
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-installer-tests.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests\run-portable-tests.ps1
