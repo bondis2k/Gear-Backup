@@ -79,8 +79,7 @@ namespace GearBackup.Gui
         void RefreshRestoreControls()
         {
             bool restoring = Selected == GuiOperation.Restore;
-            archiveRestoreField.Visible = archiveRestoreDetails.Visible = Selected == GuiOperation.RestoreZip;
-            archiveRestoreField.Enabled = !runner.IsBusy; UpdateArchiveRestoreNotice();
+            zipRestore.SetVisible(Selected == GuiOperation.RestoreZip);
             restoreBackupField.Visible = restoreDetails.Visible = restoring;
             browseRestore.Visible = restoring && rememberedRestoreScope == 1;
             restoreExact.Visible = restoring && rememberedRestoreScope == 0;
@@ -102,7 +101,7 @@ namespace GearBackup.Gui
         }
         void RefreshRestoreActionState()
         {
-            if (Selected == GuiOperation.RestoreZip) { start.Enabled = preview.Enabled = ArchiveRestoreReady; return; }
+            if (Selected == GuiOperation.RestoreZip) { start.Enabled = preview.Enabled = zipRestore.Ready; return; }
             // Restore holds its action buttons back until a point is chosen; the other operations take them back.
             if (Selected != GuiOperation.Restore)
             {

@@ -253,7 +253,7 @@ namespace GearBackup.Gui
                 if (navigate) SynchronizeOperationTab();
                 RefreshOperationControls();
             }
-            if (chooseArchive && IsHandleCreated) BeginInvoke((Action)delegate { if (!IsDisposed && !Disposing && Selected == GuiOperation.RestoreZip && !runner.IsBusy) ChooseRestoreArchive(); });
+            if (chooseArchive && IsHandleCreated) BeginInvoke((Action)delegate { if (!IsDisposed && !Disposing && Selected == GuiOperation.RestoreZip && !runner.IsBusy) zipRestore.Choose(); });
         }
 
         void UpdateCameraSettingsAvailability(bool available)

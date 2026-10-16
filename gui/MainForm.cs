@@ -67,6 +67,7 @@ namespace GearBackup.Gui
         {
             runner = new GuiOperationRunner(this);
             songTab = new SongTab(this);
+            zipRestore = new ZipRestoreSection(this);
             samplesTab = new M8SamplesTab(this, () => config.Clone(), () => source.Text, new GuiInteraction(this, p => { }));
             samplesTab.RestoreRequested = PrepareSampleRestore;
             migrationTab = new M8MigrationTab(this, () => config.Clone(), runner.RunMigration);
@@ -149,7 +150,7 @@ namespace GearBackup.Gui
             displayTimer.Tick += delegate { DrainDisplay(); };
             displayTimer.Start();
             Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { if (archiveInspection != null) archiveInspection.Cancel(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
+            FormClosed += delegate { zipRestore.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
         }
 
         void BuildLayout()
@@ -226,13 +227,13 @@ namespace GearBackup.Gui
             actions.Controls.Add(BuildOperationSelectors(), 0, 0);
             actions.Controls.Add(BuildBackupSetField(), 1, 0);
             actions.Controls.Add(BuildRestoreBackupField(), 1, 0);
-            actions.Controls.Add(BuildArchiveRestoreField(), 1, 0);
+            actions.Controls.Add(zipRestore.BuildField(), 1, 0);
             preview.Anchor = start.Anchor = AnchorStyles.Bottom;
             actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0);
             cancel.Enabled = false; cancel.Visible = false;
             inputLayout.Controls.Add(actions, 0, 0);
             inputLayout.Controls.Add(BuildRestoreDetails(), 0, 1);
-            inputLayout.Controls.Add(BuildArchiveRestoreDetails(), 0, 1);
+            inputLayout.Controls.Add(zipRestore.BuildDetails(), 0, 1);
             inputLayout.Controls.Add(destinationSummary, 0, 2);
             optionsToggle.Name = "ToggleBackupOptions"; optionsToggle.Margin = new Padding(0, 4, 0, 4);
             inputLayout.Controls.Add(optionsToggle, 0, 3);
@@ -273,12 +274,7 @@ namespace GearBackup.Gui
         }
 
         // A small caption above a field.
-        static Label FieldLabel(string text)
-        {
-            var label = GuiTheme.Label(text, 9, GuiTheme.Muted);
-            label.Margin = new Padding(0, 8, 0, 6);
-            return label;
-        }
+        static Label FieldLabel(string text) { return GuiTheme.Caption(text); }
 
         Button AddPath(TableLayoutPanel fields, int row, Label label, TextBox text, bool destination)
         {
@@ -361,7 +357,7 @@ namespace GearBackup.Gui
             if (forOperation && Selected == GuiOperation.RestoreZip)
             {
                 if (!ArchiveRestoreReady) throw new IOException("Choose a valid ZIP archive and detect a matching destination device.");
-                copy.RestoreArchive = restoreArchive.Text;
+                copy.RestoreArchive = zipRestore.ArchivePath;
             }
             if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
             if (forOperation && Selected == GuiOperation.IncrementalBackup)
@@ -555,7 +551,7 @@ namespace GearBackup.Gui
             if (device == Devices.M8) samplesTab.SuggestCard(source.Text);
             // Gear Backup mode keeps all its tools when a device is identified; a device mode follows the device that is found.
             if (gearIcons != null && device != null && InDeviceMode) gearIcons.SetActive(GearIconStrip.For(device));
-            UpdateArchiveRestoreNotice(); RefreshRestoreActionState();
+            zipRestore.UpdateNotice(); RefreshRestoreActionState();
             restoreContextKey = null;
             if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();
             UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);

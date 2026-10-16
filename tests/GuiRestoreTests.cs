@@ -60,8 +60,8 @@ partial class Tests
             var browse = (Button)form.Controls.Find("BrowseRestoreArchive", true)[0];
             browse.PerformClick();
             WaitForGui(() => firstStopped.IsSet, "superseded inspection cancelled");
-            WaitForGui(() => !(bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form), "second inspection finished");
-            var info = typeof(MainForm).GetField("archiveRestoreInfo", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            WaitForGui(() => !form.ArchiveLoading, "second inspection finished");
+            var info = form.ArchiveInfo;
             Assert(info != null && picked == 2, "stale cancellation does not overwrite the latest inspection");
             browse.PerformClick();
             WaitForGui(() => thirdStarted.IsSet, "third inspection started");
@@ -291,10 +291,10 @@ partial class Tests
             var state = (Label)form.Controls.Find("OperationStatus", true)[0];
             var path = (TextBox)form.Controls.Find("RestoreArchivePath", true)[0];
             var until = DateTime.UtcNow.AddSeconds(10);
-            while (DateTime.UtcNow < until && !(bool)typeof(MainForm).GetProperty("ArchiveRestoreReady", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form))
+            while (DateTime.UtcNow < until && !form.ArchiveRestoreReady)
             {
                 // No device is detected yet, so wait for the read itself rather than readiness.
-                if (!(bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form)) break;
+                if (!form.ArchiveLoading) break;
                 Application.DoEvents(); Thread.Sleep(10);
             }
             Assert(picked == 1 && types.Text == "Restore ZIP archive" && path.Visible && path.Text == archive && !start.Enabled &&
@@ -322,7 +322,7 @@ partial class Tests
             form.ArchiveSourcePicker = () => mtpArchive;
             form.SelectOperation(GuiOperation.RestoreZip); Application.DoEvents();
             until = DateTime.UtcNow.AddSeconds(10);
-            while ((bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form) && DateTime.UtcNow < until)
+            while (form.ArchiveLoading && DateTime.UtcNow < until)
             { Application.DoEvents(); Thread.Sleep(10); }
             runner.ShowDetected(new SourceChoice { Path = mirror, Detected = Devices.OP1Field, Mtp = new MtpSource {
                 Mirror = mirror, Device = Devices.OP1Field, Info = new MtpDeviceInfo { FriendlyName = "OP-1 Field", InstanceId = "USB\\TEST\\123" } } });
