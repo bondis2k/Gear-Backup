@@ -86,7 +86,7 @@ namespace GearBackup
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) { OperationOutput.WriteLine("  Could not save check result: " + ex.Message); }
                 BackupDatabase.TryRefresh(backup, catalogResults, string.Format("{0} OK, {1} damaged, {2} missing, {3} unchecked",
-                    ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked));
+                    ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked), context);
             }
 
             summary = string.Format("{0:N0} file(s) OK", ok);

@@ -10,15 +10,16 @@ namespace GearBackup
         internal const long MaxDirectoryBytes = 32L * 1024 * 1024;
         internal const int MaxNameBytes = 1024, MaxExtraBytes = 4096, MaxCommentBytes = 4096;
 
-        internal static void Validate(Stream file, int maxEntries)
+        internal static void Validate(Stream file, int maxEntries, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             long length = file.Length;
             if (length < 22) throw Invalid();
             // Only the EOCD and its bounded comment can follow the central directory.
             int tailLength = (int)Math.Min(length, 65535 + 22);
             var tail = new byte[tailLength];
-            file.Position = length - tailLength; ReadExactly(file, tail, tail.Length);
+            file.Position = length - tailLength; ReadExactly(file, tail, tail.Length, context);
             int end = -1;
             for (int i = tail.Length - 22; i >= 0; i--)
                 if (U32(tail, i) == 0x06054b50) { end = i; break; }
@@ -32,7 +33,7 @@ namespace GearBackup
             bool has64 = false;
             if (endOffset >= 20)
             {
-                file.Position = endOffset - 20; ReadExactly(file, locator, locator.Length);
+                file.Position = endOffset - 20; ReadExactly(file, locator, locator.Length, context);
                 has64 = U32(locator, 0) == 0x07064b50;
             }
             if (needs64 && !has64) throw Invalid();
@@ -41,7 +42,7 @@ namespace GearBackup
                 if (U32(locator, 4) != 0 || U32(locator, 16) != 1) throw Invalid();
                 ulong recordOffset = U64(locator, 8);
                 if (recordOffset > (ulong)Math.Max(0, endOffset - 20 - 56)) throw Invalid();
-                var record = new byte[56]; file.Position = (long)recordOffset; ReadExactly(file, record, record.Length);
+                var record = new byte[56]; file.Position = (long)recordOffset; ReadExactly(file, record, record.Length, context);
                 ulong recordSize = U64(record, 4);
                 if (U32(record, 0) != 0x06064b50 || recordSize < 44 || recordSize > 65536 ||
                     recordOffset + 12 + recordSize != (ulong)(endOffset - 20) || U32(record, 16) != 0 || U32(record, 20) != 0 ||
@@ -60,10 +61,10 @@ namespace GearBackup
             ulong actual = 0;
             while (file.Position < directoryEnd)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 if (++actual > (ulong)maxEntries || actual > count) throw new IOException("ZIP contains more entries than declared or allowed.");
                 if (directoryEnd - file.Position < header.Length) throw Invalid();
-                ReadExactly(file, header, header.Length);
+                ReadExactly(file, header, header.Length, context);
                 if (U32(header, 0) != 0x02014b50 || U16(header, 34) != 0) throw Invalid();
                 int name = U16(header, 28), extra = U16(header, 30), comment = U16(header, 32);
                 if (name == 0 || name > MaxNameBytes || extra > MaxExtraBytes || comment > MaxCommentBytes)
@@ -76,12 +77,12 @@ namespace GearBackup
             file.Position = 0;
         }
 
-        static void ReadExactly(Stream input, byte[] bytes, int count)
+        static void ReadExactly(Stream input, byte[] bytes, int count, OperationContext context)
         {
             int done = 0, read;
             while (done < count)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 read = input.Read(bytes, done, count - done);
                 if (read == 0) throw Invalid();
                 done += read;

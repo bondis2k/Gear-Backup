@@ -78,14 +78,15 @@ namespace GearBackup
             if (!string.IsNullOrWhiteSpace(value)) text.Append(label).Append(": ").Append(value.Replace('\r', ' ').Replace('\n', ' ')).Append('\n');
         }
 
-        internal static string Checksums(Dictionary<string, string> hashes)
+        internal static string Checksums(Dictionary<string, string> hashes, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var names = new List<string>(hashes.Keys);
             names.Sort(StringComparer.Ordinal);
             var text = new StringBuilder();
             foreach (string name in names)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 text.Append(hashes[name]).Append("  ").Append(name).Append('\n');
             }
             return text.ToString();

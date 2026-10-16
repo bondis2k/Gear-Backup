@@ -96,12 +96,37 @@ namespace GearBackup
             return result;
         }
 
-        [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
-        static extern int CM_Locate_DevNodeW(out uint devInst, string deviceId, int flags);
-        [DllImport("cfgmgr32.dll")]
-        static extern int CM_Get_Parent(out uint parent, uint devInst, int flags);
-        [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
-        static extern int CM_Request_Device_EjectW(uint devInst, out int vetoType, StringBuilder vetoName, int nameLength, int flags);
+        // The Windows device-node calls ejecting needs. The tests replace them with a script of answers.
+        internal interface IDeviceNodes
+        {
+            // 0 when the device instance ID names a device node.
+            int Locate(string deviceId, out uint devInst);
+            int Parent(out uint parent, uint devInst);
+            // 0 and a veto type of 0 mean the device was ejected.
+            int RequestEject(uint devInst, out int vetoType);
+        }
+
+        sealed class WindowsDeviceNodes : IDeviceNodes
+        {
+            [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
+            static extern int CM_Locate_DevNodeW(out uint devInst, string deviceId, int flags);
+            [DllImport("cfgmgr32.dll")]
+            static extern int CM_Get_Parent(out uint parent, uint devInst, int flags);
+            [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
+            static extern int CM_Request_Device_EjectW(uint devInst, out int vetoType, StringBuilder vetoName, int nameLength, int flags);
+
+            public int Locate(string deviceId, out uint devInst) { return CM_Locate_DevNodeW(out devInst, deviceId, 0); }
+            public int Parent(out uint parent, uint devInst) { return CM_Get_Parent(out parent, devInst, 0); }
+            public int RequestEject(uint devInst, out int vetoType)
+            {
+                var vetoName = new StringBuilder(260);
+                return CM_Request_Device_EjectW(devInst, out vetoType, vetoName, vetoName.Capacity, 0);
+            }
+        }
+
+        internal static IDeviceNodes DeviceNodes = new WindowsDeviceNodes();
+        // How long to wait before asking again when Windows refuses; the tests set it to zero.
+        internal static int EjectRetryDelayMilliseconds = 1000;
 
         // Asks Windows to safely remove the M8 (same as "Safely Remove Hardware").
         // Returns null on success, otherwise the reason it failed.
@@ -110,24 +135,23 @@ namespace GearBackup
             if (pnpId == null) return "the " + CurrentDevice.Name + " was found by drive label only, so it can't be ejected automatically.";
 
             uint disk;
-            if (CM_Locate_DevNodeW(out disk, pnpId, 0) != 0) return "the " + CurrentDevice.Name + " device was not found.";
+            if (DeviceNodes.Locate(pnpId, out disk) != 0) return "the " + CurrentDevice.Name + " device was not found.";
 
             // Eject the USB device the disk belongs to; if that's refused, try the disk itself.
             uint parent;
-            uint[] candidates = CM_Get_Parent(out parent, disk, 0) == 0 ? new[] { parent, disk } : new[] { disk };
+            uint[] candidates = DeviceNodes.Parent(out parent, disk) == 0 ? new[] { parent, disk } : new[] { disk };
             string lastError = "Windows refused to eject it.";
             foreach (uint devInst in candidates)
             {
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     int vetoType;
-                    var vetoName = new StringBuilder(260);
-                    int result = CM_Request_Device_EjectW(devInst, out vetoType, vetoName, vetoName.Capacity, 0);
+                    int result = DeviceNodes.RequestEject(devInst, out vetoType);
                     if (result == 0 && vetoType == 0) return null;
                     lastError = vetoType != 0
                         ? "it is in use (close any program or Explorer window using the " + CurrentDevice.Name + " and try again)."
                         : "Windows refused to eject it (error " + result + ").";
-                    Thread.Sleep(1000);
+                    if (EjectRetryDelayMilliseconds > 0) Thread.Sleep(EjectRetryDelayMilliseconds);
                 }
             }
             return lastError;

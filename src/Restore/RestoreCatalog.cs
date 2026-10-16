@@ -16,13 +16,14 @@ namespace GearBackup
     // manifests and checksum files are read only when the catalog cannot safely supply them.
     internal static class RestoreCatalog
     {
-        internal static List<string> BackupsForDevice(Config config, DeviceProfile device)
+        internal static List<string> BackupsForDevice(Config config, DeviceProfile device, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var result = new List<string>();
             var times = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
             foreach (string history in AvailableHistories(config)) foreach (string backup in BackupFolders.ListBackups(history))
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 try
                 {
                     DeviceProfile recorded = BackupDevice(backup);
@@ -47,8 +48,9 @@ namespace GearBackup
             return result;
         }
 
-        internal static RestoreSet Load(string backup, DeviceProfile device)
+        internal static RestoreSet Load(string backup, DeviceProfile device, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             RejectRootLinks(backup);
             DeviceProfile recorded = BackupDevice(backup);
             if (recorded == null) throw new IOException("This backup has no recognized device record.");
@@ -75,7 +77,7 @@ namespace GearBackup
                 }
                 foreach (var entry in data.Files)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if (AppIdentity.IsMetadataPath(inventoryPaths.Resolve(entry.Path))) throw new IOException("catalog contains internal metadata paths");
                     if (entry.Size < 0 || entry.ModifiedTicks < 0 || entry.ModifiedTicks > DateTime.MaxValue.Ticks ||
                         entry.CreatedTicks < 0 || entry.CreatedTicks > DateTime.MaxValue.Ticks) throw new IOException("invalid catalog metadata");
@@ -105,7 +107,7 @@ namespace GearBackup
                 var validNames = new HashSet<string>(StringComparer.Ordinal);
                 if (Directory.Exists(root)) foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
                     grouped.Add(snapshot.Name, snapshot);
                     kinds[snapshot.Name] = BackupDatabase.ReadPointKind(backup, snapshot.Name);
@@ -164,15 +166,16 @@ namespace GearBackup
             return false;
         }
 
-        internal static OperationResult Run(string target, Config config, RestoreRequest request)
+        internal static OperationResult Run(string target, Config config, RestoreRequest request, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             DeviceProfile device = Devices.Find(request.DeviceId);
             if (device == null) throw new IOException("The selected backup has no recognized device type. Refresh the restore selection.");
             if (!BackupsForDevice(config, device).Exists(path => Rooted(path) == Rooted(request.Backup)))
                 throw new IOException("The selected backup is no longer available for the identified device.");
             string history = Path.GetDirectoryName(request.Backup);
             using (Histories.LockUnlessPreview(history))
-            using (OperationContext.Current.UseDevice(device))
+            using (context.UseDevice(device))
             {
                 RestoreFlow.ValidateRestoreDestination(request.Backup, target, config);
                 RestoreSet set = Load(request.Backup, device);
@@ -188,7 +191,7 @@ namespace GearBackup
                 if (!RestoreFlow.ConfirmRestoreTarget(request.Backup, target)) return new OperationResult { Cancelled = true };
                 OperationOutput.WriteLine("  Restore inventory: " + (set.Sqlite ? "SQLite (catalog.sqlite)." : "recovery records."));
                 OperationOutput.WriteLine("  Selected backup: " + BackupSetNames.Label(request.Backup) + " · " + point.Label);
-                return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, request.Exact, effective, OperationContext.Current,
+                return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, request.Exact, effective, context,
                     () => RestoreFlow.ValidateRestoreDestination(request.Backup, target, effective));
             }
         }

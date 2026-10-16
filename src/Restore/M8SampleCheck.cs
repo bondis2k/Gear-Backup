@@ -29,8 +29,9 @@ namespace GearBackup
     {
         internal const int MatchLimit = 100;
 
-        internal static M8SampleReport Run(M8SongSummary song, string cardRoot, Config backups, string songPath = null)
+        internal static M8SampleReport Run(M8SongSummary song, string cardRoot, Config backups, string songPath = null, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var report = new M8SampleReport();
             var byReference = new Dictionary<string, M8SampleResult>(StringComparer.OrdinalIgnoreCase);
             if (!string.IsNullOrWhiteSpace(cardRoot))
@@ -40,7 +41,7 @@ namespace GearBackup
             }
             foreach (var instrument in song.Instruments)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 string raw = instrument.RawSample ?? instrument.Sample;
                 if (string.IsNullOrEmpty(raw)) continue;
                 M8SampleResult sample;
@@ -98,7 +99,7 @@ namespace GearBackup
                 foreach (string history in Histories.AvailableHistories(backups))
                 foreach (string backup in BackupFolders.ListBackups(history))
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     try
                     {
                         var device = DeviceSelection.BackupDevice(backup);
@@ -119,7 +120,7 @@ namespace GearBackup
             }
             foreach (string backup in sets)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 try
                 {
                     RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
@@ -129,7 +130,7 @@ namespace GearBackup
                     foreach (var point in set.Points.Where(p => p.Id != "current" || set.Points.Count == 1))
                     foreach (var file in point.Snapshot.Files)
                     {
-                        OperationContext.Current.CheckCancellation();
+                        context.CheckCancellation();
                         List<M8SampleResult> interested;
                         if (!names.TryGetValue(Path.GetFileName(file.Relative), out interested)) continue;
                         foreach (var sample in interested)

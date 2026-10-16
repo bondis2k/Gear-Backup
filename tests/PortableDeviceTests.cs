@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using GearBackup;
 
 // The MTP and PTP code against the fake Portable Devices API in FakePortableDevice.cs.
@@ -166,5 +167,120 @@ partial class Tests
             WithUi(() => Assert(UsbDevices.EjectDrive(null).Contains("label only"), "a drive found by label cannot be ejected automatically"));
         }
         finally { UsbDevices.ListDisks = disks; UsbDevices.ListDrives = drives; }
+    }
+
+    sealed class FakeDeviceNodes : UsbDevices.IDeviceNodes
+    {
+        public int LocateResult, ParentResult;
+        public uint ParentNode = 7, DiskNode = 1;
+        public readonly Queue<KeyValuePair<int, int>> Answers = new Queue<KeyValuePair<int, int>>();   // (result, veto type) per eject request
+        public readonly List<uint> Requested = new List<uint>();
+        public int Locate(string deviceId, out uint devInst) { devInst = DiskNode; return LocateResult; }
+        public int Parent(out uint parent, uint devInst) { parent = ParentNode; return ParentResult; }
+        public int RequestEject(uint devInst, out int vetoType)
+        {
+            Requested.Add(devInst);
+            var answer = Answers.Count > 0 ? Answers.Dequeue() : new KeyValuePair<int, int>(0, 0);
+            vetoType = answer.Value;
+            return answer.Key;
+        }
+    }
+
+    [Test("USB eject")]
+    static void TestUsbEject()
+    {
+        var nodes = UsbDevices.DeviceNodes; int delay = UsbDevices.EjectRetryDelayMilliseconds;
+        UsbDevices.EjectRetryDelayMilliseconds = 0;
+        try
+        {
+            WithUi(() => {
+                var fake = new FakeDeviceNodes();
+                UsbDevices.DeviceNodes = fake;
+                Assert(UsbDevices.EjectDrive("USB_X") == null && fake.Requested.Count == 1 && fake.Requested[0] == 7, "the USB device the disk belongs to is ejected first");
+
+                fake = new FakeDeviceNodes { LocateResult = 13 };
+                UsbDevices.DeviceNodes = fake;
+                Assert(UsbDevices.EjectDrive("USB_X").Contains("device was not found") && fake.Requested.Count == 0, "an unknown device is reported without asking Windows to eject");
+
+                fake = new FakeDeviceNodes();
+                fake.Answers.Enqueue(new KeyValuePair<int, int>(0, 4));     // vetoed: in use
+                UsbDevices.DeviceNodes = fake;
+                Assert(UsbDevices.EjectDrive("USB_X") == null && fake.Requested.Count == 2, "a vetoed eject is asked again and can succeed");
+
+                fake = new FakeDeviceNodes();
+                for (int i = 0; i < 3; i++) fake.Answers.Enqueue(new KeyValuePair<int, int>(0, 4));
+                UsbDevices.DeviceNodes = fake;
+                Assert(UsbDevices.EjectDrive("USB_X") == null && fake.Requested.Count == 4 && fake.Requested[3] == 1, "when the parent refuses three times the disk itself is tried");
+
+                fake = new FakeDeviceNodes { ParentResult = 1 };
+                UsbDevices.DeviceNodes = fake;
+                UsbDevices.EjectDrive("USB_X");
+                Assert(fake.Requested.Count == 1 && fake.Requested[0] == 1, "without a parent node only the disk is tried");
+
+                fake = new FakeDeviceNodes();
+                for (int i = 0; i < 6; i++) fake.Answers.Enqueue(new KeyValuePair<int, int>(i == 5 ? 23 : 0, i == 5 ? 0 : 4));
+                UsbDevices.DeviceNodes = fake;
+                string error = UsbDevices.EjectDrive("USB_X");
+                Assert(error != null && error.Contains("error 23") && fake.Requested.Count == 6, "when everything is refused the last reason is reported: " + error);
+                fake = new FakeDeviceNodes();
+                for (int i = 0; i < 6; i++) fake.Answers.Enqueue(new KeyValuePair<int, int>(0, 4));
+                UsbDevices.DeviceNodes = fake;
+                Assert(UsbDevices.EjectDrive("USB_X").Contains("in use"), "a veto is explained as the device being in use");
+            });
+        }
+        finally { UsbDevices.DeviceNodes = nodes; UsbDevices.EjectRetryDelayMilliseconds = delay; }
+    }
+
+    [Test("CLI source selection")]
+    static void TestSourceSelection()
+    {
+        var disks = UsbDevices.ListDisks; var drives = UsbDevices.ListDrives; var mtp = PortableDevices.ListMtpDevices;
+        try
+        {
+            UsbDevices.ListDrives = () => new List<UsbDevices.RemovableDrive>();
+            PortableDevices.ListMtpDevices = vendor => new List<MtpDeviceInfo>();
+            UsbDevices.ListDisks = () => new List<UsbDevices.UsbDisk>();
+            var config = new Config { SourceFolder = @"D:\Cards\M8" };
+            TestInteraction ui = WithUi(() => Assert(SourceSelection.SelectSource(config).Path == @"D:\Cards\M8", "a configured source folder is used without detection"));
+            Assert(ui.Questions.Count == 0, "no question when the source is configured");
+
+            UsbDevices.ListDisks = () => new List<UsbDevices.UsbDisk> { new UsbDevices.UsbDisk { PnpId = @"USBSTOR\DISK&VEN_M8&PROD_X", Model = "M8 DISK", FindDrive = () => @"F:\" } };
+            SourceChoice found = null;
+            WithUi(() => found = SourceSelection.SelectSource(new Config()));
+            Assert(found != null && found.Path == @"F:\" && found.Detected == Devices.M8 && found.PnpId != null, "a detected M8 is the source, with its ID kept for ejecting");
+
+            UsbDevices.ListDisks = () => { throw new IOException("WMI is unavailable"); };
+            ui = new TestInteraction { OnAskText = question => "" };
+            using (new OperationContext(ui, CancellationToken.None).Activate()) found = SourceSelection.SelectSource(new Config());
+            Assert(found == null && ui.Output.ToString().Contains("Automatic detection failed: WMI is unavailable"), "a failing detection is reported and falls back to asking");
+
+            UsbDevices.ListDisks = () => new List<UsbDevices.UsbDisk>();
+            ui = new TestInteraction { OnAskText = question => @"E:\Backup Card" };
+            using (new OperationContext(ui, CancellationToken.None).Activate()) found = SourceSelection.SelectSource(new Config());
+            Assert(found != null && found.Path == @"E:\Backup Card" && found.Detected == null && ui.Output.ToString().Contains("No M8"), "with nothing detected the typed path is the source");
+            ui = new TestInteraction { OnAskText = question => "" };
+            using (new OperationContext(ui, CancellationToken.None).Activate()) found = SourceSelection.SelectSource(new Config());
+            Assert(found == null, "an empty answer cancels");
+        }
+        finally { UsbDevices.ListDisks = disks; UsbDevices.ListDrives = drives; PortableDevices.ListMtpDevices = mtp; }
+    }
+
+    [Test("X100VI settings backup: finding the camera")]
+    static void TestFujiCameraFinding()
+    {
+        var mtp = PortableDevices.ListMtpDevices;
+        try
+        {
+            var config = new Config { BackupFolder = Path.Combine(Path.GetTempPath(), "gear-no-camera"), Preview = true };
+            PortableDevices.ListMtpDevices = vendor => new List<MtpDeviceInfo>();
+            WithUi(() => Throws(() => FujiSettingsBackup.RunFujiSettingsBackup(config), "no camera gives the instructions to connect one"));
+            PortableDevices.ListMtpDevices = vendor => new List<MtpDeviceInfo> {
+                new MtpDeviceInfo { InstanceId = @"USB\VID_04CB&PID_1\A", FriendlyName = "X100VI" },
+                new MtpDeviceInfo { InstanceId = @"USB\VID_04CB&PID_1\B", FriendlyName = "X100VI" } };
+            WithUi(() => Throws(() => FujiSettingsBackup.RunFujiSettingsBackup(config), "two cameras are refused"));
+            PortableDevices.ListMtpDevices = vendor => new List<MtpDeviceInfo> { new MtpDeviceInfo { InstanceId = @"USB\VID_04CB&PID_1\A", FriendlyName = "X-T5" } };
+            WithUi(() => Throws(() => FujiSettingsBackup.RunFujiSettingsBackup(config), "another Fujifilm model is not an X100VI"));
+        }
+        finally { PortableDevices.ListMtpDevices = mtp; }
     }
 }
