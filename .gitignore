@@ -7,6 +7,8 @@ tests/.build/
 native/m8-reader/target/
 dist/
 *.exe
+GearBackup.Core.dll
+m8_reader.dll
 GearBackup.ini
 GearBackup.installed
 GearBackup.Profiles.ini
