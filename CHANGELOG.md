@@ -19,6 +19,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ### Changed
 - Backups copy small files (up to 4 MB) four at a time and large files one at a time, so a card or network share with thousands of small files backs up much faster (5,000 files of 3 KB: 45 s down to 17 s on a local disk, with Verify on). The restore point lists files in the same order as before.
 - A failed backup now says why in the CLI output.
+- The catalog is updated from the previous one after each backup run instead of being rebuilt from every restore point, so a backup of a set with many restore points no longer slows down as the history grows. It is still rebuilt in full when it is missing, damaged, out of date, or after a check.
 - Every backup is now a content store. Backups can no longer be made as plain, browsable folders, so each file's content is stored once per backup set and every run saves a restore point. An incremental backup of a backup made by an earlier version is refused with a message to make a new full backup. Restore through the app, or export a ZIP for ordinary files.
 - Retention applies to whole backups only. All restore points of a backup remain until the backup is removed.
 - The name check (names the device may not handle well) now runs on every backup and lists up to ten names.

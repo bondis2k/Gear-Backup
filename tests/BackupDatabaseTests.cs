@@ -145,6 +145,42 @@ partial class Tests
         foreach (string fake in new[] { good, bad, dup }) { File.Delete(fake); File.Delete(Path.ChangeExtension(fake, ".taken")); }
     }
 
+    // After a backup run the catalog is updated from the previous one instead of rebuilt; both must list the same things.
+    [Test("SQLite: updated catalog equals a rebuilt one", Folder = "helpers")]
+    static void TestCatalogUpdateEqualsRebuild(string dir)
+    {
+        string root = Folder(dir, "catalog-update"), source = Folder(root, "source"), history = Path.Combine(root, "history");
+        Put(Path.Combine(source, "one.txt"), "ONE"); Put(Path.Combine(source, "Sub", "two.txt"), "TWO");
+        Directory.CreateDirectory(Path.Combine(source, "Empty"));
+        var config = new Config { Preview = false, Verify = false, MaxNameLength = 0 };
+        string backup = RunBackup(source, history, null, false, config).OutputFolder;
+        new IntegrityEngine().Run(new List<string> { backup }, new OperationContext(new TestInteraction(), CancellationToken.None));
+        Put(Path.Combine(source, "one.txt"), "ONE CHANGED");
+        config.IncrementalBackupName = "Second";
+        RunBackup(source, history, backup, true, config);
+        config.IncrementalBackupName = null;
+        File.Delete(Path.Combine(source, "Sub", "two.txt")); Put(Path.Combine(source, "three.txt"), "THREE");
+        RunBackup(source, history, backup, true, config);
+        RunBackup(source, history, backup, true, config);
+        CatalogData updated = BackupDatabase.Read(backup);
+        Assert(CurrentEntry(updated, "Sub" + (char)92 + "two.txt") == null && CurrentEntry(updated, "three.txt") != null, "the updated catalog lists the current files");
+        Assert(CurrentEntry(updated, "Empty").IsDirectory, "folders are kept");
+        Assert(updated.RestorePoints.Count == 4 && updated.Checks.Count == 1, "restore points and the check history are carried forward");
+        Assert(updated.PointNames.ContainsValue("Second"), "an incremental name is recorded");
+        File.Delete(BackupDatabase.CatalogPath(backup));
+        BackupDatabase.Rebuild(backup);
+        CatalogData rebuilt = BackupDatabase.Read(backup);
+        Func<CatalogData, List<string>> rows = data => {
+            var list = new List<string>();
+            foreach (var e in data.Files) list.Add(e.SnapshotId + "|" + e.Path + "|" + e.IsDirectory + "|" + e.Hash + "|" + e.Size + "|" + e.ModifiedTicks + "|" + e.Present);
+            list.Sort(StringComparer.Ordinal);
+            return list;
+        };
+        Assert(string.Join(";", rows(updated)) == string.Join(";", rows(rebuilt)), "an updated catalog lists the same rows as a rebuilt one");
+        Assert(string.Join(",", updated.RestorePoints) == string.Join(",", rebuilt.RestorePoints) && updated.PointKinds.Count == rebuilt.PointKinds.Count &&
+            updated.PointTimes.Count == rebuilt.PointTimes.Count && updated.PointNames.Count == rebuilt.PointNames.Count, "restore point metadata matches");
+    }
+
     [Test("SQLite: rebuild, interruption and links", Folder = "helpers")]
     static void TestBackupDatabaseSafety(string dir)
     {

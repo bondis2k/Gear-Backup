@@ -31,6 +31,7 @@ internal static class BackupDatabase
         if (!Directory.Exists(backup)) throw new IOException("Backup folder does not exist: " + backup);
         string path = CatalogPath(backup);
         RejectRootLinks(path);
+        if (File.Exists(path) && verified == null && checkSummary == null && TryUpdate(backup, path)) return;
         var previous = new CatalogData();
         if (File.Exists(path))
         {
@@ -47,10 +48,7 @@ internal static class BackupDatabase
         foreach (var entry in data.Files)
         {
             CatalogEntry prior;
-            // A recorded check applies only to the same expected version and observed metadata.
-            if (old.TryGetValue(Key(entry.SnapshotId, entry.Path), out prior) && entry.Hash == prior.Hash &&
-                entry.Size == prior.Size && entry.ModifiedTicks == prior.ModifiedTicks && entry.Present == prior.Present)
-            { entry.VerifiedUtc = prior.VerifiedUtc; entry.Result = prior.Result; entry.ObservedHash = prior.ObservedHash; }
+            if (old.TryGetValue(Key(entry.SnapshotId, entry.Path), out prior)) CarryCheck(entry, prior);
             CatalogVerification check;
             if (checks.TryGetValue(Key(entry.SnapshotId, entry.Path), out check) && check.ExpectedHash == entry.Hash)
             { entry.VerifiedUtc = check.CheckedUtc; entry.Result = check.Result; entry.ObservedHash = check.ObservedHash; }
@@ -59,6 +57,129 @@ internal static class BackupDatabase
         if (checkSummary != null) data.Checks.Add(new CatalogCheckRun { CheckedUtc = DateTime.UtcNow.ToString("O"), Summary = checkSummary });
         if (data.Checks.Count > 100) data.Checks.RemoveRange(0, data.Checks.Count - 100);
         Publish(backup, path, data);
+    }
+
+    // A recorded check applies only to the same expected version and observed metadata.
+    static void CarryCheck(CatalogEntry entry, CatalogEntry prior)
+    {
+        if (entry.Hash == prior.Hash && entry.Size == prior.Size && entry.ModifiedTicks == prior.ModifiedTicks && entry.Present == prior.Present)
+        { entry.VerifiedUtc = prior.VerifiedUtc; entry.Result = prior.Result; entry.ObservedHash = prior.ObservedHash; }
+    }
+
+    // After a backup run only the newest restore points and the current listing are new. Instead of reading every manifest
+    // again, this copies the published catalog, replaces its current rows, adds the new restore points and publishes the
+    // result. Returns false (changing nothing) when the catalog can't be updated that way; the caller then rebuilds it whole.
+    // Rows of earlier restore points keep the object presence they were built with until the next full rebuild.
+    static bool TryUpdate(string backup, string path)
+    {
+        string local = Path.Combine(Path.GetTempPath(), "gear-catalog-update-" + Guid.NewGuid().ToString("N") + ".sqlite");
+        bool created = false;
+        try
+        {
+            byte[] contents;
+            try { contents = Records.ReadBytes(path, Records.ListLimit, "Backup catalog"); }
+            catch (IOException) { return false; }
+            using (var file = new FileStream(local, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            { created = true; file.Write(contents, 0, contents.Length); }
+            ContentStore.RequireContentStore(backup);
+            using (var db = new SqliteDatabase(local, false))
+            {
+                using (var version = db.Prepare("PRAGMA user_version"))
+                    if (!version.Read() || version.Number(0) != SchemaVersion) return false;
+                using (var id = db.Prepare("PRAGMA application_id"))
+                    if (!id.Read() || id.Number(0) != ApplicationId) return false;
+                db.Execute("PRAGMA journal_mode=OFF");
+                db.Execute("PRAGMA synchronous=OFF");
+                db.Execute("BEGIN IMMEDIATE");
+                var known = new HashSet<string>(StringComparer.Ordinal);
+                using (var points = db.Prepare("SELECT name FROM restore_points"))
+                    while (points.Read()) known.Add(points.String(0));
+                string snapshots = SnapshotRoot(backup);
+                RejectRootLinks(snapshots);
+                var onDisk = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (Directory.Exists(snapshots))
+                    foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest")) onDisk[Path.GetFileNameWithoutExtension(manifest)] = manifest;
+                var fresh = new List<string>();
+                foreach (string name in onDisk.Keys) if (!known.Contains(name)) fresh.Add(name);
+                fresh.Sort(StringComparer.Ordinal);
+                foreach (string name in known) if (!onDisk.ContainsKey(name)) return false;
+                if (known.Count == 0 || fresh.Count > 16) return false;
+                // Small per-point records can change after a point is saved (a rename, a repaired capture time); a mismatch means
+                // the catalog is out of date in a way only a full rebuild fixes.
+                var stored = new Dictionary<string, string>(StringComparer.Ordinal);
+                using (var meta = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_%'"))
+                    while (meta.Read()) stored[meta.String(0)] = meta.String(1);
+                foreach (string name in known)
+                {
+                    OperationContext.Current.CheckCancellation();
+                    string taken, kind, custom;
+                    stored.TryGetValue("point_taken:" + name, out taken); stored.TryGetValue("point_kind:" + name, out kind); stored.TryGetValue("point_name:" + name, out custom);
+                    if (taken != RestorePointNames.TakenUtc(backup, name).ToString("O", CultureInfo.InvariantCulture) || kind != ReadPointKind(backup, name) ||
+                        custom != RestorePointNames.ReadName(backup, name)) return false;
+                }
+
+                var objects = new ObjectChecks(backup);
+                var old = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+                using (var rows = db.Prepare("SELECT path,size,modified_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files WHERE snapshot_id='current'"))
+                    while (rows.Read())
+                        old[rows.String(0)] = new CatalogEntry { Path = rows.String(0), Size = rows.String(1) == null ? -1 : rows.Number(1), ModifiedTicks = rows.Number(2),
+                            Hash = rows.String(3), Present = rows.Number(4) != 0, VerifiedUtc = rows.String(5), Result = rows.String(6), ObservedHash = rows.String(7) };
+                db.Execute("DELETE FROM files WHERE snapshot_id='current'");
+                using (var insert = db.Prepare("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
+                {
+                    Snapshot current = ContentStore.Current(backup, objects);
+                    foreach (string folder in current.Folders) InsertEntry(insert, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
+                    foreach (var item in current.Files)
+                    {
+                        OperationContext.Current.CheckCancellation();
+                        var entry = new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
+                            ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) };
+                        CatalogEntry prior;
+                        if (old.TryGetValue(item.Relative, out prior)) CarryCheck(entry, prior);
+                        InsertEntry(insert, entry);
+                    }
+                    var validNames = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (string name in fresh)
+                    {
+                        OperationContext.Current.CheckCancellation();
+                        Snapshot snapshot = ReadSnapshot(backup, onDisk[name], objects, validNames);
+                        foreach (string folder in snapshot.Folders) InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
+                        foreach (var item in snapshot.Files)
+                            InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = item.Relative, Hash = item.Hash,
+                                Size = item.Size, ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
+                        db.Execute("INSERT INTO restore_points VALUES (?)", snapshot.Name);
+                        db.Execute("INSERT INTO metadata VALUES (?,?)", "point_kind:" + snapshot.Name, ReadPointKind(backup, snapshot.Name));
+                        db.Execute("INSERT INTO metadata VALUES (?,?)", "point_taken:" + snapshot.Name, snapshot.TakenUtc.ToString("O", CultureInfo.InvariantCulture));
+                        if (snapshot.CustomName != null) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + snapshot.Name, snapshot.CustomName);
+                    }
+                }
+                SetMetadata(db, "built_utc", DateTime.UtcNow.ToString("O"));
+                SetMetadata(db, "app_version", AppIdentity.Version);
+                SetMetadata(db, "backup_name", BackupSetNames.Read(backup));
+                SetMetadata(db, "device_id", (DeviceSelection.BackupDevice(backup) ?? DeviceSelection.CurrentDevice).Id);
+                SetMetadata(db, "inventory_stamp", InventoryStamp(backup));
+                SetMetadata(db, "inventory_generation", InventoryGeneration(backup));
+                db.Execute("COMMIT");
+            }
+            PublishLocal(local, path);
+            return true;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException || ex is ArgumentException)
+        { return false; }
+        finally { if (created) { FileCopy.TryDelete(local); FileCopy.TryDelete(local + "-journal"); } }
+    }
+    static void SetMetadata(SqliteDatabase db, string key, string value)
+    {
+        db.Execute("DELETE FROM metadata WHERE key=?", key);
+        db.Execute("INSERT INTO metadata VALUES (?,?)", key, value);
+    }
+    static void InsertEntry(SqliteDatabase.Statement insert, CatalogEntry entry)
+    {
+        insert.Bind(entry.SnapshotId, entry.Path, entry.IsDirectory ? 1 : 0, entry.Size < 0 ? (object)null : entry.Size,
+            entry.ModifiedTicks == 0 ? (object)null : entry.ModifiedTicks, entry.CreatedTicks == 0 ? (object)null : entry.CreatedTicks,
+            entry.Hash, entry.Present ? 1 : 0, entry.VerifiedUtc, entry.Result, entry.ObservedHash);
+        insert.Read();
     }
 
     static string Key(string snapshot, string path) { return snapshot + "\0" + path; }
@@ -102,8 +223,6 @@ internal static class BackupDatabase
         string local = Path.Combine(Path.GetTempPath(), "gear-catalog-" + Guid.NewGuid().ToString("N") + ".sqlite");
         // Reserve the local filename before letting SQLite open it.
         using (new FileStream(local, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
-        string staged = Path.Combine(Path.GetDirectoryName(path), ".gearcatalog-" + Guid.NewGuid().ToString("N") + ".tmp");
-        bool stagedCreated = false;
         try
         {
             using (var db = new SqliteDatabase(local, false))
@@ -144,6 +263,21 @@ internal static class BackupDatabase
                 foreach (var named in data.PointNames) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + named.Key, named.Value);
                 db.Execute("COMMIT");
             }
+            PublishLocal(local, path);
+        }
+        finally
+        {
+            FileCopy.TryDelete(local); FileCopy.TryDelete(local + "-journal");
+        }
+    }
+
+    // Copies a finished local database beside the catalog, flushes it, and swaps it in as one file.
+    static void PublishLocal(string local, string path)
+    {
+        string staged = Path.Combine(Path.GetDirectoryName(path), ".gearcatalog-" + Guid.NewGuid().ToString("N") + ".tmp");
+        bool stagedCreated = false;
+        try
+        {
             if (new FileInfo(local).Length > Records.ListLimit) throw new IOException("Backup catalog is too large.");
             OperationContext.Current.CheckCancellation();
             RejectRootLinks(path);
@@ -161,11 +295,7 @@ internal static class BackupDatabase
             RejectRootLinks(path);
             if (File.Exists(path)) ReplaceSafely(staged, path); else File.Move(staged, path);
         }
-        finally
-        {
-            if (stagedCreated) FileCopy.TryDelete(staged);
-            FileCopy.TryDelete(local); FileCopy.TryDelete(local + "-journal");
-        }
+        finally { if (stagedCreated) FileCopy.TryDelete(staged); }
     }
 
     // currentOnly: just the current listing. verifiedOnly: just the rows that carry a recorded check, and the check runs, not

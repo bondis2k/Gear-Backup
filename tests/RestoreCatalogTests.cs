@@ -168,7 +168,7 @@ partial class Tests
         Assert(File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58.manifest")) && File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58_10.manifest")),
             "same-second captures receive safe suffixes instead of overwriting saved runs");
         BackupDatabase.Rebuild(backup);
-        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-01_23.59.58_10", "same-instant collisions sort numerically, including suffix ten");
+        Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-01_23.59.58_10", "same-instant collisions sort numerically, including suffix ten: " + RestoreCatalog.Load(backup, Devices.M8).Points[0].Id);
         var midnight = new DateTime(2026, 10, 2, 0, 0, 1, DateTimeKind.Local);
         addPoint(midnight);
         BackupDatabase.Rebuild(backup);
