@@ -36,6 +36,9 @@ namespace GearBackup
             finally { Release(client); }
         }
 
+        // Works with an already opened device; tests pass one that answers like the camera.
+        internal FujiPtp(IPortableDevice opened) { device = opened; }
+
         public void Dispose()
         {
             if (device == null) return;

@@ -108,7 +108,7 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 | `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |
 | `build\check-layers.ps1` | The layer check, run before the core tests and in CI. |
 | `build\check-catches.ps1` | Fails an empty `catch` without a comment, run before the core tests and in CI. |
-| `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`; CI does that and fails below 80% of statements). At the last run: 83% of statements, 77% of branches; the device-bound code (`FujiPtp`, `UsbDevices`, `MtpDevice`) is largely untested because it needs hardware. |
+| `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`; CI does that and fails below 85% of statements). At the last run: 89% of statements, 80% of branches. The Windows device code is tested against fakes of the Portable Devices API (`tests\FakePortableDevice.cs`) and of the USB disk list; what stays uncovered is mostly ejecting through `cfgmgr32` and the interactive CLI source picker. |
 | `benchmarks\run-benchmarks.ps1` | Performance scenarios; see `benchmarks\README.md`. |
 
 A test is a method of the `Tests` class marked `[Test("name")]` (`tests\TestHarness.cs`); the runners find them by reflection, so there is no list to keep. A test takes no argument or one fixture folder, and each runs in its own operation context. GUI tests are marked `Gui = true`, live in `tests\Gui*Tests.cs` by area, and run in the GUI test program on an STA thread.
