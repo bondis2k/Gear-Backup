@@ -100,10 +100,11 @@ internal static class RestoreCatalog
             grouped.Add("current", Snapshots.CurrentBackup(backup));
             string root = SnapshotRoot(backup);
             RejectRootLinks(root);
+            var validNames = new HashSet<string>(StringComparer.Ordinal);
             if (Directory.Exists(root)) foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
             {
                 OperationContext.Current.CheckCancellation();
-                Snapshot snapshot = ReadSnapshot(backup, manifest);
+                Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
                 grouped.Add(snapshot.Name, snapshot);
                 kinds[snapshot.Name] = BackupDatabase.ReadPointKind(backup, snapshot.Name);
             }

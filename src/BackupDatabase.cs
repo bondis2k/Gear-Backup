@@ -90,10 +90,11 @@ internal static class BackupDatabase
             if (!present.Contains(sum.Key)) Add(data, new CatalogEntry { Path = sum.Key, Hash = sum.Value });
         string snapshots = SnapshotRoot(backup);
         RejectRootLinks(snapshots);
+        var validNames = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(snapshots)) foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest"))
         {
             OperationContext.Current.CheckCancellation();
-            Snapshot snapshot = ReadSnapshot(backup, manifest, objects);
+            Snapshot snapshot = ReadSnapshot(backup, manifest, objects, validNames);
             data.RestorePoints.Add(snapshot.Name);
             data.PointKinds[snapshot.Name] = ReadPointKind(backup, snapshot.Name);
             data.PointTimes[snapshot.Name] = snapshot.TakenUtc;
@@ -124,8 +125,12 @@ internal static class BackupDatabase
         {
             using (var db = new SqliteDatabase(local, false))
             {
-                db.Execute("PRAGMA journal_mode=DELETE");
-                db.Execute("PRAGMA synchronous=FULL");
+                // This is a staging file: it is copied to the backup and flushed to disk below, and a half-written one is
+                // simply discarded, so it needs no journal or sync of its own. One transaction covers the schema and the rows,
+                // instead of a commit (and disk sync) per statement.
+                db.Execute("PRAGMA journal_mode=OFF");
+                db.Execute("PRAGMA synchronous=OFF");
+                db.Execute("BEGIN IMMEDIATE");
                 db.Execute("PRAGMA application_id=" + ApplicationId);
                 db.Execute("PRAGMA user_version=" + SchemaVersion);
                 db.Execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
@@ -134,7 +139,6 @@ internal static class BackupDatabase
                 db.Execute("CREATE INDEX files_integrity ON files(verification_result)");
                 db.Execute("CREATE INDEX files_path ON files(path)");
                 db.Execute("CREATE TABLE check_runs (id INTEGER PRIMARY KEY, checked_utc TEXT NOT NULL, summary TEXT NOT NULL)");
-                db.Execute("BEGIN IMMEDIATE");
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "built_utc", DateTime.UtcNow.ToString("O"));
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "app_version", AppIdentity.Version);
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "backup_name", BackupSetNames.Read(backup));

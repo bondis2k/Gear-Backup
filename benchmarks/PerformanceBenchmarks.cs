@@ -61,6 +61,7 @@ static class PerformanceBenchmarks
                     using (var input = new MemoryStream(data)) using (var output = new MemoryStream())
                         FileCopy.CopyAndHash(input, output, "memory");
             });
+            RunHistory(rows, "Incremental-30-restore-points", root, config, iterations);
             RunSource(rows, "Many-small-files", small, root, config, iterations);
             RunSource(rows, "Large-WAV", large, root, config, iterations);
             File.WriteAllLines(result, rows);
@@ -68,6 +69,34 @@ static class PerformanceBenchmarks
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+    }
+
+    // The catalog is rebuilt after every run, so a long history makes each run slower. This builds 30 restore points of 300
+    // files and times one more incremental run that changes a single file.
+    static void RunHistory(List<string> rows, string name, string root, Config config, int iterations)
+    {
+        string source = Path.Combine(root, name + "-source"), history = Path.Combine(root, name);
+        Directory.CreateDirectory(source);
+        var random = new Random(11);
+        for (int i = 0; i < 300; i++) { var data = new byte[2048]; random.NextBytes(data); File.WriteAllBytes(Path.Combine(source, i + ".wav"), data); }
+        int change = 0;
+        Action touch = () => {
+            var data = new byte[2048]; random.NextBytes(data);
+            string path = Path.Combine(source, (change % 300) + ".wav");
+            File.WriteAllBytes(path, data);
+            File.SetLastWriteTimeUtc(path, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddMinutes(++change));
+        };
+        string backup;
+        using (new OperationContext(new Quiet(), CancellationToken.None).Activate())
+        {
+            backup = Backups.RunBackup(source, history, null, false, config).OutputFolder;
+            for (int point = 1; point < 30; point++) { touch(); Backups.RunBackup(source, history, backup, true, config); }
+        }
+        Measure(rows, name, iterations, () => {
+            touch();
+            OperationResult result = Backups.RunBackup(source, history, backup, true, config);
+            if (result.ExitCode != 0) throw new IOException(result.Summary);
+        });
     }
 
     static void RunSource(List<string> rows, string name, string source, string root, Config config, int iterations)
