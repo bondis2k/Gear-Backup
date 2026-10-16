@@ -6,6 +6,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-10-16
+
 ### Added
 - The header shows gear icons between the title and Help, About and Settings: Gear Backup, M8, Tracker Mini, OP-XY and OP-1 Field. Gear Backup is the whole app as before (Device, Backup, Restore). Choosing a device icon enters that device's mode: it looks for a connected device of that type, keeps the Device tab without the Go to Backup and Restore shortcuts, and replaces the Backup and Restore tabs with Coming soon and Planned placeholders until the dedicated tools exist. Detecting a device from Gear Backup mode leaves every backup tool in place.
 - A **Song** tab after Restore opens a Dirtywave M8 song (`.m8s`) and shows its name, firmware, tempo, transpose, quantize, song length, chain/phrase/table counts, rows used per track and every instrument with its type, name and sample. Songs are only read, never changed.
@@ -17,6 +19,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed
+- Rewritten manual, FAQ and feature inventory, including the complete CLI switch reference, worked examples, current device workflows and format/safety limitations.
 - The shared code is now `GearBackup.Core.dll`, installed beside `GearBackup.exe` and `GearBackup.GUI.exe` (and included in the portable package), instead of being compiled into each program. Source files are in namespaces (`GearBackup`, `GearBackup.Cli`, `GearBackup.Gui`).
 - Backups copy small files (up to 4 MB) four at a time and large files one at a time, so a card or network share with thousands of small files backs up much faster (5,000 files of 3 KB: 45 s down to 17 s on a local disk, with Verify on). The restore point lists files in the same order as before.
 - A failed backup now says why in the CLI output.
@@ -200,7 +203,8 @@ First release of Gear Backup.
 - Graphical and command-line interfaces, Setup and Portable packages, and an illustrated offline
   manual in three themes (Original, Original (dark), Retro).
 
-[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/bondis2k/Gear-Backup/compare/v0.9.1...v0.9.2
