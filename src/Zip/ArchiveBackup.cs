@@ -38,7 +38,7 @@ namespace GearBackup
             string parent = Path.GetDirectoryName(destination);
             if (!Directory.Exists(parent)) throw new IOException("Archive destination folder does not exist: " + parent);
             if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
-            var scan = new ScanResult(); SourceScan.CollectFiles(source, scan);
+            var scan = new ScanResult(); SourceScan.CollectFiles(source, scan, context);
             foreach (var item in Directory.EnumerateFileSystemEntries(source))
                 if (string.Equals(Path.GetFileName(item), ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))

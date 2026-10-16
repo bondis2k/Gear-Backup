@@ -81,7 +81,7 @@ namespace GearBackup
                 var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (RestoreEntry item in items) wanted.Add(item.Relative);
                 var scan = new ScanResult();
-                CollectFiles(m8, scan);
+                CollectFiles(m8, scan, context);
                 foreach (FileInfo file in scan.Files)
                     if (!wanted.Contains(file.FullName.Substring(m8.Length))) removals.Add(file.FullName.Substring(m8.Length));
                 var wantedFolders = new HashSet<string>(snapshot.Folders, StringComparer.OrdinalIgnoreCase);
@@ -221,7 +221,7 @@ namespace GearBackup
                     // Planning already checked the content; the copy's checksum is compared below.
                     ValidateEntry(item, false);
                     Directory.CreateDirectory(Path.GetDirectoryName(target));
-                    string hash = CopyFile(new FileInfo(item.StoredPath), temp, config.Verify);
+                    string hash = CopyFile(new FileInfo(item.StoredPath), temp, config.Verify, context);
                     if (config.Verify && item.Hash != null && hash != item.Hash) throw new IOException("Backup checksum changed during restore.");
                     DateTime modified = new DateTime(item.ModifiedTicks, DateTimeKind.Utc);
                     DateTime created = new DateTime(item.CreatedTicks, DateTimeKind.Utc);
