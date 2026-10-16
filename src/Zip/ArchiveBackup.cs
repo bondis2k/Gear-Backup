@@ -99,13 +99,13 @@ namespace GearBackup
                         context.CheckCancellation();
                         // A placeholder has the same length as the report's eventual SHA-256 checksum.
                         hashes.Add(ArchiveMetadata.FileName, new string('0', 64));
-                        int checksumBytes = ArchiveMetadata.Utf8.GetByteCount(ArchiveMetadata.Checksums(hashes));
+                        int checksumBytes = ArchiveMetadata.Utf8.GetByteCount(ArchiveMetadata.Checksums(hashes, context));
                         byte[] info = ArchiveMetadata.Utf8.GetBytes(ArchiveMetadata.Create(source, config, choice, takenUtc,
                             scan.Files.Count, scan.Folders.Count, total, checksumBytes));
                         using (var hash = SHA256.Create()) hashes[ArchiveMetadata.FileName] = FileCopy.ToHex(hash.ComputeHash(info));
                         using (var output = zip.CreateEntry(ArchiveMetadata.FileName, CompressionLevel.Fastest).Open()) output.Write(info, 0, info.Length);
                         using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
-                            writer.Write(ArchiveMetadata.Checksums(hashes));
+                            writer.Write(ArchiveMetadata.Checksums(hashes, context));
                     }
                 }
                 if (config.Verify) Verify(temp, hashes, context);

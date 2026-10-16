@@ -64,10 +64,10 @@ namespace GearBackup
             {
                 using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    ZipPreflight.Validate(file, MaxEntries);
+                    ZipPreflight.Validate(file, MaxEntries, context);
                     using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
                     {
-                        var inventory = Read(zip);
+                        var inventory = Read(zip, context);
                         if (inventory.Info.Device.Id != detected.Detected.Id)
                             throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
                         using (context.UseDevice(inventory.Info.Device))
@@ -190,9 +190,10 @@ namespace GearBackup
         static bool IsMetadata(string name)
         { return name.Equals(ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase) || name.Equals(ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase); }
 
-        static ZipInventory Read(ZipArchive zip)
+        static ZipInventory Read(ZipArchive zip, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             var result = new ZipInventory();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string validationRoot = Rooted(Path.Combine(Path.GetTempPath(), "GearBackup-ZipValidation"));
@@ -200,7 +201,7 @@ namespace GearBackup
             if (zip.Entries.Count > MaxEntries) throw new IOException("This ZIP lists " + zip.Entries.Count.ToString("N0") + " entries, more than the " + MaxEntries.ToString("N0") + " Gear Backup will restore.");
             foreach (var entry in zip.Entries)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 bool directory = entry.FullName.EndsWith("/", StringComparison.Ordinal);
                 string name = directory ? entry.FullName.Substring(0, entry.FullName.Length - 1) : entry.FullName;
                 ValidateName(validationRoot, name);
@@ -229,8 +230,8 @@ namespace GearBackup
             ZipArchiveEntry info, sums;
             if (!result.Files.TryGetValue(ArchiveMetadata.FileName, out info) || !result.Files.TryGetValue(ArchiveMetadata.ChecksumFileName, out sums))
                 throw new IOException("Select a Gear Backup standalone ZIP containing gearbackup-info.txt and checksums.sha256.");
-            byte[] infoBytes = ReadBytes(info, 64 * 1024);
-            string manifest = new UTF8Encoding(false, true).GetString(ReadBytes(sums, Records.ListLimit));
+            byte[] infoBytes = ReadBytes(info, 64 * 1024, context);
+            string manifest = new UTF8Encoding(false, true).GetString(ReadBytes(sums, Records.ListLimit, context));
             foreach (string raw in manifest.Split('\n'))
             {
                 string line = raw.TrimEnd('\r'); if (line.Length == 0) continue;
@@ -261,7 +262,7 @@ namespace GearBackup
             CheckedPath(root, name);
         }
 
-        static byte[] ReadBytes(ZipArchiveEntry entry, long limit)
+        static byte[] ReadBytes(ZipArchiveEntry entry, long limit, OperationContext context)
         {
             if (entry.Length > limit) throw new IOException("ZIP metadata is too large: " + entry.FullName);
             using (var input = entry.Open())
@@ -270,7 +271,7 @@ namespace GearBackup
                 byte[] buffer = new byte[65536]; int read;
                 while ((read = input.Read(buffer, 0, buffer.Length)) != 0)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if (output.Length + read > limit || output.Length + read > entry.Length) throw new IOException("ZIP metadata exceeds its declared size: " + entry.FullName);
                     output.Write(buffer, 0, read);
                 }

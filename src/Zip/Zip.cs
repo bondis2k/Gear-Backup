@@ -26,8 +26,9 @@ namespace GearBackup
 
         // Zips the latest restore point as ordinary files and folders (empty folders included) plus checksums.sha256.
         // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
-        internal static string ZipBackup(string backup)
+        internal static string ZipBackup(string backup, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var snapshot = ContentStore.Current(backup);
             string path = ZipPathFor(backup), temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             RejectRootLinks(path);
@@ -43,7 +44,7 @@ namespace GearBackup
                         foreach (string folder in snapshot.Folders) zip.CreateEntry(folder.Replace('\\', '/') + "/");
                         foreach (var item in snapshot.Files)
                         {
-                            OperationContext.Current.CheckCancellation();
+                            context.CheckCancellation();
                             PathSafety.RejectRootLinks(item.StoredPath);
                             if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size) throw new IOException("Stored content is missing or damaged: " + item.Relative);
                             string name = item.Relative.Replace('\\', '/');
@@ -53,15 +54,15 @@ namespace GearBackup
                             using (var to = entry.Open())
                             {
                                 int read; while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
-                                { OperationContext.Current.CheckCancellation(); to.Write(buffer, 0, read); }
+                                { context.CheckCancellation(); to.Write(buffer, 0, read); }
                             }
                             sums.Append(item.Hash).Append("  ").Append(name).Append('\n');
-                            OperationContext.Current.Progress(Stage.Zipping, item.Relative, 0, 0, ++count, snapshot.Files.Count);
+                            context.Progress(Stage.Zipping, item.Relative, 0, 0, ++count, snapshot.Files.Count);
                         }
                         using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName).Open(), new UTF8Encoding(false))) writer.Write(sums.ToString());
                     }
                 }
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 RejectRootLinks(path); File.Move(temp, path); return path;
             }
             finally { if (created) TryDelete(temp); }

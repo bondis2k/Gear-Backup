@@ -23,8 +23,9 @@ namespace GearBackup
     {
         internal const int MaxSongs = 10000, MaxEntries = 1000000;
 
-        internal static M8CardReport Run(string root, IM8SongReader reader, Action<int, string> progress = null)
+        internal static M8CardReport Run(string root, IM8SongReader reader, Action<int, string> progress = null, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (string.IsNullOrWhiteSpace(root)) throw new IOException("Choose the M8 card root first.");
             root = PathSafety.Rooted(root);
             PathSafety.RejectRootLinks(root);
@@ -36,14 +37,14 @@ namespace GearBackup
             bool limit = false;
             while (folders.Count != 0 && !limit)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 string folder = folders.Pop();
                 try
                 {
                     PathSafety.RejectRootLinks(folder);
                     foreach (string path in Directory.EnumerateFileSystemEntries(folder))
                     {
-                        OperationContext.Current.CheckCancellation();
+                        context.CheckCancellation();
                         if (++entries > MaxEntries) { limit = true; break; }
                         try
                         {
@@ -72,7 +73,7 @@ namespace GearBackup
             songs.Sort(StringComparer.OrdinalIgnoreCase);
             foreach (string relative in songs)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 var song = new M8CardSongResult { Relative = relative };
                 try
                 {
@@ -84,7 +85,7 @@ namespace GearBackup
                 report.Songs.Add(song);
                 if (progress != null) progress(report.Songs.Count, relative);
             }
-            OperationContext.Current.CheckCancellation();
+            context.CheckCancellation();
             return report;
         }
 

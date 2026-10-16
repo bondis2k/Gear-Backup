@@ -43,15 +43,16 @@ namespace GearBackup
 
     internal static class M8CardMigration
     {
-        internal static void ValidateTarget(string target, string backup, Config config)
+        internal static void ValidateTarget(string target, string backup, Config config, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) throw new IOException("Choose an existing, empty replacement card root or test folder.");
             PathSafety.RejectRootLinks(target);
             RestoreFlow.ValidateRestoreDestination(backup, target, config);
             bool driveRoot = PathSafety.Rooted(target) == PathSafety.Rooted(Path.GetPathRoot(Path.GetFullPath(target)));
             foreach (string entry in Directory.EnumerateFileSystemEntries(target))
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 string name = Path.GetFileName(entry);
                 if (driveRoot && Directory.Exists(entry) && (string.Equals(name, "System Volume Information", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(name, "$RECYCLE.BIN", StringComparison.OrdinalIgnoreCase))) continue;
@@ -59,8 +60,9 @@ namespace GearBackup
             }
         }
 
-        internal static M8MigrationReport Run(string target, Config config, RestoreRequest request, IM8SongReader reader, bool linkHistory = false)
+        internal static M8MigrationReport Run(string target, Config config, RestoreRequest request, IM8SongReader reader, bool linkHistory = false, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var timer = System.Diagnostics.Stopwatch.StartNew();
             if (request == null || request.DeviceId != Devices.M8.Id || request.Paths != null || request.Exact)
                 throw new IOException("Card migration requires a complete M8 restore point.");
@@ -68,7 +70,7 @@ namespace GearBackup
                 throw new IOException("This M8 backup is no longer available. Refresh the backup list.");
             var report = new M8MigrationReport { Backup = request.Backup, Target = target };
             using (HistoryLock.LockHistory(Path.GetDirectoryName(request.Backup)))
-            using (OperationContext.Current.UseDevice(Devices.M8))
+            using (context.UseDevice(Devices.M8))
             {
                 RestoreSet set = RestoreCatalog.Load(request.Backup, Devices.M8);
                 RestorePoint point = set.Points.Find(p => p.Id == request.Point);
@@ -79,7 +81,7 @@ namespace GearBackup
                 report.Point = point.Label;
                 Config effective = ProfileSettings.ResolveProfileSettings(config, Devices.M8.Id, Path.GetFileName(Path.GetDirectoryName(request.Backup)));
                 effective.Verify = true; effective.Thorough = true; effective.Preview = true; effective.Recovery = false;
-                ValidateTarget(target, request.Backup, effective);
+                ValidateTarget(target, request.Backup, effective, context);
                 string history = Path.GetDirectoryName(request.Backup);
                 string linkKey = linkHistory ? ProfileLinks.Key(target) : null;
                 if (linkHistory) ProfileLinks.ValidateLink(config, linkKey, history);
@@ -93,7 +95,7 @@ namespace GearBackup
                 OperationOutput.WriteLine("Mandatory checksum verification; no formatting or removal of existing content.");
                 if (linkHistory) OperationOutput.WriteLine("After successful checks, link this card to backup history: " + history);
                 report.Operation = new RestoreEngine().RunSelected(target, point.Snapshot, point.Snapshot.Files, RestoreMode.All, null, false,
-                    effective, OperationContext.Current, () => { sameTarget(); ValidateTarget(target, request.Backup, effective); },
+                    effective, context, () => { sameTarget(); ValidateTarget(target, request.Backup, effective, context); },
                     "M8 card migration to " + target + (linkHistory ? " · Link backup history: " + history : ""));
                 if (report.Operation.Cancelled || report.Operation.ExitCode != 0) return report;
                 if (report.Operation.Title == null)
@@ -104,7 +106,7 @@ namespace GearBackup
                 sameTarget();
                 foreach (var file in point.Snapshot.Files)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     try
                     {
                         string path = PathSafety.SafePath(target, file.Relative);
@@ -115,7 +117,7 @@ namespace GearBackup
                 }
                 foreach (string folder in point.Snapshot.Folders)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if (!Directory.Exists(PathSafety.SafePath(target, folder))) report.Issues.Add("Missing folder: " + folder);
                 }
                 sameTarget();
@@ -130,7 +132,7 @@ namespace GearBackup
                     (report.Songs.Warnings.Count == 0 ? "" : " Song scan incomplete; see report.");
                 if (linkHistory && !problem)
                 {
-                    OperationContext.Current.CheckCancellation(); sameTarget();
+                    context.CheckCancellation(); sameTarget();
                     try
                     {
                         if (ProfileLinks.Key(target) != linkKey) throw new IOException("The replacement card volume ID changed.");

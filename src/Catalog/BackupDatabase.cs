@@ -18,22 +18,23 @@ namespace GearBackup
         const int ApplicationId = 1195524674, SchemaVersion = 1, RowLimit = 1000000;
         internal static string CatalogPath(string backup) { return Path.Combine(AppIdentity.MetadataRoot(backup), FileName); }
 
-        internal static void TryRefresh(string backup, List<CatalogVerification> verified = null, string checkSummary = null)
+        internal static void TryRefresh(string backup, List<CatalogVerification> verified = null, string checkSummary = null, OperationContext context = null)
         {
             if (PreviewOnly) return;
-            try { Rebuild(backup, verified, checkSummary); }
+            try { Rebuild(backup, verified, checkSummary, context); }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) { OperationOutput.WriteLine("  Could not update the backup catalog (backup files remain available): " + ex.Message); }
         }
 
-        internal static void Rebuild(string backup, List<CatalogVerification> verified = null, string checkSummary = null)
+        internal static void Rebuild(string backup, List<CatalogVerification> verified = null, string checkSummary = null, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             RejectRootLinks(backup);
             if (!Directory.Exists(backup)) throw new IOException("Backup folder does not exist: " + backup);
             string path = CatalogPath(backup);
             RejectRootLinks(path);
-            if (File.Exists(path) && verified == null && checkSummary == null && TryUpdate(backup, path)) return;
+            if (File.Exists(path) && verified == null && checkSummary == null && TryUpdate(backup, path, context)) return;
             var previous = new CatalogData();
             if (File.Exists(path))
             {
@@ -42,7 +43,7 @@ namespace GearBackup
                 catch (OperationCanceledException) { throw; }
                 catch (IOException ex) { OperationOutput.WriteLine("  Rebuilding the unreadable catalog from checksum lists and manifests: " + ex.Message); }
             }
-            CatalogData data = Inventory(backup);
+            CatalogData data = Inventory(backup, context);
             var old = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var entry in previous.Files) old[Key(entry.SnapshotId, entry.Path)] = entry;
             var checks = new Dictionary<string, CatalogVerification>(StringComparer.OrdinalIgnoreCase);
@@ -58,7 +59,7 @@ namespace GearBackup
             data.Checks.AddRange(previous.Checks);
             if (checkSummary != null) data.Checks.Add(new CatalogCheckRun { CheckedUtc = DateTime.UtcNow.ToString("O"), Summary = checkSummary });
             if (data.Checks.Count > 100) data.Checks.RemoveRange(0, data.Checks.Count - 100);
-            Publish(backup, path, data);
+            Publish(backup, path, data, context);
         }
 
         // A recorded check applies only to the same expected version and observed metadata.
@@ -72,7 +73,7 @@ namespace GearBackup
         // again, this copies the published catalog, replaces its current rows, adds the new restore points and publishes the
         // result. Returns false (changing nothing) when the catalog can't be updated that way; the caller then rebuilds it whole.
         // Rows of earlier restore points keep the object presence they were built with until the next full rebuild.
-        static bool TryUpdate(string backup, string path)
+        static bool TryUpdate(string backup, string path, OperationContext context)
         {
             string local = Path.Combine(Path.GetTempPath(), "gear-catalog-update-" + Guid.NewGuid().ToString("N") + ".sqlite");
             bool created = false;
@@ -113,7 +114,7 @@ namespace GearBackup
                         while (meta.Read()) stored[meta.String(0)] = meta.String(1);
                     foreach (string name in known)
                     {
-                        OperationContext.Current.CheckCancellation();
+                        context.CheckCancellation();
                         string taken, kind, custom;
                         stored.TryGetValue("point_taken:" + name, out taken); stored.TryGetValue("point_kind:" + name, out kind); stored.TryGetValue("point_name:" + name, out custom);
                         if (taken != RestorePointNames.TakenUtc(backup, name).ToString("O", CultureInfo.InvariantCulture) || kind != ReadPointKind(backup, name) ||
@@ -133,7 +134,7 @@ namespace GearBackup
                         foreach (string folder in current.Folders) InsertEntry(insert, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
                         foreach (var item in current.Files)
                         {
-                            OperationContext.Current.CheckCancellation();
+                            context.CheckCancellation();
                             var entry = new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
                                 ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) };
                             CatalogEntry prior;
@@ -143,7 +144,7 @@ namespace GearBackup
                         var validNames = new HashSet<string>(StringComparer.Ordinal);
                         foreach (string name in fresh)
                         {
-                            OperationContext.Current.CheckCancellation();
+                            context.CheckCancellation();
                             Snapshot snapshot = ReadSnapshot(backup, onDisk[name], objects, validNames);
                             foreach (string folder in snapshot.Folders) InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
                             foreach (var item in snapshot.Files)
@@ -163,7 +164,7 @@ namespace GearBackup
                     SetMetadata(db, "inventory_generation", InventoryGeneration(backup));
                     db.Execute("COMMIT");
                 }
-                PublishLocal(local, path);
+                PublishLocal(local, path, context);
                 return true;
             }
             catch (OperationCanceledException) { throw; }
@@ -185,7 +186,7 @@ namespace GearBackup
         }
 
         static string Key(string snapshot, string path) { return snapshot + "\0" + path; }
-        static CatalogData Inventory(string backup)
+        static CatalogData Inventory(string backup, OperationContext context)
         {
             ContentStore.RequireContentStore(backup);
             var data = new CatalogData();
@@ -199,7 +200,7 @@ namespace GearBackup
             var validNames = new HashSet<string>(StringComparer.Ordinal);
             if (Directory.Exists(snapshots)) foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest"))
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 Snapshot snapshot = ReadSnapshot(backup, manifest, objects, validNames);
                 data.RestorePoints.Add(snapshot.Name);
                 data.PointKinds[snapshot.Name] = ReadPointKind(backup, snapshot.Name);
@@ -220,7 +221,7 @@ namespace GearBackup
             data.Files.Add(entry);
         }
 
-        static void Publish(string backup, string path, CatalogData data)
+        static void Publish(string backup, string path, CatalogData data, OperationContext context)
         {
             string local = Path.Combine(Path.GetTempPath(), "gear-catalog-" + Guid.NewGuid().ToString("N") + ".sqlite");
             // Reserve the local filename before letting SQLite open it.
@@ -252,7 +253,7 @@ namespace GearBackup
                     using (var insert = db.Prepare("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
                         foreach (var entry in data.Files)
                         {
-                            OperationContext.Current.CheckCancellation();
+                            context.CheckCancellation();
                             insert.Bind(entry.SnapshotId, entry.Path, entry.IsDirectory ? 1 : 0, entry.Size < 0 ? (object)null : entry.Size,
                                 entry.ModifiedTicks == 0 ? (object)null : entry.ModifiedTicks, entry.CreatedTicks == 0 ? (object)null : entry.CreatedTicks,
                                 entry.Hash, entry.Present ? 1 : 0, entry.VerifiedUtc, entry.Result, entry.ObservedHash);
@@ -265,7 +266,7 @@ namespace GearBackup
                     foreach (var named in data.PointNames) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + named.Key, named.Value);
                     db.Execute("COMMIT");
                 }
-                PublishLocal(local, path);
+                PublishLocal(local, path, context);
             }
             finally
             {
@@ -274,14 +275,14 @@ namespace GearBackup
         }
 
         // Copies a finished local database beside the catalog, flushes it, and swaps it in as one file.
-        static void PublishLocal(string local, string path)
+        static void PublishLocal(string local, string path, OperationContext context)
         {
             string staged = Path.Combine(Path.GetDirectoryName(path), ".gearcatalog-" + Guid.NewGuid().ToString("N") + ".tmp");
             bool stagedCreated = false;
             try
             {
                 if (new FileInfo(local).Length > Records.ListLimit) throw new IOException("Backup catalog is too large.");
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 RejectRootLinks(path);
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 using (var input = new FileStream(local, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -290,10 +291,10 @@ namespace GearBackup
                     stagedCreated = true;
                     var buffer = new byte[65536]; int count;
                     while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
-                    { OperationContext.Current.CheckCancellation(); output.Write(buffer, 0, count); }
+                    { context.CheckCancellation(); output.Write(buffer, 0, count); }
                     output.Flush(true);
                 }
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 RejectRootLinks(path);
                 if (File.Exists(path)) ReplaceSafely(staged, path); else File.Move(staged, path);
             }
@@ -432,8 +433,9 @@ namespace GearBackup
             return generation + ":" + FileStamp(SafePath(SnapshotRoot(backup), name + ".manifest"));
         }
 
-        internal static CatalogData TryIncrementalInventory(string backup)
+        internal static CatalogData TryIncrementalInventory(string backup, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             try
             {
                 if (BackupStatus(backup).Unfinished) throw new IOException("backup is unfinished");
@@ -443,7 +445,7 @@ namespace GearBackup
                 var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var entry in data.Files)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if (!names.Add(entry.Path) || entry.Size < 0 || entry.ModifiedTicks < 0 || entry.ModifiedTicks > DateTime.MaxValue.Ticks ||
                         entry.CreatedTicks < 0 || entry.CreatedTicks > DateTime.MaxValue.Ticks || (!entry.IsDirectory && entry.Hash == null))
                         throw new IOException("inventory has incomplete or invalid records");

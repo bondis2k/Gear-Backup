@@ -115,7 +115,7 @@ namespace GearBackup
         // The restore point an incremental run builds on: from the SQLite inventory when it is current, otherwise the manifest.
         void LoadCurrentPoint()
         {
-            CatalogData indexed = incremental ? BackupDatabase.TryIncrementalInventory(backup) : null;
+            CatalogData indexed = incremental ? BackupDatabase.TryIncrementalInventory(backup, context) : null;
             if (indexed != null)
             {
                 current = new Snapshot();
@@ -322,7 +322,7 @@ namespace GearBackup
             committed = true;
             SetBackupStatus(backup, Status.Complete);
             AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt"), DateTime.UtcNow.ToString("O") + "\n");
-            BackupDatabase.TryRefresh(backup);
+            BackupDatabase.TryRefresh(backup, null, null, context);
         }
 
         // --zip: after a full backup, also saves it as a zip next to its folder. A zip that fails leaves the backup complete.
@@ -331,7 +331,7 @@ namespace GearBackup
             zipPath = null; zipFailed = false;
             if (!config.Zip) return;
             if (incremental) { OperationOutput.WriteLine("  --zip applies to full backups; no zip made for this incremental backup."); return; }
-            try { OperationOutput.WriteLine("  Saving zip..."); zipPath = BackupZip.ZipBackup(backup); OperationOutput.WriteLine("  Zip saved to " + zipPath); }
+            try { OperationOutput.WriteLine("  Saving zip..."); zipPath = BackupZip.ZipBackup(backup, context); OperationOutput.WriteLine("  Zip saved to " + zipPath); }
             catch (Exception ex)
             {
                 if (ex is OperationCanceledException) throw;
