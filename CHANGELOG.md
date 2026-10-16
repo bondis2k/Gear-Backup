@@ -7,7 +7,8 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 ## [Unreleased]
 
 ### Added
-- The Tracker Mini view has a **Project inspector** and an **Instrument check**: they read a Tracker project (`project.mt`, patterns and instrument files) and list its instruments and patterns, and the instruments that notes play without a usable instrument file.
+- The Tracker Mini view can open a pattern from the **Project inspector** (**View pattern**) as a table of steps with notes, instruments and effects, and the Device tab shows a summary of the detected Tracker card's projects and any that need attention.
+- The Tracker Mini view has a **Project inspector** and an **Instrument check**: they read a Tracker project (`project.mt`, patterns and instrument files) and list its instruments and patterns, and the instruments that notes play without a usable instrument file. Checked against a real Tracker Mini card: `N name.pti` instrument names, the 392-byte header and original-Tracker `.mti` projects with `samples\instrNN.wav` are understood.
 - Optional **Link replacement card to the original backup history** during M8 migration, saved after successful verification and song checks. Future backups use the original history, location and preferences across drive-letter changes; explicit profiles override linking.
 - M8 **Card migration** restores a selected complete backup point to an empty replacement card or test folder, with mandatory preview/checksums, target identity checks, post-copy file verification, song dependency checks, progress/cancellation and a saveable migration report. It does not format storage or delete existing content.
 - M8 mode now has a Sample check tab: inspect a song's sample references against a card folder and search M8 backup histories, including older restore points. Results include referencing instrument slots, exact-path and filename-only matches, and SHA-256 verification of matching saved objects. Checking can be cancelled and does not restore or modify song/sample files.
@@ -15,6 +16,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - M8 Sample check has a **Check all songs on card** button, which scans songs recursively, reports missing samples per song, distinguishes unreadable songs and invalid references, and supports selection of per-song details, progress and cancellation.
 
 ### Fixed
+- Tracker checks use the 392-byte Mini instrument layout, retain legacy `.mti` sample checks, and lock scan inputs to prevent stale results. Project/file discovery streams bounded entries and reports incomplete checks instead of claiming all instruments are usable.
 - M8 migration locks its path inputs while copying and cancels superseded inventory loads. Saved card-history links reject ambiguous relative paths and report duplicate identities clearly.
 - The sample backup restore confirmation uses the application's theme, including its title bar, details and action buttons.
 - Toggling M8 backup-history search preserves card results. Re-enabling it refreshes the selected song's backup copies automatically, including selections from the whole-card list.

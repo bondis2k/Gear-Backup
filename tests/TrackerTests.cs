@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 using GearBackup;
 
 // The Tracker project readers and the missing-instrument check, on files built to the layouts in Polyend's tracker-lib.
@@ -34,13 +35,16 @@ partial class Tests
         {
             int at = 28 + step[0] * (1 + 128 * 6) + 1 + step[1] * 6;
             data[at] = (byte)step[2]; data[at + 1] = (byte)step[3];
+            if (step.Length > 5) { data[at + 4] = (byte)step[4]; data[at + 5] = (byte)step[5]; }       // first effect
+            if (step.Length > 7) { data[at + 2] = (byte)step[6]; data[at + 3] = (byte)step[7]; }       // second effect
         }
         return data;
     }
 
     static void TrackerInstrument(string path, string sample, int frames, int channels, bool wavetable = false, long audioBytes = -1)
     {
-        var data = new byte[394 + (audioBytes >= 0 ? audioBytes : frames * 2L * channels)];
+        // Keep this independent of the production constant: real Mini instruments start PCM at byte 392.
+        var data = new byte[392 + (audioBytes >= 0 ? audioBytes : frames * 2L * channels)];
         data[0] = (byte)'T'; data[1] = (byte)'I'; data[20] = (byte)(wavetable ? 1 : 0);
         Encoding.ASCII.GetBytes(sample).CopyTo(data, 21);
         BitConverter.GetBytes((uint)frames).CopyTo(data, 60);
@@ -75,6 +79,7 @@ partial class Tests
         TrackerInstrument(mono, "kick", 1000, 1); TrackerInstrument(stereo, "pad", 500, 2);
         TrackerInstrumentFile one = TrackerInstrumentFile.Read(mono);
         Assert(one.SampleName == "kick" && one.Frames == 1000 && one.Channels == 1 && one.PlayMode == "Forward loop", "a mono instrument is read");
+        Assert(new FileInfo(mono).Length == 2392 && one.AudioBytes == 2000, "PCM starts at byte 392, independent of the production header constant");
         Assert(TrackerInstrumentFile.Read(stereo).Channels == 2, "a stereo instrument is read");
         string odd = Path.Combine(dir, "tracker-instruments", "odd.pti"); TrackerInstrument(odd, "odd", 1000, 1, false, 1234);
         Assert(TrackerInstrumentFile.Read(odd).Channels == 0, "audio of an unexpected size has no channel count");
@@ -83,6 +88,74 @@ partial class Tests
         var wrongInstrument = new byte[394]; wrongInstrument[0] = (byte)'Q';
         File.WriteAllBytes(Path.Combine(dir, "tracker-instruments", "wrong.pti"), wrongInstrument);
         Throws(() => TrackerInstrumentFile.Read(Path.Combine(dir, "tracker-instruments", "wrong.pti")), "a wrong signature is refused");
+    }
+
+    [Test("Tracker legacy samples and real-style instrument names")]
+    static void TestTrackerLegacy(string root)
+    {
+        File.WriteAllBytes(Path.Combine(root, "project.mt"), TrackerProject("Legacy", 120f, new[] { 1 }));
+        Directory.CreateDirectory(Path.Combine(root, "patterns"));
+        File.WriteAllBytes(Path.Combine(root, "patterns", "pattern_01.mtp"), TrackerPattern(16, 16, new[] { 0, 0, 60, 0 }));
+        string instruments = Folder(root, "instruments"), samples = Folder(root, "samples");
+        string instrument = Path.Combine(instruments, "instrument_01.mti");
+        var bytes = new byte[388]; bytes[0] = (byte)'T'; bytes[1] = (byte)'I';
+        Encoding.ASCII.GetBytes("Kick").CopyTo(bytes, 21); File.WriteAllBytes(instrument, bytes);
+        var report = TrackerProjectCheck.Inspect(root);
+        Assert(report.Missing.Count == 1 && report.Missing[0].Reason.Contains("instr01.wav"), "legacy instruments check the project-local sample file");
+        File.WriteAllBytes(Path.Combine(samples, "instr01.wav"), new byte[44]);
+        Assert(TrackerProjectCheck.Inspect(root).Missing[0].Reason.Contains("empty"), "an empty legacy WAV is reported");
+        File.WriteAllBytes(Path.Combine(samples, "instr01.wav"), new byte[46]);
+        report = TrackerProjectCheck.Inspect(root);
+        Assert(report.Missing.Count == 0 && report.Instruments[0].Details.Legacy && report.Instruments[0].SampleFileBytes == 46, "a legacy instrument with sample content is present");
+        Array.Resize(ref bytes, 64); File.WriteAllBytes(instrument, bytes);
+        Assert(TrackerProjectCheck.Inspect(root).Missing.Count == 0, "legacy files only require the fields used to find their external sample");
+        File.Delete(instrument);
+        TrackerInstrument(Path.Combine(instruments, "1 Kick 22.pti"), "Kick", 16, 1);
+        report = TrackerProjectCheck.Inspect(root);
+        Assert(report.Missing.Count == 0 && report.Instruments[0].Slot == 1 && !report.Instruments[0].Details.Legacy, "Mini slots use the leading number rather than a number in the sample name");
+    }
+
+    static System.Collections.Generic.IEnumerable<string> TrackerManyFiles()
+    {
+        yield return "notes.txt";
+        for (int i = 0; i <= TrackerProjectCheck.MaxFiles; i++) yield return i + ".PTI";
+        throw new Exception("Enumeration continued beyond the matching-file budget.");
+    }
+
+    [Test("Tracker enumeration limits and cancellation")]
+    static void TestTrackerLimits(string root)
+    {
+        var report = new TrackerProjectReport();
+        string[] files = TrackerProjectCheck.LimitedFiles(TrackerManyFiles(), report, OperationContext.Current, ".pti", ".mti");
+        Assert(files.Length == TrackerProjectCheck.MaxFiles && report.Warnings.Count == 1, "matching files are bounded before an unbounded input is materialized");
+        using (var cancel = new CancellationTokenSource())
+        using (new OperationContext(new TestInteraction(), cancel.Token).Activate())
+        {
+            cancel.Cancel(); bool stopped = false;
+            try { TrackerProjectCheck.FindProjects(root); } catch (OperationCanceledException) { stopped = true; }
+            Assert(stopped, "even an empty project discovery honors cancellation");
+            stopped = false;
+            try { TrackerProjectCheck.LimitedFiles(TrackerManyFiles(), report, OperationContext.Current, ".pti"); } catch (OperationCanceledException) { stopped = true; }
+            Assert(stopped, "file enumeration honors cancellation before collecting results");
+        }
+        for (int i = 0; i <= TrackerProjectCheck.MaxProjects; i++)
+            Put(Path.Combine(root, "p" + i, "project.mt"), "fixture");
+        var warnings = new System.Collections.Generic.List<string>();
+        var projects = TrackerProjectCheck.FindProjects(root, null, warnings);
+        Assert(projects.Count == TrackerProjectCheck.MaxProjects && warnings.Count > 0, "project discovery stops at its budget and reports that the list may be incomplete");
+    }
+
+    [Test("Tracker incomplete checks stay visible")]
+    static void TestTrackerIncomplete(string root)
+    {
+        var bytes = TrackerProject("Truncated"); Array.Resize(ref bytes, 500);
+        File.WriteAllBytes(Path.Combine(root, "project.mt"), bytes);
+        Directory.CreateDirectory(Path.Combine(root, "patterns")); Directory.CreateDirectory(Path.Combine(root, "instruments"));
+        var report = TrackerProjectCheck.Inspect(root);
+        Assert(report.Error == null && report.Project.Truncated && report.Warnings.Exists(w => w.Contains("truncated")), "a truncated project is advisory rather than a complete successful check");
+        var summary = TrackerProjectCheck.Summarize(root);
+        Assert(summary.Problems.Count > 0 && summary.Describe().Contains("Needs attention") && !summary.Describe().Contains("no missing instruments"),
+            "the card summary retains incomplete-check warnings even without a missing instrument");
     }
 
     [Test("Tracker project check", Folder = "helpers")]
@@ -144,5 +217,46 @@ partial class Tests
         Assert(found.Count == 1, "a project folder lists itself");
         WithUi(() => found = TrackerProjectCheck.FindProjects(Path.Combine(root, "nothing-here")));
         Assert(found.Count == 0, "a missing folder holds no projects");
+    }
+
+    [Test("Tracker pattern steps and card summary", Folder = "helpers")]
+    static void TestTrackerStepsAndSummary(string dir)
+    {
+        // Track 1 step 1: note 60 on instrument 4, tempo 60 (shown 120) and volume 80; step 2 is a cut; track 2 step 1 a fade.
+        TrackerPatternFile pattern = TrackerPatternFile.Read(TrackerPattern(16, 16, new[] { 0, 0, 60, 3, 15, 60, 18, 80 }, new[] { 0, 1, 253, 0 }, new[] { 1, 0, 254, 0 }));
+        TrackerStep first = pattern.Tracks[0].Steps[0];
+        Assert(first.HasNote && first.Note == 60 && first.Instrument == 3 && TrackerFx.Text(first.Fx0Type, first.Fx0Value) == "T120" && TrackerFx.Text(first.Fx1Type, first.Fx1Value) == "V80",
+            "a step's note, instrument and two effects are read: " + TrackerFx.Text(first.Fx0Type, first.Fx0Value) + "|" + TrackerFx.Text(first.Fx1Type, first.Fx1Value));
+        Assert(!pattern.Tracks[0].Steps[1].HasNote && pattern.Tracks[0].Steps[1].Note == -3 && pattern.Tracks[1].Steps[0].Note == -2, "cut and fade steps are not notes");
+        Assert(pattern.Tracks[0].Length == 16 && pattern.Tracks[0].Steps[127].IsEmpty, "a track keeps its length and its empty steps");
+        Assert(TrackerFx.Text(0, 5) == "" && TrackerFx.Text(17, 60) == "I10" && TrackerFx.Text(31, 25) == "P-25" && TrackerFx.Text(25, 0) == "S1" && TrackerFx.Text(40, 30) == "U6", "effect values are shown as the Tracker shows them");
+        Assert(TrackerFx.Name(15) == "Tempo" && TrackerFx.Name(99).Contains("Unknown") && TrackerFx.Symbol(18) == "V" && TrackerFx.Symbol(99) == "?", "effect names and symbols are looked up");
+
+        string root = Folder(dir, "tracker-summary-card");
+        Func<string, int, string> make = (name, instrumentsPresent) => {
+            string folder = Path.Combine(root, "Projects", name);
+            Directory.CreateDirectory(Path.Combine(folder, "patterns"));
+            File.WriteAllBytes(Path.Combine(folder, "project.mt"), TrackerProject(name, 120f, new[] { 1 }));
+            File.WriteAllBytes(Path.Combine(folder, "patterns", "pattern_01.mtp"), TrackerPattern(16, 16, new[] { 0, 0, 60, 0 }, new[] { 0, 1, 60, 1 }));
+            for (int i = 1; i <= instrumentsPresent; i++) TrackerInstrument(Path.Combine(folder, "instruments", "instrument_0" + i + ".pti"), "s" + i, 100, 1);
+            return folder;
+        };
+        make("Good", 2);
+        string bad = make("Bad", 1);
+        File.SetLastWriteTime(Path.Combine(bad, "project.mt"), DateTime.Now.AddDays(1));
+        TrackerCardSummary summary = null;
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root));
+        Assert(summary.Projects == 2 && summary.Checked == 2 && summary.NewestName == "Bad", "the card's projects are counted and the newest named");
+        Assert(summary.Problems.Count == 1 && summary.Problems[0].StartsWith("Bad: 1 instrument played without a usable file"), "a project with a missing instrument is listed: " + string.Join("|", summary.Problems));
+        string text = summary.Describe();
+        Assert(text.Contains("Tracker projects: 2") && text.Contains("Needs attention:") && text.Contains("Bad:"), "the summary reads: " + text);
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root, null, 1));
+        Assert(summary.Checked == 1 && summary.Describe().Contains("The first 1 projects were checked"), "only the newest projects are checked when there are many");
+        make("Bad", 2);
+        WithUi(() => summary = TrackerProjectCheck.Summarize(root));
+        Assert(summary.Problems.Count == 0 && summary.Describe().Contains("no missing instruments"), "a card with nothing wrong says so");
+        string empty = Folder(dir, "tracker-summary-empty");
+        WithUi(() => summary = TrackerProjectCheck.Summarize(empty));
+        Assert(summary.Projects == 0 && summary.Describe().Contains("No Tracker projects"), "a card without projects says so");
     }
 }

@@ -26,12 +26,19 @@ namespace GearBackup.Gui
         readonly Label checkNotice = GuiTheme.Label("Inspect a project first, or click Check project.", 9, GuiTheme.Muted);
         readonly DataGridView missing = new DataGridView { Name = "TrackerMissingInstruments", AccessibleName = "Instruments the patterns play without a usable file" };
         readonly TextBox details = new TextBox { Name = "TrackerCheckDetails", ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Top, Height = 80, Visible = false, AccessibleName = "Other findings" };
+        readonly Button viewPattern = GuiTheme.Button("View pattern", false);
+        Button browse;
         Control inspectorContent, checkContent;
         CancellationTokenSource running;
         bool closed, initialized, filling;
+        int generation;
         List<string> projects = new List<string>();
+        List<string> projectWarnings = new List<string>();
         internal Func<string, string> FolderPicker { get; set; }
         internal TrackerProjectReport Report { get; private set; }
+        internal Func<string, OperationContext, TrackerProjectReport> Inspector = TrackerProjectCheck.Inspect;
+        // Tests replace the modal window; it receives the dialog instead of showing it.
+        internal Action<TrackerPatternDialog> PatternShown { get; set; }
 
         internal TrackerProjectTab(IWorkflowTabHost host, Func<string> source, IOperationInteraction interaction)
         { this.host = host; this.source = source; this.interaction = interaction; }
@@ -49,7 +56,7 @@ namespace GearBackup.Gui
             var row = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 3 };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             row.Controls.Add(new FieldPanel(path) { Dock = DockStyle.Fill }, 0, 0);
-            var browse = GuiTheme.Button("Browse…", false); browse.Name = "TrackerBrowse"; browse.Click += delegate { if (running == null) Browse(); };
+            browse = GuiTheme.Button("Browse…", false); browse.Name = "TrackerBrowse"; browse.Click += delegate { if (running == null) Browse(); };
             inspect.Name = "TrackerInspect"; inspect.Click += delegate { Run(); };
             row.Controls.Add(browse, 1, 0); row.Controls.Add(inspect, 2, 0);
             panel.Controls.Add(row);
@@ -62,13 +69,18 @@ namespace GearBackup.Gui
             ConfigureGrid(instruments, new[] { "Instrument", "File", "Sample", "Length (frames)", "Channels", "Play mode", "Status" }, 190);
             ConfigureGrid(patterns, new[] { "Pattern", "File", "Tracks", "Note steps", "Instruments played", "In the song" }, 150);
             panel.Controls.Add(instruments); panel.Controls.Add(patterns);
-            path.TextChanged += delegate { if (running == null) ClearResults(); };
-            panel.Disposed += delegate { closed = true; if (running != null) running.Cancel(); };
+            viewPattern.Name = "TrackerViewPattern"; viewPattern.Enabled = false;
+            viewPattern.Click += delegate { ViewPattern(); };
+            patterns.CellDoubleClick += delegate(object sender, DataGridViewCellEventArgs e) { if (e.RowIndex >= 0) ViewPattern(); };
+            patterns.SelectionChanged += delegate { viewPattern.Enabled = patterns.CurrentRow != null && Report != null && Report.Patterns.Count > patterns.CurrentRow.Index && Report.Patterns[patterns.CurrentRow.Index].Error == null; };
+            panel.Controls.Add(viewPattern);
+            path.TextChanged += delegate { ++generation; if (running != null) running.Cancel(); ClearResults(); };
+            panel.Disposed += delegate { closed = true; ++generation; if (running != null) running.Cancel(); };
             inspectorContent = panel;
 
             var second = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Margin = Padding.Empty };
             second.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            check.Name = "TrackerCheckButton"; check.Click += delegate { Run(); };
+            check.Name = "TrackerCheckButton"; check.Click += delegate { Run(Math.Max(0, picker.SelectedIndex)); };
             second.Controls.Add(check);
             checkNotice.Name = "TrackerCheckNotice"; checkNotice.UseMnemonic = false; checkNotice.MaximumSize = new Size(780, 0);
             second.Controls.Add(checkNotice);
@@ -112,7 +124,7 @@ namespace GearBackup.Gui
 
         void ClearResults()
         {
-            Report = null; projects = new List<string>(); picker.Visible = false;
+            Report = null; projects = new List<string>(); projectWarnings = new List<string>(); picker.Visible = false;
             instruments.Rows.Clear(); patterns.Rows.Clear(); missing.Rows.Clear();
             summary.Visible = false; details.Visible = false;
             notice.Text = "Choose a Tracker card, or a project folder that holds project.mt, then click Inspect.";
@@ -120,7 +132,29 @@ namespace GearBackup.Gui
             host.RefreshLayout();
         }
 
-        void SetBusy(bool busy) { inspect.Enabled = check.Enabled = !busy; }
+        // Opens the selected pattern's steps in a window.
+        internal void ViewPattern()
+        {
+            if (running != null || Report == null || patterns.CurrentRow == null || patterns.CurrentRow.Index >= Report.Patterns.Count) return;
+            TrackerPatternInfo info = Report.Patterns[patterns.CurrentRow.Index];
+            if (info.Error != null) return;
+            TrackerPatternFile file;
+            try { file = TrackerPatternFile.Read(Records.ReadBytes(System.IO.Path.Combine(Report.Folder, "patterns", info.File), TrackerFiles.PatternLimit, "Tracker pattern")); }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { notice.Text = "Cannot open " + info.File + ": " + ex.Message; return; }
+            string name = Report.Project.Name.Length > 0 ? Report.Project.Name : System.IO.Path.GetFileName(Report.Folder);
+            using (var dialog = new TrackerPatternDialog("Pattern " + info.Number + " · " + name, file, Report.Project.TrackNames))
+            {
+                if (PatternShown != null) PatternShown(dialog);
+                else dialog.ShowDialog(host.Owner);
+            }
+        }
+
+        void SetBusy(bool busy)
+        {
+            inspect.Enabled = check.Enabled = path.Enabled = browse.Enabled = picker.Enabled = patterns.Enabled = !busy;
+            viewPattern.Enabled = !busy && Report != null && patterns.CurrentRow != null &&
+                patterns.CurrentRow.Index < Report.Patterns.Count && Report.Patterns[patterns.CurrentRow.Index].Error == null;
+        }
 
         // Finds the projects below the chosen folder and inspects one (the first, or the one picked).
         internal async void Run(int index = 0)
@@ -128,18 +162,23 @@ namespace GearBackup.Gui
             if (running != null || closed) return;
             string folder = path.Text.Trim();
             if (folder.Length == 0) { notice.Text = "Choose a Tracker card or project folder first."; return; }
+            int scan = ++generation;
+            var knownProjects = new List<string>(projects);
             var cancellation = running = new CancellationTokenSource();
             SetBusy(true);
             notice.Text = "Reading the project…"; checkNotice.Text = notice.Text;
             List<string> found = projects; TrackerProjectReport report = null; string error = null;
+            var discoveryWarnings = knownProjects.Count > 0 && index > 0 ? new List<string>(projectWarnings) : new List<string>();
+            var inspectProject = Inspector;
             try
             {
                 var token = cancellation.Token;
                 var result = await Task.Run(delegate {
                     using (new OperationContext(interaction, token) { PreviewOnly = true }.Activate())
                     {
-                        List<string> list = projects.Count > 0 && index > 0 ? projects : TrackerProjectCheck.FindProjects(folder);
-                        TrackerProjectReport inspected = list.Count == 0 ? null : TrackerProjectCheck.Inspect(list[Math.Min(index, list.Count - 1)]);
+                        List<string> list = knownProjects.Count > 0 && index > 0 ? knownProjects : TrackerProjectCheck.FindProjects(folder, OperationContext.Current, discoveryWarnings);
+                        TrackerProjectReport inspected = list.Count == 0 ? null : inspectProject(list[Math.Min(index, list.Count - 1)], OperationContext.Current);
+                        if (inspected != null) inspected.Warnings.AddRange(discoveryWarnings);
                         return new KeyValuePair<List<string>, TrackerProjectReport>(list, inspected);
                     }
                 });
@@ -151,8 +190,12 @@ namespace GearBackup.Gui
             host.RunOnUi(delegate {
                 if (closed) return;
                 SetBusy(false);
+                if (scan != generation) return;
                 if (error != null) { notice.Text = error; checkNotice.Text = error; return; }
+                projectWarnings = discoveryWarnings;
                 Show(found, report, index);
+                if (report == null && discoveryWarnings.Count > 0)
+                    notice.Text = checkNotice.Text = string.Join(Environment.NewLine, discoveryWarnings);
             });
         }
 
@@ -200,6 +243,13 @@ namespace GearBackup.Gui
             {
                 if (item.Error != null) { instruments.Rows.Add(item.Slot.ToString(CultureInfo.InvariantCulture), item.File, "", "", "", "", "Unreadable: " + item.Error); continue; }
                 TrackerInstrumentFile d = item.Details;
+                if (d.Legacy)
+                {
+                    // The original Tracker keeps the audio in a wav file beside the instrument.
+                    instruments.Rows.Add(item.Slot.ToString(CultureInfo.InvariantCulture), item.File, d.SampleName, item.SampleFileBytes < 0 ? "" : FormatSampleSize(item.SampleFileBytes),
+                        "", "Original Tracker", item.SampleFileBytes < 0 ? "Sample file " + System.IO.Path.GetFileName(item.SampleFile) + " is missing" : item.SampleFileBytes <= 44 ? "Sample file is empty" : "OK");
+                    continue;
+                }
                 bool usable = d.Frames > 0 && (d.Wavetable || d.Channels > 0);
                 instruments.Rows.Add(item.Slot.ToString(CultureInfo.InvariantCulture), item.File, d.SampleName, d.Frames.ToString("N0", CultureInfo.InvariantCulture),
                     d.Channels == 0 ? "?" : d.Channels == 1 ? "Mono" : "Stereo", d.PlayMode, d.Wavetable ? "Wavetable" : usable ? "OK" : "No usable sample");
@@ -215,6 +265,8 @@ namespace GearBackup.Gui
             host.RefreshLayout();
         }
 
+        static string FormatSampleSize(long bytes) { return Formatting.FormatSize(bytes) + " wav"; }
+
         void ShowCheck(TrackerProjectReport report)
         {
             foreach (TrackerMissingInstrument item in report.Missing)
@@ -226,10 +278,10 @@ namespace GearBackup.Gui
             lines.AddRange(report.Warnings);
             details.Text = string.Join(Environment.NewLine, lines); details.Visible = lines.Count > 0;
             int inSongCount = report.Missing.FindAll(m => m.InSong).Count;
-            checkNotice.Text = report.Missing.Count == 0 && report.MissingPatterns.Count == 0
-                ? "Every instrument the patterns play has a usable instrument file."
-                : report.Missing.Count + " instrument(s) are played by patterns without a usable file" + (report.Missing.Count > 0 ? " (" + inSongCount + " in the song)" : "") +
-                  (report.MissingPatterns.Count > 0 ? "; " + report.MissingPatterns.Count + " song position(s) have no pattern file" : "") + ".";
+            checkNotice.Text = report.Missing.Count == 0
+                ? (report.Warnings.Count > 0 || report.UnreadableFiles > 0 ? "Check incomplete; see the findings below." : "Every instrument the patterns play has a usable instrument file.") + (report.MissingPatterns.Count > 0 ? " " + report.MissingPatterns.Count + " song position(s) play a pattern with no file; see below." : "")
+                : report.Missing.Count + " instrument(s) are played by patterns without a usable file (" + inSongCount + " in the song)" +
+                  (report.MissingPatterns.Count > 0 ? "; " + report.MissingPatterns.Count + " song position(s) play a pattern with no file" : "") + ".";
         }
     }
 }

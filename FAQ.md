@@ -758,21 +758,29 @@ No. Double-click a verified copy in the lower table and confirm to open **Restor
 
 Select the **Tracker Mini** header icon, open **Project inspector**, choose the Tracker card (or one project folder, the one that holds `project.mt`) with **Browse…** and click **Inspect**. If the card holds several projects, pick one from the list that appears. You see the project name, tempo and firmware, the number of patterns and song positions, every instrument file with its sample name, length, channels and play mode, and every pattern with the instruments its notes play and whether the song uses it. Nothing on the card is changed.
 
+### Can I see what is in a Tracker pattern?
+
+Yes. In **Project inspector**, select a pattern and click **View pattern** (or double-click it). The window shows a row per step and a column per track that has content. Each cell holds the note, the instrument and up to two effects, such as `C4 03 V80`. Notes use MIDI names (60 is C4), so the octave may differ from what the Tracker displays. It is a read-only view; nothing is written to the card or the project.
+
+### What is the project summary on the Device tab?
+
+After you detect a Tracker Mini card, the Device tab lists the number of projects, the newest one, and any project that needs attention (an instrument played without a usable file, an unreadable file, or a song position with no pattern). It checks up to 25 projects, newest first; open **Project inspector** and **Instrument check** for the full detail of one project.
+
 ### Can Gear Backup find missing samples in a Tracker project?
 
 A Tracker instrument (`.pti`) keeps its sample inside the file and a project stores no sample paths, so a sample cannot go missing the way it can on the M8. The **Instrument check** tab finds the equivalent problem: a note that plays an instrument number with no usable instrument file in the project's `instruments` folder. It lists each such instrument with the patterns that play it and whether any of them is in the song.
 
 ### What does "no instrument file" or "no usable sample" mean?
 
-The pattern plays instrument 7, but `instruments\instrument_07.pti` is not there ("no instrument file"), cannot be read ("the instrument file cannot be read"), or holds no audio ("no usable sample"). Restore the instrument from a backup, or load a sample into that slot on the Tracker. Instruments are matched by number, counting from 1 as the Tracker shows them; a folder that starts at `instrument_00.pti` is recognised too.
+The pattern plays instrument 7, but there is no instrument file for slot 7 (`7 <sample>.pti`, or `instrument_07.mti` with `samples\instr07.wav` in projects from the original Tracker) ("no instrument file"), cannot be read ("the instrument file cannot be read"), or holds no audio ("no usable sample"). Restore the instrument from a backup, or load a sample into that slot on the Tracker. Instruments are matched by slot number, counting from 1 as the Tracker shows them.
 
 ### Why does the check list a missing instrument I never hear?
 
 Only notes inside a track's length count, but a pattern that is not in the song can still play an instrument that is missing; the **In the song** column says No for those. Empty, off and cut steps are ignored. MIDI and synth instruments have no files, so they are counted separately and never reported as missing.
 
-### Why does it say a song position plays a pattern with no pattern file?
+### Why does it mention a song position with no pattern file?
 
-The project's song order names a pattern number, and there is no `patterns\pattern_NN.mtp` with that number. This usually means the pattern was removed from the folder or the project is only partly restored. Restore the whole project folder (not just `project.mt`) and run the check again.
+The project's song order names a pattern number, and there is no `patterns\pattern_NN.mtp` with that number. On real cards this is normally an empty pattern, which the Tracker does not save, so it is only a note and is not listed as a problem. If the pattern should have notes, restore the whole project folder (not just `project.mt`) and run the check again.
 
 ### Can I inspect a project that is only in a backup?
 
