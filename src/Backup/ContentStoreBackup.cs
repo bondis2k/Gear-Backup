@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using static PathSafety;
 using static FileCopy;
 using static Snapshots;
@@ -21,6 +23,9 @@ using static BackupFolders;
 // current pointer is published last. SQLite is rebuilt from those records and is never needed to restore.
 internal sealed class ContentStoreBackup
 {
+    // Files up to this size are copied by CopyWorkers at a time; larger ones one at a time.
+    const long SmallFileLimit = 4L << 20;
+    const int CopyWorkers = 4;
     sealed class PlannedFile
     {
         internal FileInfo Source;
@@ -129,10 +134,18 @@ internal sealed class ContentStoreBackup
         foreach (string folder in scan.Folders) snapshot.Folders.Add(folder.Substring(source.Length));
         try
         {
-            foreach (var item in files)
+            // Small files are copied by a few workers at once: on a card or a network share their cost is mostly
+            // per-file latency. Large files go one at a time afterwards. Results are kept in file order.
+            var entries = new RestoreEntry[files.Count];
+            var small = new List<int>(); var large = new List<int>();
+            for (int i = 0; i < files.Count; i++) (files[i].Size <= SmallFileLimit ? small : large).Add(i);
+            var storeLock = new object();
+            long addedBytes = 0; int done = 0;
+            RestoreEntry Capture(int index)
             {
+                PlannedFile item = files[index];
                 OperationContext.Current.CheckCancellation();
-                OperationContext.Current.Progress(Stage.Copying, item.Relative, added, needed, copied + unchanged, files.Count);
+                OperationContext.Current.Progress(Stage.Copying, item.Relative, Interlocked.Read(ref addedBytes), needed, Interlocked.CompareExchange(ref done, 0, 0), files.Count);
                 item.Source.Refresh();
                 if (!item.Source.Exists || item.Source.Length != item.Size || item.Source.LastWriteTimeUtc.Ticks != item.Modified)
                     throw new IOException("Source changed since the preview: " + item.Relative);
@@ -141,28 +154,64 @@ internal sealed class ContentStoreBackup
                 if (obj == null || !File.Exists(obj))
                 {
                     string objects = Path.Combine(AppIdentity.MetadataRoot(backup), "objects");
-                    RejectRootLinks(objects); Directory.CreateDirectory(objects);
                     string temp = Path.Combine(objects, ".gearobject-" + Guid.NewGuid().ToString("N") + ".tmp");
                     try
                     {
                         string copiedHash = CopyFile(item.Source, temp, config.Verify);
                         if (hash != null && copiedHash != hash) throw new IOException("Source checksum changed since the preview: " + item.Relative);
                         hash = copiedHash; obj = store.PathOf(hash);
-                        if (File.Exists(obj))
+                        // Two workers can hold the same new content; the first to publish it wins.
+                        lock (storeLock)
                         {
-                            if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
-                                throw new IOException("Damaged stored content: " + item.Relative);
+                            if (File.Exists(obj))
+                            {
+                                if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
+                                    throw new IOException("Damaged stored content: " + item.Relative);
+                            }
+                            else { File.Move(temp, obj); Interlocked.Add(ref addedBytes, item.Size); if (config.Verify) verifiedObjects.Add(hash); }
                         }
-                        else { File.Move(temp, obj); added += item.Size; if (config.Verify) verifiedObjects.Add(hash); }
                     }
                     finally { TryDelete(temp); }
                 }
-                else if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
-                    throw new IOException("Damaged stored content: " + item.Relative);
-                if (item.Unchanged) unchanged++; else copied++;
-                snapshot.Files.Add(new RestoreEntry { Relative = item.Relative, StoredPath = obj, Hash = hash, Size = item.Size,
-                    ModifiedTicks = item.Modified, CreatedTicks = item.Created });
+                else
+                {
+                    bool damaged;
+                    lock (storeLock) damaged = new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash);
+                    if (damaged) throw new IOException("Damaged stored content: " + item.Relative);
+                }
+                Interlocked.Increment(ref done);
+                return new RestoreEntry { Relative = item.Relative, StoredPath = obj, Hash = hash, Size = item.Size,
+                    ModifiedTicks = item.Modified, CreatedTicks = item.Created };
             }
+            string objectsFolder = Path.Combine(AppIdentity.MetadataRoot(backup), "objects");
+            RejectRootLinks(objectsFolder); Directory.CreateDirectory(objectsFolder);
+            if (small.Count > 1)
+            {
+                OperationContext context = OperationContext.Current;
+                try
+                {
+                    Parallel.ForEach(small, new ParallelOptions { MaxDegreeOfParallelism = CopyWorkers, CancellationToken = context.Cancellation }, index =>
+                    {
+                        using (context.Activate()) entries[index] = Capture(index);
+                    });
+                }
+                catch (AggregateException ex)
+                {
+                    // Report the real failure, not the cancellations it caused in the other workers.
+                    Exception first = null;
+                    foreach (Exception inner in ex.Flatten().InnerExceptions)
+                        if (first == null || (first is OperationCanceledException && !(inner is OperationCanceledException))) first = inner;
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(first).Throw();
+                }
+            }
+            else foreach (int index in small) entries[index] = Capture(index);
+            foreach (int index in large) entries[index] = Capture(index);
+            for (int i = 0; i < files.Count; i++)
+            {
+                if (files[i].Unchanged) unchanged++; else copied++;
+                snapshot.Files.Add(entries[i]);
+            }
+            added = addedBytes;
             // Nothing names a new restore point until every referenced object has been captured.
             OperationContext.Current.CheckCancellation();
             var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
@@ -201,6 +250,7 @@ internal sealed class ContentStoreBackup
         catch (Exception ex)
         {
             if (!committed) SetBackupStatus(backup, Status.Failed);
+            OperationOutput.WriteLine("  " + (committed ? "Follow-up failed: " : "Backup failed: ") + ex.Message);
             return new OperationResult { Title = AppIdentity.Name + (committed ? " follow-up failed" : " backup failed"),
                 Summary = ex.Message + (committed ? " The restore point was saved." : " Previous restore points are preserved."), ExitCode = 2,
                 OutputFolder = backup, Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged, Failed = 1 } };

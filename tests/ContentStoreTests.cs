@@ -11,6 +11,35 @@ using static Histories;
 
 partial class Tests
 {
+    // Small files are captured by several workers at once: results must match a sequential run.
+    [Test("Parallel capture of many small files", Folder = "helpers")]
+    static void TestParallelCapture(string dir)
+    {
+        string root = Folder(dir, "parallel-capture"), source = Folder(root, "source");
+        for (int i = 0; i < 300; i++) Put(Path.Combine(source, "Folder" + (i % 7), "file" + i + ".txt"), "CONTENT " + (i % 25) + new string('x', i % 25));
+        Put(Path.Combine(source, "big.bin"), new string('B', 5 * 1024 * 1024));
+        string history = Path.Combine(root, "history");
+        var config = new Config { Preview = false, Verify = true };
+        var result = RunBackup(source, history, null, false, config);
+        string backup = result.OutputFolder;
+        Assert(result.ExitCode == 0 && result.Counts.Copied == 301, "every file is captured exactly once");
+        Snapshot point = ContentStore.Current(backup);
+        Assert(point.Files.Count == 301, "the restore point lists every file");
+        for (int i = 0; i < 300; i++)
+        {
+            RestoreEntry entry = point.Files.Find(f => f.Relative == "Folder" + (i % 7) + "\\file" + i + ".txt");
+            Assert(entry != null && File.ReadAllText(entry.StoredPath) == File.ReadAllText(Path.Combine(source, "Folder" + (i % 7), "file" + i + ".txt")), "stored content matches its source: " + i);
+        }
+        Assert(Directory.GetFiles(Path.Combine(AppIdentity.MetadataRoot(backup), "objects")).Length == 26, "identical contents share one object even when captured at the same time");
+        int ok = 0, damaged = 0, missing = 0;
+        CheckSnapshots(backup, ref ok, ref damaged, ref missing);
+        Assert(damaged == 0 && missing == 0, "a parallel capture leaves every object valid");
+        File.WriteAllText(Path.Combine(source, "Folder1", "file1.txt"), "CHANGED");
+        File.Delete(Path.Combine(source, "Folder2", "file2.txt"));
+        result = RunBackup(source, history, backup, true, config);
+        Assert(result.ExitCode == 0 && result.Counts.Copied == 1 && result.Counts.Unchanged == 299, "an incremental run captures only what changed");
+    }
+
     [Test("Single store: incremental points and restore", Folder = "helpers")]
     static void TestSingleContentStore(string dir)
     {

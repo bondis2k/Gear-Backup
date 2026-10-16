@@ -61,7 +61,10 @@ static class Program
         catch (Exception ex)
         {
             Console.WriteLine();
-            WriteColored("  Error: " + ex.Message, ConsoleColor.Red);
+            // The operation context is gone by now, so write to the console directly.
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("  Error: " + ex.Message);
+            Console.ResetColor();
             result = 1;
         }
         if (pause)
