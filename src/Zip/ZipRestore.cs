@@ -19,7 +19,7 @@ internal sealed class ZipRestoreInfo
 // ZIPs are untrusted input. Validate the inventory, metadata and all hashes before changing the target.
 internal static class ZipRestore
 {
-    sealed class Inventory
+    sealed class ZipInventory
     {
         internal ZipRestoreInfo Info;
         internal readonly Dictionary<string, ZipArchiveEntry> Files = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
@@ -65,39 +65,8 @@ internal static class ZipRestore
                     throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
                 using (context.UseDevice(inventory.Info.Device))
                 {
-                    var snapshot = new Snapshot { Name = Path.GetFileName(path), TakenUtc = inventory.Info.TakenUtc };
-                    var lengths = new PathLengthCheck();
-                    foreach (var item in inventory.Files)
-                    {
-                        if (IsMetadata(item.Key)) continue;
-                        string relative = item.Key.Replace('/', '\\');
-                        string destination = SafePath(target, relative), stored = CheckedPath(stage, relative);
-                        if (string.Equals(destination, path, StringComparison.OrdinalIgnoreCase)) throw new IOException("The ZIP file would overwrite itself during restore.");
-                        PathSafety.CheckParents(target, destination);
-                        if (Directory.Exists(destination)) throw new IOException("A folder blocks the destination file: " + relative);
-                        lengths.File(destination); lengths.File(stored);
-                        snapshot.Files.Add(new RestoreEntry { Relative = relative, StoredPath = stored, Size = item.Value.Length,
-                            Hash = inventory.Hashes[item.Key], ModifiedTicks = item.Value.LastWriteTime.UtcDateTime.Ticks,
-                            CreatedTicks = item.Value.LastWriteTime.UtcDateTime.Ticks });
-                    }
-                    foreach (string folder in inventory.Folders)
-                    {
-                        string relative = folder.Replace('/', '\\');
-                        lengths.Folder(CheckedPath(stage, relative)); lengths.Folder(CheckedPath(target, relative));
-                        snapshot.Folders.Add(relative);
-                    }
-                    string problem = lengths.Problem("Choose a shorter restore destination.");
-                    if (problem != null) throw new IOException(problem);
-                    // Existing identical files need no replacement space. Undated files stay in the conservative estimate.
-                    var candidates = snapshot.Files.FindAll(item => {
-                        string destination = SafePath(target, item.Relative);
-                        var actual = new FileInfo(destination);
-                        if (!actual.Exists || actual.Length != item.Size) return true;
-                        if (config.Thorough) return FileCopy.HashFile(destination) != item.Hash;
-                        return !FileCopy.UsableFileTime(actual.LastWriteTimeUtc) || !FileCopy.UsableFileTime(new DateTime(item.ModifiedTicks, DateTimeKind.Utc)) ||
-                            Math.Abs(actual.LastWriteTimeUtc.Ticks - item.ModifiedTicks) > TimeSpan.FromSeconds(2).Ticks;
-                    });
-                    long reserve = RestoreFlow.RestoreSpaceNeeded(target, candidates);
+                    Snapshot snapshot = BuildSnapshot(inventory, path, target, stage);
+                    long reserve = RestoreFlow.RestoreSpaceNeeded(target, ChangedFiles(snapshot, target, config));
                     bool sameVolume = string.Equals(Path.GetPathRoot(parent), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase);
                     RequireSpace(space, target, checked(reserve + (sameVolume ? inventory.Info.ContentBytes : 0)));
                     RequireSpace(space, parent, checked(inventory.Info.ContentBytes + (sameVolume ? reserve : 0)));
@@ -106,33 +75,7 @@ internal static class ZipRestore
                     OperationOutput.WriteLine("  Checking ZIP SHA-256 checksums before restore.");
                     context.CheckCancellation();
                     Directory.CreateDirectory(stage); created = true;
-                    var buffer = new byte[65536]; long done = 0; int count = 0;
-                    foreach (var item in snapshot.Files)
-                    {
-                        context.CheckCancellation();
-                        RejectRootLinks(stage);
-                        Directory.CreateDirectory(Path.GetDirectoryName(SafePath(stage, item.Relative)));
-                        var entry = inventory.Files[item.Relative.Replace('\\', '/')];
-                        using (var from = entry.Open())
-                        using (var to = new FileStream(SafePath(stage, item.Relative), FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                        using (var hash = SHA256.Create())
-                        {
-                            long copied = 0; int read;
-                            while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
-                            {
-                                context.CheckCancellation();
-                                copied = checked(copied + read);
-                                if (copied > item.Size) throw new IOException("ZIP entry exceeds its declared size: " + item.Relative);
-                                to.Write(buffer, 0, read); hash.TransformBlock(buffer, 0, read, buffer, 0); done += read;
-                                context.Progress(Stage.Verifying, item.Relative, done, inventory.Info.ContentBytes, count, snapshot.Files.Count);
-                            }
-                            hash.TransformFinalBlock(new byte[0], 0, 0);
-                            if (copied != item.Size || FileCopy.ToHex(hash.Hash) != item.Hash)
-                                throw new IOException("ZIP checksum verification failed: " + item.Relative);
-                        }
-                        File.SetLastWriteTimeUtc(item.StoredPath, new DateTime(item.ModifiedTicks, DateTimeKind.Utc));
-                        context.Progress(Stage.Verifying, item.Relative, done, inventory.Info.ContentBytes, ++count, snapshot.Files.Count);
-                    }
+                    ExtractAndVerify(inventory, snapshot, stage, context);
                     // Recheck space and device after verification and again after the user approves the plan.
                     Action guard = delegate {
                         context.CheckCancellation(); RejectRootLinks(target);
@@ -155,6 +98,80 @@ internal static class ZipRestore
         }
     }
 
+    // Lists the ZIP's files and folders as a restore point, checking every name and length before anything is written.
+    static Snapshot BuildSnapshot(ZipInventory inventory, string path, string target, string stage)
+    {
+        var snapshot = new Snapshot { Name = Path.GetFileName(path), TakenUtc = inventory.Info.TakenUtc };
+        var lengths = new PathLengthCheck();
+        foreach (var item in inventory.Files)
+        {
+            if (IsMetadata(item.Key)) continue;
+            string relative = item.Key.Replace('/', '\\');
+            string destination = SafePath(target, relative), stored = CheckedPath(stage, relative);
+            if (string.Equals(destination, path, StringComparison.OrdinalIgnoreCase)) throw new IOException("The ZIP file would overwrite itself during restore.");
+            PathSafety.CheckParents(target, destination);
+            if (Directory.Exists(destination)) throw new IOException("A folder blocks the destination file: " + relative);
+            lengths.File(destination); lengths.File(stored);
+            snapshot.Files.Add(new RestoreEntry { Relative = relative, StoredPath = stored, Size = item.Value.Length,
+                Hash = inventory.Hashes[item.Key], ModifiedTicks = item.Value.LastWriteTime.UtcDateTime.Ticks,
+                CreatedTicks = item.Value.LastWriteTime.UtcDateTime.Ticks });
+        }
+        foreach (string folder in inventory.Folders)
+        {
+            string relative = folder.Replace('/', '\\');
+            lengths.Folder(CheckedPath(stage, relative)); lengths.Folder(CheckedPath(target, relative));
+            snapshot.Folders.Add(relative);
+        }
+        string problem = lengths.Problem("Choose a shorter restore destination.");
+        if (problem != null) throw new IOException(problem);
+        return snapshot;
+    }
+
+    // The files the restore would replace or add: existing identical files need no replacement space. Undated files stay in the conservative estimate.
+    static List<RestoreEntry> ChangedFiles(Snapshot snapshot, string target, Config config)
+    {
+        return snapshot.Files.FindAll(item => {
+            string destination = SafePath(target, item.Relative);
+            var actual = new FileInfo(destination);
+            if (!actual.Exists || actual.Length != item.Size) return true;
+            if (config.Thorough) return FileCopy.HashFile(destination) != item.Hash;
+            return !FileCopy.UsableFileTime(actual.LastWriteTimeUtc) || !FileCopy.UsableFileTime(new DateTime(item.ModifiedTicks, DateTimeKind.Utc)) ||
+                Math.Abs(actual.LastWriteTimeUtc.Ticks - item.ModifiedTicks) > TimeSpan.FromSeconds(2).Ticks;
+        });
+    }
+
+    // Copies every entry into the staging folder, checking size and SHA-256 as it goes.
+    static void ExtractAndVerify(ZipInventory inventory, Snapshot snapshot, string stage, OperationContext context)
+    {
+        var buffer = new byte[65536]; long done = 0; int count = 0;
+        foreach (var item in snapshot.Files)
+        {
+            context.CheckCancellation();
+            RejectRootLinks(stage);
+            Directory.CreateDirectory(Path.GetDirectoryName(SafePath(stage, item.Relative)));
+            var entry = inventory.Files[item.Relative.Replace('\\', '/')];
+            using (var from = entry.Open())
+            using (var to = new FileStream(SafePath(stage, item.Relative), FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var hash = SHA256.Create())
+            {
+                long copied = 0; int read;
+                while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    context.CheckCancellation();
+                    copied = checked(copied + read);
+                    if (copied > item.Size) throw new IOException("ZIP entry exceeds its declared size: " + item.Relative);
+                    to.Write(buffer, 0, read); hash.TransformBlock(buffer, 0, read, buffer, 0); done += read;
+                    context.Progress(Stage.Verifying, item.Relative, done, inventory.Info.ContentBytes, count, snapshot.Files.Count);
+                }
+                hash.TransformFinalBlock(new byte[0], 0, 0);
+                if (copied != item.Size || FileCopy.ToHex(hash.Hash) != item.Hash)
+                    throw new IOException("ZIP checksum verification failed: " + item.Relative);
+            }
+            File.SetLastWriteTimeUtc(item.StoredPath, new DateTime(item.ModifiedTicks, DateTimeKind.Utc));
+            context.Progress(Stage.Verifying, item.Relative, done, inventory.Info.ContentBytes, ++count, snapshot.Files.Count);
+        }
+    }
+
     internal static string CheckSpace(string path, long needed)
     {
         return DiskSpace.Shortage(path, needed, "ZIP restore");
@@ -165,9 +182,9 @@ internal static class ZipRestore
     static bool IsMetadata(string name)
     { return name.Equals(ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase) || name.Equals(ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase); }
 
-    static Inventory Read(ZipArchive zip)
+    static ZipInventory Read(ZipArchive zip)
     {
-        var result = new Inventory();
+        var result = new ZipInventory();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string validationRoot = Rooted(Path.Combine(Path.GetTempPath(), "GearBackup-ZipValidation"));
         long content = 0, total = 0;

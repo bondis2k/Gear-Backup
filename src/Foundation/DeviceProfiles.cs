@@ -4,38 +4,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using static PathSafety;
-using static ChangeSummary;
-using static SampleDependencies;
-using static DeviceSelection;
-
-static class DeviceSelection
-{
-    // Device identity comes only from the backup's explicit metadata, independently of its folder name.
-    internal static DeviceProfile BackupDevice(string backup)
-    {
-        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt");
-        if (!File.Exists(path)) return null;
-        return Devices.Find(Records.ReadText(path, Records.DeviceLimit, "Backup device record").Trim());
-    }
-
-    // The device the current operation works with (set by the front end once the source is known).
-    internal static DeviceProfile CurrentDevice { get { return OperationContext.Current.Device; } }
-
-    // The kind of device a source is: the Device setting when it names one, otherwise the detected
-    // device, otherwise the device whose marker file is at the top of the source (a card in a reader),
-    // otherwise the first known device.
-    internal static DeviceProfile DeviceFor(Config config, DeviceProfile detected, string source = null)
-    {
-        DeviceProfile named = Devices.Find(config.Device);
-        if (named != null) return named;
-        if (detected != null) return detected;
-        if (!string.IsNullOrEmpty(source))
-            foreach (DeviceProfile device in Devices.All)
-                if (device.MarkerFile != null && File.Exists(Path.Combine(source, device.MarkerFile))) return device;
-        return Devices.All[0];
-    }
-}
 
 internal sealed class DeviceProfile
 {
@@ -69,8 +37,8 @@ internal sealed class DeviceProfile
     // instead of a restore to the device, and before restoring one of its backups onto a memory card.
     public string RestoreWarning;
     public string BundlesFolder;       // null when the device has no bundles
-    // Lists the sample files a song uses, for "song with samples" restore; null when not supported.
-    public Func<string, List<string>> ReadSamplePaths;
+    // Whether a song's sample files can be listed (SampleDependencies.SamplePaths), for "song with samples" restore.
+    public bool ReadsSamplePaths;
 
     public bool IsSong(string path)
     {
@@ -94,7 +62,7 @@ internal static class Devices
     public static readonly DeviceProfile M8 = new DeviceProfile {
         Id = "m8", Name = "M8", UsbVendor = "VEN_M8", UsbModel = "M8", VolumeLabel = "M8",
         SongExtensions = new[] { ".m8s" }, SongsFolder = "Songs", BundlesFolder = "Bundles",
-        ReadSamplePaths = SamplePaths, IconName = "M8" };
+        ReadsSamplePaths = true, IconName = "M8" };
 
     // The Teenage Engineering OP-1 Field. It connects only over MTP (shift + COM, then T4), as a portable
     // device "OP-1" with USB vendor 2367, holding synth, drum, tapes and mixdown folders. It has no song

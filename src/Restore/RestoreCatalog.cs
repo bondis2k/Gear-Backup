@@ -8,6 +8,7 @@ using static BackupStatuses;
 using static Histories;
 using static DeviceSelection;
 using static Snapshots;
+using static BackupFolders;
 
 // The GUI's restore inventory, optionally filtered by the detected device. SQLite supplies paths and saved run membership;
 // manifests and checksum files are read only when the catalog cannot safely supply them.
@@ -17,7 +18,7 @@ internal static class RestoreCatalog
     {
         var result = new List<string>();
         var times = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        foreach (string history in AvailableHistories(config)) foreach (string backup in Backups.ListBackups(history))
+        foreach (string history in AvailableHistories(config)) foreach (string backup in BackupFolders.ListBackups(history))
         {
             OperationContext.Current.CheckCancellation();
             try
@@ -52,7 +53,7 @@ internal static class RestoreCatalog
         if (device != null && recorded.Id != device.Id)
             throw new IOException("This backup does not match the identified device. Detect the device and choose its backup again.");
         var set = new RestoreSet { Backup = backup, Device = recorded };
-        ContentStoreBackup.RequireContentStore(backup);
+        ContentStore.RequireContentStore(backup);
         try
         {
             var inventoryPaths = new InventoryPathCache(backup);
@@ -168,7 +169,7 @@ internal static class RestoreCatalog
         if (!BackupsForDevice(config, device).Exists(path => Rooted(path) == Rooted(request.Backup)))
             throw new IOException("The selected backup is no longer available for the identified device.");
         string history = Path.GetDirectoryName(request.Backup);
-        using (Session.LockUnlessPreview(history))
+        using (Histories.LockUnlessPreview(history))
         using (OperationContext.Current.UseDevice(device))
         {
             if (Within(target, request.Backup) || Within(request.Backup, target)) throw new IOException("The restore destination and backup must not contain one another.");
@@ -190,4 +191,3 @@ internal static class RestoreCatalog
 }
 internal sealed class RestoreSet { internal string Backup, Notice; internal DeviceProfile Device; internal bool Sqlite; internal readonly List<RestorePoint> Points = new List<RestorePoint>(); }
 internal sealed class RestorePoint { internal string Id, Label; internal Snapshot Snapshot; public override string ToString() { return Label; } }
-internal sealed class RestoreRequest { internal string Backup, DeviceId, Point, Stamp; internal string[] Paths; internal bool Exact; }

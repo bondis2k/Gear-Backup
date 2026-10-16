@@ -97,16 +97,20 @@ internal sealed class OperationContext
     // The kind of device the source is (see Devices.cs); the M8 unless a front end sets another.
     public DeviceProfile Device = Devices.M8;
     // Buffers belong to this operation, never to another worker or thread. Rent separately so a
-    // nested operation (for example from a progress callback) cannot overwrite an active copy.
+    // nested operation (for example from a progress callback) cannot overwrite an active copy. Copy workers share
+    // the pools, so access is locked.
     readonly Stack<byte[]> smallBuffers = new Stack<byte[]>(), largeBuffers = new Stack<byte[]>();
     internal byte[] RentBuffer(bool small)
     {
         var pool = small ? smallBuffers : largeBuffers;
-        return pool.Count == 0 ? new byte[small ? 65536 : FileCopy.ChunkSize] : pool.Pop();
+        lock (pool) if (pool.Count != 0) return pool.Pop();
+        return new byte[small ? 65536 : FileCopy.ChunkSize];
     }
     internal void ReturnBuffer(byte[] buffer)
     {
-        if (buffer != null) (buffer.Length == 65536 ? smallBuffers : largeBuffers).Push(buffer);
+        if (buffer == null) return;
+        var pool = buffer.Length == 65536 ? smallBuffers : largeBuffers;
+        lock (pool) pool.Push(buffer);
     }
     // Histories found in each set of backup locations, so an unreachable location (a disconnected
     // network drive) delays an operation once.

@@ -18,6 +18,8 @@ using static Histories;
 using static PlanReview;
 using static ProfileNaming;
 using static Program;
+using static HistoryLock;
+using static BackupFolders;
 
 partial class Tests
 {

@@ -10,17 +10,17 @@ using System.Text;
 using Microsoft.Win32.SafeHandles;
 using static FileCopy;
 using static PathSafety;
-using static Backups;
 using static MtpMirror;
 using static DeviceSelection;
 using static ProfileSettings;
-using static Session;
 using static AtomicFile;
 using static BackupStatuses;
 using static Histories;
 using static PlanReview;
 using static ProfileNaming;
 using static StorageCatalog;
+using static BackupFolders;
+using static HistoryLock;
 
 static class StorageCatalog
 {
@@ -188,7 +188,7 @@ static class StorageCatalog
                 Status = BackupStatus(backup), Latest = latest, Device = CatalogDevice(backup) };
             metadata.CompletedUtc = LastSuccess(backup);
             ReadCheckRecord(metadata);
-            catalog.Backups.Add(metadata);
+            catalog.BackupList.Add(metadata);
             return;
         }
         var folders = new List<DirectoryInfo>();
@@ -208,7 +208,7 @@ static class StorageCatalog
         }
         row.CompletedUtc = LastSuccess(backup);
         ReadCheckRecord(row);
-        catalog.Backups.Add(row);
+        catalog.BackupList.Add(row);
         if (!latest) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OlderBackup, backup, history, backup, files, folders));
     }
 
@@ -362,7 +362,7 @@ internal sealed class StorageItem
 internal sealed class BackupCatalog
 {
     public bool StorageDetails = true;
-    public readonly List<CatalogBackup> Backups = new List<CatalogBackup>();
+    public readonly List<CatalogBackup> BackupList = new List<CatalogBackup>();
     public readonly List<StorageItem> Cleanup = new List<StorageItem>();
     // Locations, histories or backups that couldn't be read; the scan carries on without them.
     public readonly List<string> Warnings = new List<string>();

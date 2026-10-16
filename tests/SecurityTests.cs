@@ -13,6 +13,7 @@ using static MtpMirror;
 using static UsbDevices;
 using static AtomicFile;
 using static BackupStatuses;
+using static BackupFolders;
 
 partial class Tests
 {

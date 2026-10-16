@@ -13,6 +13,9 @@ using static ConsoleUi;
 using static Session;
 using static Histories;
 using static MtpMirror;
+using static HistoryLock;
+using static BackupFolders;
+using static FujiSettingsBackup;
 
 // Shared operations offered by the Backup and Restore tabs.
 internal enum GuiOperation { FullBackup, IncrementalBackup, Restore, Check, CameraSettings, ZipArchive, RestoreZip }

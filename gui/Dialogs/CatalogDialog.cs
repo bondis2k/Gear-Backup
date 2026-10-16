@@ -7,6 +7,7 @@ using static PathSafety;
 using static ConsoleUi;
 using static Formatting;
 using static Histories;
+using static HistoryLock;
 
 // The Dashboard (one row per history: last success, status, last check) and Storage (space per backup,
 // and items to recycle) windows. Both show a BackupCatalog; Refresh scans again in the background.
@@ -164,7 +165,7 @@ internal sealed class CatalogDialog : ToolsDialog
     // A history's name as the lists show it (its nickname or readable name).
     string HistoryLabel(string history)
     {
-        CatalogBackup row = catalog == null ? null : catalog.Backups.Find(b => string.Equals(b.History, history, StringComparison.OrdinalIgnoreCase));
+        CatalogBackup row = catalog == null ? null : catalog.BackupList.Find(b => string.Equals(b.History, history, StringComparison.OrdinalIgnoreCase));
         return row != null ? row.Profile : HistoryNames.DisplayName(history);
     }
 
@@ -226,7 +227,7 @@ internal sealed class CatalogDialog : ToolsDialog
             HistoryNames.SetNickname(row.History, dialog.Input.Text);
         }
         string name = HistoryNames.DisplayName(row.History);
-        foreach (CatalogBackup backup in catalog.Backups)
+        foreach (CatalogBackup backup in catalog.BackupList)
             if (string.Equals(backup.History, row.History, StringComparison.OrdinalIgnoreCase)) backup.Profile = name;
         Populate(catalog);
         Notice.Text = "Renamed to “" + name + "”.";
@@ -266,7 +267,7 @@ internal sealed class CatalogDialog : ToolsDialog
         if (storage) PopulateStorage(value);
         else PopulateDashboard(value);
         if (value.Warnings.Count > 0) Notice.Text += "\r\nSkipped / unavailable: " + string.Join("; ", value.Warnings.ToArray());
-        if (value.Backups.Count == 0) Notice.Text = "No backups found in the current or configured profile locations. " + Notice.Text;
+        if (value.BackupList.Count == 0) Notice.Text = "No backups found in the current or configured profile locations. " + Notice.Text;
         UpdateRecipesButton();
     }
 
@@ -286,7 +287,7 @@ internal sealed class CatalogDialog : ToolsDialog
             DeviceProfile device;
             return historyDevices.TryGetValue(item.History, out device) ? device : null;
         };
-        foreach (CatalogBackup row in value.Backups)
+        foreach (CatalogBackup row in value.BackupList)
         {
             DeviceProfile device;
             if (!VisibleFor(historyDevices.TryGetValue(row.History, out device) ? device : null)) continue;
@@ -317,7 +318,7 @@ internal sealed class CatalogDialog : ToolsDialog
     static Dictionary<string, DeviceProfile> HistoryDevices(BackupCatalog value)
     {
         var devices = new Dictionary<string, DeviceProfile>(StringComparer.OrdinalIgnoreCase);
-        foreach (CatalogBackup row in value.Backups)
+        foreach (CatalogBackup row in value.BackupList)
             if (row.Latest) devices[row.History] = row.Device;
         return devices;
     }
@@ -333,12 +334,12 @@ internal sealed class CatalogDialog : ToolsDialog
     // histories of the device chosen in the filter are listed; a history's device is its latest backup's.
     void PopulateDashboard(BackupCatalog value)
     {
-        FillDeviceChoices(value.Backups.FindAll(b => b.Latest).ConvertAll(b => b.Device));
-        foreach (CatalogBackup latest in value.Backups.FindAll(b => b.Latest && VisibleFor(b.Device)))
+        FillDeviceChoices(value.BackupList.FindAll(b => b.Latest).ConvertAll(b => b.Device));
+        foreach (CatalogBackup latest in value.BackupList.FindAll(b => b.Latest && VisibleFor(b.Device)))
         {
             DateTime? successful = null;
             long bytes = 0;
-            foreach (CatalogBackup row in value.Backups.FindAll(b => b.History == latest.History))
+            foreach (CatalogBackup row in value.BackupList.FindAll(b => b.History == latest.History))
             {
                 bytes += row.TotalBytes;
                 if (row.CompletedUtc != null && (successful == null || row.CompletedUtc > successful)) successful = row.CompletedUtc;

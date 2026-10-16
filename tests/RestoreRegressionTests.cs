@@ -8,6 +8,7 @@ using static DeviceSelection;
 using static ProfileSettings;
 using static Session;
 using static Histories;
+using static BackupFolders;
 
 partial class Tests
 {

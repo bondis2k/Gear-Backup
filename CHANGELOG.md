@@ -17,11 +17,17 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed
+- Backups copy small files (up to 4 MB) four at a time and large files one at a time, so a card or network share with thousands of small files backs up much faster (5,000 files of 3 KB: 45 s down to 17 s on a local disk, with Verify on). The restore point lists files in the same order as before.
+- A failed backup now says why in the CLI output.
+- The catalog is updated from the previous one after each backup run instead of being rebuilt from every restore point, so a backup of a set with many restore points no longer slows down as the history grows. It is still rebuilt in full when it is missing, damaged, out of date, or after a check.
 - Every backup is now a content store. Backups can no longer be made as plain, browsable folders, so each file's content is stored once per backup set and every run saves a restore point. An incremental backup of a backup made by an earlier version is refused with a message to make a new full backup. Restore through the app, or export a ZIP for ordinary files.
 - Retention applies to whole backups only. All restore points of a backup remain until the backup is removed.
 - The name check (names the device may not handle well) now runs on every backup and lists up to ten names.
 - Updating a backup's catalog is faster, and the gain grows with the number of restore points: each distinct file name is validated once instead of once per restore point (about half the manifest-reading time at 30 restore points of 2,000 files), the temporary catalog is written in one transaction without its own journal or disk syncs, since it is flushed to disk when published, and the old catalog is read only for the rows that carry a recorded integrity check instead of in full (35 ms instead of about 500 ms at 30 restore points of 2,000 files). Catalog contents are unchanged.
 - Restore works without a connected device: all available device backups are listed and can be restored to a folder. Detection still filters the list to that device type; restore requests retain and revalidate the selected backup's identity.
+
+### Fixed
+- The command-line app crashed with "No operation is running" instead of printing an error message when a run failed.
 
 ### Removed
 - The settings `SingleContentStore`, `PointInTimeHistory`, `HardLinks` and `KeepOldVersions`, their controls in Settings and Device & backup settings, and the per-file ("browsable") backup layout they selected, including dated old versions, NTFS hard-linked history, the per-file `checksums.sha256` list, `backup-statistics` reports and old-version cleanup in Storage.

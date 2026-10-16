@@ -16,7 +16,7 @@ partial class Tests
             var config = new Config { Preview = false };
             string backup = RunBackup(source, history, null, false, config).OutputFolder;
             string database = BackupDatabase.CatalogPath(backup);
-            string records = Path.Combine(Snapshots.SnapshotRoot(backup), ContentStoreBackup.Current(backup).Name + ".manifest");
+            string records = Path.Combine(Snapshots.SnapshotRoot(backup), ContentStore.Current(backup).Name + ".manifest");
             var before = BackupDatabase.Read(backup, true);
             Assert(before.Files.Count == 2 && before.Files.TrueForAll(e => e.SnapshotId == "current"), "incremental query reads only current files and folders");
             OperationResult preview = null;

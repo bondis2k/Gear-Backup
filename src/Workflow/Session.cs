@@ -17,6 +17,8 @@ using static Histories;
 using static PlanReview;
 using static ProfileNaming;
 using static Session;
+using static BackupFolders;
+using static HistoryLock;
 
 static class Session
 {
@@ -107,45 +109,6 @@ static class Session
         return true;
     }
 
-    internal static string HistoriesRoot(Config config)
-    {
-        return Path.Combine(config.BackupFolder, AppIdentity.BackupsFolderName);
-    }
-
-    // Checks the source against the backup location and returns this source's history folder.
-    internal static string HistoryFor(Config config, string source)
-    {
-        string histories = HistoriesRoot(config);
-        if (Within(histories, source) || Within(source, histories))
-            throw new IOException("The backup folder and source must not contain one another.");
-        return ProfileFolder(Path.Combine(histories, "profiles"), source, config.Profile);
-    }
-
-    // The history to check: the named profile, or one the user picks. Null when cancelled.
-    internal static string HistoryToCheck(Config config)
-    {
-        string histories = HistoriesRoot(config);
-        if (config.Profile.Length == 0) return ChooseHistory(config, null);
-        var found = AvailableHistories(config).FindAll(path =>
-            Path.GetFileName(Path.GetDirectoryName(path)).Equals("profiles", StringComparison.OrdinalIgnoreCase) &&
-            Path.GetFileName(path).Equals(config.Profile, StringComparison.OrdinalIgnoreCase));
-        if (found.Count == 1) return found[0];
-        if (found.Count > 1) { int pick = AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
-        return Path.Combine(histories, "profiles", config.Profile);
-    }
-
-    // Locks a history against a second writer; a preview changes nothing, so it takes no lock.
-    internal static IDisposable LockUnlessPreview(string history)
-    {
-        return PreviewOnly ? null : LockHistory(history);
-    }
-
-    internal static string LatestBackup(string history)
-    {
-        List<string> backups = ListBackups(history);
-        return backups.Count == 0 ? null : backups[backups.Count - 1];
-    }
-
     // When the latest backup didn't finish, asks whether to resume it. Returns the incremental choice
     // to use (unchanged if the latest backup is fine), or null when the user cancels.
     internal static bool? ConfirmResume(string previous, bool incremental, Config config)
@@ -198,17 +161,6 @@ static class Session
         }
         catch (Exception ex) { return "Could not confirm the device for ejection: " + ex.Message; }
     }
-}
-
-// Where an operation's files come from (or, for a restore, go to).
-internal sealed class SourceChoice
-{
-    public string Path;             // the drive or folder; for an MTP device, its mirror
-    public string PnpId;            // set only for a detected drive, which can then be ejected
-    public DeviceProfile Detected;  // the detected device; null for a folder chosen by hand
-    public MtpSource Mtp;           // set for an MTP device, whose mirror is synced before a backup
-    public string CameraMode;       // the X100VI's connection mode, read once at detection
-    public bool CameraSettingsMode;
 }
 
 // A source with everything both front ends work out the same way: its device, its preferences

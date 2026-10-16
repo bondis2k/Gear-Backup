@@ -49,6 +49,11 @@ internal sealed class ConsoleInteraction : IOperationInteraction
     // Rewrites one status line in place, at most every 150 ms unless the stage changes or a file finishes.
     public void ReportProgress(OperationProgress progress)
     {
+        lock (progressLock) ReportProgressLocked(progress);
+    }
+    readonly object progressLock = new object();
+    void ReportProgressLocked(OperationProgress progress)
+    {
         if (Console.IsOutputRedirected) return;
         if (progress.OverallOnly && progress.Stage.IsFileDetail) return;
         DateTime now = DateTime.UtcNow;

@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Xml;
 using static FujiSettings;
+using static FujiSettingsBackup;
 
 partial class Tests
 {

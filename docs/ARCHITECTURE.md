@@ -33,12 +33,12 @@ A layer may use its own layer and the ones below it, never the ones above. `buil
 
 | Folder | What lives there |
 |---|---|
-| `Foundation` | Everything else builds on this: path and link safety (`PathSafety`), reading and writing the small files kept beside backups (`Records`, `AtomicFile`), file copying and hashing with verification (`FileCopy`), free space (`DiskSpace`), sizes and times (`Formatting`), the named vocabulary (`Names`: stages, statuses, restore modes), the operation context and the interfaces front ends implement (`Operations`), the question helpers (`ConsoleUi`), plan preview (`PlanReview`) and the app's names and folder layout (`AppIdentity`). |
+| `Foundation` | Everything else builds on this: path and link safety (`PathSafety`), reading and writing the small files kept beside backups (`Records`, `AtomicFile`), file copying and hashing with verification (`FileCopy`), free space (`DiskSpace`), sizes and times (`Formatting`), the named vocabulary (`Names`: stages, statuses, restore modes), the operation context and the interfaces front ends implement (`Operations`), the question helpers (`ConsoleUi`), plan preview (`PlanReview`), source scanning (`SourceScan`), the history lock (`HistoryLock`), the device profiles (`DeviceProfiles`: one `DeviceProfile` per device) and the app's names and folder layout (`AppIdentity`). |
 | `Settings` | `GearBackup.ini` and per-device and per-source overrides (`Config`, `ProfileSettings`, `SettingsLocation`), and how a source is named in the backup folders (`ProfileNaming`). |
-| `Devices` | What each device is (`Devices.cs`: one `DeviceProfile` per device), USB detection (`UsbDevices`), the M8 song reader seam (`M8SongReader`, `M8SongJson`, `M8SongModel`), and the song-to-sample lookup (`Dependencies`). `Devices\Mtp` talks to MTP devices and mirrors them to a PC folder. `Devices\Fuji` handles the X100VI's PTP protocol, settings and film recipes. |
-| `Catalog` | What a backup contains: restore points (`Snapshots`, `RestorePointNames`), checksum lists (`Checksums`), the SQLite catalog (`BackupDatabase`, `SqliteDatabase`, `BackupCatalog`), integrity checks (`IntegrityEngine`) and the old-version list (`VersionCatalog`). |
-| `Backup` | Making backups: `BackupEngine` (per-file layout), `ContentStoreBackup` (single content store, the default), source scanning, the statistics report, backup names, histories (`Histories`), status records (`BackupStatuses`) and the change summary. |
-| `Restore` | Restoring: `RestoreEngine`, the restore flow and its catalog. |
+| `Devices` | Which device an operation works with (`DeviceSelection`), what a source is (`SourceChoice`), song naming rules (`Changes`), USB detection (`UsbDevices`), the M8 song reader seam (`M8SongReader`, `M8SongJson`, `M8SongModel`), and the song-to-sample lookup (`Dependencies`). `Devices\Mtp` talks to MTP devices and mirrors them to a PC folder. `Devices\Fuji` handles the X100VI's PTP protocol, settings and film recipes. |
+| `Catalog` | What a backup contains: restore points (`Snapshots`, `RestorePointNames`), reading a content store (`ContentStore`), the backup folders of a history (`BackupFolders`, `Histories`, `HistoryNames`), set names and status records (`BackupSetNames`, `BackupStatuses`), the SQLite catalog (`BackupDatabase`, `SqliteDatabase`, `BackupCatalog`) and integrity checks (`IntegrityEngine`). |
+| `Backup` | Making backups: `BackupEngine` and `ContentStoreBackup`, which writes a content store. |
+| `Restore` | Restoring: `RestoreEngine`, the restore flow and its catalog, and the sample files a song needs (`SongRestoreDependencies`). |
 | `Zip` | Standalone ZIP archives: writing (`ArchiveBackup`, `Zip`), reading and verifying (`ZipRestore`). |
 | `Workflow` | Steps the CLI and the GUI share: detecting and preparing a source, running a backup or restore, ejecting (`Session`), and the CLI's source choice (`SourceSelection`). |
 | `Cli` | The command-line front end: `Program` (arguments and the main flow), `ConsoleInteraction`, `Notifications`. |
@@ -53,7 +53,7 @@ Rules of thumb: ask the context for interaction and cancellation; pass a `Device
 
 ## Devices
 
-Everything device-specific is data in a `DeviceProfile` (`Devices\Devices.cs`): how to detect it (USB vendor or model, volume label, MTP vendor and name), what its songs are, which folders to leave out, its picture, and optional readers. Adding a device means adding a profile, plus a reader if it needs one. A device that needs real code, like the X100VI, keeps that code in its own folder.
+Everything device-specific is data in a `DeviceProfile` (`Foundation\DeviceProfiles.cs`): how to detect it (USB vendor or model, volume label, MTP vendor and name), what its songs are, which folders to leave out, its picture, and optional readers. Adding a device means adding a profile, plus a reader if it needs one. A device that needs real code, like the X100VI, keeps that code in its own folder.
 
 The GUI's gear icons (Gear Backup, M8, Tracker Mini, OP-XY, OP-1 Field) are modes of the window; `GearIconStrip` lists them and `MainForm.Navigation` swaps the tabs.
 
@@ -81,7 +81,7 @@ These are enforced in `Foundation` and used everywhere; keep new code on the sam
 
 - **Paths:** every path that comes from a backup, a ZIP or a device goes through `PathSafety.SafePath` or `CheckedPath`. They reject `..`, rooted paths, `:`, trailing dots and spaces, and Windows device names, and they refuse junctions and symbolic links, again right before writing.
 - **Small files:** records are read through `Records` with size limits, and written through `AtomicFile` (a temporary file that then replaces the original).
-- **Concurrency:** a history is locked while it is written (`Histories.LockHistory`).
+- **Concurrency:** a history is locked while it is written (`HistoryLock.LockHistory`).
 - **Copies:** `FileCopy` hashes while copying and, when verifying, reads the copy back from the disk, bypassing the cache.
 - **ZIPs and SQLite:** ZIPs are untrusted (`ZipRestore` validates names, sizes and checksums before touching the target). SQLite uses bound parameters only, read-only opens for published catalogs, and limits.
 - **Devices:** devices are only read. An MTP device is mirrored to a PC folder first.
@@ -93,6 +93,8 @@ The Song tab calls `IM8SongReader` (`Devices\M8SongReader.cs`). The one implemen
 ## The GUI
 
 `MainForm` is split over several files by concern: `MainForm.cs` (window, header, activity area), `.Navigation` (tabs and gear modes), `.Restore`, `.ZipRestore`, `.BackupSets`, `.Song` and `.WindowsTheme`. `GuiOperationRunner` owns the worker thread and talks to the engines; the form only displays. `GuiTheme`, `GuiPalette` and the `Gui*Theme` files give the four appearances. Several form fields are `internal` hooks (such as `SongFilePicker`) so tests can replace dialogs.
+
+A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` and `ContentHeight`) is the module's side, and `IWorkflowTabHost` is the small set of window services it may use (fonts, tooltips, the owner for dialogs, running on the UI thread, relayout, redraw freezing); `MainForm` implements the host in `MainForm.Song.cs`. The Song tab (`SongTab`) is the first module. Move another tab over by giving it the same shape, rather than adding more fields and partial files to `MainForm`.
 
 ## Building and testing
 
@@ -122,20 +124,13 @@ The layer of a file is its top-level folder under `src`:
 | 4 | Workflow |
 | 5 | Cli |
 
-`build\check-layers.ps1` scans the sources and fails when a file mentions a type declared in a higher layer. The structure is not fully clean yet, so the violations that exist today are recorded in `build\layer-baseline.txt` and only **new** ones fail. When you fix one, delete its line (or run `build\check-layers.ps1 -UpdateBaseline`).
-
-The baseline is also a to-do list. The recurring patterns are:
-
-- `Catalog` using helpers that sit in `Backup\Backup.cs` (listing backups, scanning a source), `Backup\ContentStoreBackup.cs` and `Backup\BackupTraversal.cs`: those helpers belong in `Catalog` or `Foundation`.
-- Several folders using `Workflow\Session.cs` for small helpers such as `HistoriesRoot`: they belong lower down.
-- `Foundation` (`Operations`, `FileCopy`) using `Devices`, because the context carries the current device.
-- `Settings\Config.cs` using `Restore\RestoreCatalog.cs`.
+`build\check-layers.ps1` scans the sources and fails when a file mentions a type declared in a higher layer. There are no known violations; `build\layer-baseline.txt` is empty and exists so a violation that cannot be fixed at once can be recorded (run `build\check-layers.ps1 -UpdateBaseline`) while only new ones fail.
 
 ## Where does new code go?
 
 - A rule about paths, files or records: `Foundation`.
 - A new setting: `Settings\Config.cs`, and the manual.
-- A new device: a profile in `Devices\Devices.cs`; its own code in a folder under `Devices`.
+- A new device: a profile in `Foundation\DeviceProfiles.cs`; its own code in a folder under `Devices`.
 - Something that describes backup contents: `Catalog`.
 - Something that makes or restores a backup: `Backup`, `Restore` or `Zip`.
 - A step both the CLI and the GUI run: `Workflow`.

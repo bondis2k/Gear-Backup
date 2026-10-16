@@ -17,6 +17,9 @@ using static Session;
 using static BackupStatuses;
 using static Histories;
 using static ProfileNaming;
+using static HistoryLock;
+using static BackupFolders;
+using static FujiSettingsBackup;
 
 partial class Tests
 {
@@ -114,12 +117,12 @@ partial class Tests
     static void TestBackupManagement(string root)
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
-        Assert(catalog.Warnings.Count == 0 && catalog.Backups.Count == 2, "catalog discovers dated backups without warnings");
-        Assert(catalog.Backups.TrueForAll(b => b.Device == Devices.M8), "the catalog records each backup's device for the Dashboard filter");
+        Assert(catalog.Warnings.Count == 0 && catalog.BackupList.Count == 2, "catalog discovers dated backups without warnings");
+        Assert(catalog.BackupList.TrueForAll(b => b.Device == Devices.M8), "the catalog records each backup's device for the Dashboard filter");
         string damagedRecord = Path.Combine(root, "other", "profiles", "op-xy-ABC", "2026-10-01");
         Put(Path.Combine(AppIdentity.MetadataRoot(damagedRecord), "device.txt"), new string('x', 200));
         Assert(CatalogDevice(damagedRecord) == null, "a damaged device record does not infer identity from the history name");
-        CatalogBackup old = catalog.Backups.Find(b => !b.Latest), latest = catalog.Backups.Find(b => b.Latest);
+        CatalogBackup old = catalog.BackupList.Find(b => !b.Latest), latest = catalog.BackupList.Find(b => b.Latest);
         Assert(old.FilesBytes == 0 && old.ObjectsBytes == 10, "storage separates plain files from the stored content objects");
         Assert(catalog.ZipBytes == 3 && catalog.MirrorBytes == 5 && catalog.UniqueBytes > 0, "storage includes ZIP archives and local MTP mirrors");
         Assert(latest.CompletedUtc != null && latest.CheckResult == "Never checked", "dashboard distinguishes successful backups from unperformed checks");
@@ -139,15 +142,15 @@ partial class Tests
         Directory.Delete(added);
         Assert(StorageStamp(older.Path, true, out unused) == older.Stamp, "removing it again restores the stamp");
         new IntegrityEngine().Run(new List<string> { latest.Path }, new OperationContext(new TestInteraction(), CancellationToken.None));
-        catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); latest = catalog.Backups.Find(b => b.Latest);
+        catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors")); latest = catalog.BackupList.Find(b => b.Latest);
         Assert(latest.CheckedUtc != null && latest.CheckResult == "OK", "completed checks persist their time and result");
-        Put(Path.Combine(AppIdentity.MetadataRoot(latest.Path), "objects", ContentStoreBackup.Current(latest.Path).Files.Find(f => f.Relative == "song.txt").Hash), "DAMAGE");
+        Put(Path.Combine(AppIdentity.MetadataRoot(latest.Path), "objects", ContentStore.Current(latest.Path).Files.Find(f => f.Relative == "song.txt").Hash), "DAMAGE");
         new IntegrityEngine().Run(new List<string> { latest.Path }, new OperationContext(new TestInteraction(), CancellationToken.None));
         catalog = ScanBackupCatalog(config, Path.Combine(root, "mirrors"));
-        Assert(catalog.Backups.Find(b => b.Latest).CheckResult == "Problems found", "dashboard records failed integrity checks");
-        DateTime success = catalog.Backups.Find(b => b.Latest).CompletedUtc.Value;
+        Assert(catalog.BackupList.Find(b => b.Latest).CheckResult == "Problems found", "dashboard records failed integrity checks");
+        DateTime success = catalog.BackupList.Find(b => b.Latest).CompletedUtc.Value;
         WithUi(() => SetBackupStatus(latest.Path, Status.Failed));
-        Assert(ScanBackupCatalog(config, Path.Combine(root, "mirrors")).Backups.Find(b => b.Latest).CompletedUtc == success, "failed incremental runs preserve the last successful backup time");
+        Assert(ScanBackupCatalog(config, Path.Combine(root, "mirrors")).BackupList.Find(b => b.Latest).CompletedUtc == success, "failed incremental runs preserve the last successful backup time");
         StorageItem busy = catalog.Cleanup.Find(i => i.Kind == StorageKind.OlderBackup); int recycled = 0;
         WithUi(() => {
             using (LockHistory(busy.History)) Throws(() => CleanupStorage(catalog, new List<StorageItem> { busy }, i => recycled++), "cleanup refuses a busy history");

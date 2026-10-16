@@ -11,6 +11,7 @@ using static Snapshots;
 using static Backups;
 using static RestoreFlow;
 using static ConsoleUi;
+using static BackupFolders;
 
 class TestRunner
 {
@@ -235,7 +236,8 @@ partial class Tests
         public bool ReviewPlan(OperationPlan plan) { Plans++; if (OnReview != null) OnReview(plan); return !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
         {
-            Progress.Add(progress);
+            // Copy workers report from several threads at once.
+            lock (Progress) Progress.Add(progress);
             if (OnProgress != null) OnProgress(progress);
         }
     }

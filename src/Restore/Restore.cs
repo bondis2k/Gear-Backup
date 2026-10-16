@@ -15,6 +15,7 @@ using static ProfileSettings;
 using static AtomicFile;
 using static BackupStatuses;
 using static Histories;
+using static SongRestoreDependencies;
 
 static class RestoreFlow
 {
@@ -107,17 +108,8 @@ static class RestoreFlow
         if (device.BundlesFolder != null) modes.Add(new Option(RestoreMode.Bundle.Key, "Bundle"));
         if (device.SongIsFolder) modes.Add(new Option(RestoreMode.ProjectFolder.Key, "Whole " + Singular(device.SongsLabel) + " folder"));
         modes.Add(new Option(RestoreMode.SingleFile.Key, "Single file"));
-        if (device.ReadSamplePaths != null) modes.Add(new Option(RestoreMode.SongWithSamples.Key, "Song with dependent samples"));
+        if (device.ReadsSamplePaths) modes.Add(new Option(RestoreMode.SongWithSamples.Key, "Song with dependent samples"));
         return modes.ToArray();
-    }
-
-    internal static void ValidateEntry(RestoreEntry item, bool verify = true)
-    {
-        RejectRootLinks(item.StoredPath);
-        if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
-            throw new IOException("Backup file is missing or truncated: " + item.Relative);
-        if (verify && item.Hash != null && HashFile(item.StoredPath) != item.Hash)
-            throw new IOException("Backup file is damaged: " + item.Relative);
     }
 
     internal static bool EntryMatchesTarget(RestoreEntry item, string target, bool thorough)

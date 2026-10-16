@@ -20,6 +20,7 @@ using static ProfileSettings;
 using static Session;
 using static ProfileNaming;
 using static GearGui;
+using static BackupFolders;
 
 partial class Tests
 {

@@ -48,7 +48,7 @@ internal sealed partial class MainForm
         panel.Controls.Add(browseRestore, 1, 1);
         restoreExact.Margin = new Padding(12, 0, 0, 0); panel.Controls.Add(restoreExact, 1, 1);
         hints.SetToolTip(restoreExact, "Exact restore removes files and empty folders that are not in the saved point. You will confirm removals in the restore preview.");
-        restoreNotice.MaximumSize = new System.Drawing.Size(750, 0); restoreNotice.Margin = new Padding(0, 8, 0, 10);
+        restoreNotice.Name = "RestoreNotice"; restoreNotice.MaximumSize = new System.Drawing.Size(750, 0); restoreNotice.Margin = new Padding(0, 8, 0, 10);
         panel.Controls.Add(restoreNotice, 0, 2); panel.SetColumnSpan(restoreNotice, 2);
         browseRestore.Click += delegate {
             var point = restorePoint.SelectedItem as RestorePoint;
