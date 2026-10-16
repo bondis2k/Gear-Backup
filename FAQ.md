@@ -111,7 +111,7 @@ The normal source scan also excludes common filesystem leftovers. Gear Backup is
 
 ### Why do the device header tabs say Coming soon or Planned?
 
-You selected a device-specific header mode. M8 mode includes **Sample check** and **Card migration** in builds containing those features; other dedicated tools are still placeholders. Select the **Gear Backup** header icon to return to the complete Backup and Restore interface.
+You selected a device-specific header mode. M8 mode includes **Sample check**, **Card migration** and **Song**, and Tracker Mini mode includes **Project inspector** and **Instrument check**; the other devices' tools are still placeholders. Select the **Gear Backup** header icon to return to the complete Backup and Restore interface.
 
 Detection from Gear Backup mode keeps those normal tools available. A placeholder tab does not mean the installation is broken.
 
@@ -712,10 +712,6 @@ Restoring the XML files does not write settings into the camera. Apply settings 
 
 ## M8 Song viewer
 
-### Can Gear Backup find missing samples in a Tracker project?
-
-A Tracker instrument (`.pti`) keeps its sample inside the file and a project stores no sample paths, so a sample cannot go missing the way it can on the M8. The Tracker Mini view's **Instrument check** finds the equivalent problem: a note that plays an instrument number with no usable instrument file in the project's `instruments` folder.
-
 ### What can the Song tab show?
 
 The Song tab is part of the M8 view (choose the M8 icon in the header). It reads a `.m8s` and shows available name, firmware, tempo, transpose, quantize, length, used track rows, chain/phrase/table counts, and instruments with names/types/sample references.
@@ -755,6 +751,36 @@ Enable backup search and select your backup location. The checker searches M8 hi
 ### Does Sample check repair the song or restore files automatically?
 
 No. Double-click a verified copy in the lower table and confirm to open **Restore individual files** with its set, saved point and file selected. Review the destination and click **Restore** to recover it. Filename-only candidates retain their original folder path. You can search backups without a card by leaving the card-root field empty, or check only the card by disabling backup search. Cancel stops the current check; changing inputs clears old results.
+
+## Tracker Mini project tools
+
+### How do I look inside a Tracker Mini project?
+
+Select the **Tracker Mini** header icon, open **Project inspector**, choose the Tracker card (or one project folder, the one that holds `project.mt`) with **Browse…** and click **Inspect**. If the card holds several projects, pick one from the list that appears. You see the project name, tempo and firmware, the number of patterns and song positions, every instrument file with its sample name, length, channels and play mode, and every pattern with the instruments its notes play and whether the song uses it. Nothing on the card is changed.
+
+### Can Gear Backup find missing samples in a Tracker project?
+
+A Tracker instrument (`.pti`) keeps its sample inside the file and a project stores no sample paths, so a sample cannot go missing the way it can on the M8. The **Instrument check** tab finds the equivalent problem: a note that plays an instrument number with no usable instrument file in the project's `instruments` folder. It lists each such instrument with the patterns that play it and whether any of them is in the song.
+
+### What does "no instrument file" or "no usable sample" mean?
+
+The pattern plays instrument 7, but `instruments\instrument_07.pti` is not there ("no instrument file"), cannot be read ("the instrument file cannot be read"), or holds no audio ("no usable sample"). Restore the instrument from a backup, or load a sample into that slot on the Tracker. Instruments are matched by number, counting from 1 as the Tracker shows them; a folder that starts at `instrument_00.pti` is recognised too.
+
+### Why does the check list a missing instrument I never hear?
+
+Only notes inside a track's length count, but a pattern that is not in the song can still play an instrument that is missing; the **In the song** column says No for those. Empty, off and cut steps are ignored. MIDI and synth instruments have no files, so they are counted separately and never reported as missing.
+
+### Why does it say a song position plays a pattern with no pattern file?
+
+The project's song order names a pattern number, and there is no `patterns\pattern_NN.mtp` with that number. This usually means the pattern was removed from the folder or the project is only partly restored. Restore the whole project folder (not just `project.mt`) and run the check again.
+
+### Can I inspect a project that is only in a backup?
+
+Gear Backup keeps backups in a content store, not as browsable folders. Restore the project folder to an ordinary folder first (the CLI and the Restore tab can restore a whole Tracker project folder), then choose that folder in **Project inspector**.
+
+### Why can the inspector read my project oddly?
+
+The file layouts follow Polyend's open-source tracker-lib and have been tested with files built to those layouts. A project from a different firmware may differ. Nothing is written, so the worst case is a wrong or empty report; if you see one, note the firmware version shown in the summary and report the problem.
 
 ## M8 card migration
 
