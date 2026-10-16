@@ -34,8 +34,9 @@ namespace GearBackup
         }
 
         // Exact comparison for missing timestamps; no SHA-256 calculation/comparison.
-        internal static bool FilesEqual(string first, string second)
+        internal static bool FilesEqual(string first, string second, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             using (var a = new FileStream(first, FileMode.Open, FileAccess.Read, FileShare.Read))
             using (var b = new FileStream(second, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -44,7 +45,7 @@ namespace GearBackup
                 int count;
                 while ((count = ReadChunk(a, left)) > 0)
                 {
-                    OperationContext.Current.Progress(Stage.Comparing, first, a.Position, a.Length);
+                    context.Progress(Stage.Comparing, first, a.Position, a.Length);
                     if (ReadChunk(b, right) != count) return false;
                     for (int i = 0; i < count; i++) if (left[i] != right[i]) return false;
                 }
@@ -74,8 +75,9 @@ namespace GearBackup
         // Copies a file (target must not exist yet) and returns the SHA-256 checksum of the original.
         // With verify, the copy is read back and compared; a mismatch is retried once, then reported as a failure.
         // A failed copy never leaves a partial file behind.
-        internal static string CopyFile(FileInfo file, string target, bool verify)
+        internal static string CopyFile(FileInfo file, string target, bool verify, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (File.Exists(target)) throw new IOException("the target file already exists");
             file.Refresh();
             long originalSize = file.Length;
@@ -85,13 +87,13 @@ namespace GearBackup
                 string sourceHash;
                 try
                 {
-                    sourceHash = CopyAndHash(file.FullName, target);
+                    sourceHash = CopyAndHash(file.FullName, target, context);
                     file.Refresh();
                     if (file.Length != originalSize || file.LastWriteTimeUtc != originalWrite)
-                        throw new IOException("the source changed while it was being copied; retry with the " + OperationContext.Current.Device.Name + " idle");
+                        throw new IOException("the source changed while it was being copied; retry with the " + context.Device.Name + " idle");
                     if (UsableFileTime(file.CreationTimeUtc)) File.SetCreationTimeUtc(target, file.CreationTimeUtc);
                     if (UsableFileTime(file.LastWriteTimeUtc)) File.SetLastWriteTimeUtc(target, file.LastWriteTimeUtc);
-                    if (!verify || HashFileFromDisk(target) == sourceHash) return sourceHash;
+                    if (!verify || HashFileFromDisk(target, context) == sourceHash) return sourceHash;
                 }
                 catch (Exception)
                 {
@@ -106,7 +108,7 @@ namespace GearBackup
 
         internal static void TryDelete(string path)
         {
-            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { } // best-effort cleanup of a temporary file
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // best-effort cleanup of a temporary file
         }
 
         internal static string ToHex(byte[] hash)
@@ -121,27 +123,28 @@ namespace GearBackup
         static HashAlgorithm NewSha256()
         {
             try { return new SHA256Cng(); }
-            catch (Exception) { return SHA256.Create(); }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is System.Security.Cryptography.CryptographicException || ex is PlatformNotSupportedException) { return SHA256.Create(); }
         }
 
-        internal static string CopyAndHash(string from, string to)
+        internal static string CopyAndHash(string from, string to, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             using (var input = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
             using (var output = new FileStream(to, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.WriteThrough))
-                return CopyAndHash(input, output, from);
+                return CopyAndHash(input, output, from, context);
         }
 
         // Copies `input` to `output` and returns the SHA-256 of the content. The next chunk is read in the
         // background while the current one is hashed and written, so the card and the backup disk work at
         // the same time instead of taking turns.
-        internal static string CopyAndHash(Stream input, Stream output, string label)
+        internal static string CopyAndHash(Stream input, Stream output, string label, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             using (HashAlgorithm sha = NewSha256())
             {
                 long total = input.CanSeek ? input.Length : 0, done = 0;
                 bool small = input.CanSeek && input.Length - input.Position <= 65536;
-                OperationContext context = OperationContext.Current;
                 byte[] current = context.RentBuffer(small), spare = small ? null : context.RentBuffer(false);
                 Task<int> pending = null;
                 try
@@ -149,13 +152,13 @@ namespace GearBackup
                     int read = ReadChunk(input, current);
                     while (read > 0)
                     {
-                        OperationContext.Current.CheckCancellation();
+                        context.CheckCancellation();
                         byte[] next = spare;
                         if (!small) pending = Task.Factory.StartNew(() => ReadChunk(input, next));
                         sha.TransformBlock(current, 0, read, null, 0);
                         output.Write(current, 0, read);
                         done += read;
-                        OperationContext.Current.Progress(Stage.Copying, label, done, total);
+                        context.Progress(Stage.Copying, label, done, total);
                         read = small ? ReadChunk(input, current) : Result(pending);
                         pending = null;
                         if (!small) { spare = current; current = next; }
@@ -166,7 +169,7 @@ namespace GearBackup
                 finally
                 {
                     // Never leave a read running after the streams close (e.g. when cancelled or a write fails).
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
+                    if (pending != null) try { pending.Wait(); } catch (AggregateException) { } // the read-ahead failed too; the original error is the one reported
                     context.ReturnBuffer(current);
                     context.ReturnBuffer(spare);
                 }
@@ -192,13 +195,13 @@ namespace GearBackup
             }
         }
 
-        internal static string HashFile(string path)
+        internal static string HashFile(string path, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             using (HashAlgorithm sha = NewSha256())
             using (var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
             {
-                OperationContext context = OperationContext.Current;
                 byte[] buffer = context.RentBuffer(input.Length <= 65536);
                 try
                 {
@@ -231,9 +234,10 @@ namespace GearBackup
         // system refuses them (some network shares), this falls back to a normal read.
         // Unbuffered reads get no read-ahead from Windows, so the next chunk is read in the background while
         // the current one is hashed: measured 1.4-2.2x faster than taking turns (2 GB file on an NVMe SSD).
-        internal static string HashFileFromDisk(string path)
+        internal static string HashFileFromDisk(string path, OperationContext context = null)
         {
-            OperationContext.Current.CheckCancellation();
+            context = context ?? OperationContext.Current;
+            context.CheckCancellation();
             using (SafeFileHandle file = CreateFile(path, GenericRead, ShareRead | ShareDelete, IntPtr.Zero,
                                                     OpenExisting, FlagNoBuffering | FlagSequentialScan, IntPtr.Zero))
             {
@@ -241,7 +245,6 @@ namespace GearBackup
                 long total = new FileInfo(path).Length, done = 0;
                 bool small = total <= 65536;
                 int readSize = small ? 65536 : ChunkSize;
-                OperationContext context = OperationContext.Current;
                 byte[] buffer = context.RentBuffer(small);
                 IntPtr rawCurrent = IntPtr.Zero, rawSpare = IntPtr.Zero;
                 Task<int> pending = null;
@@ -260,7 +263,7 @@ namespace GearBackup
                             Marshal.Copy(current, buffer, 0, read);
                             sha.TransformBlock(buffer, 0, read, null, 0);
                             done += read;
-                            OperationContext.Current.Progress(Stage.Verifying, path, done, total);
+                            context.Progress(Stage.Verifying, path, done, total);
                             read = small ? ReadUnbuffered(file, current, readSize) : Result(pending);
                             pending = null;
                             if (!small) { spare = current; current = next; }
@@ -273,7 +276,7 @@ namespace GearBackup
                 finally
                 {
                     // Never free a buffer, or close the file, while a background read still uses it.
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
+                    if (pending != null) try { pending.Wait(); } catch (AggregateException) { } // the read-ahead failed too; the original error is the one reported
                     Marshal.FreeHGlobal(rawCurrent);
                     Marshal.FreeHGlobal(rawSpare);
                     context.ReturnBuffer(buffer);
@@ -302,14 +305,14 @@ namespace GearBackup
                     return string.Format("Not enough space on {0}: needs {1}, but only {2} is free.",
                                          root, FormatSize(needed), FormatSize(free));
             }
-            catch (Exception) { } // If the free space cannot be read, the copy goes ahead and a full disk fails there with its own error.
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // If the free space cannot be read, the copy goes ahead and a full disk fails there with its own error.
             return null;
         }
 
         internal static string FreeSpaceText(string root)
         {
             try { return FormatSize(new DriveInfo(root).AvailableFreeSpace); }
-            catch (Exception) { return "unknown"; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return "unknown"; }
         }
 
         // "1.2 GB of 7.4 GB"; DriveInfo rejects network paths (\\server\share), which give "unknown".
@@ -320,7 +323,7 @@ namespace GearBackup
                 var drive = new DriveInfo(root);
                 return FormatSize(drive.AvailableFreeSpace) + " of " + FormatSize(drive.TotalSize);
             }
-            catch (Exception) { return "unknown"; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return "unknown"; }
         }
     }
 

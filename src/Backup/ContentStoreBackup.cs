@@ -139,7 +139,7 @@ namespace GearBackup
         {
             var old = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
             if (current != null) foreach (var item in current.Files) old.Add(item.Relative, item);
-            scan = new ScanResult(); CollectFiles(source, scan);
+            scan = new ScanResult(); CollectFiles(source, scan, context);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var length = new PathLengthCheck();
             string nameRoot = Path.GetPathRoot(Path.GetFullPath(backup));
@@ -182,7 +182,7 @@ namespace GearBackup
                 if (new FileInfo(prior.StoredPath).Length != prior.Size) throw new DamagedContentException("Damaged stored content: " + relative);
                 bool hashCompare = config.Thorough || !UsableFileTime(file.LastWriteTimeUtc) || !UsableFileTime(new DateTime(prior.ModifiedTicks, DateTimeKind.Utc));
                 if (hashCompare)
-                { planned.KnownHash = HashFile(file.FullName); planned.Unchanged = planned.KnownHash == prior.Hash; }
+                { planned.KnownHash = HashFile(file.FullName, context); planned.Unchanged = planned.KnownHash == prior.Hash; }
                 else if (Math.Abs(file.LastWriteTimeUtc.Ticks - prior.ModifiedTicks) <= TimeSpan.FromSeconds(2).Ticks)
                 { planned.KnownHash = prior.Hash; planned.Unchanged = true; }
             }
@@ -278,7 +278,7 @@ namespace GearBackup
                 string temp = Path.Combine(objects, ".gearobject-" + Guid.NewGuid().ToString("N") + ".tmp");
                 try
                 {
-                    string copiedHash = CopyFile(item.Source, temp, config.Verify);
+                    string copiedHash = CopyFile(item.Source, temp, config.Verify, context);
                     if (hash != null && copiedHash != hash) throw new IOException("Source checksum changed since the preview: " + item.Relative);
                     hash = copiedHash; obj = store.PathOf(hash);
                     // Two workers can hold the same new content; the first to publish it wins.
@@ -286,7 +286,7 @@ namespace GearBackup
                     {
                         if (File.Exists(obj))
                         {
-                            if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
+                            if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj, context) != hash))
                                 throw new DamagedContentException("Damaged stored content: " + item.Relative);
                         }
                         else { File.Move(temp, obj); Interlocked.Add(ref addedBytes, item.Size); if (config.Verify) verifiedObjects.Add(hash); }
@@ -297,7 +297,7 @@ namespace GearBackup
             else
             {
                 bool damaged;
-                lock (storeLock) damaged = new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash);
+                lock (storeLock) damaged = new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj, context) != hash);
                 if (damaged) throw new DamagedContentException("Damaged stored content: " + item.Relative);
             }
             Interlocked.Increment(ref doneFiles);

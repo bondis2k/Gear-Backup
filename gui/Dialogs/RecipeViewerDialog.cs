@@ -85,7 +85,7 @@ namespace GearBackup.Gui
         internal static bool HasRecipes(string folder)
         {
             try { return Directory.Exists(folder) && RecipeFiles(folder).Count > 0; }
-            catch (Exception) { return false; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return false; }
         }
 
         // Reads every file first, so one invalid file leaves what's shown unchanged.

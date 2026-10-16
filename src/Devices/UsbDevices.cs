@@ -1,5 +1,6 @@
 // Finding a connected device's drive (see Devices.cs for what identifies each device) and ejecting it.
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Management;
 using System.Runtime.InteropServices;
@@ -11,6 +12,23 @@ namespace GearBackup
 {
     static class UsbDevices
     {
+        // A USB disk as Windows lists it: its device instance ID, its model, and (found only when asked) its drive letter.
+        internal sealed class UsbDisk
+        {
+            public string PnpId, Model;
+            public Func<string> FindDrive = () => null;
+        }
+
+        // A removable drive that is ready to read.
+        internal sealed class RemovableDrive
+        {
+            public string Label, Root;
+        }
+
+        // Where the disks and drives come from; the tests replace these with lists they control.
+        internal static Func<List<UsbDisk>> ListDisks = WindowsDisks;
+        internal static Func<List<RemovableDrive>> ListDrives = WindowsDrives;
+
         // Returns the drive of the first connected device that matches a known device profile, and which
         // device it is. pnpId is the disk's device instance ID, needed to eject it (null if found by label only).
         // "only" limits the search to one device type (the GUI gear icons).
@@ -18,43 +36,64 @@ namespace GearBackup
         {
             device = null;
             pnpId = null;
-            var disks = new ManagementObjectSearcher(
-                "SELECT DeviceID, PNPDeviceID, Model FROM Win32_DiskDrive WHERE InterfaceType='USB'");
-            foreach (ManagementObject disk in disks.Get())
+            foreach (UsbDisk disk in ListDisks())
             {
-                string pnp = (disk["PNPDeviceID"] ?? "").ToString().ToUpperInvariant();
-                string model = (disk["Model"] ?? "").ToString().ToUpperInvariant();
+                string pnp = (disk.PnpId ?? "").ToUpperInvariant();
+                string model = (disk.Model ?? "").ToUpperInvariant();
                 DeviceProfile match = null;
                 foreach (DeviceProfile profile in Devices.All)
                     if ((only == null || profile.Id == only.Id) && profile.MatchesDisk(pnp, model)) { match = profile; break; }
                 if (match == null) continue;
-
-                string partQuery = "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='" + disk["DeviceID"] +
-                                   "'} WHERE AssocClass=Win32_DiskDriveToDiskPartition";
-                foreach (ManagementObject part in new ManagementObjectSearcher(partQuery).Get())
-                {
-                    string volQuery = "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='" + part["DeviceID"] +
-                                      "'} WHERE AssocClass=Win32_LogicalDiskToPartition";
-                    foreach (ManagementObject vol in new ManagementObjectSearcher(volQuery).Get())
-                    {
-                        device = match;
-                        pnpId = disk["PNPDeviceID"].ToString();
-                        return vol["DeviceID"] + "\\";
-                    }
-                }
+                string drive = disk.FindDrive();
+                if (drive == null) continue;
+                device = match;
+                pnpId = disk.PnpId;
+                return drive;
             }
 
             // Fallback: a removable drive labelled like a known device (e.g. "M8")
-            foreach (DriveInfo d in DriveInfo.GetDrives())
-                if (d.IsReady && d.DriveType == DriveType.Removable)
-                    foreach (DeviceProfile profile in Devices.All)
-                        if ((only == null || profile.Id == only.Id) && profile.VolumeLabel != null && string.Equals(d.VolumeLabel, profile.VolumeLabel, StringComparison.OrdinalIgnoreCase))
-                        {
-                            device = profile;
-                            return d.RootDirectory.FullName;
-                        }
+            foreach (RemovableDrive drive in ListDrives())
+                foreach (DeviceProfile profile in Devices.All)
+                    if ((only == null || profile.Id == only.Id) && profile.VolumeLabel != null && string.Equals(drive.Label, profile.VolumeLabel, StringComparison.OrdinalIgnoreCase))
+                    {
+                        device = profile;
+                        return drive.Root;
+                    }
 
             return null;
+        }
+
+        static List<UsbDisk> WindowsDisks()
+        {
+            var result = new List<UsbDisk>();
+            var disks = new ManagementObjectSearcher("SELECT DeviceID, PNPDeviceID, Model FROM Win32_DiskDrive WHERE InterfaceType='USB'");
+            foreach (ManagementObject disk in disks.Get())
+            {
+                ManagementObject current = disk;
+                result.Add(new UsbDisk { PnpId = (disk["PNPDeviceID"] ?? "").ToString(), Model = (disk["Model"] ?? "").ToString(),
+                    FindDrive = () => DriveOf(current) });
+            }
+            return result;
+        }
+
+        // The drive letter of the disk's first volume, or null when it has none.
+        static string DriveOf(ManagementObject disk)
+        {
+            string partQuery = "ASSOCIATORS OF {Win32_DiskDrive.DeviceID='" + disk["DeviceID"] + "'} WHERE AssocClass=Win32_DiskDriveToDiskPartition";
+            foreach (ManagementObject part in new ManagementObjectSearcher(partQuery).Get())
+            {
+                string volQuery = "ASSOCIATORS OF {Win32_DiskPartition.DeviceID='" + part["DeviceID"] + "'} WHERE AssocClass=Win32_LogicalDiskToPartition";
+                foreach (ManagementObject vol in new ManagementObjectSearcher(volQuery).Get()) return vol["DeviceID"] + "\\";
+            }
+            return null;
+        }
+
+        static List<RemovableDrive> WindowsDrives()
+        {
+            var result = new List<RemovableDrive>();
+            foreach (DriveInfo d in DriveInfo.GetDrives())
+                if (d.IsReady && d.DriveType == DriveType.Removable) result.Add(new RemovableDrive { Label = d.VolumeLabel, Root = d.RootDirectory.FullName });
+            return result;
         }
 
         [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]

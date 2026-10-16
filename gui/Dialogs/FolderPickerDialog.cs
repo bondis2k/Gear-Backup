@@ -152,7 +152,7 @@ namespace GearBackup.Gui
         static bool PathsEqual(string a, string b)
         {
             try { return string.Equals(Path.GetFullPath(a).TrimEnd('\\'), Path.GetFullPath(b).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase); }
-            catch (Exception) { return false; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return false; }
         }
 
         void AddRoots()
@@ -205,7 +205,7 @@ namespace GearBackup.Gui
         bool GoTo(string folder)
         {
             string full;
-            try { full = Path.GetFullPath(folder.Trim()); } catch (Exception) { return false; }
+            try { full = Path.GetFullPath(folder.Trim()); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { return false; }
             if (!Directory.Exists(full)) return false;
             string root = Path.GetPathRoot(full);
             TreeNode node = null;

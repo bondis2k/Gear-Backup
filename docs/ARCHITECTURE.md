@@ -108,7 +108,7 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 | `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |
 | `build\check-layers.ps1` | The layer check, run before the core tests and in CI. |
 | `build\check-catches.ps1` | Fails an empty `catch` without a comment, run before the core tests and in CI. |
-| `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`). At the last run: 83% of statements, 77% of branches; the device-bound code (`FujiPtp`, `UsbDevices`, `MtpDevice`) is largely untested because it needs hardware. |
+| `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`; CI does that and fails below 85% of statements). At the last run: 89% of statements, 80% of branches. The Windows device code is tested against fakes of the Portable Devices API (`tests\FakePortableDevice.cs`) and of the USB disk list; what stays uncovered is mostly ejecting through `cfgmgr32` and the interactive CLI source picker. |
 | `benchmarks\run-benchmarks.ps1` | Performance scenarios; see `benchmarks\README.md`. |
 
 A test is a method of the `Tests` class marked `[Test("name")]` (`tests\TestHarness.cs`); the runners find them by reflection, so there is no list to keep. A test takes no argument or one fixture folder, and each runs in its own operation context. GUI tests are marked `Gui = true`, live in `tests\Gui*Tests.cs` by area, and run in the GUI test program on an STA thread.
@@ -132,7 +132,9 @@ The layer of a file is its top-level folder under `src`:
 
 Failures that callers may want to tell apart have their own types in `Foundationrrors.cs` (`DamagedContentException`, `UnsafePathException`, `HistoryBusyException`, `UnsupportedBackupException`). They derive from `IOException`, so existing handlers still catch them, and `ErrorHints.For` gives the advice the CLI and GUI show after the message.
 
-Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure.
+Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure. A catch-all that quietly gives up (a best-effort lookup or cleanup) filters with `when (ExpectedFailure.Is(ex))`, so a bug in the code still surfaces; the check fails a bare `catch (Exception)` that neither filters nor rethrows. Catch-alls that remain are at a boundary where the error is shown to the user (the operation runner, a background task finishing, a dialog button).
+
+The namespace commit re-indented every source file, so `git blame` would credit it for most lines. `.git-blame-ignore-revs` lists it (and any later mechanical rewrite); run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, and `git diff -w` hides the indentation in that commit.
 
 ## Where does new code go?
 

@@ -105,3 +105,36 @@ jobs:
         run: |
           if (-not (Test-Path "$env:USERPROFILE\.cargo\bin\cargo-audit.exe")) { cargo install cargo-audit --version 0.22.2 --locked }
           cargo audit
+
+  # Runs beside the tests: the core tests again under OpenCover, failing when statement coverage of the core drops.
+  coverage:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # OpenCover is pinned to a release and checked against the SHA-256 its release publishes.
+      - name: Get OpenCover
+        shell: powershell
+        run: |
+          $version = '4.7.1221'
+          $expected = 'DF7EF69D6AACBA567D5C5D602AC2097841F3ED5FC9633ECF4699267458A98AA8'
+          $zip = Join-Path $env:RUNNER_TEMP 'opencover.zip'
+          Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/OpenCover/opencover/releases/download/$version/opencover.$version.zip" -OutFile $zip
+          if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $expected) { throw 'OpenCover download does not match its published checksum.' }
+          Expand-Archive -LiteralPath $zip -DestinationPath .tools\OpenCover
+
+      - name: Core coverage
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-coverage.ps1 -Minimum 85
+
+      - name: Keep the coverage report
+        if: success() || failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-summary
+          path: tests/.build/coverage/coverage-summary.csv
+          if-no-files-found: ignore
+          retention-days: 14

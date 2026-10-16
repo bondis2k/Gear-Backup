@@ -29,7 +29,19 @@ namespace GearBackup
         internal UnsupportedBackupException(string message) : base(message) { }
     }
 
-    static class ErrorHints
+    static class ExpectedFailure
+{
+    // Failures that normal use can cause (a missing or locked file, a bad path or typed value, an unplugged device).
+    // A catch that quietly gives up on one uses `when (ExpectedFailure.Is(ex))`, so a bug in the code still surfaces.
+    internal static bool Is(System.Exception error)
+    {
+        return error is IOException || error is System.UnauthorizedAccessException || error is System.ArgumentException ||
+            error is System.NotSupportedException || error is System.FormatException || error is System.Security.SecurityException ||
+            error is System.Runtime.InteropServices.ExternalException || error is System.InvalidOperationException;
+    }
+}
+
+static class ErrorHints
     {
         // What to try next for a kind of failure, or null when there is nothing specific to suggest.
         internal static string For(System.Exception error)

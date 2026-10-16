@@ -28,14 +28,15 @@ namespace GearBackup
         }
 
         // Walks the tree, skipping Windows system folders and leftovers from other computers (see IsLeftover).
-        internal static void CollectFiles(string dir, ScanResult scan)
+        internal static void CollectFiles(string dir, ScanResult scan, OperationContext context = null)
         {
-            OperationContext.Current.Progress(Stage.Scanning, dir, 0, 0, scan.Files.Count);
+            context = context ?? OperationContext.Current;
+            context.Progress(Stage.Scanning, dir, 0, 0, scan.Files.Count);
             try
             {
                 foreach (FileInfo file in new DirectoryInfo(dir).EnumerateFiles())
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if ((file.Attributes & FileAttributes.ReparsePoint) != 0) throw new UnsafePathException("Linked file is not supported: " + file.FullName);
                     if (IsLeftover(file.Name, false))
                     {
@@ -50,7 +51,7 @@ namespace GearBackup
                 }
                 foreach (string sub in Directory.EnumerateDirectories(dir))
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     string name = Path.GetFileName(sub);
                     if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) throw new UnsafePathException("Linked folder is not supported: " + sub);
                     if (name == "System Volume Information" || name == "$RECYCLE.BIN") continue;
@@ -62,17 +63,17 @@ namespace GearBackup
                         {
                             foreach (FileInfo f in new DirectoryInfo(sub).GetFiles("*", SearchOption.AllDirectories))
                             {
-                                OperationContext.Current.CheckCancellation();
+                                context.CheckCancellation();
                                 scan.SkippedFolderFiles++;
                                 scan.SkippedFolderBytes += f.Length;
                             }
                         }
                         catch (OperationCanceledException) { throw; }
-                        catch (Exception) { }  // only used for the statistics
+                        catch (Exception ex) when (ExpectedFailure.Is(ex)) { }  // only used for the statistics
                         continue;
                     }
                     scan.Folders.Add(sub);
-                    CollectFiles(sub, scan);
+                    CollectFiles(sub, scan, context);
                 }
             }
             catch (UnauthorizedAccessException ex) { throw new IOException("Cannot scan " + dir + ": " + ex.Message, ex); }

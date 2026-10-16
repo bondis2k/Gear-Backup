@@ -21,6 +21,5 @@ namespace GearBackup.Gui
         DeviceProfile IRestoreSectionHost.DisplayedDevice { get { return displayedDevice; } }
         string IRestoreSectionHost.RestoreDestinationText { get { return restoreDestination.Text; } }
         void IRestoreSectionHost.RefreshActionState() { RefreshRestoreActionState(); }
-        IOperationInteraction IRestoreSectionHost.QuietInteraction() { return new GuiInteraction(this, p => { }); }
     }
 }

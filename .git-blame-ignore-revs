@@ -1,0 +1,6 @@
+# Commits that only re-indented or mechanically rewrote many files, so `git blame` skips them.
+# Use it with:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub's blame view reads this file by itself.)
+
+# Wrapped every source file in a namespace (re-indentation) and rewrote its using directives.
+d3093efa5fcbeb2213384680fc8be49cc41e37c7

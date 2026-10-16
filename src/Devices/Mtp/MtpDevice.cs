@@ -200,11 +200,21 @@ namespace GearBackup
         readonly IPortableDeviceProperties properties;
         readonly IPortableDeviceResources resources;
 
-        public MtpDevice(string interfacePath)
+        public MtpDevice(string interfacePath) : this(OpenDevice(interfacePath)) { }
+
+        // The device Windows' Portable Devices API opens for this interface path.
+        static IPortableDevice OpenDevice(string interfacePath)
         {
-            device = (IPortableDevice)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("F7C0039A-4762-488A-B4B3-760EF9A1BA9B")));
+            var opened = (IPortableDevice)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("F7C0039A-4762-488A-B4B3-760EF9A1BA9B")));
             object clientInfo = Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("0C15D503-D017-47CE-9016-7B3F978721CC")));
-            device.Open(interfacePath, clientInfo);
+            opened.Open(interfacePath, clientInfo);
+            return opened;
+        }
+
+        // Works with an already opened device; tests pass one that behaves like a camera or synth.
+        internal MtpDevice(IPortableDevice opened)
+        {
+            device = opened;
             device.Content(out content);
             content.Properties(out properties);
             content.Transfer(out resources);
@@ -375,7 +385,7 @@ namespace GearBackup
                 }
                 finally { Marshal.FreeCoTaskMem(readCount); }
             }
-            finally { Marshal.ReleaseComObject(stream); }
+            finally { if (Marshal.IsComObject(stream)) Marshal.ReleaseComObject(stream); }
         }
 
         // Enforce the device's byte budget before writing, even for an advertised empty file.
