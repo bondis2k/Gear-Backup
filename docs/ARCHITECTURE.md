@@ -6,10 +6,12 @@ How Gear Backup is put together, and where new code goes. For how to use the pro
 
 Gear Backup is a Windows program for .NET Framework 4.x, written in C# 7.3, built with the C# compiler alone (no project files, no NuGet packages). It backs up and restores music gear and cameras: a USB drive or an MTP device is read, its files are stored in a backup folder, and the backup can be checked, browsed and restored later. Nothing is ever written to a device while backing it up.
 
-There are two programs built from the same core:
+There are two programs built on one core library, `GearBackup.Core.dll` (everything under `src` except `src\Cli`, namespace `GearBackup`):
 
-- `GearBackup.exe`, the command line (`src\Cli\Program.cs`).
-- `GearBackup.GUI.exe`, the Windows Forms window (`gui\`).
+- `GearBackup.exe`, the command line (`src\Cli`, namespace `GearBackup.Cli`).
+- `GearBackup.GUI.exe`, the Windows Forms window (`gui\`, namespace `GearBackup.Gui`).
+
+The core's types are `internal`; `InternalsVisibleTo` in `src\Foundation\AssemblyInfo.cs` lets the two programs and the test programs use them. `AssemblyInfo.cs` is compiled into every program, so each carries the same version and the System32-only DLL search rule. The core cannot refer to the CLI or the GUI, which the compiler now enforces; `build\check-layers.ps1` still checks the layers inside the core.
 
 A small Rust library, `m8_reader.dll` (`native\m8-reader`), reads Dirtywave M8 songs for the Song tab.
 
@@ -100,7 +102,7 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 
 | Script | What it does |
 |---|---|
-| `build.cmd`, `build-gui.cmd` | Compile the CLI and the GUI. Both compile every `.cs` file under `src` (recursively) plus `gui` for the GUI, so the core is built into each executable. The GUI build also builds `m8_reader.dll` and the HTML manual. |
+| `build.cmd`, `build-gui.cmd` | Build `GearBackup.Core.dll` from `src` (recursively, without `src\Cli`), then the CLI (`src\Cli`) or the GUI (`gui`) against it, in the same folder. The GUI build also builds `m8_reader.dll` and the HTML manual. |
 | `build\build-native.ps1` | Builds the Rust reader (`-Test` runs its tests), remaps build paths and checks the DLL's protections. |
 | `build-installer.cmd` | Builds the installer and portable packages. |
 | `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |

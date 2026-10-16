@@ -4,16 +4,18 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using static FileCopy;
-using static PathSafety;
-using static Snapshots;
-using static Backups;
-using static SampleDependencies;
-using static MtpMirror;
-using static UsbDevices;
-using static AtomicFile;
-using static BackupStatuses;
-using static BackupFolders;
+using static GearBackup.FileCopy;
+using static GearBackup.PathSafety;
+using static GearBackup.Snapshots;
+using static GearBackup.Backups;
+using static GearBackup.SampleDependencies;
+using static GearBackup.MtpMirror;
+using static GearBackup.UsbDevices;
+using static GearBackup.AtomicFile;
+using static GearBackup.BackupStatuses;
+using static GearBackup.BackupFolders;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

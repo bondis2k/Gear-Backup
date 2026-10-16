@@ -1,7 +1,9 @@
 using System;
 using System.IO;
-using static Backups;
-using static Session;
+using static GearBackup.Backups;
+using static GearBackup.Session;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

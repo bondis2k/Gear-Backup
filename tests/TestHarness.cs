@@ -5,6 +5,8 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using GearBackup;
+using GearBackup.Cli;
 
 // Marks a method of the Tests class as a test. The runners find these by reflection, so adding a test is writing the
 // method with this attribute; there is no list to keep.

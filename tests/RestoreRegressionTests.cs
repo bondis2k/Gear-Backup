@@ -2,13 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using static Snapshots;
-using static RestoreFlow;
-using static DeviceSelection;
-using static ProfileSettings;
-using static Session;
-using static Histories;
-using static BackupFolders;
+using static GearBackup.Snapshots;
+using static GearBackup.RestoreFlow;
+using static GearBackup.DeviceSelection;
+using static GearBackup.ProfileSettings;
+using static GearBackup.Session;
+using static GearBackup.Histories;
+using static GearBackup.BackupFolders;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

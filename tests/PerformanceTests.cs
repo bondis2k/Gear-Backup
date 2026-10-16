@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

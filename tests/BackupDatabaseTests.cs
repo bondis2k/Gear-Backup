@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using static Snapshots;
-using static Backups;
-using static FileCopy;
-using static BackupFolders;
+using static GearBackup.Snapshots;
+using static GearBackup.Backups;
+using static GearBackup.FileCopy;
+using static GearBackup.BackupFolders;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

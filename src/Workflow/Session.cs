@@ -3,172 +3,176 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using static PathSafety;
-using static Backups;
-using static RestoreFlow;
-using static FujiSettings;
-using static MtpMirror;
-using static UsbDevices;
-using static ConsoleUi;
-using static DeviceSelection;
-using static ProfileSettings;
-using static BackupStatuses;
-using static Histories;
-using static PlanReview;
-using static ProfileNaming;
-using static Session;
-using static BackupFolders;
-using static HistoryLock;
+using static GearBackup.PathSafety;
+using static GearBackup.Backups;
+using static GearBackup.RestoreFlow;
+using static GearBackup.FujiSettings;
+using static GearBackup.MtpMirror;
+using static GearBackup.UsbDevices;
+using static GearBackup.ConsoleUi;
+using static GearBackup.DeviceSelection;
+using static GearBackup.ProfileSettings;
+using static GearBackup.BackupStatuses;
+using static GearBackup.Histories;
+using static GearBackup.PlanReview;
+using static GearBackup.ProfileNaming;
+using static GearBackup.Session;
+using static GearBackup.BackupFolders;
+using static GearBackup.HistoryLock;
 
-static class Session
+namespace GearBackup
 {
-    // The first connected supported device: a USB drive, otherwise an MTP device (whose mirror folder
-    // is created). Null when none is connected. "only" looks for one device type.
-    internal static SourceChoice DetectSource(DeviceProfile only = null)
+    static class Session
     {
-        DeviceProfile device;
-        string pnp;
-        string drive = FindDevice(out device, out pnp, only);
-        if (drive != null) return new SourceChoice { Path = drive, PnpId = pnp, Detected = device };
-        MtpSource mtp = FindMtpSource(only);
-        if (mtp == null) return null;
-        Directory.CreateDirectory(mtp.Mirror);
-        var found = new SourceChoice { Path = mtp.Mirror, Detected = mtp.Device, Mtp = mtp };
-        if (mtp.Device == Devices.X100VI)
+        // The first connected supported device: a USB drive, otherwise an MTP device (whose mirror folder
+        // is created). Null when none is connected. "only" looks for one device type.
+        internal static SourceChoice DetectSource(DeviceProfile only = null)
         {
-            found.CameraSettingsMode = FujiSettingsMode(mtp.Info);
-            found.CameraMode = FujiModeName(found.CameraSettingsMode);
-        }
-        return found;
-    }
-
-    // Checks the source and works out its device, preferences and history. Sets the current device.
-    internal static PreparedSource PrepareSource(Config global, SourceChoice choice, bool needsHistory = true)
-    {
-        if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
-        string path = Rooted(choice.Path);
-        RejectRootLinks(path);
-        DeviceProfile device = DeviceFor(global, choice.Detected, path);
-        OperationContext.Current.Device = device;
-        Config config = ResolveSourceSettings(global, path);
-        return new PreparedSource { Source = choice, Path = path, Device = device, Global = global, Config = config,
-            Histories = HistoriesRoot(config), History = needsHistory ? HistoryFor(config, path) : null };
-    }
-
-    // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
-    // device's mirror is synced first, under the lock of the folder holding the mirrors (MirrorRoot),
-    // which storage cleanup also takes before recycling a mirror.
-    internal static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
-    {
-        MtpSource mtp = prepared.Source.Mtp;
-        if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-        if (!restore && !EnsureBackupFolder(prepared.Config)) return BackupFolderCancelled();
-        using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
-        {
-            string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
-            if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
-            string history = ChooseHistory(prepared.Global, prepared.History);
-            if (history == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
-            List<string> backups = ListBackups(history);
-            if (backups.Count == 0) throw new IOException("No backups found at this location.");
-            OperationResult result;
-            // Resolve device and profile preferences after the backup itself is selected.
-            using (LockUnlessPreview(history)) result = RunRestore(source, backups, prepared.Config, prepared.Global);
-            result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
-            return result;
-        }
-    }
-
-    internal static OperationResult RunArchive(PreparedSource prepared, string destination)
-    {
-        MtpSource mtp = prepared.Source.Mtp;
-        using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
-        {
-            string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
-            return ArchiveBackup.Run(source, destination, prepared.Config, prepared.Source);
-        }
-    }
-
-    internal static OperationResult BackupFolderCancelled()
-    {
-        return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
-    }
-
-    // Ask before the history lock or MTP sync creates anything for a backup. A preview stays read-only.
-    internal static bool EnsureBackupFolder(Config config)
-    {
-        string folder = Path.GetFullPath(config.BackupFolder);
-        RejectRootLinks(folder);
-        if (Directory.Exists(folder)) return true;
-        if (File.Exists(folder)) throw new IOException("The backup location is a file, not a folder: " + folder);
-        if (PreviewOnly) return true;
-        if (!AskYesNo("The backup folder does not exist:\n" + folder + "\n\nCreate it and continue with the backup?")) return false;
-        OperationContext.Current.CheckCancellation();
-        RejectRootLinks(folder);
-        Directory.CreateDirectory(folder);
-        return true;
-    }
-
-    // When the latest backup didn't finish, asks whether to resume it. Returns the incremental choice
-    // to use (unchanged if the latest backup is fine), or null when the user cancels.
-    internal static bool? ConfirmResume(string previous, bool incremental, Config config)
-    {
-        if (previous == null) return incremental;
-        Status status = BackupStatus(previous);
-        if (!status.Unfinished) return incremental;
-        OperationOutput.WriteLine("  Latest backup is " + status + ". Resume uses " +
-            (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
-        char answer = Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),
-            new Option('n', "New full backup"), new Option('c', "Cancel"));
-        if (answer == 'c') return null;
-        return answer == 'r';
-    }
-
-    // Runs a backup while holding the history lock. The latest backup is read under the lock, so a
-    // backup finished by another window in the meantime is seen. `incremental` is the user's choice;
-    // it's ignored when there's no backup yet.
-    internal static OperationResult BackupWithLock(string source, string history, bool incremental, Config config)
-    {
-        using (LockUnlessPreview(history))
-        {
-            string previous = LatestBackup(history);
-            if (incremental && config.IncrementalBackup != null)
+            DeviceProfile device;
+            string pnp;
+            string drive = FindDevice(out device, out pnp, only);
+            if (drive != null) return new SourceChoice { Path = drive, PnpId = pnp, Detected = device };
+            MtpSource mtp = FindMtpSource(only);
+            if (mtp == null) return null;
+            Directory.CreateDirectory(mtp.Mirror);
+            var found = new SourceChoice { Path = mtp.Mirror, Detected = mtp.Device, Mtp = mtp };
+            if (mtp.Device == Devices.X100VI)
             {
-                previous = Path.GetFullPath(config.IncrementalBackup);
-                if (!ListBackups(history).Exists(path => Rooted(path) == Rooted(previous)))
-                    throw new IOException("The selected backup no longer exists in this history. Choose a full backup again.");
-                RejectRootLinks(previous);
+                found.CameraSettingsMode = FujiSettingsMode(mtp.Info);
+                found.CameraMode = FujiModeName(found.CameraSettingsMode);
             }
-            if (previous == null) OperationOutput.WriteLine("  First backup for this profile: creating a full backup.");
-            bool? choice = ConfirmResume(previous, incremental && previous != null, config);
-            if (choice == null) return new OperationResult { Cancelled = true, Summary = "Backup cancelled." };
-            return RunBackup(source, history, previous, choice.Value, config);
+            return found;
         }
-    }
 
-    // The M8 can be unplugged or get another drive letter while a window stays open. Only eject a
-    // device that still owns this source; returns null when it does, otherwise the reason.
-    internal static string ConfirmSameDevice(string source, string pnpId)
-    {
-        try
+        // Checks the source and works out its device, preferences and history. Sets the current device.
+        internal static PreparedSource PrepareSource(Config global, SourceChoice choice, bool needsHistory = true)
         {
-            string currentPnp;
-            DeviceProfile currentDevice;
-            string currentSource = FindDevice(out currentDevice, out currentPnp);
-            if (currentSource == null || Rooted(currentSource) != Rooted(source) || currentPnp != pnpId)
-                return "The detected device changed, so it was left connected.";
-            return null;
+            if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
+            string path = Rooted(choice.Path);
+            RejectRootLinks(path);
+            DeviceProfile device = DeviceFor(global, choice.Detected, path);
+            OperationContext.Current.Device = device;
+            Config config = ResolveSourceSettings(global, path);
+            return new PreparedSource { Source = choice, Path = path, Device = device, Global = global, Config = config,
+                Histories = HistoriesRoot(config), History = needsHistory ? HistoryFor(config, path) : null };
         }
-        catch (Exception ex) { return "Could not confirm the device for ejection: " + ex.Message; }
-    }
-}
 
-// A source with everything both front ends work out the same way: its device, its preferences
-// (global, then device, then profile) and its history.
-internal sealed class PreparedSource
-{
-    public SourceChoice Source;
-    public string Path, Histories, History;
-    public DeviceProfile Device;
-    public Config Global, Config;
+        // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
+        // device's mirror is synced first, under the lock of the folder holding the mirrors (MirrorRoot),
+        // which storage cleanup also takes before recycling a mirror.
+        internal static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
+        {
+            MtpSource mtp = prepared.Source.Mtp;
+            if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+            if (!restore && !EnsureBackupFolder(prepared.Config)) return BackupFolderCancelled();
+            using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+            {
+                string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+                if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
+                string history = ChooseHistory(prepared.Global, prepared.History);
+                if (history == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
+                List<string> backups = ListBackups(history);
+                if (backups.Count == 0) throw new IOException("No backups found at this location.");
+                OperationResult result;
+                // Resolve device and profile preferences after the backup itself is selected.
+                using (LockUnlessPreview(history)) result = RunRestore(source, backups, prepared.Config, prepared.Global);
+                result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
+                return result;
+            }
+        }
+
+        internal static OperationResult RunArchive(PreparedSource prepared, string destination)
+        {
+            MtpSource mtp = prepared.Source.Mtp;
+            using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+            {
+                string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+                return ArchiveBackup.Run(source, destination, prepared.Config, prepared.Source);
+            }
+        }
+
+        internal static OperationResult BackupFolderCancelled()
+        {
+            return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
+        }
+
+        // Ask before the history lock or MTP sync creates anything for a backup. A preview stays read-only.
+        internal static bool EnsureBackupFolder(Config config)
+        {
+            string folder = Path.GetFullPath(config.BackupFolder);
+            RejectRootLinks(folder);
+            if (Directory.Exists(folder)) return true;
+            if (File.Exists(folder)) throw new IOException("The backup location is a file, not a folder: " + folder);
+            if (PreviewOnly) return true;
+            if (!AskYesNo("The backup folder does not exist:\n" + folder + "\n\nCreate it and continue with the backup?")) return false;
+            OperationContext.Current.CheckCancellation();
+            RejectRootLinks(folder);
+            Directory.CreateDirectory(folder);
+            return true;
+        }
+
+        // When the latest backup didn't finish, asks whether to resume it. Returns the incremental choice
+        // to use (unchanged if the latest backup is fine), or null when the user cancels.
+        internal static bool? ConfirmResume(string previous, bool incremental, Config config)
+        {
+            if (previous == null) return incremental;
+            Status status = BackupStatus(previous);
+            if (!status.Unfinished) return incremental;
+            OperationOutput.WriteLine("  Latest backup is " + status + ". Resume uses " +
+                (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
+            char answer = Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),
+                new Option('n', "New full backup"), new Option('c', "Cancel"));
+            if (answer == 'c') return null;
+            return answer == 'r';
+        }
+
+        // Runs a backup while holding the history lock. The latest backup is read under the lock, so a
+        // backup finished by another window in the meantime is seen. `incremental` is the user's choice;
+        // it's ignored when there's no backup yet.
+        internal static OperationResult BackupWithLock(string source, string history, bool incremental, Config config)
+        {
+            using (LockUnlessPreview(history))
+            {
+                string previous = LatestBackup(history);
+                if (incremental && config.IncrementalBackup != null)
+                {
+                    previous = Path.GetFullPath(config.IncrementalBackup);
+                    if (!ListBackups(history).Exists(path => Rooted(path) == Rooted(previous)))
+                        throw new IOException("The selected backup no longer exists in this history. Choose a full backup again.");
+                    RejectRootLinks(previous);
+                }
+                if (previous == null) OperationOutput.WriteLine("  First backup for this profile: creating a full backup.");
+                bool? choice = ConfirmResume(previous, incremental && previous != null, config);
+                if (choice == null) return new OperationResult { Cancelled = true, Summary = "Backup cancelled." };
+                return RunBackup(source, history, previous, choice.Value, config);
+            }
+        }
+
+        // The M8 can be unplugged or get another drive letter while a window stays open. Only eject a
+        // device that still owns this source; returns null when it does, otherwise the reason.
+        internal static string ConfirmSameDevice(string source, string pnpId)
+        {
+            try
+            {
+                string currentPnp;
+                DeviceProfile currentDevice;
+                string currentSource = FindDevice(out currentDevice, out currentPnp);
+                if (currentSource == null || Rooted(currentSource) != Rooted(source) || currentPnp != pnpId)
+                    return "The detected device changed, so it was left connected.";
+                return null;
+            }
+            catch (Exception ex) { return "Could not confirm the device for ejection: " + ex.Message; }
+        }
+    }
+
+    // A source with everything both front ends work out the same way: its device, its preferences
+    // (global, then device, then profile) and its history.
+    internal sealed class PreparedSource
+    {
+        public SourceChoice Source;
+        public string Path, Histories, History;
+        public DeviceProfile Device;
+        public Config Global, Config;
+    }
+
 }

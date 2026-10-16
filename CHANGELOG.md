@@ -17,6 +17,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed
+- The shared code is now `GearBackup.Core.dll`, installed beside `GearBackup.exe` and `GearBackup.GUI.exe` (and included in the portable package), instead of being compiled into each program. Source files are in namespaces (`GearBackup`, `GearBackup.Cli`, `GearBackup.Gui`).
 - Backups copy small files (up to 4 MB) four at a time and large files one at a time, so a card or network share with thousands of small files backs up much faster (5,000 files of 3 KB: 45 s down to 17 s on a local disk, with Verify on). The restore point lists files in the same order as before.
 - A failed backup now says why in the CLI output.
 - Failures of a known kind now come with a suggestion: damaged backup content (run Check backups), a history in use by another window, a backup in an older layout (make a new full backup) and refused links or unsafe paths. The error kinds are `DamagedContentException`, `HistoryBusyException`, `UnsupportedBackupException` and `UnsafePathException`, all still `IOException`s.

@@ -1,30 +1,34 @@
 using System;
 using System.IO;
-using static AppSettings;
-using static PlanReview;
+using static GearBackup.AppSettings;
+using static GearBackup.PlanReview;
 
-static class SettingsLocation
+namespace GearBackup
 {
-    internal static string DefaultSettingsDirectory()
+    static class SettingsLocation
     {
-        string executableDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        return File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker))
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppIdentity.DirectoryName)
-            : executableDirectory;
+        internal static string DefaultSettingsDirectory()
+        {
+            string executableDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            return File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker))
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppIdentity.DirectoryName)
+                : executableDirectory;
+        }
+
+        internal static Config LoadApplicationConfig(string executableDirectory, string roamingDirectory)
+        {
+            if (!File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker)))
+                return LoadConfig(executableDirectory);
+
+            string settingsDirectory = Path.Combine(roamingDirectory, AppIdentity.DirectoryName);
+            if (!PreviewOnly) Directory.CreateDirectory(settingsDirectory);
+            return LoadConfig(settingsDirectory);
+        }
+
+        internal static string SettingsReadPath(Config config, string name)
+        {
+            return Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), name);
+        }
     }
 
-    internal static Config LoadApplicationConfig(string executableDirectory, string roamingDirectory)
-    {
-        if (!File.Exists(Path.Combine(executableDirectory, AppIdentity.InstalledMarker)))
-            return LoadConfig(executableDirectory);
-
-        string settingsDirectory = Path.Combine(roamingDirectory, AppIdentity.DirectoryName);
-        if (!PreviewOnly) Directory.CreateDirectory(settingsDirectory);
-        return LoadConfig(settingsDirectory);
-    }
-
-    internal static string SettingsReadPath(Config config, string name)
-    {
-        return Path.Combine(config.SettingsDirectory ?? DefaultSettingsDirectory(), name);
-    }
 }

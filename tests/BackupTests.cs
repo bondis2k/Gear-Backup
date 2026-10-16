@@ -6,20 +6,22 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading;
-using static FileCopy;
-using static PathSafety;
-using static Snapshots;
-using static Backups;
-using static RestoreFlow;
-using static BackupZip;
-using static AppSettings;
-using static BackupStatuses;
-using static Histories;
-using static PlanReview;
-using static ProfileNaming;
-using static Program;
-using static HistoryLock;
-using static BackupFolders;
+using static GearBackup.FileCopy;
+using static GearBackup.PathSafety;
+using static GearBackup.Snapshots;
+using static GearBackup.Backups;
+using static GearBackup.RestoreFlow;
+using static GearBackup.BackupZip;
+using static GearBackup.AppSettings;
+using static GearBackup.BackupStatuses;
+using static GearBackup.Histories;
+using static GearBackup.PlanReview;
+using static GearBackup.ProfileNaming;
+using static GearBackup.Cli.Program;
+using static GearBackup.HistoryLock;
+using static GearBackup.BackupFolders;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Threading;
-using static Backups;
-using static BackupZip;
-using static FileCopy;
-using static PathSafety;
+using static GearBackup.Backups;
+using static GearBackup.BackupZip;
+using static GearBackup.FileCopy;
+using static GearBackup.PathSafety;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

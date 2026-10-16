@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Threading;
-using static Backups;
-using static Snapshots;
-using static FileCopy;
-using static Session;
-using static Histories;
+using static GearBackup.Backups;
+using static GearBackup.Snapshots;
+using static GearBackup.FileCopy;
+using static GearBackup.Session;
+using static GearBackup.Histories;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {
