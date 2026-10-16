@@ -26,7 +26,7 @@ static class ContentStore
     internal static void RequireContentStore(string backup)
     {
         if (!IsContentStore(backup))
-            throw new IOException("This backup was made in a layout older versions of Gear Backup used, which is no longer supported: " + backup +
+            throw new UnsupportedBackupException("This backup was made in a layout older versions of Gear Backup used, which is no longer supported: " + backup +
                 ". Make a new full backup; the old folder can stay for reference.");
     }
     internal static Snapshot Current(string backup, ObjectChecks objects = null)

@@ -82,6 +82,8 @@ internal sealed class ContentStoreBackup
         {
             if (!committed) SetBackupStatus(backup, Status.Failed);
             OperationOutput.WriteLine("  " + (committed ? "Follow-up failed: " : "Backup failed: ") + ex.Message);
+            string hint = ErrorHints.For(ex);
+            if (hint != null) OperationOutput.WriteLine("  " + hint);
             return new OperationResult { Title = AppIdentity.Name + (committed ? " follow-up failed" : " backup failed"),
                 Summary = ex.Message + (committed ? " The restore point was saved." : " Previous restore points are preserved."), ExitCode = 2,
                 OutputFolder = backup, Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged, Failed = 1 } };
@@ -117,7 +119,7 @@ internal sealed class ContentStoreBackup
                 if (entry.IsDirectory) current.Folders.Add(entry.Path);
                 else
                 {
-                    if (entry.Result == "damaged") throw new IOException("Damaged stored content: " + entry.Path + ". Repair this backup before updating it.");
+                    if (entry.Result == "damaged") throw new DamagedContentException("Damaged stored content: " + entry.Path + ". Repair this backup before updating it.");
                     current.Files.Add(new RestoreEntry { Relative = entry.Path, Hash = entry.Hash, Size = entry.Size,
                         ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks, StoredPath = store.PathOf(entry.Hash) });
                 }
@@ -172,7 +174,7 @@ internal sealed class ContentStoreBackup
             Modified = file.LastWriteTimeUtc.Ticks, Created = file.CreationTimeUtc.Ticks };
         if (old.TryGetValue(relative, out prior) && prior.Size == file.Length && store.Present(prior.Hash))
         {
-            if (new FileInfo(prior.StoredPath).Length != prior.Size) throw new IOException("Damaged stored content: " + relative);
+            if (new FileInfo(prior.StoredPath).Length != prior.Size) throw new DamagedContentException("Damaged stored content: " + relative);
             bool hashCompare = config.Thorough || !UsableFileTime(file.LastWriteTimeUtc) || !UsableFileTime(new DateTime(prior.ModifiedTicks, DateTimeKind.Utc));
             if (hashCompare)
             { planned.KnownHash = HashFile(file.FullName); planned.Unchanged = planned.KnownHash == prior.Hash; }
@@ -281,7 +283,7 @@ internal sealed class ContentStoreBackup
                     if (File.Exists(obj))
                     {
                         if (new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash))
-                            throw new IOException("Damaged stored content: " + item.Relative);
+                            throw new DamagedContentException("Damaged stored content: " + item.Relative);
                     }
                     else { File.Move(temp, obj); Interlocked.Add(ref addedBytes, item.Size); if (config.Verify) verifiedObjects.Add(hash); }
                 }
@@ -292,7 +294,7 @@ internal sealed class ContentStoreBackup
         {
             bool damaged;
             lock (storeLock) damaged = new FileInfo(obj).Length != item.Size || (config.Verify && verifiedObjects.Add(hash) && HashFileFromDisk(obj) != hash);
-            if (damaged) throw new IOException("Damaged stored content: " + item.Relative);
+            if (damaged) throw new DamagedContentException("Damaged stored content: " + item.Relative);
         }
         Interlocked.Increment(ref doneFiles);
         return new RestoreEntry { Relative = item.Relative, StoredPath = obj, Hash = hash, Size = item.Size,

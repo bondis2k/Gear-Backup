@@ -64,6 +64,8 @@ static class Program
             // The operation context is gone by now, so write to the console directly.
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("  Error: " + ex.Message);
+            string hint = ErrorHints.For(ex);
+            if (hint != null) Console.WriteLine("  " + hint);
             Console.ResetColor();
             result = 1;
         }

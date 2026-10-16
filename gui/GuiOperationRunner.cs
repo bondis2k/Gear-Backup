@@ -44,11 +44,13 @@ internal sealed class GuiOperationRunner
             OperationResult result;
             try { using (context.Activate()) result = action(context); }
             catch (OperationCanceledException) { result = new OperationResult { Cancelled = true, Summary = "Operation cancelled." }; }
-            catch (Exception ex) { result = new OperationResult { ExitCode = 1, Title = "Could not complete operation", Summary = ex.Message }; }
+            catch (Exception ex) { result = new OperationResult { ExitCode = 1, Title = "Could not complete operation", Summary = ex.Message + HintAfter(ex) }; }
             form.AppendActivity(Environment.NewLine + (result.Summary ?? "No files changed.") + Environment.NewLine);
             form.BeginInvoke((Action)delegate { form.DrainDisplay(); cancellation.Dispose(); cancellation = null; form.CompleteOperation(result, previewOnly); });
         });
     }
+
+    static string HintAfter(Exception error) { string hint = ErrorHints.For(error); return hint == null ? "" : " " + hint; }
 
     // Drives populate the source; MTP uses detection at backup time, never a previous drive path.
     internal void ShowDetected(SourceChoice found)

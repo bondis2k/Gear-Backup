@@ -126,6 +126,8 @@ The layer of a file is its top-level folder under `src`:
 
 `build\check-layers.ps1` scans the sources and fails when a file mentions a type declared in a higher layer. There are no known violations; `build\layer-baseline.txt` is empty and exists so a violation that cannot be fixed at once can be recorded (run `build\check-layers.ps1 -UpdateBaseline`) while only new ones fail.
 
+Failures that callers may want to tell apart have their own types in `Foundationrrors.cs` (`DamagedContentException`, `UnsafePathException`, `HistoryBusyException`, `UnsupportedBackupException`). They derive from `IOException`, so existing handlers still catch them, and `ErrorHints.For` gives the advice the CLI and GUI show after the message.
+
 ## Where does new code go?
 
 - A rule about paths, files or records: `Foundation`.

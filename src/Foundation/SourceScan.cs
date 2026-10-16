@@ -34,7 +34,7 @@ static class SourceScan
             foreach (FileInfo file in new DirectoryInfo(dir).EnumerateFiles())
             {
                 OperationContext.Current.CheckCancellation();
-                if ((file.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked file is not supported: " + file.FullName);
+                if ((file.Attributes & FileAttributes.ReparsePoint) != 0) throw new UnsafePathException("Linked file is not supported: " + file.FullName);
                 if (IsLeftover(file.Name, false))
                 {
                     scan.SkippedFiles++;
@@ -50,7 +50,7 @@ static class SourceScan
             {
                 OperationContext.Current.CheckCancellation();
                 string name = Path.GetFileName(sub);
-                if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) throw new IOException("Linked folder is not supported: " + sub);
+                if ((File.GetAttributes(sub) & FileAttributes.ReparsePoint) != 0) throw new UnsafePathException("Linked folder is not supported: " + sub);
                 if (name == "System Volume Information" || name == "$RECYCLE.BIN") continue;
                 if (IsLeftover(name, true))
                 {
