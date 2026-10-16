@@ -17,18 +17,20 @@ static class M8SongReaders
 }
 
 // Calls m8_reader.dll, the Rust reader built from native/m8-reader. The DLL is loaded by full path from the
-// application folder (or GEARBACKUP_M8_READER), so a missing or mismatched DLL gives a clear message, not a crash.
+// application folder, and its own dependencies only from System32 (never the current folder or PATH), so a missing or
+// mismatched DLL gives a clear message, not a crash. There is deliberately no environment variable to point elsewhere:
+// tests pass the path to the constructor.
 sealed class NativeM8SongReader : IM8SongReader
 {
     internal const string LibraryName = "m8_reader.dll";
-    internal const string LibraryOverride = "GEARBACKUP_M8_READER";
     const uint AbiVersion = 2;
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate uint AbiVersionFunction();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate IntPtr ReadSongFunction([MarshalAs(UnmanagedType.LPWStr)] string path, UIntPtr pathLength, out UIntPtr length);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] delegate void FreeFunction(IntPtr buffer, UIntPtr length);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryW(string path);
+    const uint SearchDllLoadDir = 0x100, SearchSystem32 = 0x800; // LOAD_LIBRARY_SEARCH_*
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr LoadLibraryExW(string path, IntPtr file, uint flags);
     [DllImport("kernel32.dll", CharSet = CharSet.Ansi, SetLastError = true)] static extern IntPtr GetProcAddress(IntPtr module, string name);
 
     readonly string explicitPath;
@@ -43,8 +45,7 @@ sealed class NativeM8SongReader : IM8SongReader
     {
         get
         {
-            string path = explicitPath ?? Environment.GetEnvironmentVariable(LibraryOverride);
-            return string.IsNullOrEmpty(path) ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LibraryName) : path;
+            return Path.GetFullPath(string.IsNullOrEmpty(explicitPath) ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, LibraryName) : explicitPath);
         }
     }
 
@@ -82,7 +83,7 @@ sealed class NativeM8SongReader : IM8SongReader
         string path = LibraryPath;
         if (!File.Exists(path)) throw new M8SongException("Reading M8 songs needs " + LibraryName + " next to the application, and it was not found at " + path + ".");
         if (!Environment.Is64BitProcess) throw new M8SongException("Reading M8 songs needs a 64-bit Windows session.");
-        IntPtr module = LoadLibraryW(path);
+        IntPtr module = LoadLibraryExW(path, IntPtr.Zero, SearchDllLoadDir | SearchSystem32);
         if (module == IntPtr.Zero)
             throw new M8SongException(LibraryName + " could not be loaded (" + new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()).Message + ").");
         var version = Function<AbiVersionFunction>(module, "m8_abi_version");

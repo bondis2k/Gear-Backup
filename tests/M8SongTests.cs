@@ -14,7 +14,7 @@ partial class Tests
 
     static NativeM8SongReader NativeReaderOrNull()
     {
-        var reader = new NativeM8SongReader();
+        var reader = new NativeM8SongReader(Path.Combine("native", "m8-reader", "target", "release", NativeM8SongReader.LibraryName));
         if (File.Exists(reader.LibraryPath)) return reader;
         Console.WriteLine("  (native M8 reader not built; skipping its checks. Install Rust and run build\\build-native.ps1.)");
         return null;
@@ -29,6 +29,9 @@ partial class Tests
             song.MasterVolume == 200 && song.TrackVolumes[7] == 8 && song.ReverbVolume == 30, "track usage, counts and mixer values are read");
         Assert(song.Instruments.Count == 2 && song.Instruments[0].Sample == "/Samples/kick.wav" && song.Instruments[1].Slot == 9 && song.Instruments[1].Kind == "FM Synth",
             "instruments keep their slot, type, name and sample");
+        M8SongSummary dirty = M8SongJson.Parse("{\"schema\":1,\"song\":{\"name\":\"A&B\\u202E\\u0007\\u200Bx\",\"instruments\":[{\"slot\":1,\"kind\":\"Sampler\",\"name\":\"K\\r\\nICK\",\"sample\":\"/S/\\u0000a.wav\"}]}}");
+        Assert(dirty.Name == "A&Bx" && dirty.Instruments[0].Name == "KICK" && dirty.Instruments[0].Sample == "/S/a.wav",
+            "control, zero-width and bidirectional characters are removed from song text, while & and letters stay");
         string reported = null;
         Action<string> fails = json => { try { M8SongJson.Parse(json); } catch (M8SongException ex) { reported = ex.Message; return; } reported = "no exception"; };
         fails("{\"schema\":1,\"error\":\"Not a readable M8 song\"}");
@@ -42,6 +45,11 @@ partial class Tests
         string missingMessage = null;
         try { missing.Read(M8Fixture("TEST-FILE.m8s")); } catch (M8SongException ex) { missingMessage = ex.Message; }
         Assert(missingMessage != null && missingMessage.Contains("m8_reader.dll"), "a missing native reader gives a clear message");
+        // The load path can no longer be redirected through the environment.
+        string before = Environment.GetEnvironmentVariable("GEARBACKUP_M8_READER");
+        Environment.SetEnvironmentVariable("GEARBACKUP_M8_READER", Path.Combine(Path.GetTempPath(), "elsewhere", "evil.dll"));
+        try { Assert(new NativeM8SongReader().LibraryPath == Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "m8_reader.dll"), "the reader's DLL location ignores environment overrides"); }
+        finally { Environment.SetEnvironmentVariable("GEARBACKUP_M8_READER", before); }
         try { new NativeM8SongReader().Read(""); missingMessage = null; } catch (M8SongException ex) { missingMessage = ex.Message; }
         Assert(missingMessage != null, "an empty path is refused");
 

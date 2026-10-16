@@ -317,4 +317,13 @@ partial class Tests
         Put(plain, "complete");
         Assert(Records.ReadText(plain, Records.SmallLimit, "Backup status record").Trim() == "complete", "an ordinary record reads normally");
     }
+    static void TestReservedNames()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "gearbackup-reserved-names");
+        foreach (string name in new[] { "CON", "nul.txt", "Songs\\aux.log", "COM1", "lpt9.x", "COM0", "CON .txt", "PRN.tar.gz", "CONIN$", "conout$.txt", "COM\u00b9", "Samples\\Nul\\kick.wav" })
+            Throws(() => PathSafety.CheckedPath(root, name), "reserved Windows name is refused: " + name);
+        foreach (string name in new[] { "console.txt", "com10.txt", "NULL.txt", "CONNECT.wav", "auxiliary", "Songs\\communication.m8s", "lpt.txt", "com.txt", "My Songs\\prn_01.m8s", "COMX.txt" })
+            Assert(PathSafety.CheckedPath(root, name).StartsWith(PathSafety.Rooted(root), StringComparison.OrdinalIgnoreCase), "ordinary name is allowed: " + name);
+        Assert(PathSafety.IsReservedName("Aux") && !PathSafety.IsReservedName("Auxx"), "reserved names are matched whole, ignoring case");
+    }
 }

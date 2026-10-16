@@ -41,6 +41,7 @@ partial class Tests
         RunTest("ZIP archive restore", () => TestZipRestore(Folder(root, "zip-restore")));
         RunTest("M8 song reader", () => TestM8Song());
         RunTest("Security hardening", () => TestSecurity(dir));
+        RunTest("Security: reserved Windows names", () => TestReservedNames());
         RunTest("Security: MTP mirror links", () => TestMirrorLinks(dir));
         RunTest("Security: additional mirror link types", () => TestAdditionalMirrorLinks(dir));
         RunTest("Security: file symbolic links in mirrors", () => TestMirrorFileSymlinks(dir));

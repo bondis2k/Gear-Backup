@@ -31,6 +31,7 @@ internal sealed partial class MainForm
         browseSong.Name = "BrowseSong"; browseSong.Margin = new Padding(8, 0, 0, 0);
         browseSong.Click += delegate { ChooseSong(); };
         panel.Controls.Add(browseSong, 1, 1);
+        songNotice.UseMnemonic = songSummary.UseMnemonic = false; // an & in a song name or message is text, not a shortcut key
         songNotice.Name = "SongNotice"; songNotice.MaximumSize = new Size(750, 0); songNotice.Margin = new Padding(0, 8, 0, 6);
         panel.Controls.Add(songNotice, 0, 2); panel.SetColumnSpan(songNotice, 2);
         songSummary.Name = "SongSummary"; songSummary.MaximumSize = new Size(750, 0); songSummary.Visible = false;

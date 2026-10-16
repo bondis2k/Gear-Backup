@@ -228,11 +228,7 @@ internal static class ZipRestore
         foreach (string part in name.Split('/'))
         {
             if (part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) throw new IOException("Invalid ZIP filename: " + name);
-            string stem = part.Split('.')[0].ToUpperInvariant();
-            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
-                (stem.Length == 4 && (stem.StartsWith("COM") || stem.StartsWith("LPT")) &&
-                    ((stem[3] >= '1' && stem[3] <= '9') || stem[3] == '\u00b9' || stem[3] == '\u00b2' || stem[3] == '\u00b3')))
-                throw new IOException("Reserved ZIP filename: " + name);
+            if (IsReservedName(part)) throw new IOException("Reserved ZIP filename: " + name);
         }
         CheckedPath(root, name);
     }
