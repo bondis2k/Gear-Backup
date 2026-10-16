@@ -341,7 +341,7 @@ Restoring XML exports to a PC or restoring photos does not apply camera settings
 
 ## M8 Song viewer
 
-The Song tab opens a Dirtywave M8 `.m8s` and presents a read-only summary through the bundled native reader.
+The Song tab, available in the M8 view only, opens a Dirtywave M8 `.m8s` and presents a read-only summary through the bundled native reader.
 
 Available information includes:
 

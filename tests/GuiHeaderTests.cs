@@ -52,11 +52,11 @@ partial class Tests
                 var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
                 Func<string> titles = () => string.Join("|", tabs.TabPages.Cast<TabPage>().Select(page => page.Text));
                 Func<string, Control> named = name => form.Controls.Find(name, true).FirstOrDefault();
-                Assert(titles() == "Device|Backup|Restore|Song" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup, Restore and Song");
+                Assert(titles() == "Device|Backup|Restore" && named("GoToBackup").Visible, "Gear Backup mode has Device, Backup and Restore, and no Song tab");
 
                 runner.ShowDetected(new SourceChoice { Path = folder, Detected = Devices.M8 });
                 Application.DoEvents();
-                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0,
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0,
                     "identifying a device in Gear Backup mode keeps every backup tool");
                 strip.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
                 Assert(titles() == "Device|Sample check|Card migration|Song" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
@@ -66,12 +66,12 @@ partial class Tests
                 form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
                 form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
                 form.ShowDevice(Devices.X100VI);
-                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
+                Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
                     "a device without a mode of its own uses Gear Backup, with Backup and Restore back as they were");
 
                 tabs.SelectedIndex = 2; Application.DoEvents();
                 strip.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
-                Assert(titles() == "Device|Coming soon|Planned|Song" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
+                Assert(titles() == "Device|Coming soon|Planned" && form.Controls.Find("StartOperation", true).Length == 0, "switching mode while on the Restore tab shows its placeholder");
                 strip.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
                 Assert(tabs.SelectedIndex == 2 && tabs.SelectedTab.Controls.Find("StartOperation", true).Length > 0 && named("RestoreOperation").Visible && !named("BackupOperation").Visible,
                     "returning to Gear Backup puts the restore controls back on the Restore tab");
@@ -89,14 +89,14 @@ partial class Tests
                     Assert(asked.Count == before + 1, "clicking a gear icon looks for a device");
                 };
                 click(3);
-                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned|Song",
+                Assert(asked[asked.Count - 1] == Devices.OPXY && strip.Active.Device == Devices.OPXY && titles() == "Device|Coming soon|Planned",
                     "clicking OP-XY enters the OP-XY mode and looks for an OP-XY");
                 available = false;
                 click(1);
                 Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Sample check|Card migration|Song",
                     "clicking M8 selects the M8 mode even when no M8 is connected");
                 click(0);
-                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore|Song",
+                Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore",
                     "clicking Gear Backup returns to the full app and looks for any device");
                 Assert(form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible, "Gear Backup behaves as it did before");
                 runner.Detector = Session.DetectSource;
@@ -138,6 +138,8 @@ partial class Tests
             {
                 form.Show(); Application.DoEvents();
                 var tabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
+                Assert(tabs.TabPages.Count == 3, "the Song tab is not shown in the Gear Backup view");
+                ((GearIconStrip)form.Controls.Find("GearIcons", true)[0]).SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
                 var pathBox = (TextBox)form.Controls.Find("SongFilePath", true)[0];
                 var notice = form.Controls.Find("SongNotice", true)[0];
                 var summary = form.Controls.Find("SongSummary", true)[0];
@@ -159,6 +161,11 @@ partial class Tests
                 browse.PerformClick();
                 WaitForGui(() => notice.Text.StartsWith("Not a readable"), "error message");
                 Assert(notice.Text.Contains("Not a readable M8 song") && !summary.Visible && !grid.Visible && grid.Rows.Count == 0, "an unreadable song shows the reason and clears the old details");
+                tabs.SelectedIndex = 3; Application.DoEvents();
+                var icons = (GearIconStrip)form.Controls.Find("GearIcons", true)[0];
+                icons.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
+                Assert(tabs.TabPages.Count == 3 && tabs.SelectedIndex == 0 && form.Controls.Find("BrowseSong", true).Length == 0, "leaving the M8 view while on the Song tab removes it and returns to Device");
+                icons.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
                 tabs.SelectedIndex = 1; Application.DoEvents();
                 Assert(tabs.SelectedTab.Text == "Backup" && form.Controls.Find("StartOperation", true)[0].Visible, "switching back to Backup still shows its controls");
             }

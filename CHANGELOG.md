@@ -33,6 +33,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - **Zip archive** backup type creates a standalone full ZIP at a chosen save location. Uses the optional name or device name plus date/time, preserves empty folders, supports preview and optional verification, and safely publishes the archive without a separate backup set.
 
 ### Changed
+- The Song tab (reading an M8 song) now appears only in the M8 view; the Gear Backup view and the other device views no longer have it.
 - Rewritten manual, FAQ and feature inventory, including the complete CLI switch reference, worked examples, current device workflows and format/safety limitations.
 - The shared code is now `GearBackup.Core.dll`, installed beside `GearBackup.exe` and `GearBackup.GUI.exe` (and included in the portable package), instead of being compiled into each program. Source files are in namespaces (`GearBackup`, `GearBackup.Cli`, `GearBackup.Gui`).
 - Backups copy small files (up to 4 MB) four at a time and large files one at a time, so a card or network share with thousands of small files backs up much faster (5,000 files of 3 KB: 45 s down to 17 s on a local disk, with Verify on). The restore point lists files in the same order as before.
