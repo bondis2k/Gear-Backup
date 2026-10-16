@@ -14,6 +14,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - M8 Sample check has a **Check all songs on card** button, which scans songs recursively, reports missing samples per song, distinguishes unreadable songs and invalid references, and supports selection of per-song details, progress and cancellation.
 
 ### Fixed
+- M8 migration locks its path inputs while copying and cancels superseded inventory loads. Saved card-history links reject ambiguous relative paths and report duplicate identities clearly.
 - The sample backup restore confirmation uses the application's theme, including its title bar, details and action buttons.
 - Toggling M8 backup-history search preserves card results. Re-enabling it refreshes the selected song's backup copies automatically, including selections from the whole-card list.
 - Sample check path fields retain readable theme colours after a check and when changing themes while the tab is inactive. Detecting an M8 also fills an empty card-root field.

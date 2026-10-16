@@ -106,7 +106,7 @@ namespace GearBackup
             if (linked != null)
             {
                 RejectRootLinks(linked);
-                string location = Path.GetDirectoryName(Path.GetDirectoryName(linked));
+                string location = Path.Combine(ProfileLinks.BackupLocation(linked), AppIdentity.BackupsFolderName);
                 if (Within(location, source) || Within(source, location))
                     throw new IOException("The backup folder and source must not contain one another.");
                 if (!Directory.Exists(linked)) throw new IOException("The linked backup history is unavailable: " + linked);

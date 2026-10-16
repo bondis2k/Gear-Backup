@@ -92,7 +92,7 @@ namespace GearBackup
             if (linked != null)
             {
                 Config effective = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(linked));
-                effective.BackupFolder = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(linked)));
+                effective.BackupFolder = ProfileLinks.BackupLocation(linked);
                 return effective;
             }
             return ResolveProfileSettings(global, CurrentDevice.Id, ProfileId(source, global.Profile));
@@ -144,7 +144,7 @@ namespace GearBackup
             var locations = new List<string> { config.BackupFolder };
             foreach (string history in ProfileLinks.Read(config).Values)
             {
-                string location = Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(history)));
+                string location = ProfileLinks.BackupLocation(history);
                 if (!locations.Exists(p => Rooted(p) == Rooted(location))) locations.Add(location);
             }
             foreach (var section in ReadProfileSettings(config).Values)

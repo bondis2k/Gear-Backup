@@ -27,6 +27,8 @@ namespace GearBackup.Gui
         M8MigrationReport report;
         bool initialized, filling, loading, migrating, closed;
         int generation;
+        CancellationTokenSource inventory;
+        readonly System.Collections.Generic.List<Control> pathRows = new System.Collections.Generic.List<Control>();
         internal Func<string, string> FolderPicker { get; set; }
         internal Func<string> ReportPicker { get; set; }
         internal Control Content { get { return content; } }
@@ -71,11 +73,11 @@ namespace GearBackup.Gui
             backups.SelectedIndexChanged += delegate { if (!filling) LoadPoints(); };
             points.SelectedIndexChanged += delegate { ClearReport(); ShowSelection(); };
             backupRoot.TextChanged += delegate {
-                ++generation; set = null; filling = true; backups.Items.Clear(); points.Items.Clear(); filling = false;
+                CancelInventory(); set = null; filling = true; backups.Items.Clear(); points.Items.Clear(); filling = false;
                 loading = false; ClearReport(); notice.Text = "Click Refresh backups to load this location."; UpdateAvailability();
             };
             target.TextChanged += delegate { ClearReport(); UpdateAvailability(); };
-            panel.Disposed += delegate { closed = true; ++generation; };
+            panel.Disposed += delegate { closed = true; CancelInventory(); };
             content = panel; UpdateAvailability(); return panel;
         }
 
@@ -87,14 +89,27 @@ namespace GearBackup.Gui
             row.Controls.Add(new FieldPanel(field) { Dock = DockStyle.Fill }, 0, 0);
             var browse = GuiTheme.Button("Browse…", false);
             browse.Click += delegate {
-                if (host.Busy) return;
+                if (host.Busy || migrating) return;
                 string path;
                 if (FolderPicker != null) path = FolderPicker(field.Name);
                 else using (var picker = new FolderPickerDialog("Choose " + caption.ToLowerInvariant(), field.Text, allowNew))
                     path = picker.ShowDialog(host.Owner) == DialogResult.OK ? picker.SelectedPath : null;
                 if (!string.IsNullOrEmpty(path)) field.Text = path;
             };
-            row.Controls.Add(browse, 1, 0); panel.Controls.Add(row);
+            row.Controls.Add(browse, 1, 0); panel.Controls.Add(row); pathRows.Add(row);
+        }
+
+        void CancelInventory()
+        {
+            ++generation;
+            if (inventory != null) inventory.Cancel();
+            inventory = null;
+        }
+
+        CancellationTokenSource BeginInventory()
+        {
+            CancelInventory();
+            return inventory = new CancellationTokenSource();
         }
 
         internal void Activate()
@@ -112,16 +127,16 @@ namespace GearBackup.Gui
 
         async void RefreshBackups()
         {
-            if (host.Busy) return;
-            int scan = ++generation;
+            if (host.Busy || migrating) return;
             Config config;
             try { config = Options(); } catch (Exception ex) { notice.Text = ex.Message; return; }
+            var cancellation = BeginInventory(); int scan = generation;
             loading = true; set = null; ClearReport(); UpdateAvailability(); notice.Text = "Loading M8 backups…";
             try
             {
                 var paths = await Task.Run(() => {
-                    using (new OperationContext(new MigrationReadInteraction(), CancellationToken.None).Activate()) return RestoreCatalog.BackupsForDevice(config, Devices.M8);
-                }).ConfigureAwait(false);
+                    using (new OperationContext(new MigrationReadInteraction(), cancellation.Token).Activate()) return RestoreCatalog.BackupsForDevice(config, Devices.M8);
+                });
                 host.RunOnUi(delegate {
                     if (closed || scan != generation) return;
                     filling = true; backups.Items.Clear(); points.Items.Clear();
@@ -131,21 +146,23 @@ namespace GearBackup.Gui
                     if (paths.Count > 0) LoadPoints(); else { notice.Text = "No M8 backups found in the configured locations."; UpdateAvailability(); }
                 });
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex) { host.RunOnUi(delegate { if (!closed && scan == generation) { loading = false; notice.Text = "Cannot load backups: " + ex.Message; UpdateAvailability(); } }); }
+            finally { if (ReferenceEquals(inventory, cancellation)) inventory = null; cancellation.Dispose(); }
         }
 
         async void LoadPoints()
         {
-            int scan = ++generation;
+            var cancellation = BeginInventory(); int scan = generation;
             var backup = backups.SelectedItem as BackupItem;
             set = null; points.Items.Clear(); ClearReport();
-            if (backup == null) { loading = false; UpdateAvailability(); return; }
+            if (backup == null) { loading = false; inventory = null; cancellation.Dispose(); UpdateAvailability(); return; }
             loading = true; UpdateAvailability(); notice.Text = "Loading restore points…";
             try
             {
                 var loaded = await Task.Run(() => {
-                    using (new OperationContext(new MigrationReadInteraction(), CancellationToken.None).Activate()) return RestoreCatalog.Load(backup.Path, Devices.M8);
-                }).ConfigureAwait(false);
+                    using (new OperationContext(new MigrationReadInteraction(), cancellation.Token).Activate()) return RestoreCatalog.Load(backup.Path, Devices.M8);
+                });
                 host.RunOnUi(delegate {
                     if (closed || scan != generation) return;
                     set = loaded; loading = false;
@@ -154,7 +171,9 @@ namespace GearBackup.Gui
                     ShowSelection();
                 });
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex) { host.RunOnUi(delegate { if (!closed && scan == generation) { loading = false; notice.Text = "Cannot read backup: " + ex.Message; UpdateAvailability(); } }); }
+            finally { if (ReferenceEquals(inventory, cancellation)) inventory = null; cancellation.Dispose(); }
         }
 
         void ShowSelection()
@@ -175,6 +194,7 @@ namespace GearBackup.Gui
             start.Enabled = !busy && !loading && set != null && points.SelectedItem is RestorePoint && !string.IsNullOrWhiteSpace(target.Text);
             save.Enabled = !busy && report != null;
             linkHistory.Enabled = !busy;
+            foreach (Control row in pathRows) row.Enabled = !busy;
         }
 
         void StartMigration()

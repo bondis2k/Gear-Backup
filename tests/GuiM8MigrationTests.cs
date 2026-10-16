@@ -41,10 +41,14 @@ partial class Tests
                 start.PerformClick();
                 var state = (Label)named("OperationStatus");
                 Assert(named("CancelOperation").Visible && state.Visible, "global progress and Cancel remain visible while migration runs");
+                Assert(!named("MigrationTarget").Enabled && !named("MigrationBackupRoot").Enabled && !link.Enabled,
+                    "migration paths and linking choice are locked while the operation runs");
                 bool reviewed = false;
                 DriveGui(form, state, "Complete", false, dialog => { if (dialog is PreviewDialog) reviewed = true; });
                 Assert(reviewed && File.ReadAllText(Path.Combine(target, "Songs", "Demos", "relative.m8s")) == "SONG", "migration copies files only after the preview is approved");
                 WaitForGui(() => named("SaveMigrationReport").Enabled, "migration report ready");
+                Assert(named("MigrationTarget").Enabled && named("MigrationBackupRoot").Enabled && link.Enabled,
+                    "migration inputs become available again after completion");
                 Assert(((DataGridView)named("MigrationSongs")).Rows.Count == 1 && named("MigrationReport").Text.Contains("Files verified: 2") &&
                     named("MigrationNotice").Text.Contains("0 with missing samples"), "assistant shows verified file counts and restored-song checks");
                 var module = (M8MigrationTab)typeof(MainForm).GetField("migrationTab", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
@@ -63,6 +67,12 @@ partial class Tests
                 Assert(!start.Visible && tabs.TabPages[2].Text == "Planned", "migration is specific to M8 mode");
                 gears.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
                 Assert(tabs.TabPages[2].Text == "Card migration" && named("MigrationTarget").Text == cancelled, "assistant selections survive gear-mode changes");
+                ((Button)named("RefreshMigrationBackups")).PerformClick();
+                named("MigrationBackupRoot").Text = Folder(root, "empty-backup-location");
+                ((Button)named("RefreshMigrationBackups")).PerformClick();
+                WaitForGui(() => named("MigrationNotice").Text.StartsWith("No M8 backups"), "replacement inventory load settles");
+                Assert(((ComboBox)named("MigrationBackup")).Items.Count == 0 && ((ComboBox)named("MigrationPoint")).Items.Count == 0 && !start.Enabled,
+                    "superseded inventory results cannot repopulate an empty replacement location");
             }
         }
         finally { M8SongReaders.Current = original; GuiTheme.ApplyTheme("original"); }

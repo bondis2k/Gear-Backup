@@ -114,7 +114,10 @@ namespace GearBackup
                     catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { report.Issues.Add(file.Relative + ": " + ex.Message); }
                 }
                 foreach (string folder in point.Snapshot.Folders)
+                {
+                    OperationContext.Current.CheckCancellation();
                     if (!Directory.Exists(PathSafety.SafePath(target, folder))) report.Issues.Add("Missing folder: " + folder);
+                }
                 sameTarget();
                 report.Songs = M8CardCheck.Run(target, reader);
                 sameTarget();

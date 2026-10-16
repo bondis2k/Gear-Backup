@@ -34,10 +34,29 @@ partial class Tests
             Assert(ProfileLinks.Find(config, source) == history, "conflict leaves the original association intact");
             Throws(() => ProfileLinks.Key(source), "migration linking refuses rehearsal folders");
             Throws(() => ProfileLinks.Save(config, key, Path.Combine(root, "outside")), "unsafe history structure is refused");
+            string drive = Path.GetPathRoot(history);
+            Throws(() => ProfileLinks.Save(config, key, drive.Substring(0, 2) + @"Gear Backups\profiles\Unsafe"), "drive-relative history paths are refused");
+            Throws(() => ProfileLinks.Save(config, key, @"\Gear Backups\profiles\Unsafe"), "current-drive-relative history paths are refused");
+            Throws(() => ProfileLinks.Save(config, key, Path.Combine(originalLocation, "unused", "..", AppIdentity.BackupsFolderName, "profiles", "OriginalM8")),
+                "history paths must be canonical rather than depend on dot segments");
             Directory.Delete(history);
             Throws(() => Histories.HistoryFor(effective, source), "unavailable history fails visibly instead of starting an independent history");
             using (OperationContext.Current.UseDevice(Devices.OPXY))
                 Assert(ProfileLinks.Find(config, source) == null, "card links do not change other device histories");
         }
+    }
+
+    [Test("Replacement card history links reject damaged settings")]
+    static void TestDamagedProfileLinks(string root)
+    {
+        var config = new Config { SettingsDirectory = Folder(root, "settings") };
+        string path = SettingsLocation.SettingsReadPath(config, "GearBackup.CardLinks.ini");
+        string history = Path.Combine(root, AppIdentity.BackupsFolderName, "profiles", "Original");
+        Put(path, "m8-card-12345678=" + history + "\r\nM8-CARD-12345678=" + history);
+        bool explained = false;
+        try { ProfileLinks.Read(config); } catch (IOException ex) { explained = ex.Message.Contains("Duplicate card history link"); }
+        Assert(explained, "duplicate card identities produce an actionable settings error");
+        Put(path, "m8-card-12345678=" + @"C:Gear Backups\profiles\Original");
+        Throws(() => ProfileLinks.Read(config), "loading settings also rejects drive-relative destinations");
     }
 }
