@@ -340,30 +340,12 @@ namespace GearBackup.Gui
 
         Config CaptureConfig(bool forOperation = false)
         {
-            // Start from every saved setting, so settings without a field in this window are kept.
-            Config copy = config.Clone();
-            copy.BackupFolder = string.IsNullOrWhiteSpace(backupFolder.Text)
-                ? DefaultBackupFolder() : ExpandPath(backupFolder.Text);
-            copy.SourceFolder = forOperation && (Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings) ? "" :
-                ExpandPath(forOperation && Restoring ? restoreDestination.Text : source.Text);
-            copy.Profile = profile.Text.Trim();
-            copy.Zip = zip.Checked && ZipApplies;
-            if (copy.Profile.Length > 0) ValidateProfile(copy.Profile);
-            if (forOperation && Selected == GuiOperation.Restore) copy.RestoreSelection = CaptureRestoreSelection();
-            if (forOperation && Selected == GuiOperation.RestoreZip)
-            {
-                if (!ArchiveRestoreReady) throw new IOException("Choose a valid ZIP archive and detect a matching destination device.");
-                copy.RestoreArchive = zipRestore.ArchivePath;
-            }
-            if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(backupSets.FullName);
-            if (forOperation && Selected == GuiOperation.IncrementalBackup)
-            {
-                copy.IncrementalBackupName = BackupSetNames.Validate(backupSets.IncrementalName);
-                string chosen = backupSets.SelectedBackup;
-                if (chosen == null) throw new IOException("Choose a full backup to update. Detect the device or choose a source first.");
-                copy.IncrementalBackup = chosen;
-            }
-            return copy;
+            var inputs = new WindowInputs {
+                Operation = Selected, BackupFolder = backupFolder.Text, Source = source.Text, RestoreDestination = restoreDestination.Text,
+                Profile = profile.Text, ZipChecked = zip.Checked, FullName = backupSets.FullName, IncrementalName = backupSets.IncrementalName,
+                ChosenBackup = backupSets.SelectedBackup, ArchiveReady = ArchiveRestoreReady, ArchivePath = zipRestore.ArchivePath,
+                RestoreSelection = CaptureRestoreSelection };
+            return WindowOptions.Capture(config, inputs, forOperation);
         }
         void RefreshOperationControls()
         {
@@ -452,9 +434,9 @@ namespace GearBackup.Gui
             finally { synchronizingNavigation = previous; }
         }
         GuiOperation Selected { get { return selectedOperation; } }
-        bool Restoring { get { return Selected == GuiOperation.Restore || Selected == GuiOperation.RestoreZip; } }
+        bool Restoring { get { return WindowOptions.Restoring(Selected); } }
         // A zip is made of a full backup, including a camera-settings snapshot.
-        bool ZipApplies { get { return Selected == GuiOperation.FullBackup || Selected == GuiOperation.CameraSettings; } }
+        bool ZipApplies { get { return WindowOptions.ZipApplies(Selected); } }
         void RefreshProgressMetrics()
         {
             if (!elapsed.IsRunning) return;
