@@ -63,7 +63,7 @@ partial class Tests
                 string cancelled = Folder(root, "cancelled"); named("MigrationTarget").Text = cancelled;
                 start.PerformClick(); DriveGui(form, state, "Cancelled", true);
                 Assert(Directory.GetFileSystemEntries(cancelled).Length == 0, "declining migration preview leaves the destination empty");
-                gears.SetActive(GearIconStrip.Gears[2]); Application.DoEvents();
+                gears.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
                 Assert(!start.Visible && tabs.TabPages[2].Text == "Planned", "migration is specific to M8 mode");
                 gears.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
                 Assert(tabs.TabPages[2].Text == "Card migration" && named("MigrationTarget").Text == cancelled, "assistant selections survive gear-mode changes");

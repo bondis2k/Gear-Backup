@@ -63,8 +63,9 @@ partial class Tests
                     "M8 mode replaces Backup with Sample check and drops backup/restore shortcuts: " + titles());
                 Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("CheckM8Samples") != null,
                     "M8 mode exposes Detect device and sample checking without backup controls");
-                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
-                form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
+                form.ShowDevice(Devices.OPXY); Assert(strip.Active.Device == Devices.OPXY && named("GearPlaceholder1").Text.Contains("OP-XY"), "in a device mode an identified device of another type switches to its mode");
+                form.ShowDevice(null); Assert(strip.Active.Device == Devices.OPXY, "no device keeps the chosen mode");
+                form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && titles() == "Device|Project inspector|Instrument check", "an identified Tracker Mini switches to the Tracker Mini view: " + titles());
                 form.ShowDevice(Devices.X100VI);
                 Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore" && form.Controls.Find("StartOperation", true).Length > 0 && named("GoToBackup").Visible,
                     "a device without a mode of its own uses Gear Backup, with Backup and Restore back as they were");

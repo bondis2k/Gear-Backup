@@ -172,7 +172,7 @@ Use distinct history names for sources you want kept separate. Reusing the same 
 
 ### Header modes
 
-The **Gear Backup** icon selects the complete app: Device, Backup and Restore. The M8, Tracker Mini, OP-XY and OP-1 Field header icons select device-specific modes and search for that device type. M8 mode includes **Sample check**, **Card migration** and **Song**; other devices' **Coming soon** and **Planned** tabs are placeholders. Return to the Gear Backup icon for the normal Backup and Restore tabs.
+The **Gear Backup** icon selects the complete app: Device, Backup and Restore. The M8, Tracker Mini, OP-XY and OP-1 Field header icons select device-specific modes and search for that device type. M8 mode includes **Sample check**, **Card migration** and **Song**; Tracker Mini mode includes **Project inspector** and **Instrument check**; the other devices' **Coming soon** and **Planned** tabs are placeholders. Return to the Gear Backup icon for the normal Backup and Restore tabs.
 
 Detecting a device while in Gear Backup mode keeps the backup tools available. A device-specific placeholder is not an error or a missing installation component.
 
@@ -445,6 +445,16 @@ This is a settings snapshot, not a complete camera configuration image or Fujifi
 Choose **View recipes** for a supported settings backup in Dashboard/Storage. The viewer can also open an XML export or a folder of exports. It displays recognized film simulation names and values; unknown values remain explicit protocol values instead of guesses.
 
 Use copy/export actions to make a readable text reference. A text report is for reading or applying settings manually, not uploading to the camera. Restore XML files to a PC folder when you need separate copies of their exports.
+
+## Tracker Mini project tools
+
+Choose the **Tracker Mini** icon in the header. Its two tabs read a project without changing anything.
+
+**Project inspector.** Choose the Tracker card (or a project folder that holds `project.mt`) with **Browse…** and click **Inspect**. If the card holds several projects, pick one from the list that appears. The tab shows the project name, tempo and firmware, how many patterns and song positions it has, every instrument file with its sample name, length, channels and play mode, and every pattern with the instruments its notes play and whether the song uses it.
+
+**Instrument check.** A Tracker instrument keeps its sample inside its `.pti` file and a project stores no sample paths, so there is no path to go missing as on the M8. What can go wrong is that a pattern plays an instrument number that has no usable instrument file. The check lists each such instrument (no file, unreadable, or a file with no audio), the patterns that play it and whether any of them is in the song. It also lists song positions that play a pattern with no pattern file, and counts MIDI and synth instruments, which have no files. Click **Check project** to read the project again after fixing it.
+
+Only notes inside a track's length count, and instruments are matched by number: a note on instrument 7 needs `instruments\instrument_07.pti` (a folder numbered from `instrument_00` is recognised too). The file layouts follow Polyend's open-source tracker-lib; if a project from a newer firmware reads oddly, tell us which file so the reader can be checked against it.
 
 ## M8 Song viewer
 
