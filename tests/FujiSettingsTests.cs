@@ -4,8 +4,10 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Xml;
-using static FujiSettings;
-using static FujiSettingsBackup;
+using static GearBackup.FujiSettings;
+using static GearBackup.FujiSettingsBackup;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

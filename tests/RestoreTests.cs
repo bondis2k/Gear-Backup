@@ -6,14 +6,16 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Threading;
-using static FileCopy;
-using static PathSafety;
-using static Snapshots;
-using static RestoreFlow;
-using static SampleDependencies;
-using static AtomicFile;
-using static PlanReview;
-using static SongRestoreDependencies;
+using static GearBackup.FileCopy;
+using static GearBackup.PathSafety;
+using static GearBackup.Snapshots;
+using static GearBackup.RestoreFlow;
+using static GearBackup.SampleDependencies;
+using static GearBackup.AtomicFile;
+using static GearBackup.PlanReview;
+using static GearBackup.SongRestoreDependencies;
+using GearBackup;
+using GearBackup.Cli;
 
 partial class Tests
 {

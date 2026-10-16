@@ -72,6 +72,7 @@ Name: clipath; Description: "Add CLI to PATH"; Flags: unchecked
 [Files]
 Source: "{#PayloadDir}\GearBackup.GUI.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\GearBackup.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\GearBackup.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\m8_reader.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Manual.html"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PayloadDir}\Manual-*.html"; DestDir: "{app}"; Flags: ignoreversion

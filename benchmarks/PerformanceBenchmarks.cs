@@ -6,6 +6,9 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 
+using GearBackup;
+using GearBackup.Cli;
+
 static class PerformanceBenchmarks
 {
     sealed class Quiet : IOperationInteraction

@@ -6,12 +6,14 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using static PathSafety;
-using static Snapshots;
-using static Backups;
-using static RestoreFlow;
-using static ConsoleUi;
-using static BackupFolders;
+using static GearBackup.PathSafety;
+using static GearBackup.Snapshots;
+using static GearBackup.Backups;
+using static GearBackup.RestoreFlow;
+using static GearBackup.ConsoleUi;
+using static GearBackup.BackupFolders;
+using GearBackup;
+using GearBackup.Cli;
 
 class TestRunner
 {
@@ -268,8 +270,11 @@ partial class Tests
 
 // Tests leave out Notifications.cs, whose Windows notifications would write to the registry and appear on
 // the desktop; these stand-ins replace it.
-static class Notifications
+namespace GearBackup.Cli
 {
-    internal static bool? ShowToast(string title, string summary, bool ask) { return false; }
-    internal static void Finish(string pnp, string title, string summary, EjectMode mode) { }
+    static class Notifications
+    {
+        internal static bool? ShowToast(string title, string summary, bool ask) { return false; }
+        internal static void Finish(string pnp, string title, string summary, EjectMode mode) { }
+    }
 }

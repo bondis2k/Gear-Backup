@@ -7,19 +7,22 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using static PathSafety;
-using static ConsoleUi;
-using static Formatting;
-using static Snapshots;
-using static Backups;
-using static FujiSettings;
-using static MtpMirror;
-using static StorageCatalog;
-using static AppSettings;
-using static ProfileSettings;
-using static Session;
-using static ProfileNaming;
-using static GearGui;
+using static GearBackup.PathSafety;
+using static GearBackup.ConsoleUi;
+using static GearBackup.Formatting;
+using static GearBackup.Snapshots;
+using static GearBackup.Backups;
+using static GearBackup.FujiSettings;
+using static GearBackup.MtpMirror;
+using static GearBackup.StorageCatalog;
+using static GearBackup.AppSettings;
+using static GearBackup.ProfileSettings;
+using static GearBackup.Session;
+using static GearBackup.ProfileNaming;
+using static GearBackup.Gui.GearGui;
+using GearBackup;
+using GearBackup.Cli;
+using GearBackup.Gui;
 
 class GuiTestRunner
 {
