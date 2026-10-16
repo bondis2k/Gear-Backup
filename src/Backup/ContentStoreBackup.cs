@@ -63,6 +63,7 @@ internal sealed class ContentStoreBackup
         OperationOutput.WriteLine("  " + (incremental ? "Updating" : "Creating") + " single content store: " + backup);
         OperationOutput.WriteLine("  A restore point is saved for this backup run. Files are restored through Gear Backup.");
         store = new ObjectChecks(backup);
+        StartAfterLatestPoint();
         LoadCurrentPoint();
         OperationResult stop = PlanFiles();
         if (stop != null) return stop;
@@ -86,6 +87,22 @@ internal sealed class ContentStoreBackup
                 OutputFolder = backup, Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged, Failed = 1 } };
         }
         finally { RemoveUnpublishedPoint(); }
+    }
+
+    // Restore points are ordered by capture time. A run that starts in the same clock tick as the previous one
+    // (a fast run on a small set) would otherwise tie with it and could be listed as the older point.
+    void StartAfterLatestPoint()
+    {
+        if (!incremental) return;
+        string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");
+        if (!File.Exists(pointer)) return;
+        try
+        {
+            string latest = Records.ReadText(pointer, Records.SmallLimit, "Current restore point").Trim();
+            DateTime taken = RestorePointNames.TakenUtc(backup, latest);
+            if (started.ToUniversalTime() <= taken) started = taken.ToLocalTime().AddMilliseconds(1);
+        }
+        catch (IOException) { } // a damaged record is reported by the run itself
     }
 
     // The restore point an incremental run builds on: from the SQLite inventory when it is current, otherwise the manifest.
