@@ -52,8 +52,7 @@ internal static class RestoreCatalog
         if (device != null && recorded.Id != device.Id)
             throw new IOException("This backup does not match the identified device. Detect the device and choose its backup again.");
         var set = new RestoreSet { Backup = backup, Device = recorded };
-        bool single = ContentStoreBackup.IsSingle(backup);
-        set.Single = single;
+        ContentStoreBackup.RequireContentStore(backup);
         try
         {
             var inventoryPaths = new InventoryPathCache(backup);
@@ -64,7 +63,6 @@ internal static class RestoreCatalog
             set.Sqlite = true;
             var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
             grouped.Add("current", new Snapshot { Name = "Latest backup files" });
-            if (!single) grouped["current"].OldVersions = VersionCatalog.KnownOldVersions(backup);
             foreach (string name in data.RestorePoints)
             {
                 if (name == "current") throw new IOException("invalid saved restore point name");
@@ -75,7 +73,7 @@ internal static class RestoreCatalog
             foreach (var entry in data.Files)
             {
                 OperationContext.Current.CheckCancellation();
-                if (Checksums.IsBackupMetaFile(inventoryPaths.Resolve(entry.Path))) throw new IOException("catalog contains internal metadata paths");
+                if (AppIdentity.IsMetadataPath(inventoryPaths.Resolve(entry.Path))) throw new IOException("catalog contains internal metadata paths");
                 if (entry.Size < 0 || entry.ModifiedTicks < 0 || entry.ModifiedTicks > DateTime.MaxValue.Ticks ||
                     entry.CreatedTicks < 0 || entry.CreatedTicks > DateTime.MaxValue.Ticks) throw new IOException("invalid catalog metadata");
                 Snapshot snapshot;
@@ -83,8 +81,8 @@ internal static class RestoreCatalog
                 if (entry.IsDirectory) snapshot.Folders.Add(entry.Path);
                 else
                 {
-                    if ((single || entry.SnapshotId != "current") && !ValidHash(entry.Hash)) throw new IOException("Invalid snapshot checksum.");
-                    string stored = single || entry.SnapshotId != "current" ? objectPaths.Resolve(entry.Hash) : inventoryPaths.Resolve(entry.Path);
+                    if (!ValidHash(entry.Hash)) throw new IOException("Invalid snapshot checksum.");
+                    string stored = objectPaths.Resolve(entry.Hash);
                     snapshot.Files.Add(new RestoreEntry { Relative = entry.Path, StoredPath = stored, Hash = entry.Hash,
                         Size = entry.Size, ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks });
                 }
@@ -135,7 +133,6 @@ internal static class RestoreCatalog
         var records = new List<string>();
         foreach (var file in snapshot.Files) records.Add("F\t" + Encode(file.Relative) + "\t" + file.Hash + "\t" + file.Size + "\t" + file.ModifiedTicks + "\t" + file.CreatedTicks);
         foreach (string folder in snapshot.Folders) records.Add("D\t" + Encode(folder));
-        foreach (string old in snapshot.OldVersions) records.Add("O\t" + Encode(old));
         records.Sort(StringComparer.Ordinal);
         using (var hash = System.Security.Cryptography.SHA256.Create()) return FileCopy.ToHex(hash.ComputeHash(Encoding.UTF8.GetBytes(string.Join("\n", records))));
     }
@@ -179,10 +176,10 @@ internal static class RestoreCatalog
             RestorePoint point = set.Points.Find(p => p.Id == request.Point);
             if (point == null || Stamp(point.Snapshot) != request.Stamp) throw new IOException("The selected backup changed. Refresh the restore selection and review the files again.");
             if (BackupStatus(request.Backup).Unfinished && !ConsoleUi.AskYesNo("This backup is unfinished. Restore its available files anyway?")) return new OperationResult { Cancelled = true };
-            Snapshot snapshot = request.Paths == null ? Select(point.Snapshot, point.Snapshot.Files.FindAll(f => !point.Snapshot.OldVersions.Contains(f.Relative)).ConvertAll(f => f.Relative).ToArray()) : Select(point.Snapshot, request.Paths);
+            Snapshot snapshot = request.Paths == null ? Select(point.Snapshot, point.Snapshot.Files.ConvertAll(f => f.Relative).ToArray()) : Select(point.Snapshot, request.Paths);
             if (request.Paths == null) snapshot.Folders = new List<string>(point.Snapshot.Folders);
             if (snapshot.Files.Count == 0 && snapshot.Folders.Count == 0) throw new IOException("No files or folders selected.");
-            if (request.Exact && (request.Paths != null || (point.Id == "current" && !set.Single))) throw new IOException("Exact restore requires a complete saved restore point and full-backup restore.");
+            if (request.Exact && request.Paths != null) throw new IOException("Exact restore requires a complete saved restore point and full-backup restore.");
             Config effective = ProfileSettings.ResolveProfileSettings(config, device.Id, Path.GetFileName(history));
             if (!RestoreFlow.ConfirmRestoreTarget(request.Backup, target)) return new OperationResult { Cancelled = true };
             OperationOutput.WriteLine("  Restore inventory: " + (set.Sqlite ? "SQLite (catalog.sqlite)." : "recovery records."));
@@ -191,6 +188,6 @@ internal static class RestoreCatalog
         }
     }
 }
-internal sealed class RestoreSet { internal string Backup, Notice; internal DeviceProfile Device; internal bool Sqlite, Single; internal readonly List<RestorePoint> Points = new List<RestorePoint>(); }
+internal sealed class RestoreSet { internal string Backup, Notice; internal DeviceProfile Device; internal bool Sqlite; internal readonly List<RestorePoint> Points = new List<RestorePoint>(); }
 internal sealed class RestorePoint { internal string Id, Label; internal Snapshot Snapshot; public override string ToString() { return Label; } }
 internal sealed class RestoreRequest { internal string Backup, DeviceId, Point, Stamp; internal string[] Paths; internal bool Exact; }

@@ -2,7 +2,7 @@
 
 Back up your music gear, camera and local folders on Windows. Gear Backup provides a graphical app and a command-line app with the same backup, restore and integrity-check engine.
 
-Make full or incremental backups, review changes before copying, and restore the files you need. Optional point-in-time history lets you return to an earlier state; turn it off when you prefer a smaller backup of the current files.
+Make full or incremental backups, review changes before copying, and restore the files you need. Every run saves a restore point, so you can return to an earlier state of the source.
 
 Restore does not require a connected device. Choose any available backup and recover it to a PC folder; detecting a device filters the list to that device type.
 
@@ -26,13 +26,13 @@ MTP devices are read through a local PC mirror. Their backups restore to a PC fo
 ## What it offers
 
 - **Flexible backups:** full and incremental copies, separate source profiles, optional ZIP archives, and resumable interrupted backups.
-- **History when you need it:** dated snapshots, retained file versions and optional NTFS hard links. Disable point-in-time history to avoid its additional content copy.
+- **History built in:** every backup run is a restore point. Each distinct file content is stored once within a backup set, so history costs little space.
 - **Selective restore:** the GUI lists backups for the detected device, defaults to the latest saved run and uses SQLite for full restore or a checked folder/file browser. The CLI also offers M8 bundles, songs with samples and Tracker Mini projects.
 - **ZIP restore:** the GUI can restore a standalone ZIP to a matching detected device or PC folder, with mandatory checksum validation and free-space checks. MTP files are restored to a PC folder for manual transfer.
 - **Checks and control:** change previews, backup integrity checks, optional SHA-256 change comparison, optional copy verification and recovery copies before restore.
 - **Backup file catalog:** SQLite supplies the primary inventory for incremental backups and records snapshot membership and integrity results. Checksum lists and manifests provide recovery records if the database is missing, stale or damaged.
 - **Backup management:** a dashboard showing backup health and age, a storage breakdown, and previewed cleanup to the Recycle Bin.
-- **Device preferences:** save different backup locations, history and retention choices for each device or profile.
+- **Device preferences:** save different backup locations and retention choices for each device or profile.
 - **Readable X100VI recipes:** browse saved recipes offline, see film simulation names and setting values, and copy or export them as text.
 
 ## Install and get started
@@ -78,11 +78,9 @@ Installed copies store settings in `%APPDATA%\GearBackup`; portable copies and l
 
 Choose **Original**, **Original (dark)** or **Retro** under **Settings → Appearance → Color theme**. Saving applies the theme immediately and remembers it for the next launch. Original is the default.
 
-Change previews are enabled by default. Point-in-time history (`PointInTimeHistory`), SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
+Change previews are enabled by default. SHA-256 change comparison (`Thorough`), automatic copy verification (`Verify`) and recovery copies (`Recovery`) are optional and default to off.
 
-The default `PointInTimeHistory=no` avoids the second history content copy for new backups while keeping incremental backups, integrity checks and current-file restore. Enable **Save point-in-time history** in Settings or set `PointInTimeHistory=yes` if you want to restore earlier states. Existing snapshots, retained versions, ZIPs and MTP mirrors still occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
-
-By default new full backups use a single content store (**Settings → Backup → Use a single content store**, `SingleContentStore=yes`); turn it off for plain, browsable backup folders. Each distinct file content is stored once within that backup set. Every successful incremental run saves a restore point dated by the backup run, including runs with no changes. Restore or export files through the app; this layout has no browsable file tree. Separate full backups remain independent.
+Backups use a content store: each distinct file content is stored once within a backup set, and every run, including runs with no changes, saves a restore point dated by the backup run. Restore or export files through the app; a backup has no browsable file tree. Separate full backups remain independent. ZIPs and MTP mirrors also occupy space; use **Storage** to review them. Cleanup moves selected items to the Recycle Bin, which must be emptied to release their space.
 
 See the [settings reference](MANUAL.md#all-ini-settings) for backup paths, retention, recovery locations and other options.
 

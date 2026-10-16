@@ -37,7 +37,7 @@ internal static class ArchiveBackup
         if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
         var scan = new ScanResult(); Backups.CollectFiles(source, scan);
         foreach (var item in Directory.EnumerateFileSystemEntries(source))
-            if (string.Equals(Path.GetFileName(item), Checksums.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(Path.GetFileName(item), ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("The source contains a reserved archive metadata name: " + Path.GetFileName(item) + ". Rename it before creating the ZIP.");
         var actions = new List<string>(); var sizes = new Dictionary<string, long>(); long total = 0;
@@ -101,7 +101,7 @@ internal static class ArchiveBackup
                         scan.Files.Count, scan.Folders.Count, total, checksumBytes));
                     using (var hash = SHA256.Create()) hashes[ArchiveMetadata.FileName] = FileCopy.ToHex(hash.ComputeHash(info));
                     using (var output = zip.CreateEntry(ArchiveMetadata.FileName, CompressionLevel.Fastest).Open()) output.Write(info, 0, info.Length);
-                    using (var writer = new StreamWriter(zip.CreateEntry(Checksums.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
+                    using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
                         writer.Write(ArchiveMetadata.Checksums(hashes));
                 }
             }

@@ -43,7 +43,7 @@ partial class Tests
         Assert(result.ExitCode == 0 && result.Counts.Copied == 2 && File.ReadAllText(Path.Combine(target, "Songs", "one.m8s")) == "BACKUP SONG" &&
             File.ReadAllText(Path.Combine(target, "Samples", "æøå.wav")) == "SAMPLE" && Directory.Exists(Path.Combine(target, "Empty")), "ZIP restore copies verified content and empty folders");
         Assert(File.Exists(Path.Combine(target, "keep.txt")) && !File.Exists(Path.Combine(target, ArchiveMetadata.FileName)) &&
-            !File.Exists(Path.Combine(target, Checksums.ChecksumFileName)) && Directory.GetFileSystemEntries(scratch).Length == 0,
+            !File.Exists(Path.Combine(target, ArchiveMetadata.ChecksumFileName)) && Directory.GetFileSystemEntries(scratch).Length == 0,
             "ZIP restore merges, excludes generated metadata and removes extraction files");
 
         string untouched = Folder(root, "untouched");
@@ -93,7 +93,7 @@ partial class Tests
             using (var writer = new StreamWriter(zip.CreateEntry(name).Open())) writer.Write("EVIL");
             Throws(() => WithUi(() => ZipRestore.Run(corrupt, detected, untouched, config, stagingParent: scratch)), "ZIP restore rejects unsafe, duplicate or conflicting paths: " + name);
         }
-        foreach (string name in new[] { ArchiveMetadata.FileName, Checksums.ChecksumFileName })
+        foreach (string name in new[] { ArchiveMetadata.FileName, ArchiveMetadata.ChecksumFileName })
         {
             File.Copy(archive, corrupt, true);
             using (var file = new FileStream(corrupt, FileMode.Open, FileAccess.ReadWrite))
@@ -135,7 +135,7 @@ partial class Tests
             using (var hash = System.Security.Cryptography.SHA256.Create()) checksum = FileCopy.ToHex(hash.ComputeHash(new UTF8Encoding(false).GetBytes(updated)));
             return updated;
         });
-        ReplaceZipText(path, Checksums.ChecksumFileName, text => {
+        ReplaceZipText(path, ArchiveMetadata.ChecksumFileName, text => {
             var lines = text.Split('\n');
             for (int i = 0; i < lines.Length; i++)
                 if (lines[i].EndsWith("  " + ArchiveMetadata.FileName)) lines[i] = checksum + "  " + ArchiveMetadata.FileName;

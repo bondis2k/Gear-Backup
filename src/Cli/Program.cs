@@ -9,7 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
-using static Checksums;
 using static Backups;
 using static FujiSettings;
 using static MtpMirror;
@@ -258,7 +257,7 @@ static class Program
     // Checks backups against their checksum lists; only shows a notification (the M8 isn't involved).
     static int Check(List<string> backups)
     {
-        OperationResult result = RunCheck(backups);
+        OperationResult result = IntegrityEngine.RunCheck(backups);
         if (result.Title != null) ShowToast(result.Title, result.Summary, false);
         return result.ExitCode;
     }

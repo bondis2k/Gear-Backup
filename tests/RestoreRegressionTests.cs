@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using static Snapshots;
-using static VersionCatalog;
 using static RestoreFlow;
 using static DeviceSelection;
 using static ProfileSettings;
@@ -20,20 +19,18 @@ partial class Tests
         Put(Path.Combine(source, dated), "REAL SAMPLE");
         Put(Path.Combine(source, "Bundles", "Demo", dated), "BUNDLE SAMPLE");
         Put(Path.Combine(source, "song.txt"), "FIRST");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, SettingsDirectory = root, Preview = false, PointInTimeHistory = false, Thorough = true };
+        var config = new Config { BackupFolder = root, SettingsDirectory = root, Preview = false, Thorough = true };
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
         new BackupEngine().Run(source, history, null, false, config, context);
         string backup = LatestBackup(history);
         Put(Path.Combine(source, "song.txt"), "SECOND");
         new BackupEngine().Run(source, history, backup, true, config, context);
-        Assert(KnownOldVersions(backup).Count == 1, "only the changed song's retained copy is a known version");
         var ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
         string target = Folder(root, "all");
         using (new OperationContext(ui, CancellationToken.None).Activate())
             Assert(RunRestore(target, new List<string> { backup }, config).ExitCode == 0, "current-file all restore succeeds");
         Assert(File.ReadAllText(Path.Combine(target, dated)) == "REAL SAMPLE", "all restore keeps a real dated filename");
         Assert(File.ReadAllText(Path.Combine(target, "Bundles", "Demo", dated)) == "BUNDLE SAMPLE", "all restore keeps nested dated source files");
-        foreach (string version in KnownOldVersions(backup)) Assert(!File.Exists(Path.Combine(target, version)), "all restore omits genuine retained versions");
 
         ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
         ui.Keys.Enqueue(RestoreMode.Bundle.Key);
@@ -49,20 +46,17 @@ partial class Tests
             Assert(RunRestore(target, new List<string> { backup }, config).ExitCode == 0, "single dated-file restore succeeds");
         Assert(!ui.Questions.Exists(q => q.Contains("old version under")), "a genuine dated source file is never offered a rename");
         Assert(File.Exists(Path.Combine(target, dated)), "single-file restore preserves its exact source name");
-
-        File.Delete(Path.Combine(AppIdentity.MetadataRoot(backup), "old-versions.txt"));
-        Assert(CurrentBackup(backup).OldVersions.Count == 0, "missing version records never infer retained versions from names");
     }
 
     [Test("History selection across configured locations", Folder = "history-locations")]
     static void TestHistoryLocations(string root)
     {
-        var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
+        var config = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root };
         string alternate = Path.Combine(root, "alternate");
         SaveProfileSettings(config, "device:tracker-mini", new Dictionary<string, string> { { "BackupFolder", alternate } });
         SaveProfileSettings(config, "profile:Studio", new Dictionary<string, string> { { "BackupFolder", alternate } });
         string globalHistory = Path.Combine(HistoriesRoot(config), "profiles", "Studio");
-        string otherHistory = Path.Combine(HistoriesRoot(new Config { SingleContentStore = false, BackupFolder = alternate }), "profiles", "Studio");
+        string otherHistory = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
         Directory.CreateDirectory(Path.Combine(globalHistory, "2026-01-01"));
         Directory.CreateDirectory(Path.Combine(otherHistory, "2026-01-01"));
         int before;
@@ -99,10 +93,10 @@ partial class Tests
     [Test("Restore uses saved device and preferences", Folder = "restore-device")]
     static void TestRestoreDevicePreferences(string root)
     {
-        var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
+        var global = new Config { BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, Preview = false };
         string alternate = Path.Combine(root, "tracker"), recovery = Path.Combine(root, "recovery");
         SaveProfileSettings(global, "device:tracker-mini", new Dictionary<string, string> {
-            { "BackupFolder", alternate }, { "Recovery", "yes" }, { "RecoveryFolder", recovery }, { "Verify", "yes" }, { "PointInTimeHistory", "no" }
+            { "BackupFolder", alternate }, { "Recovery", "yes" }, { "RecoveryFolder", recovery }, { "Verify", "yes" }, { "Thorough", "yes" }
         });
         string source = Folder(root, "source"), relative = "Projects\\Group\\Demo\\project.mt";
         Put(Path.Combine(source, relative), "PROJECT");
@@ -127,7 +121,8 @@ partial class Tests
         string[] recovered = Directory.GetFiles(recovery, "project.mt", SearchOption.AllDirectories);
         Assert(recovered.Length == 1 && File.ReadAllText(recovered[0]) == "ORIGINAL", "saved device recovery preferences preserve the original target");
 
-        Put(Path.Combine(backup, relative), "DAMAGED");
+        string storedProject = Snapshots.CurrentBackup(backup).Files.Find(e => e.Relative == relative).StoredPath;
+        Put(storedProject, "DAMAGED");
         ui = new TestInteraction { OnChooseItem = (q, items) => 1 };
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
@@ -148,7 +143,7 @@ partial class Tests
         using (new OperationContext(ui, CancellationToken.None).Activate())
         {
             PreparedSource prepared = PrepareSource(global, new SourceChoice { Path = target });
-            Put(Path.Combine(backup, relative), "PROJECT");
+            Put(storedProject, "PROJECT");
             Throws(() => RunPrepared(prepared, true, false), "restore refuses a backup with invalid device identity");
         }
         Put(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), new string('x', 200));

@@ -6,8 +6,6 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
-using static BackupTraversal;
-using static Checksums;
 using static Backups;
 using static PathSafety;
 
@@ -24,81 +22,9 @@ static class BackupZip
         return path;
     }
 
-    // Zips the card's files and folders (empty ones included) plus checksums.sha256 and the statistics,
-    // leaving out the .gearbackup history store, which only this program uses and would double the size.
+    // Zips the latest restore point as ordinary files and folders (empty folders included) plus checksums.sha256.
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
     internal static string ZipBackup(string backup)
-    {
-        if (ContentStoreBackup.IsSingle(backup)) return ZipContentStore(backup);
-        RejectRootLinks(backup);
-        var entries = new List<FileSystemInfo>(BackupEntries(backup));
-        foreach (string path in Directory.GetFiles(backup))
-            if (IsStatisticsFile(path) || Path.GetFileName(path).Equals(ChecksumFileName, StringComparison.OrdinalIgnoreCase))
-            {
-                RejectRootLinks(path);
-                entries.Add(new FileInfo(path));
-            }
-        long total = 0;
-        int fileCount = 0;
-        foreach (FileSystemInfo entry in entries)
-        {
-            var file = entry as FileInfo;
-            if (file != null) { total += file.Length; fileCount++; }
-        }
-
-        string zipPath = ZipPathFor(backup), temp = zipPath + ".tmp";
-        TryDelete(temp);
-        try
-        {
-            using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
-            {
-                var buffer = new byte[ChunkSize];
-                long done = 0;
-                int count = 0;
-                foreach (FileSystemInfo entry in entries)
-                {
-                    OperationContext.Current.CheckCancellation();
-                    RejectRootLinks(entry.FullName);
-                    string name = entry.FullName.Substring(backup.Length).TrimStart('\\').Replace('\\', '/');
-                    if (entry is DirectoryInfo)
-                    {
-                        zip.CreateEntry(name + "/");
-                        continue;
-                    }
-                    var file = (FileInfo)entry;
-                    // Fastest: most of a card is WAV samples, which barely compress at any level.
-                    ZipArchiveEntry item = zip.CreateEntry(name, CompressionLevel.Fastest);
-                    item.LastWriteTime = ZipTime(file.LastWriteTime);
-                    using (Stream from = IsStatisticsFile(file.FullName)
-                        ? new MemoryStream(Encoding.UTF8.GetBytes(RedactPaths(Records.ReadText(file.FullName, Records.ListLimit, "Backup statistics"), backup)))
-                        : (Stream)new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
-                    using (Stream to = item.Open())
-                    {
-                        int read;
-                        while ((read = from.Read(buffer, 0, buffer.Length)) > 0)
-                        {
-                            OperationContext.Current.CheckCancellation();
-                            to.Write(buffer, 0, read);
-                        }
-                    }
-                    done += file.Length;
-                    count++;
-                    OperationContext.Current.Progress(Stage.Zipping, name, done, total, count, fileCount);
-                }
-            }
-            File.Move(temp, zipPath);
-            return zipPath;
-        }
-        catch (Exception)
-        {
-            TryDelete(temp);
-            throw;
-        }
-    }
-
-    // Export a single store as ordinary files; no duplicate on-disk backup tree is needed first.
-    static string ZipContentStore(string backup)
     {
         var snapshot = ContentStoreBackup.Current(backup);
         string path = ZipPathFor(backup), temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -130,25 +56,13 @@ static class BackupZip
                         sums.Append(item.Hash).Append("  ").Append(name).Append('\n');
                         OperationContext.Current.Progress(Stage.Zipping, item.Relative, 0, 0, ++count, snapshot.Files.Count);
                     }
-                    using (var writer = new StreamWriter(zip.CreateEntry(ChecksumFileName).Open(), new UTF8Encoding(false))) writer.Write(sums.ToString());
+                    using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName).Open(), new UTF8Encoding(false))) writer.Write(sums.ToString());
                 }
             }
             OperationContext.Current.CheckCancellation();
             RejectRootLinks(path); File.Move(temp, path); return path;
         }
         finally { if (created) TryDelete(temp); }
-    }
-
-    // A zip is made to be shared, so its copy of the statistics hides where things are on this PC:
-    // the backup folder becomes "<this backup>" and the user profile (C:\Users\<name>) "%USERPROFILE%".
-    // The statistics file in the backup folder itself keeps the full paths.
-    static string RedactPaths(string text, string backup)
-    {
-        text = Regex.Replace(text, Regex.Escape(backup.TrimEnd('\\')), "<this backup>", RegexOptions.IgnoreCase);
-        string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\');
-        if (profile.Length > 3)
-            text = Regex.Replace(text, Regex.Escape(profile), "%USERPROFILE%", RegexOptions.IgnoreCase);
-        return text;
     }
 
     // Zip files can only store dates from 1980 to 2107; undated M8 files (1601) get 1 January 1980.

@@ -55,29 +55,19 @@ static class RestoreFlow
         RestoreMode mode = RestoreMode.FromKey(Ask("What should be restored?", RestoreModes(CurrentDevice)));
         List<RestoreEntry> items;
         string bundle = null;
-        if (mode == RestoreMode.All) items = snapshot.Files.FindAll(f => !snapshot.OldVersions.Contains(f.Relative));
+        if (mode == RestoreMode.All) items = new List<RestoreEntry>(snapshot.Files);
         else if (mode == RestoreMode.Bundle || mode == RestoreMode.ProjectFolder)
         {
             // A bundle or a song folder: everything under one folder, restored like a bundle.
             bundle = mode == RestoreMode.Bundle ? PickBundle(snapshot) : PickSongFolder(snapshot);
             if (bundle == null) return new OperationResult();
-            items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase) &&
-                !snapshot.OldVersions.Contains(f.Relative));
+            items = snapshot.Files.FindAll(f => f.Relative.StartsWith(bundle + "\\", StringComparison.OrdinalIgnoreCase));
         }
         else
         {
             RestoreEntry file = PickEntry(snapshot, mode == RestoreMode.SongWithSamples);
             if (file == null) return new OperationResult();
             items = mode == RestoreMode.SongWithSamples ? SongDependencies(file, snapshot, m8, config.Verify) : new List<RestoreEntry> { file };
-            if (snapshot.OldVersions.Contains(file.Relative))
-            {
-                if (Ask("Restore this old version under which name?", new Option('o', "Original name"), new Option('d', "Dated name")) == 'o')
-                {
-                    var renamed = new RestoreEntry { Relative = OriginalName(file.Relative), StoredPath = file.StoredPath,
-                        Hash = file.Hash, Size = file.Size, ModifiedTicks = file.ModifiedTicks, CreatedTicks = file.CreatedTicks };
-                    items[0] = renamed;
-                }
-            }
         }
         if (items.Count == 0) { OperationOutput.WriteLine("  No files selected."); return new OperationResult(); }
 
@@ -257,7 +247,7 @@ static class RestoreFlow
     {
         var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (RestoreEntry file in snapshot.Files)
-            if (IsSong(file.Relative) && !snapshot.OldVersions.Contains(file.Relative)) folders.Add(Path.GetDirectoryName(file.Relative));
+            if (IsSong(file.Relative)) folders.Add(Path.GetDirectoryName(file.Relative));
         var list = new List<string>(folders);
         list.Sort(StringComparer.OrdinalIgnoreCase);
         if (list.Count == 0) { OperationOutput.WriteLine("  No " + CurrentDevice.SongsLabel + " found in this backup."); return null; }

@@ -19,7 +19,7 @@ partial class Tests
             Put(Path.Combine(source, "Songs", "Other", "two.m8s"), "OTHER");
             Put(Path.Combine(source, "Samples", "kick.wav"), "SAMPLE");
             Directory.CreateDirectory(Path.Combine(source, "Songs", "Empty", "Nested"));
-            var config = new Config { BackupFolder = root, Preview = false, SingleContentStore = single, PointInTimeHistory = true, FullBackupName = "Live" };
+            var config = new Config { BackupFolder = root, Preview = false, FullBackupName = "Live" };
             string history = Path.Combine(Session.HistoriesRoot(config), "profiles", "Studio");
             string backup;
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
@@ -116,7 +116,7 @@ partial class Tests
         }
         string plain = Folder(dir, "restore-current-only"), plainSource = Folder(plain, "source");
         Put(Path.Combine(plainSource, "one.txt"), "ORIGINAL");
-        var plainConfig = new Config { SingleContentStore = false, BackupFolder = plain, Preview = false };
+        var plainConfig = new Config { BackupFolder = plain, Preview = false };
         string plainHistory = Path.Combine(Session.HistoriesRoot(plainConfig), "profiles", "Plain");
         string first = RunBackup(plainSource, plainHistory, null, false, plainConfig).OutputFolder;
         string second = RunBackup(plainSource, plainHistory, first, false, plainConfig).OutputFolder;
@@ -124,7 +124,7 @@ partial class Tests
         var latest = RestoreCatalog.BackupsForDevice(plainConfig, Devices.M8);
         Assert(latest[0] == first && latest.Count == 2, "restore defaults to most recent successful run even when an older full set was updated");
         var plainSet = RestoreCatalog.Load(first, Devices.M8);
-        Assert(plainSet.Sqlite && plainSet.Points.Count == 1 && plainSet.Points[0].Id == "current", "history-disabled backup offers only latest current files");
+        Assert(plainSet.Sqlite && plainSet.Points.Count == 3, "every run of a backup is offered as a restore point, after the latest files");
     }
 
     static void TestRestoreInventoryPathScope(string dir)
@@ -152,20 +152,24 @@ partial class Tests
     {
         string root = Folder(dir, "clock-point-names"), source = PathSafety.Rooted(Folder(root, "source"));
         Put(Path.Combine(source, "one.m8s"), "SONG");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        var config = new Config { BackupFolder = root, Preview = false };
         string backup = RunBackup(source, Path.Combine(Session.HistoriesRoot(config), "profiles", "Clock"), null, false, config).OutputFolder;
         string full = Path.GetFileNameWithoutExtension(Directory.GetFiles(SnapshotRoot(backup), "*.manifest")[0]);
         var started = new DateTime(2026, 10, 1, 23, 59, 58, DateTimeKind.Local);
         RestorePointNames.SaveMetadata(backup, full, started.AddHours(-1), false);
-        var scan = new ScanResult(); CollectFiles(source, scan);
-        var sums = Checksums.LoadChecksums(backup);
-        for (int i = 0; i < 10; i++) SaveSnapshot(backup, source, scan, sums, started, false, false, true);
+        string template = Path.Combine(SnapshotRoot(backup), full + ".manifest");
+        Action<DateTime> addPoint = when => {
+            string name = RestorePointNames.Create(backup, when, true);
+            File.Copy(template, Path.Combine(SnapshotRoot(backup), name + ".manifest"));
+            RestorePointNames.SaveMetadata(backup, name, when, true);
+        };
+        for (int i = 0; i < 10; i++) addPoint(started);
         Assert(File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58.manifest")) && File.Exists(Path.Combine(SnapshotRoot(backup), "2026-10-01_23.59.58_10.manifest")),
             "same-second captures receive safe suffixes instead of overwriting saved runs");
         BackupDatabase.Rebuild(backup);
         Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-01_23.59.58_10", "same-instant collisions sort numerically, including suffix ten");
         var midnight = new DateTime(2026, 10, 2, 0, 0, 1, DateTimeKind.Local);
-        SaveSnapshot(backup, source, scan, sums, midnight, false, false, true);
+        addPoint(midnight);
         BackupDatabase.Rebuild(backup);
         RestoreSet set = RestoreCatalog.Load(backup, Devices.M8);
         Assert(set.Points[0].Id == "2026-10-02_00.00.01" && set.Points[0].Snapshot.TakenUtc == midnight.ToUniversalTime(),
@@ -173,7 +177,7 @@ partial class Tests
         Assert(Path.GetFileNameWithoutExtension(RestorePointNames.OrderedManifests(backup)[0]) == "2026-10-02_00.00.01", "CLI uses the same chronological ordering as SQLite GUI");
         using (var locked = new FileStream(Path.Combine(SnapshotRoot(backup), "2026-10-02_00.00.01.taken"), FileMode.Open, FileAccess.Read, FileShare.None))
             Assert(RestoreCatalog.Load(backup, Devices.M8).Sqlite, "GUI capture timestamps come from SQLite without rereading sidecar files");
-        SaveSnapshot(backup, source, scan, sums, started.AddDays(1), false, false, true);
+        addPoint(started.AddDays(1));
         BackupDatabase.Rebuild(backup);
         Assert(RestoreCatalog.Load(backup, Devices.M8).Points[0].Id == "2026-10-02_23.59.58", "the same clock time on another day is a separate, later point");
     }
@@ -182,11 +186,11 @@ partial class Tests
     [Test("Named incremental backups", Folder = "helpers")]
     static void TestIncrementalBackupNames(string dir)
     {
-        foreach (bool single in new[] { false, true })
+        foreach (bool single in new[] { true })
         {
             string root = Folder(dir, "incremental-names-" + single), source = Folder(root, "source");
             Put(Path.Combine(source, "one.m8s"), "FULL");
-            var config = new Config { BackupFolder = root, Preview = false, SingleContentStore = single, PointInTimeHistory = true };
+            var config = new Config { BackupFolder = root, Preview = false };
             string history = Path.Combine(Session.HistoriesRoot(config), "profiles", "Names"), backup;
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
                 backup = RunBackup(source, history, null, false, config).OutputFolder;

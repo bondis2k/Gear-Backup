@@ -27,7 +27,7 @@ partial class Tests
     static void TestGuiThemes(string root)
     {
         string settingsPath = Path.Combine(root, "theme-settings"); Directory.CreateDirectory(settingsPath);
-        var config = new Config { SingleContentStore = false, BackupFolder = root, SettingsDirectory = settingsPath, SourceFolder = Path.Combine(root, "card") };
+        var config = new Config { BackupFolder = root, SettingsDirectory = settingsPath, SourceFolder = Path.Combine(root, "card") };
         try
         {
             using (var form = new MainForm(false, config))
@@ -222,7 +222,7 @@ partial class Tests
         try
         {
             foreach (string initial in new[] { "original", "original-dark", "windows", "retro" })
-            using (var owner = new MainForm(true, new Config { SingleContentStore = false, Theme = initial }))
+            using (var owner = new MainForm(true, new Config { Theme = initial }))
             using (var profiles = new ProfileSettingsDialog(owner, config))
             {
                 owner.Show();
@@ -250,7 +250,7 @@ partial class Tests
                         CheckNativeTitleBar(profiles, GuiTheme.IsDark);
                         foreach (Form window in windows) CheckNativeTitleBar(window, GuiTheme.IsDark);
                         var preferences = (SettingsDialog)windows[1];
-                        foreach (string name in new[] { "VerifyCopies", "CompareContents", "ReviewChanges", "PointInTimeHistory", "RecoveryCopies" })
+                        foreach (string name in new[] { "VerifyCopies", "CompareContents", "ReviewChanges", "RecoveryCopies" })
                             Assert(preferences.Controls.Find(name, true)[0].ForeColor == GuiTheme.Ink,
                                 "settings checkbox label follows the palette: " + theme + " / " + name);
                     }

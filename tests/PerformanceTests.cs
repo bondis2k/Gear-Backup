@@ -37,57 +37,38 @@ partial class Tests
     {
         string source = Path.Combine(root, "source"), history = Path.Combine(root, "history");
         Put(Path.Combine(source, "song.txt"), "UNCHANGED");
-        var config = new Config { SingleContentStore = false, Preview = false, MaxNameLength = 0 };
+        var config = new Config { Preview = false, MaxNameLength = 0 };
         OperationResult result = null;
         WithUi(() => result = Backups.RunBackup(source, history, null, false, config));
-        string backup = result.OutputFolder, checksums = Path.Combine(backup, Checksums.ChecksumFileName);
+        string backup = result.OutputFolder;
         DateTime sentinel = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        File.SetLastWriteTimeUtc(checksums, sentinel);
-        int reports = Directory.GetFiles(backup, "backup-statistics_*.txt").Length;
+        string success = Path.Combine(backup, AppIdentity.MetadataFolderName, "last-success.txt");
+        File.WriteAllText(success, sentinel.ToString("O") + "\n");
         TestInteraction ui = WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
         Assert(result.ExitCode == 0 && result.Counts.Unchanged == 1 && result.Counts.Copied == 0 && ui.Plans == 0,
             "unchanged incremental finishes with correct counts without approval");
-        Assert(File.GetLastWriteTimeUtc(checksums) == sentinel && Directory.GetFiles(backup, "backup-statistics_*.txt").Length == reports,
-            "unchanged run preserves checksums and statistics");
-        Assert(DateTime.Parse(File.ReadAllText(Path.Combine(backup, AppIdentity.MetadataFolderName, "last-success.txt"))).ToUniversalTime() > sentinel,
-            "unchanged run updates dashboard success time");
+        Assert(DateTime.Parse(File.ReadAllText(success)).ToUniversalTime() > sentinel, "unchanged run updates dashboard success time");
         string deviceRecord = Path.Combine(backup, AppIdentity.MetadataFolderName, "device.txt");
         File.WriteAllText(deviceRecord, "unknown-device\n");
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(File.ReadAllText(deviceRecord).Trim() == Devices.M8.Id, "changed device metadata takes normal repair path");
+        Assert(File.ReadAllText(deviceRecord).Trim() == Devices.M8.Id, "changed device metadata is repaired by the next run");
         Directory.CreateDirectory(Path.Combine(source, "NewEmpty"));
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(Directory.Exists(Path.Combine(backup, "NewEmpty")), "new empty folders take normal backup path");
-        File.SetLastWriteTimeUtc(checksums, sentinel);
-        Put(Path.Combine(backup, "manual.txt"), "MANUAL");
-        WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(Checksums.LoadChecksums(backup).ContainsKey("manual.txt"), "manual additions are still included in regenerated checksums");
+        Assert(Snapshots.CurrentBackup(backup).Folders.Contains("NewEmpty"), "new empty folders are recorded in the next restore point");
         File.Delete(Path.Combine(source, "song.txt"));
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(File.Exists(Path.Combine(backup, "song.txt")) && !result.Summary.StartsWith("No new or changed"), "source deletions take normal retained-file path");
-        File.Delete(checksums);
-        WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(File.Exists(checksums), "missing checksum list is rebuilt");
+        Assert(Snapshots.CurrentBackup(backup).Files.Count == 0 && !result.Summary.StartsWith("No new or changed"), "source deletions are recorded without touching earlier restore points");
+        Assert(Directory.GetFiles(Snapshots.SnapshotRoot(backup), "*.manifest").Length == 5, "every run saves a restore point");
         BackupStatuses.SetBackupStatus(backup, Status.Incomplete);
         WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(BackupStatuses.BackupStatus(backup) == Status.Complete, "unfinished backup still completes normal recovery");
-        config.PointInTimeHistory = true;
-        WithUi(() => result = Backups.RunBackup(source, history, backup, true, config));
-        Assert(Directory.GetFiles(Snapshots.SnapshotRoot(backup), "*.manifest").Length == 1, "enabling history still writes a snapshot");
-        config.PointInTimeHistory = false;
+        Assert(BackupStatuses.BackupStatus(backup) == Status.Complete, "an unfinished backup still completes");
         string cleanHistory = Path.Combine(root, "clean-history");
+        Put(Path.Combine(source, "song.txt"), "UNCHANGED");
         WithUi(() => result = Backups.RunBackup(source, cleanHistory, null, false, config));
         string cleanBackup = result.OutputFolder;
         config.KeepBackups = 1;
         WithUi(() => result = Backups.RunBackup(source, cleanHistory, cleanBackup, true, config));
-        Assert(!result.Summary.StartsWith("No new or changed"), "retention uses normal housekeeping");
-        config.KeepBackups = 0; config.KeepOldVersions = 1;
-        WithUi(() => result = Backups.RunBackup(source, cleanHistory, cleanBackup, true, config));
-        Assert(!result.Summary.StartsWith("No new or changed"), "old-version retention uses normal housekeeping");
-        config.KeepOldVersions = 0; config.PointInTimeHistory = true;
-        WithUi(() => result = Backups.RunBackup(source, cleanHistory, cleanBackup, true, config));
-        Assert(Directory.GetFiles(Snapshots.SnapshotRoot(cleanBackup), "*.manifest").Length == 1,
-            "unchanged clean backup still creates requested history");
+        Assert(Directory.GetFiles(Snapshots.SnapshotRoot(cleanBackup), "*.manifest").Length == 2, "an unchanged run still saves its restore point with retention on");
     }
 
     [Test("Reusable copy and hash buffers", Folder = "reusable-buffers")]

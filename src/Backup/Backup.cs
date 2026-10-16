@@ -3,15 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
-using static BackupTraversal;
-using static Checksums;
 using static ConsoleUi;
 using static Backups;
 
 static class Backups
 {
     // The date/time suffix added to old versions of updated files, e.g. "Song_2026-10-01_143000" or "..._2"
-    static readonly Regex VersionSuffix = new Regex(@"_\d{4}-\d{2}-\d{2}_\d{6}(_\d+)?$");
 
     // The full result, including whether the backup was cancelled. Title is null if nothing was done.
     internal static OperationResult RunBackup(string source, string backupRoot, string previous, bool incremental, Config config)
@@ -27,97 +24,6 @@ static class Backups
         title = result.Title;
         summary = result.Summary;
         return result.ExitCode;
-    }
-
-    // "Songs\Song.m8s" -> "Songs\Song_2026-10-01_143000.m8s" (adds _2, _3, ... if that name is taken)
-    internal static string VersionedName(string path, DateTime time)
-    {
-        string baseName = Path.Combine(Path.GetDirectoryName(path),
-            Path.GetFileNameWithoutExtension(path) + "_" + time.ToString("yyyy-MM-dd_HHmmss"));
-        string ext = Path.GetExtension(path);
-        string candidate = baseName + ext;
-        for (int n = 2; File.Exists(candidate); n++) candidate = baseName + "_" + n + ext;
-        return candidate;
-    }
-
-    internal static bool IsOldVersion(string path)
-    {
-        return VersionSuffix.IsMatch(Path.GetFileNameWithoutExtension(path));
-    }
-
-    // "Songs\Song_2026-10-01_143000.m8s" -> "Songs\Song.m8s"
-    internal static string OriginalName(string path)
-    {
-        string name = Path.GetFileNameWithoutExtension(path);
-        return Path.Combine(Path.GetDirectoryName(path),
-            name.Substring(0, VersionSuffix.Match(name).Index) + Path.GetExtension(path));
-    }
-
-    // Keeps at most `keep` old versions of each file in the backup; the oldest extra ones go to the
-    // Recycle Bin after asking. Only versions the program recorded keeping (`known`, relative names) are
-    // considered, so a file of the user's own with a date in its name is never offered. Files that also
-    // exist on the M8 under that name are never touched (e.g. a dated version that was restored to the M8).
-    // Returns how many were moved.
-    internal static int PruneOldVersions(string backup, int keep, HashSet<string> onM8, HashSet<string> known)
-    {
-        var groups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-        foreach (string path in BackupFiles(backup))
-        {
-            string relative = path.Substring(backup.Length).TrimStart('\\');
-            if (IsBackupMetaFile(path) || !IsOldVersion(path) || !known.Contains(relative)) continue;
-            if (onM8.Contains(relative)) continue;
-            string original = OriginalName(path);
-            List<string> list;
-            if (!groups.TryGetValue(original, out list)) groups[original] = list = new List<string>();
-            list.Add(path);
-        }
-
-        var extra = new List<string>();
-        foreach (List<string> versions in groups.Values)
-        {
-            if (versions.Count <= keep) continue;
-            // The date/time in the name sorts oldest first
-            versions.Sort((a, b) => string.CompareOrdinal(Path.GetFileName(a), Path.GetFileName(b)));
-            extra.AddRange(versions.GetRange(0, versions.Count - keep));
-        }
-        if (extra.Count == 0) return 0;
-
-        extra.Sort(StringComparer.OrdinalIgnoreCase);
-        OperationOutput.WriteLine("  KeepOldVersions is {0}, so these {1} older version(s) can go:", keep, extra.Count);
-        for (int i = 0; i < extra.Count && i < 15; i++)
-            OperationOutput.WriteLine("    " + extra[i].Substring(backup.Length).TrimStart('\\'));
-        if (extra.Count > 15) OperationOutput.WriteLine("    ... and {0} more", extra.Count - 15);
-        if (!AskYesNo("Move them to the Recycle Bin?"))
-        {
-            OperationOutput.WriteLine();
-            return 0;
-        }
-
-        int moved = 0;
-        foreach (string path in extra)
-        {
-            try
-            {
-                Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
-                    Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs,
-                    Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                moved++;
-            }
-            catch (Exception ex)
-            {
-                WriteColored("  Could not remove " + Path.GetFileName(path) + ": " + ex.Message, ConsoleColor.Yellow);
-            }
-        }
-        OperationOutput.WriteLine("  Moved {0} older version(s) to the Recycle Bin.", moved);
-        OperationOutput.WriteLine();
-        return moved;
-    }
-
-    internal static bool IsStatisticsFile(string path)
-    {
-        string name = Path.GetFileName(path);
-        return name.StartsWith("backup-statistics", StringComparison.OrdinalIgnoreCase) &&
-               name.EndsWith(".txt", StringComparison.OrdinalIgnoreCase);
     }
 
     // Backup folders (named yyyy-MM-dd or yyyy-MM-dd_HHmmss) in backupRoot, oldest first.

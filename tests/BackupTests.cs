@@ -8,8 +8,6 @@ using System.Text;
 using System.Threading;
 using static FileCopy;
 using static PathSafety;
-using static BackupTraversal;
-using static Checksums;
 using static Snapshots;
 using static Backups;
 using static RestoreFlow;
@@ -29,8 +27,8 @@ partial class Tests
     static void TestSettingsAndProfiles(string root)
     {
         string source = Rooted(Path.Combine(root, "card"));
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true };
-        Assert(!new Config { SingleContentStore = false }.Verify && !new Config { SingleContentStore = false }.Thorough, "SHA-256 comparisons default off");
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
+        Assert(!new Config { }.Verify && !new Config { }.Thorough, "SHA-256 comparisons default off");
         Assert(!config.Recovery, "recovery defaults to no");
         Assert(RecoveryRoot(config) == Path.Combine(root, "Gear Recovery"), "empty recovery location defaults under backup folder");
         ApplySetting(config, "RecoveryFolder", "%USERPROFILE%\\M8-test-recovery");
@@ -58,7 +56,7 @@ partial class Tests
     static void TestFullAndIncremental(string root)
     {
         string source = Rooted(Path.Combine(root, "card")), history = Path.Combine(root, "history");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, Verify = true, PointInTimeHistory = true };
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true, Verify = true };
         string title, summary;
         Put(Path.Combine(source, "Songs", "one.m8s"), "AAAA");
         Put(Path.Combine(source, "Songs", "removed.m8s"), "REMOVED");
@@ -79,20 +77,22 @@ partial class Tests
         Assert(first.Files.Count == 6, "snapshot contains exactly user files");
         Assert(first.Folders.Contains("Empty"), "empty folder recorded");
         Assert(!File.Exists(Path.Combine(backup, "Thumbs.db")), "OS junk excluded");
-        Assert(LoadChecksums(backup).Count == 6, "metadata not included in checksums");
         int objects = Directory.GetFiles(Path.Combine(backup, ".gearbackup", "objects")).Length;
         Assert(objects == 5, "identical samples share one history object");
 
         string song = Path.Combine(source, "Songs", "one.m8s");
         DateTime oldTime = File.GetLastWriteTimeUtc(song);
         Put(song, "BBBB"); File.SetLastWriteTimeUtc(song, oldTime);
-        Assert(CompareContent(new FileInfo(song), Path.Combine(backup, "Songs", "one.m8s"), false) == FileState.Same, "fast comparison preserves original behavior");
-        Assert(CompareContent(new FileInfo(song), Path.Combine(backup, "Songs", "one.m8s"), true) == FileState.Changed, "thorough detects same-size same-time changes");
+        string probeA = Path.Combine(root, "probe-a.bin"), probeB = Path.Combine(root, "probe-b.bin");
+        Put(probeA, "AAAA"); Put(probeB, "BBBB"); File.SetLastWriteTimeUtc(probeB, File.GetLastWriteTimeUtc(probeA));
+        Assert(CompareContent(new FileInfo(probeA), probeB, false) == FileState.Same, "fast comparison preserves original behavior");
+        Assert(CompareContent(new FileInfo(probeA), probeB, true) == FileState.Changed, "thorough detects same-size same-time changes");
         File.Delete(Path.Combine(source, "Songs", "removed.m8s"));
         Assert(Backup(source, history, backup, true, config, out title, out summary) == 0, "incremental succeeds");
         Snapshot second = LatestSnapshot(backup);
         Assert(second.Files.Count == 5, "deleted file absent from current snapshot");
-        Assert(File.Exists(Path.Combine(backup, "Songs", "removed.m8s")), "incremental retains deleted file in browsable backup");
+        Assert(first.Files.Exists(f => f.Relative == "Songs\\removed.m8s") && File.Exists(first.Files.Find(f => f.Relative == "Songs\\removed.m8s").StoredPath),
+            "the earlier restore point keeps the deleted file");
         Assert(File.ReadAllText(first.Files.Find(f => f.Relative == "Songs\\one.m8s").StoredPath) == "AAAA", "old snapshot contents immutable");
         Assert(second.Files.Exists(f => f.Relative == "Songs\\dated_2026-01-01_120000.m8s"), "genuine dated song included in snapshot");
 
@@ -104,27 +104,22 @@ partial class Tests
         Assert(sameDay.Count == 2 && sameDay[0] == firstFull && sameDay[1] != firstFull, "new full backup names sort chronologically without collision");
     }
 
-    [Test("Resume repairs partial copies", Folder = "resume")]
+    [Test("Resume after an interrupted backup", Folder = "resume")]
     static void TestResume(string root)
     {
         Fixture f = BackedUpCard(root, true);
         string title, summary;
         DateTime oldTime = File.GetLastWriteTimeUtc(f.Song);
-        SetBackupStatus(f.Backup, Status.Incomplete);
-        Put(Path.Combine(f.Backup, "Songs", "one.m8s"), "PARTIAL");
-        Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 0, "resume repairs partial file despite fast setting");
-        Assert(File.ReadAllText(Path.Combine(f.Backup, "Songs", "one.m8s")) == "BBBB", "resume restores source content");
-        Assert(BackupStatus(f.Backup) == Status.Complete, "resume complete status");
-        Assert(Directory.GetFiles(Path.Combine(f.Backup, ".gearbackup", "quarantine"), "*", SearchOption.AllDirectories).Length == 1, "partial copy quarantined");
-        int checkedOk = 0, checkedDamaged = 0, checkedMissing = 0, uncheckedBackups = 0;
-        CheckBackup(f.Backup, ref checkedOk, ref checkedDamaged, ref checkedMissing, ref uncheckedBackups);
-        Assert(checkedDamaged == 0 && checkedMissing == 0, "resume does not bless partial files as valid versions");
-        // Simulate an interrupted incremental after the file was copied but before checksums were updated.
+        // An interrupted run leaves the backup marked incomplete; the next incremental run finishes the job.
         SetBackupStatus(f.Backup, Status.Incomplete);
         Put(f.Song, "CCCC"); File.SetLastWriteTimeUtc(f.Song, oldTime);
-        Put(Path.Combine(f.Backup, "Songs", "one.m8s"), "CCCC");
-        Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 0, "resume refreshes stale checksum entries");
-        Assert(LoadChecksums(f.Backup)["Songs\\one.m8s"] == HashFile(f.Song), "resumed checksum matches repaired file");
+        Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 0, "an incremental run resumes an incomplete backup");
+        Assert(BackupStatus(f.Backup) == Status.Complete, "resume complete status");
+        RestoreEntry resumed = LatestSnapshot(f.Backup).Files.Find(e => e.Relative == "Songs\\one.m8s");
+        Assert(resumed.Hash == HashFile(f.Song) && File.ReadAllText(resumed.StoredPath) == "CCCC", "the resumed restore point holds the source content, even when only the content changed");
+        int checkedOk = 0, checkedDamaged = 0, checkedMissing = 0;
+        CheckSnapshots(f.Backup, ref checkedOk, ref checkedDamaged, ref checkedMissing);
+        Assert(checkedDamaged == 0 && checkedMissing == 0, "resume leaves every stored object valid");
     }
 
     [Test("Command-line entry flow", Folder = "cli")]
@@ -173,15 +168,16 @@ partial class Tests
         // A selected current object corruption must fail snapshot creation and mark backup failed.
         RestoreEntry currentSong = LatestSnapshot(f.Backup).Files.Find(e => e.Relative == "Songs\\one.m8s");
         Put(currentSong.StoredPath, "BAD");
-        Assert(Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary) == 2, "history failure prevents successful backup");
-        Assert(BackupStatus(f.Backup) == Status.Failed, "history failure sets failed status");
+        Throws(() => Backup(f.Source, f.History, f.Backup, true, f.Config, out title, out summary), "damaged stored content prevents an incremental backup");
 
-        // Objects a previous backup wrote and verified are only size-checked by later backups, which
-        // no longer read the whole history; damage that keeps the size is for Check backups to find.
+        // With Verify=no, objects a previous backup wrote are only size-checked by later backups, which
+        // do not read the whole history; damage that keeps the size is for Check backups to find.
         Fixture g = BackedUpCard(Path.Combine(root, "same-size"), true);
         RestoreEntry song = LatestSnapshot(g.Backup).Files.Find(e => e.Relative == "Songs\\one.m8s");
         Put(song.StoredPath, new string('X', (int)song.Size));
-        Assert(Backup(g.Source, g.History, g.Backup, true, g.Config, out title, out summary) == 0, "a backup doesn't re-read existing history objects");
+        Assert(Backup(g.Source, g.History, g.Backup, true, g.Config, out title, out summary) == 2, "Verify=yes re-reads the stored objects a backup reuses and refuses damaged ones");
+        g.Config.Verify = false;
+        Assert(Backup(g.Source, g.History, g.Backup, true, g.Config, out title, out summary) == 0, "with Verify=no a backup doesn't re-read existing history objects");
         ok = damaged = missing = 0;
         CheckSnapshots(g.Backup, ref ok, ref damaged, ref missing);
         Assert(damaged > 0, "Check backups finds same-size damage in history");
@@ -209,7 +205,7 @@ partial class Tests
         Assert(Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false).StartsWith("meta:"), "default guard records metadata fingerprint");
         var optionalCopies = new List<RestoreEntry> { optionalEntry };
         var optionalHashes = new Dictionary<string, string> { { "optional.bin", Fingerprint(Path.Combine(optionalTarget, "optional.bin"), false) } };
-        var offConfig = new Config { SingleContentStore = false, BackupFolder = root, Preview = false };
+        var offConfig = new Config { BackupFolder = root, Preview = false };
         ExecuteRestore(optionalTarget, optionalCopies, new List<string>(), new List<string>(), new List<string>(), optionalHashes, offConfig, out title, out summary);
         Assert(title == "Gear Backup restore complete" && File.ReadAllText(Path.Combine(optionalTarget, "optional.bin")) == "BBBB", "Verify=no permits restore without stored-checksum comparison");
         Assert(CopyFile(new FileInfo(optionalPath), Path.Combine(root, "optional-copy.bin"), false) == HashFile(optionalPath), "checksum records are generated when verification is off");
@@ -233,11 +229,13 @@ partial class Tests
         Put(undatedSong, "UNCHANGED");
         File.SetLastWriteTimeUtc(undatedSong, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
         string undatedHistory = Path.Combine(root, "undated-history");
-        var fastConfig = new Config { SingleContentStore = false, BackupFolder = root, Preview = false };
+        var fastConfig = new Config { BackupFolder = root, Preview = false };
         Assert(Backup(undatedSource, undatedHistory, null, false, fastConfig, out title, out summary) == 0, "undated initial backup succeeds with SHA off");
         string undatedBackup = ListBackups(undatedHistory)[0];
-        string undatedCopy = Path.Combine(undatedBackup, "Songs", "undated.m8s");
-        Assert(UsableFileTime(File.GetLastWriteTimeUtc(undatedCopy)), "undated copy retains destination timestamp");
+        // The stored object carries no useful date; compare against a copy that has one, as a browsable backup would have.
+        string undatedCopy = Path.Combine(root, "undated-copy.m8s");
+        File.Copy(undatedSong, undatedCopy);
+        File.SetLastWriteTimeUtc(undatedCopy, DateTime.UtcNow);
         Assert(CompareContent(new FileInfo(undatedSong), undatedCopy, false) == FileState.Same, "different timestamps do not mark identical undated contents changed");
         TextWriter previousOutput = Console.Out;
         var captured = new StringWriter();
@@ -252,8 +250,7 @@ partial class Tests
         try { Console.SetOut(noChangesOutput); noChangesResult = Backup(undatedSource, undatedHistory, undatedBackup, true, fastConfig, out title, out summary); }
         finally { Console.SetOut(previousOutput); fastConfig.Preview = false; }
         Assert(noChangesResult == 0, "unchanged incremental succeeds without confirmation even with Preview=yes");
-        Assert(!noChangesOutput.ToString().Contains("Proceed?") && noChangesOutput.ToString().Contains("No new or changed files"), "no-change run reports result without acceptance prompt");
-        Assert(Directory.GetFiles(Path.Combine(undatedBackup, "Songs"), "*.m8s").Length == 1, "no spurious old versions for undated files");
+        Assert(!noChangesOutput.ToString().Contains("Proceed?") && noChangesOutput.ToString().Contains("0 new/changed"), "no-change run reports result without acceptance prompt");
         var missingDateEntry = new RestoreEntry { Relative = "Songs\\undated.m8s", StoredPath = undatedCopy, Size = 9,
             ModifiedTicks = new DateTime(1601, 1, 1, 0, 0, 0, DateTimeKind.Utc).Ticks };
         Assert(EntryMatchesTarget(missingDateEntry, undatedSong, false), "restore skips identical FILETIME-zero snapshot contents");
@@ -274,7 +271,7 @@ partial class Tests
         Assert(!FilesEqual(blockA, blockB), "byte comparison finds difference in final partial buffer");
         Assert(DriveSpaceText(@"\\server\share") == "unknown", "statistics free-space text tolerates network sources");
         Assert(DriveSpaceText(Path.GetPathRoot(root)).Contains(" of "), "statistics free-space text shows free and total size");
-        var original = new Config { SingleContentStore = false };
+        var original = new Config { };
         foreach (var field in typeof(Config).GetFields())
         {
             if (field.FieldType == typeof(bool)) field.SetValue(original, !(bool)field.GetValue(original));
@@ -306,7 +303,7 @@ partial class Tests
         File.SetLastWriteTimeUtc(undated, new DateTime(1601, 1, 2, 0, 0, 0, DateTimeKind.Utc));
         Directory.CreateDirectory(Path.Combine(source, "Empty"));
         string history = Path.Combine(root, "zip-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Zip = true };
+        var config = new Config { BackupFolder = root, Preview = false, Zip = true };
 
         var ui = new TestInteraction();
         OperationResult full = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
@@ -319,8 +316,8 @@ partial class Tests
             var names = new HashSet<string>();
             foreach (ZipArchiveEntry entry in zip.Entries) names.Add(entry.FullName);
             Assert(names.Contains("Songs/a.m8s") && names.Contains("Samples/kick.wav") && names.Contains("Empty/") &&
-                names.Contains("checksums.sha256") && names.Contains("backup-statistics.txt"),
-                "zip holds the card's files, empty folders, checksums and statistics");
+                names.Contains("checksums.sha256"),
+                "zip holds the card's files, empty folders and checksums");
             Assert(!new List<string>(names).Exists(n => n.StartsWith(".gearbackup")), "zip leaves out the history store");
             using (var reader = new StreamReader(zip.GetEntry("Songs/a.m8s").Open()))
                 Assert(reader.ReadToEnd() == "ZIP SONG", "zipped content matches the backup");
@@ -369,128 +366,46 @@ partial class Tests
         Assert(cancelled && !File.Exists(cancelledCopy), "cancelling mid-copy stops and leaves no partial file");
     }
 
-    [Test("Backup without point-in-time history", Folder = "without-history")]
-    static void TestWithoutHistory(string root)
+    [Test("Cancelled backup resumes", Folder = "cancelled-backup")]
+    static void TestCancelledBackup(string root)
     {
-        Assert(!new Config { SingleContentStore = false }.PointInTimeHistory, "point-in-time history is disabled by default");
-        string source = Rooted(Path.Combine(root, "source"));
-        Put(Path.Combine(source, "song.txt"), "FIRST");
-        Put(Path.Combine(source, "unchanged.txt"), "SAME");
-        Directory.CreateDirectory(Path.Combine(source, "empty"));
-        string history = Path.Combine(root, "history");
-        var config = new Config { SingleContentStore = false, HardLinks = true, Verify = true, Thorough = true, Preview = false };
-        var ui = new TestInteraction();
-        OperationResult result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
-        string backup = ListBackups(history)[0];
-        Assert(result.ExitCode == 0 && BackupStatus(backup) == Status.Complete, "full backup completes with history disabled");
-        Assert(!Directory.Exists(SnapshotRoot(backup)) && !Directory.Exists(Path.Combine(backup, ".gearbackup", "objects")), "no snapshot or second content store is created");
-        Assert(ui.Output.ToString().Contains("no extra history content store"), "space planning ignores history even with HardLinks enabled");
-        Assert(LoadChecksums(backup).Count == 2, "history-free backup still has checksums");
-
-        Put(Path.Combine(source, "song.txt"), "SECOND VERSION");
-        Put(Path.Combine(source, "new.txt"), "NEW");
-        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
-        Assert(result.ExitCode == 0 && result.Counts.Copied == 2 && result.Counts.Unchanged == 1, "incremental backup updates changed and new files and skips unchanged files");
-        Assert(BackupFiles(backup).Exists(f => File.ReadAllText(f) == "FIRST"), "old browsable versions remain independent of snapshot history");
-        int ok = 0, damaged = 0, missing = 0, uncheckedFiles = 0;
-        using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
-        {
-            CheckBackup(backup, ref ok, ref damaged, ref missing, ref uncheckedFiles);
-            CheckSnapshots(backup, ref ok, ref damaged, ref missing);
-        }
-        Assert(ok == 4 && damaged == 0 && missing == 0 && uncheckedFiles == 0, "integrity checks verify current files and retained versions without snapshots");
-        Snapshot current = CurrentBackup(backup);
-        string target = Rooted(Path.Combine(root, "restored"));
-        Directory.CreateDirectory(target);
-        result = new RestoreEngine().RunSelected(target, current, current.Files, RestoreMode.All, null, false, config,
-            new OperationContext(new TestInteraction(), CancellationToken.None));
-        Assert(result.ExitCode == 0 && File.ReadAllText(Path.Combine(target, "song.txt")) == "SECOND VERSION" &&
-            File.ReadAllText(Path.Combine(target, "new.txt")) == "NEW" && Directory.Exists(Path.Combine(target, "empty")),
-            "current files and empty folders can be restored with history disabled");
-        Assert(!Directory.Exists(SnapshotRoot(backup)), "incremental backups also omit snapshots");
-
-        string resumeSource = Rooted(Path.Combine(root, "resume-source"));
-        Directory.CreateDirectory(resumeSource);
-        File.WriteAllBytes(Path.Combine(resumeSource, "large.wav"), new byte[2 * 1024 * 1024]);
-        string resumeHistory = Path.Combine(root, "resume-history");
+        string source = Rooted(Path.Combine(root, "resume-source"));
+        Directory.CreateDirectory(source);
+        File.WriteAllBytes(Path.Combine(source, "large.wav"), new byte[2 * 1024 * 1024]);
+        string history = Path.Combine(root, "resume-history");
+        var config = new Config { Preview = false };
+        OperationResult result;
         using (var cancellation = new CancellationTokenSource())
         {
-            ui = new TestInteraction();
+            var ui = new TestInteraction();
             ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
-            result = new BackupEngine().Run(resumeSource, resumeHistory, null, false, config, new OperationContext(ui, cancellation.Token));
-            Assert(result.Cancelled && BackupStatus(ListBackups(resumeHistory)[0]) == Status.Incomplete,
-                "cancelled history-free backup remains resumable");
+            result = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, cancellation.Token));
+            Assert(result.Cancelled && BackupStatus(ListBackups(history)[0]) == Status.Incomplete, "a cancelled backup remains resumable");
         }
-        string interrupted = ListBackups(resumeHistory)[0];
-        result = new BackupEngine().Run(resumeSource, resumeHistory, interrupted, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
+        string interrupted = ListBackups(history)[0];
+        Assert(!Directory.Exists(SnapshotRoot(interrupted)) || Directory.GetFiles(SnapshotRoot(interrupted), "*.manifest").Length == 0, "a cancelled backup publishes no restore point");
+        result = new BackupEngine().Run(source, history, interrupted, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
         Assert(result.ExitCode == 0 && BackupStatus(interrupted) == Status.Complete &&
-            LoadChecksums(interrupted)["large.wav"] == HashFile(Path.Combine(resumeSource, "large.wav")) && !Directory.Exists(SnapshotRoot(interrupted)),
-            "resuming without history completes copies and checksum records without creating snapshots");
-
-        config.PointInTimeHistory = true;
-        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
-        Assert(result.ExitCode == 0 && LatestSnapshot(backup).Files.Count == 3, "enabling history later captures the current source membership");
-        int manifests = Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length;
-        config.PointInTimeHistory = false;
-        result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(new TestInteraction(), CancellationToken.None));
-        Assert(result.ExitCode == 0 && Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == manifests,
-            "disabling history preserves existing snapshots without adding one");
+            LatestSnapshot(interrupted).Files.Find(e => e.Relative == "large.wav").Hash == HashFile(Path.Combine(source, "large.wav")),
+            "resuming completes the backup and saves its first restore point");
     }
 
     [Test("Optimizations", Folder = "optimizations")]
     static void TestOptimizations(string root)
     {
-        // History objects are hard links to the backup files on NTFS: one copy of the content on disk.
         string source = Rooted(Path.Combine(root, "opt-source"));
         string song = Path.Combine(source, "Songs", "same-size.m8s");
         Put(song, "AAAA");
         DateTime songTime = File.GetLastWriteTimeUtc(song);
         string history = Path.Combine(root, "opt-history");
-        Assert(!new Config { SingleContentStore = false }.HardLinks, "hard-linked history is opt-in");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Thorough = true, HardLinks = true, PointInTimeHistory = true };
+        var config = new Config { BackupFolder = root, Preview = false, Thorough = true };
         var ui = new TestInteraction();
         OperationResult first = new BackupEngine().Run(source, history, null, false, config, new OperationContext(ui, CancellationToken.None));
         Assert(first.ExitCode == 0, "optimization fixture backup succeeds");
         string backup = ListBackups(history)[0];
-        string treeFile = Path.Combine(backup, "Songs", "same-size.m8s");
-        string objectFile = LatestSnapshot(backup).Files[0].StoredPath;
-        if (SupportsHardLinks(root))
-        {
-            Assert(ui.Output.ToString().Contains("no extra space needed"), "NTFS history needs no extra space");
-            File.AppendAllText(Path.Combine(root, "opt-probe.txt"), "");
-            string probe = Path.Combine(root, "opt-probe.txt"), probeLink = Path.Combine(root, "opt-probe-link.txt");
-            Assert(TryHardLink(probe, probeLink), "hard link created");
-            File.WriteAllText(probe, "SHARED");
-            Assert(File.ReadAllText(probeLink) == "SHARED", "hard link shares content");
-            Assert(File.ReadAllText(objectFile) == "AAAA" && File.ReadAllText(treeFile) == "AAAA", "history object holds backed-up content");
-            File.WriteAllText(treeFile, "AAAZ");
-            Assert(File.ReadAllText(objectFile) == "AAAZ", "HardLinks=yes shares one copy between backup file and history");
-            File.WriteAllText(treeFile, "AAAA");
-
-            // A check reads hard-linked content once: the history object isn't hashed a second time.
-            var checkUi = new TestInteraction();
-            var verifiedLinks = new Dictionary<string, string>();
-            int linkOk = 0, linkDamaged = 0, linkMissing = 0, linkUnchecked = 0;
-            using (new OperationContext(checkUi, CancellationToken.None).Activate())
-            {
-                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
-                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
-            }
-            Assert(linkDamaged == 0 && linkMissing == 0 && linkOk == 2, "hard-linked backup checks OK");
-            Assert(!checkUi.Progress.Exists(p => p.Stage == Stage.Hashing && p.Path == objectFile), "check skips re-reading hard-linked history");
-            File.WriteAllText(treeFile, "AAAX");
-            linkOk = 0; verifiedLinks.Clear();
-            using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate())
-            {
-                CheckBackup(backup, ref linkOk, ref linkDamaged, ref linkMissing, ref linkUnchecked, verifiedLinks);
-                CheckSnapshots(backup, ref linkOk, ref linkDamaged, ref linkMissing, verifiedLinks);
-            }
-            Assert(linkDamaged == 2, "damage to hard-linked content is reported for the backup file and its history");
-            File.WriteAllText(treeFile, "AAAA");
-        }
 
         // Full backup with Thorough=yes: no hashing before copying, and a same-size, same-time
-        // content edit is still reported, using the checksums from copying.
+        // content edit is still stored, using the checksums from copying.
         Put(song, "BBBB");
         File.SetLastWriteTimeUtc(song, songTime);
         ui = new TestInteraction();
@@ -502,7 +417,7 @@ partial class Tests
         };
         OperationResult second = new BackupEngine().Run(source, history, backup, false, config, new OperationContext(ui, CancellationToken.None));
         Assert(second.ExitCode == 0 && hashedBeforeCopy.Count == 0, "thorough full backup reads the card once");
-        Assert(second.Summary.Contains("1 edited (same-size)"), "thorough full backup reports content-only edits");
+        Assert(second.Counts.Copied == 1, "thorough full backup stores the content-only edit");
 
         // Link checks are remembered only within one operation: a folder replaced by a junction
         // later is rejected by the next operation.
@@ -528,35 +443,23 @@ partial class Tests
         Put(Path.Combine(source, "Songs", "one.m8s"), "HEADLESS");
         Put(Path.Combine(source, "Songs", "two.m8s"), "HEADLESS");
         string history = Path.Combine(root, "engine-history");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = true, PointInTimeHistory = true };
+        var config = new Config { BackupFolder = root, Preview = true };
         var ui = new TestInteraction();
-        bool delayed = false;
-        ui.OnProgress = delegate(OperationProgress p) {
-            if (!delayed && p.Stage == Stage.SavingHistory) { delayed = true; Thread.Sleep(350); }
-        };
         var context = new OperationContext(ui, CancellationToken.None);
         OperationResult result = new BackupEngine().Run(source, history, null, false, config, context);
         Assert(result.ExitCode == 0 && !result.Cancelled && ui.Plans == 1, "backup engine uses injected plan review without console input");
-        Assert(ui.Progress.Exists(p => p.Stage == Stage.Scanning) && ui.Progress.Exists(p => p.Stage == Stage.Copying) &&
-            ui.Progress.Exists(p => p.Stage == Stage.SavingHistory), "structured backup progress covers scan, copy, and history");
+        Assert(ui.Progress.Exists(p => p.Stage == Stage.Scanning) && ui.Progress.Exists(p => p.Stage == Stage.Copying), "structured backup progress covers scan and copy");
         Assert(!ui.Progress.Exists(p => p.Stage == Stage.Hashing), "default full backup avoids standalone preflight hashing reads");
-        Assert(result.Elapsed.TotalMilliseconds >= 350, "engine elapsed time includes snapshot creation");
-        var time = System.Text.RegularExpressions.Regex.Match(ui.Output.ToString(), @"Time:\s+([\d.,]+)s");
-        Assert(time.Success && double.Parse(time.Groups[1].Value.Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture) >= 0.3,
-            "printed backup duration includes snapshot creation");
         string backup = ListBackups(history)[0];
         Snapshot snapshot = LatestSnapshot(backup);
-        Put(Path.Combine(backup, ".gearbackup", "objects", "not-a-user-file"), "HIDDEN");
-        Assert(BackupFiles(backup).Count == 2, "backup traversal excludes metadata and statistics");
         Assert(CurrentBackup(backup).Files.Count == 2, "current restore view excludes history store contents");
 
         ui = new TestInteraction();
         config.Thorough = true;
-        config.Verify = true;
         result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, CancellationToken.None));
         string sharedObject = snapshot.Files[0].StoredPath;
         Assert(!ui.Progress.Exists(p => p.Path == sharedObject),
-            "an existing history object isn't read again by a later backup, even with Verify=yes");
+            "an existing stored object isn't read again by a later backup");
         Assert(ui.Progress.FindAll(p => p.Stage == Stage.Hashing && p.Path == Path.Combine(source, "Songs", "one.m8s") && p.Bytes == p.TotalBytes).Count == 1,
             "thorough planning reuses source hash instead of rehashing for space estimate");
         Assert(result.ExitCode == 0 && ui.Plans == 0, "unchanged incremental needs no injected confirmation");
@@ -575,7 +478,7 @@ partial class Tests
         Directory.CreateDirectory(cancelSource);
         File.WriteAllBytes(large.FullName, new byte[2 * 1024 * 1024]);
         string cancelHistory = Path.Combine(root, "cancel-history");
-        config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        config = new Config { BackupFolder = root, Preview = false };
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
@@ -586,15 +489,14 @@ partial class Tests
             Assert(!File.Exists(Path.Combine(interrupted, "large.wav")), "cancelling during copy removes partial backup file");
         }
 
-        // Cancelling a changed incremental copy restores its previous browsable version.
+        // Cancelling an incremental backup publishes no restore point.
         Put(Path.Combine(source, "Songs", "one.m8s"), "CHANGED CONTENT");
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
             ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             result = new BackupEngine().Run(source, history, backup, true, config, new OperationContext(ui, cancellation.Token));
-            Assert(result.Cancelled && File.ReadAllText(Path.Combine(backup, "Songs", "one.m8s")) == "HEADLESS",
-                "cancelled incremental replacement puts old backup copy back");
+            Assert(result.Cancelled, "a cancelled incremental backup reports cancellation");
             Assert(Directory.GetFiles(SnapshotRoot(backup), "*.manifest").Length == 2, "cancelled backup does not publish a snapshot");
         }
 
@@ -627,7 +529,7 @@ partial class Tests
         {
             ui = new TestInteraction();
             ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
-            var recoveryConfig = new Config { SingleContentStore = false, BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
+            var recoveryConfig = new Config { BackupFolder = root, Recovery = true, RecoveryFolder = Path.Combine(root, "cancel-recovery") };
             result = new RestoreEngine().Run(cancelTarget, copies, removals, new List<string>(), new List<string>(), fingerprints,
                 recoveryConfig, new OperationContext(ui, cancellation.Token));
             Assert(result.Cancelled && File.ReadAllText(Path.Combine(cancelTarget, "Songs", "one.m8s")) == "KEEP ORIGINAL" &&
@@ -639,13 +541,12 @@ partial class Tests
         using (var cancellation = new CancellationTokenSource())
         {
             ui = new TestInteraction();
-            ui.OnProgress = p => { if (p.Stage == Stage.SavingHistory) cancellation.Cancel(); };
+            ui.OnProgress = p => { if (p.Stage == Stage.Copying) cancellation.Cancel(); };
             string cancelledHistory = Path.Combine(root, "cancel-history-save");
             result = new BackupEngine().Run(cancelSource, cancelledHistory, null, false, config, new OperationContext(ui, cancellation.Token));
             string interrupted = ListBackups(cancelledHistory)[0];
-            Assert(result.Cancelled && File.Exists(Path.Combine(interrupted, "large.wav")) && BackupStatus(interrupted) == Status.Incomplete,
-                "history cancellation retains completed browsable copies for resume");
-            Assert(!Directory.Exists(SnapshotRoot(interrupted)), "history cancellation does not publish manifest");
+            Assert(result.Cancelled && BackupStatus(interrupted) == Status.Incomplete, "cancellation leaves the backup resumable");
+            Assert(!Directory.Exists(SnapshotRoot(interrupted)) || Directory.GetFiles(SnapshotRoot(interrupted), "*.manifest").Length == 0, "cancellation does not publish a manifest");
         }
         using (var cancellation = new CancellationTokenSource())
         {
@@ -667,7 +568,7 @@ partial class Tests
         string source = Rooted(Folder(root, "src"));
         string relative = Path.Combine(new string('s', 40), new string('f', 30) + ".wav");
         Put(Path.Combine(source, relative), "LONG");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, PointInTimeHistory = true };
+        var config = new Config { BackupFolder = root, Preview = false };
 
         // A history deep enough that the copy would be over 259 characters, while the folder itself fits.
         string deep = Path.Combine(root, new string('h', Math.Max(1, 185 - root.Length)));

@@ -60,7 +60,7 @@ internal sealed class RecipeViewerDialog : ToolsDialog
     static List<string> RecipeFiles(string folder)
     {
         var files = new List<string>();
-        if (ContentStoreBackup.IsSingle(folder))
+        if (ContentStoreBackup.IsContentStore(folder))
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Shooting settings.xml" };
             for (int slot = 1; slot <= 7; slot++) names.Add("C" + slot + ".xml");

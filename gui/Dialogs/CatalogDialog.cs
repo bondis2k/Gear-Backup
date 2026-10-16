@@ -70,7 +70,7 @@ internal sealed class CatalogDialog : ToolsDialog
 
     void BuildStorage(MainForm owner)
     {
-        foreach (string column in new[] { "Profile / backup", "Current files", "Old versions", "Content store / history", "Metadata", "Unique content", "Location" })
+        foreach (string column in new[] { "Profile / backup", "Current files", "Content store / history", "Metadata", "Unique content", "Location" })
             grid.Columns.Add(column, column);
         var usage = new TabPage("Space usage");
         var clean = new TabPage("Cleanup");
@@ -144,8 +144,6 @@ internal sealed class CatalogDialog : ToolsDialog
         string history = HistoryLabel(item.History);
         if (item.Kind == StorageKind.OlderBackup) return "Older backup · " + history + " · " + Path.GetFileName(item.Path.TrimEnd('\\'));
         if (item.Kind == StorageKind.Zip) return "ZIP copy · " + history + " · " + Path.GetFileNameWithoutExtension(item.Path);
-        if (item.Kind == StorageKind.OldVersion && item.Backup != null && item.Path.StartsWith(Rooted(item.Backup), StringComparison.OrdinalIgnoreCase))
-            return "Old version of a file · " + history + " · " + item.Path.Substring(Rooted(item.Backup).Length);
         return item.Kind + " · " + history;
     }
 
@@ -273,7 +271,7 @@ internal sealed class CatalogDialog : ToolsDialog
     }
 
     // Space per backup and the items cleanup can recycle, for the device chosen in the filter. A backup,
-    // its old versions and its history's ZIPs belong to the history's device (as on the Dashboard); an
+    // its history's ZIPs belong to the history's device (as on the Dashboard); an
     // MTP mirror to the device its folder is named after. Changing the filter rebuilds the Cleanup list,
     // so nothing hidden from view stays selected.
     void PopulateStorage(BackupCatalog value)
@@ -292,7 +290,7 @@ internal sealed class CatalogDialog : ToolsDialog
         {
             DeviceProfile device;
             if (!VisibleFor(historyDevices.TryGetValue(row.History, out device) ? device : null)) continue;
-            int i = grid.Rows.Add(row.Profile + " / " + Path.GetFileName(row.Path), FormatSize(row.FilesBytes), FormatSize(row.VersionsBytes),
+            int i = grid.Rows.Add(row.Profile + " / " + Path.GetFileName(row.Path), FormatSize(row.FilesBytes),
                 FormatSize(row.ObjectsBytes), FormatSize(row.MetadataBytes), FormatSize(row.UniqueBytes), row.Path);
             grid.Rows[i].Tag = row;
         }

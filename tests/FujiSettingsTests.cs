@@ -4,7 +4,6 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Xml;
-using static Checksums;
 using static FujiSettings;
 
 partial class Tests
@@ -30,7 +29,7 @@ partial class Tests
         Assert(Encoding.UTF8.GetString(files["About this backup.txt"]).Contains("not a full-camera backup"), "export states its limitations");
 
         string history = Path.Combine(root, "history");
-        var config = new Config { SingleContentStore = false, BackupFolder = root, Preview = false, Verify = true, Zip = true };
+        var config = new Config { BackupFolder = root, Preview = false, Verify = true, Zip = true };
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { PreviewOnly = true, Device = Devices.X100VI }.Activate())
             SaveFujiSettings(files, history, config);
         Assert(!Directory.Exists(history), "settings preview does not create a backup history");
@@ -39,13 +38,12 @@ partial class Tests
             saved = SaveFujiSettings(files, history, config);
         Assert(saved.ExitCode == 0 && saved.Counts.Copied == 9 && File.Exists(saved.OutputFolder + ".zip"),
             "settings snapshot uses the full backup engine and optional ZIP");
-        Assert(SameFujiBytes(File.ReadAllBytes(Path.Combine(saved.OutputFolder, "C3.xml")), files["C3.xml"]),
+        Assert(SameFujiBytes(File.ReadAllBytes(Snapshots.CurrentBackup(saved.OutputFolder).Files.Find(f => f.Relative == "C3.xml").StoredPath), files["C3.xml"]),
             "saved recipe bytes match captured content");
-        int ok = 0, damaged = 0, missing = 0, uncheckedBackups = 0;
+        int ok = 0, damaged = 0, missing = 0;
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.X100VI }.Activate())
-            CheckBackup(saved.OutputFolder, ref ok, ref damaged, ref missing, ref uncheckedBackups);
-        Assert(ok == 9 && damaged == 0 && missing == 0 && uncheckedBackups == 0,
-            "camera exports participate in normal checksum verification");
+            Snapshots.CheckSnapshots(saved.OutputFolder, ref ok, ref damaged, ref missing);
+        Assert(ok > 0 && damaged == 0 && missing == 0, "camera exports participate in normal checksum verification");
 
         source = new FakeFujiSettings { MissingLive = true };
         using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) files = CaptureFujiSettings(source);

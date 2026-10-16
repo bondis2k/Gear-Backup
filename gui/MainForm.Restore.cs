@@ -79,7 +79,7 @@ internal sealed partial class MainForm
             restoreNotice.Text += "  Taken " + selectedPoint.Snapshot.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") + ".";
         browseRestore.Enabled = !loadingRestore && !runner.IsBusy && restorePoint.SelectedItem is RestorePoint;
         var point = restorePoint.SelectedItem as RestorePoint;
-        restoreExact.Enabled = !loadingRestore && !runner.IsBusy && restoreSet != null && point != null && (point.Id != "current" || restoreSet.Single);
+        restoreExact.Enabled = !loadingRestore && !runner.IsBusy && restoreSet != null && point != null;
         if (!restoreExact.Enabled) restoreExact.Checked = false;
         RefreshRestoreActionState();
     }

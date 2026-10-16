@@ -11,7 +11,7 @@ All app pictures in this manual use **Original**, the default light gray and tea
 - [Connecting a device](#connecting-a-device)
 - [Graphical interface](#graphical-interface)
 - [Full and incremental backup](#full-and-incremental-backup)
-- [Choosing how backups are stored](#choosing-how-backups-are-stored)
+- [How backups are stored](#how-backups-are-stored)
 - [Restore](#restore)
 - [Checking and managing backups](#checking-and-managing-backups)
 - [X100VI settings and recipe viewer](#x100vi-settings-and-recipe-viewer)
@@ -29,7 +29,7 @@ All app pictures in this manual use **Original**, the default light gray and tea
 4. Open **Backup**, leave **Full backup** selected, and optionally enter a name such as `Live set`.
 5. Click **Back up**, review the planned changes, and accept them. If the backup location does not exist, the app asks whether to create it.
 
-The default backup location is `%USERPROFILE%\Backup`. The default storage mode is a **single content store**: files are stored once within a backup set, and each successful backup run saves a restore point. Use the app to restore files; this mode does not create a separate folder of ordinary backup files.
+The default backup location is `%USERPROFILE%\Backup`. Backups are content stores: files are stored once within a backup set, and each successful backup run saves a restore point. Use the app to restore files; a backup does not create a separate folder of ordinary backup files.
 
 For a single file you can extract with Windows, choose **Zip archive** on Backup instead, then choose where to save it.
 
@@ -115,7 +115,7 @@ The activity area records operation details. Progress, totals, elapsed time, and
 
 A full backup creates a new dated folder under the source's history. An optional name helps distinguish it in the app, for example `Before firmware update`. The display name does not replace the dated folder name.
 
-Each full backup is independent. Content is shared between restore points **inside one set**, not between separate full backups. Creating several full backups therefore uses more space even with a single content store.
+Each full backup is independent. Content is shared between restore points **inside one set**, not between separate full backups. Creating several full backups therefore uses more space even though each set stores content once.
 
 With **Also save as zip**, a successful full backup additionally creates a ZIP beside the backup folder. It contains ordinary exported files, not the internal content-store history. It is useful for transfer or manual extraction; it uses extra space and does not preserve the set's restore points. Incremental backups do not update or create ZIP archives.
 
@@ -149,25 +149,13 @@ In the default single-store mode, every successful incremental run saves a resto
 
 An unnamed incremental point uses `yyyy-MM-dd_HH.mm.ss`, such as `2026-10-11_14.32.08`. Repeated names receive a numeric suffix. The app lists points using the recorded backup capture date and time, not source-file dates or the point name. A named point retains its recorded capture time as well.
 
-Incremental backup retains the selected set's storage format. Changing the storage setting affects the **next full backup**, not an existing set.
+## How backups are stored
 
-## Choosing how backups are stored
+Every backup is a content store: one immutable store of file contents plus a complete inventory for each restore point. Each distinct file content is stored once per backup set, and every successful run, including an unchanged incremental, creates a point. Restore or export through the app; a backup has no browsable file tree.
 
-Choose the mode in **Settings → Backup** before starting a new full backup.
+All points remain until you remove the whole backup set. There is no individual restore-point pruning control. **Backups to keep** limits full backup sets; zero means keep all. Retention runs after successful backups and asks before moving excess items to the Recycle Bin.
 
-| Mode | Contents | History and space |
-| --- | --- | --- |
-| **Use a single content store** on (default) | One immutable content store and complete restore-point inventories. Restore/export through the app. | Each distinct file content is stored once per set. Every successful run creates a point. |
-| Single content store off; **Save point-in-time history** off | Ordinary browsable backup files, checksums, and catalog. | Incremental backup keeps dated copies of changed files. No complete historical snapshots. |
-| Single content store off; **Save point-in-time history** on | Ordinary files plus snapshots and a history content store. | Complete historical restore points, but separate history copies can substantially increase space. |
-
-In a single content store, **Save point-in-time history**, **Hard-linked history**, and **Old versions to keep** have no effect. All points remain until you remove the whole backup set. There is no individual restore-point pruning control.
-
-For browsable backups, changed files are retained under dated names. Source deletions do not remove the old files from the browsable backup. Without point-in-time history, this is accumulated file history rather than an exact record of the source at each run.
-
-With browsable point-in-time history, `HardLinks=yes` can reduce duplication on NTFS. A hard link shares the same data with the ordinary backup file, so editing or damaging that file also affects its linked history. Other filesystems use copies. Hard links are off by default.
-
-**Backups to keep** limits full backup sets; **Old versions to keep** limits retained file versions in browsable mode. Zero means keep all. Retention runs after successful backups and asks before moving excess items to the Recycle Bin.
+Backups made by earlier versions in plain, browsable folders are not supported. Make a new full backup; the old folder can stay for reference or be removed from **Storage**.
 
 ## Restore
 
@@ -242,7 +230,7 @@ Hashes are recorded during backup even when the two optional settings are off. S
 
 ### Storage and cleanup
 
-**Storage → Space usage** separates current files, old versions, content/history, and metadata. Shared hard-linked content is counted by unique storage where possible. ZIP exports and MTP mirrors also use space.
+**Storage → Space usage** separates stored content and metadata. ZIP exports and MTP mirrors also use space.
 
 Under **Cleanup**, tick the items to remove, then click **Preview cleanup**. Nothing is selected initially. Review the effect before accepting; selected items are moved to the Recycle Bin after safety checks. Removing an entire set removes every restore point stored in it. Do not manually remove individual content objects: several points can reference the same object.
 
@@ -290,14 +278,10 @@ A history/profile name groups backup sets. A full or incremental backup's option
 | --- | --- | --- |
 | `Theme` | `original` | `original`, `original-dark`, `windows`, or `retro`. Windows follows the current Windows app light/dark mode and accent color, updating open windows when system preferences change. |
 | `BackupFolder` | Empty in generated INI | Empty uses `%USERPROFILE%\Backup`; otherwise a backup parent folder. |
-| `SingleContentStore` | `yes` | Use one content store with restore points for new full backups. |
-| `PointInTimeHistory` | `no` | Add snapshots/history content to browsable backups; ignored in single-store mode. |
-| `HardLinks` | `no` | Share browsable history content using NTFS hard links; requires point-in-time history. |
 | `Verify` | `no` | Automatically verify copied/restore content with SHA-256. |
 | `Thorough` | `no` | Compare contents rather than only size and usable timestamps. |
 | `Preview` | `yes` | Review and approve planned backup/restore actions before writing. |
 | `KeepBackups` | `0` | Full backup sets to retain; nonnegative integer, zero keeps all. |
-| `KeepOldVersions` | `0` | Retained versions per file in browsable mode; zero keeps all. |
 | `Recovery` | `no` | Save recovery copies before restore overwrites/removals. |
 | `RecoveryFolder` | Empty | Empty uses `<BackupFolder>\Gear Recovery`; otherwise your recovery folder, outside the source card/folder. |
 | `MaxNameLength` | `64` | Device name-length warning threshold; zero disables length checks. |
@@ -321,7 +305,7 @@ Recovery=yes
 RecoveryFolder=D:\RestoreRecovery
 ```
 
-Omit a key to inherit it. Overridable keys are `BackupFolder`, `SingleContentStore`, `PointInTimeHistory`, `HardLinks`, `Verify`, `Thorough`, `Preview`, `KeepBackups`, `KeepOldVersions`, `Recovery`, `RecoveryFolder`, `MaxNameLength`, and `Eject`. Theme, source, identity, device selection, and Mode are global settings. Unknown override scopes or keys are rejected rather than silently ignored.
+Omit a key to inherit it. Overridable keys are `BackupFolder`, `Verify`, `Thorough`, `Preview`, `KeepBackups`, `Recovery`, `RecoveryFolder`, `MaxNameLength`, and `Eject`. Theme, source, identity, device selection, and Mode are global settings. Unknown override scopes or keys are rejected rather than silently ignored.
 
 ## Command line and exit codes
 
@@ -390,7 +374,7 @@ Use `Mode=full` or `Mode=incremental` to choose a CLI backup mode without its mo
 | Restore list empty | Confirm the backup location/profile locations. If a device is detected, only matching device types appear; with no detected device, all types appear. Backups need valid explicit device metadata; folder names alone do not identify them. |
 | Restore points cannot load | Inspect the error in the app. Keep the entire metadata/content folder intact; try a catalog rebuild if the index is damaged. Rebuild does not restore missing objects. |
 | Files unexpectedly marked changed | Check size and timestamp differences. The normal comparison tolerates two seconds. Enable content comparison when timestamps are unreliable; MTP mirroring can add read time. |
-| Backup occupies more space than expected | Count separate full sets, retained changed content, ZIP exports, and MTP mirrors. Browsable point-in-time history can add a second copy; a single store avoids that duplicate inside its set. |
+| Backup occupies more space than expected | Count separate full sets, retained changed content, ZIP exports, and MTP mirrors. Content is stored once inside each set. |
 | Settings ignored | Check installed AppData versus portable executable-folder INIs, then device/profile overrides. Both interfaces share the same effective settings. |
 | Path/name warning | Shorten the backup location or source names. Name warnings depend on the device profile. Excessive Windows paths can prevent an operation. |
 | Eject not offered or fails | Only eligible positively detected USB drives can be ejected. Close applications using the drive. MTP devices and manually selected folders are not ejected this way. |

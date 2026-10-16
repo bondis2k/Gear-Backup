@@ -10,8 +10,6 @@ using System.Text;
 using Microsoft.Win32.SafeHandles;
 using static FileCopy;
 using static PathSafety;
-using static Checksums;
-using static VersionCatalog;
 using static Backups;
 using static MtpMirror;
 using static DeviceSelection;
@@ -108,78 +106,12 @@ static class StorageCatalog
         }
     }
 
-    // Counts a file's size towards the unique total once per identity (see FileIdentities).
+    // Counts a file's size towards the unique total once per path.
     static void CountUnique(BackupCatalog catalog, string identity, long length, CatalogBackup row = null)
     {
         if (!catalog.Counted.Add(identity)) return;
         catalog.UniqueBytes += length;
         if (row != null) row.UniqueBytes += length;
-    }
-
-    // What tells files apart for the unique total, by path: hard links to one file share an identity. On
-    // NTFS that's the file's ID, read a whole folder at a time; opening every file instead took seconds on
-    // a large history. File systems without hard links (FAT, exFAT) just use the path.
-    internal static Dictionary<string, string> FileIdentities(string root, List<FileInfo> files)
-    {
-        var identities = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (!SupportsHardLinks(root))
-        {
-            foreach (FileInfo file in files) identities[file.FullName] = file.FullName;
-            return identities;
-        }
-        uint serial, maxComponent, flags;
-        string volume = GetVolumeInformationW(Path.GetPathRoot(Path.GetFullPath(root)), null, 0, out serial, out maxComponent, out flags, null, 0)
-            ? serial.ToString(CultureInfo.InvariantCulture) : null;
-        var folders = new Dictionary<string, Dictionary<string, long>>(StringComparer.OrdinalIgnoreCase);
-        foreach (FileInfo file in files)
-        {
-            Dictionary<string, long> ids;
-            if (!folders.TryGetValue(file.DirectoryName, out ids)) folders[file.DirectoryName] = ids = volume == null ? null : FolderFileIds(file.DirectoryName);
-            long id;
-            identities[file.FullName] = ids != null && ids.TryGetValue(file.Name, out id) && id != 0
-                ? volume + ":" + (ulong)id
-                : SharedFileId(file.FullName) ?? file.FullName;
-        }
-        return identities;
-    }
-
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
-    [DllImport("kernel32.dll", SetLastError = true)]
-    static extern bool GetFileInformationByHandleEx(SafeFileHandle file, int infoClass, IntPtr buffer, uint size);
-
-    // The NTFS file ID of every entry in a folder, by name, from FILE_ID_BOTH_DIR_INFO records (FileId at
-    // offset 96, FileNameLength at 60, FileName at 104). Null if Windows can't list it this way.
-    internal static Dictionary<string, long> FolderFileIds(string folder)
-    {
-        const uint ListDirectory = 1, ShareAll = 7, OpenExisting = 3, BackupSemantics = 0x02000000, OpenReparsePoint = 0x00200000;
-        const int RestartInfo = 11, NextInfo = 10, NoMoreFiles = 18, Size = 64 * 1024;
-        var ids = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        using (SafeFileHandle handle = CreateFileW(folder, ListDirectory, ShareAll, IntPtr.Zero, OpenExisting, BackupSemantics | OpenReparsePoint, IntPtr.Zero))
-        {
-            if (handle.IsInvalid) return null;
-            IntPtr buffer = Marshal.AllocHGlobal(Size);
-            try
-            {
-                int infoClass = RestartInfo;
-                while (GetFileInformationByHandleEx(handle, infoClass, buffer, Size))
-                {
-                    infoClass = NextInfo;
-                    for (int offset = 0; ; )
-                    {
-                        IntPtr entry = IntPtr.Add(buffer, offset);
-                        int next = Marshal.ReadInt32(entry, 0);
-                        int nameBytes = Marshal.ReadInt32(entry, 60);
-                        ids[Marshal.PtrToStringUni(IntPtr.Add(entry, 104), nameBytes / 2)] = Marshal.ReadInt64(entry, 96);
-                        if (next == 0) break;
-                        offset += next;
-                    }
-                }
-                if (Marshal.GetLastWin32Error() != NoMoreFiles) return null;
-            }
-            finally { Marshal.FreeHGlobal(buffer); }
-        }
-        return ids;
     }
 
     // Scans every configured backup location (the global one and those named in device/profile
@@ -239,13 +171,13 @@ static class StorageCatalog
                 continue;
             StorageItem item = MakeStorageItem(StorageKind.Zip, zip, history, null, false);
             catalog.ZipBytes += item.Bytes;
-            CountUnique(catalog, SharedFileId(zip) ?? zip, item.Bytes);
+            CountUnique(catalog, zip, item.Bytes);
             catalog.Cleanup.Add(item);
         }
     }
 
-    // One backup folder: its space by kind (current files, known old versions, history objects, other
-    // metadata), when it last succeeded, and its last integrity check.
+    // One backup folder: its space by kind (stored content objects, other metadata, and the files of a
+    // backup made by an older version), when it last succeeded, and its last integrity check.
     static void ScanBackup(BackupCatalog catalog, string history, string profile, string backup, bool latest)
     {
         OperationContext.Current.CheckCancellation();
@@ -261,11 +193,8 @@ static class StorageCatalog
         }
         var folders = new List<DirectoryInfo>();
         List<FileInfo> files = StorageFiles(backup, folders);
-        HashSet<string> oldVersionNames = ContentStoreBackup.IsSingle(backup) ? new HashSet<string>() : KnownOldVersions(backup);
         var row = new CatalogBackup { Profile = profile, History = history, Path = backup, Status = BackupStatus(backup), Latest = latest,
             Device = CatalogDevice(backup) };
-        Dictionary<string, string> identities = FileIdentities(backup, files);
-        var versions = new List<string>();
         foreach (FileInfo file in files)
         {
             string relative = file.FullName.Substring(Rooted(backup).Length);
@@ -274,20 +203,13 @@ static class StorageCatalog
                 if (relative.IndexOf("\\objects\\", StringComparison.OrdinalIgnoreCase) >= 0) row.ObjectsBytes += file.Length;
                 else row.MetadataBytes += file.Length;
             }
-            else if (IsBackupMetaFile(file.FullName)) row.MetadataBytes += file.Length;
-            else if (oldVersionNames.Contains(relative))
-            {
-                row.VersionsBytes += file.Length;
-                versions.Add(file.FullName);
-            }
             else row.FilesBytes += file.Length;
-            CountUnique(catalog, identities[file.FullName], file.Length, row);
+            CountUnique(catalog, file.FullName, file.Length, row);
         }
         row.CompletedUtc = LastSuccess(backup);
         ReadCheckRecord(row);
         catalog.Backups.Add(row);
         if (!latest) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OlderBackup, backup, history, backup, files, folders));
-        foreach (string version in versions) catalog.Cleanup.Add(MakeStorageItem(StorageKind.OldVersion, version, history, backup, false));
     }
 
     // A damaged device record loses the device filter, while the backup remains visible in All devices.
@@ -328,8 +250,7 @@ static class StorageCatalog
                 List<FileInfo> files = StorageFiles(mirror, folders);
                 StorageItem item = MakeStorageItem(StorageKind.Mirror, mirror, mirrors, null, files, folders);
                 catalog.MirrorBytes += item.Bytes;
-                Dictionary<string, string> identities = FileIdentities(mirror, files);
-                foreach (FileInfo file in files) CountUnique(catalog, identities[file.FullName], file.Length);
+                foreach (FileInfo file in files) CountUnique(catalog, file.FullName, file.Length);
                 catalog.Cleanup.Add(item);
             });
         }
@@ -392,10 +313,6 @@ static class StorageCatalog
                     throw new IOException("Storage changed since the preview. Refresh before cleanup: " + item.Path);
             }
             int removed = 0;
-            // Recycled old versions by backup, whose checksum lists are rewritten once at the end.
-            var recycledVersions = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            bool finished = false;
-            try
             {
                 foreach (StorageItem item in items)
                 {
@@ -409,19 +326,7 @@ static class StorageCatalog
                     else Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(item.Path,
                         Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
                     removed++;
-                    if (item.Kind != StorageKind.OldVersion) continue;
-                    List<string> names;
-                    if (!recycledVersions.TryGetValue(item.Backup, out names)) recycledVersions[item.Backup] = names = new List<string>();
-                    names.Add(item.Path.Substring(Rooted(item.Backup).Length));
                 }
-                finished = true;
-            }
-            finally
-            {
-                // Also after a failure or Cancel part-way, so the lists never name a recycled version.
-                // An error here only replaces the outcome when the cleanup itself succeeded.
-                try { RemoveChecksumEntries(recycledVersions); }
-                catch (Exception) { if (finished) throw; }
             }
             return removed;
         }
@@ -431,23 +336,6 @@ static class StorageCatalog
         }
     }
 
-    // Takes recycled old versions out of their backups' checksum lists, one rewrite per backup. Runs
-    // without cancellation: a Cancel pressed during cleanup must not leave a list naming recycled files.
-    static void RemoveChecksumEntries(Dictionary<string, List<string>> recycled)
-    {
-        if (recycled.Count == 0) return;
-        OperationContext current = OperationContext.Current;
-        using (new OperationContext(current.Interaction, System.Threading.CancellationToken.None) { Device = current.Device }.Activate())
-            foreach (var backup in recycled)
-            {
-                if (!Directory.Exists(backup.Key)) continue;
-                Dictionary<string, string> sums = LoadChecksums(backup.Key);
-                if (sums == null) continue;
-                foreach (string name in backup.Value) sums.Remove(name);
-                WriteChecksums(backup.Key, sums);
-                BackupDatabase.TryRefresh(backup.Key);
-            }
-    }
 }
 
 // One backup folder as the Dashboard and Storage windows see it.
@@ -457,9 +345,9 @@ internal sealed class CatalogBackup
     public Status Status;
     public DateTime? CompletedUtc, CheckedUtc;
     public DeviceProfile Device;    // the device it was made from; null when identity metadata is missing/invalid
-    public long FilesBytes, VersionsBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
+    public long FilesBytes, ObjectsBytes, MetadataBytes, UniqueBytes;
     public bool Latest;
-    public long TotalBytes { get { return FilesBytes + VersionsBytes + ObjectsBytes + MetadataBytes; } }
+    public long TotalBytes { get { return FilesBytes + ObjectsBytes + MetadataBytes; } }
 }
 
 // Something Storage offers to recycle. Stamp records its state at scan time (see StorageStamp).

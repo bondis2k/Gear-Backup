@@ -6,9 +6,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
-using static BackupTraversal;
-using static Checksums;
-using static VersionCatalog;
 using static Backups;
 using static RestoreFlow;
 using static ConsoleUi;
@@ -44,61 +41,6 @@ static class Snapshots
     //   D  <path>                                            a folder (kept even when empty)
     //   F  <path>  <sha256>  <size>  <modified>  <created>   a file; times are UTC ticks
     // The file's content is stored once in .gearbackup\objects\<sha256>.
-    internal static void SaveSnapshot(string backup, string source, ScanResult scan, Dictionary<string, string> sums, DateTime started, bool verify, bool hardLinks, bool incremental = false, string customName = null)
-    {
-        var rows = new StringBuilder(AppIdentity.SnapshotHeader + "\n");
-        var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (string folder in scan.Folders)
-            rows.Append("D\t").Append(Encode(folder.Substring(source.Length))).Append('\n');
-        foreach (FileInfo original in scan.Files)
-        {
-            OperationContext.Current.Progress(Stage.SavingHistory, original.FullName, 0, 0);
-            string relative = original.FullName.Substring(source.Length);
-            string path = SafePath(backup, relative);
-            string hash;
-            if (!sums.TryGetValue(relative, out hash) || !ValidHash(hash))
-                throw new IOException("No trustworthy checksum for " + relative);
-            string obj = ObjectPath(backup, hash);
-            Directory.CreateDirectory(Path.GetDirectoryName(obj));
-            // An object that already exists was verified when it was written (with Verify=yes), so here it
-            // only has to have the right size: reading every existing object again on each backup took
-            // longer than the backup itself once the history grew. Damage that keeps the size is found by
-            // Check backups, which reads every object.
-            if (File.Exists(obj))
-            {
-                if (checkedObjects.Add(hash) && new FileInfo(obj).Length != new FileInfo(path).Length)
-                    throw new IOException("Damaged history object for " + relative);
-            }
-            else
-            {
-                string temp = obj + ".tmp";
-                TryDelete(temp);
-                try
-                {
-                    // HardLinks=yes: a hard link stores the content once (NTFS); otherwise, or where linking
-                    // fails, a copy. The program never edits backup files in place, so linked content stays as recorded.
-                    string storedHash = hardLinks && TryHardLink(path, temp)
-                        ? (verify ? HashFile(temp) : hash)
-                        : CopyFile(new FileInfo(path), temp, verify);
-                    if (verify && storedHash != hash)
-                        throw new IOException("Backup checksum differs for " + relative);
-                    File.Move(temp, obj);
-                    checkedObjects.Add(hash);
-                }
-                finally { TryDelete(temp); }
-            }
-            var info = new FileInfo(path);
-            rows.Append("F\t").Append(Encode(relative)).Append('\t').Append(hash).Append('\t')
-                .Append(info.Length.ToString(CultureInfo.InvariantCulture)).Append('\t')
-                .Append(original.LastWriteTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)).Append('\t')
-                .Append(original.CreationTimeUtc.Ticks.ToString(CultureInfo.InvariantCulture)).Append('\n');
-        }
-        string name = RestorePointNames.Create(backup, started, incremental);
-        AtomicText(Path.Combine(SnapshotRoot(backup), name + ".manifest"), rows.ToString());
-        RestorePointNames.SaveMetadata(backup, name, started, incremental, customName);
-        OperationOutput.WriteLine("  Point-in-time snapshot saved: " + name);
-    }
-
     // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
     // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
     // `validNames`, shared by the manifests of one backup, remembers names already found valid: the check is a pure
@@ -155,7 +97,7 @@ static class Snapshots
         return result;
     }
 
-    // Lets the user pick a saved point in time, newest first. Null means "use the current backup files".
+    // Lets the user pick a saved point in time, newest first. Null means the latest restore point.
     internal static Snapshot ChooseSnapshot(string backup)
     {
         string root = SnapshotRoot(backup);
@@ -170,47 +112,18 @@ static class Snapshots
             names.Add((custom == null ? "" : custom + " · ") + name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         }
         int pick = AskItem("Restore from which saved point in time?", names,
-            ContentStoreBackup.IsSingle(backup) ? "Latest restore point" : "Current backup files (no snapshot)");
+            "Latest restore point");
         return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
     }
 
-    // The backup folder's files as they are now, as a snapshot. Checksums come from checksums.sha256
-    // where available.
+    // The latest restore point of a backup.
     internal static Snapshot CurrentBackup(string backup)
     {
-        if (ContentStoreBackup.IsSingle(backup)) return ContentStoreBackup.Current(backup);
-        var result = new Snapshot { Name = "current backup files", OldVersions = KnownOldVersions(backup) };
-        Dictionary<string, string> sums = LoadChecksums(backup);
-        foreach (FileSystemInfo entry in BackupEntries(backup))
-        {
-            if (entry is DirectoryInfo)
-            {
-                result.Folders.Add(entry.FullName.Substring(backup.Length).TrimStart('\\'));
-                continue;
-            }
-            string path = entry.FullName;
-            string relative = path.Substring(backup.Length).TrimStart('\\');
-            SafePath(backup, relative);
-            string hash = null;
-            if (sums != null) sums.TryGetValue(relative, out hash);
-            var info = new FileInfo(path);
-            result.Files.Add(new RestoreEntry { Relative = relative, StoredPath = path, Hash = hash,
-                Size = info.Length, ModifiedTicks = info.LastWriteTimeUtc.Ticks, CreatedTicks = info.CreationTimeUtc.Ticks });
-        }
-        return result;
-    }
-
-    // HardLinks=yes: the object is the same file on disk as a backup file just checked with this checksum.
-    static bool AlreadyVerified(RestoreEntry item, Dictionary<string, string> verifiedLinks)
-    {
-        if (verifiedLinks == null || verifiedLinks.Count == 0) return false;
-        string id = SharedFileId(item.StoredPath), hash;
-        return id != null && verifiedLinks.TryGetValue(id, out hash) && hash == item.Hash;
+        return ContentStoreBackup.Current(backup);
     }
 
     // Checks every history object referenced by any manifest in this backup; each object once.
-    internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing,
-                               Dictionary<string, string> verifiedLinks = null, List<CatalogVerification> catalogResults = null)
+    internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing, List<CatalogVerification> catalogResults = null)
     {
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return;
@@ -228,7 +141,6 @@ static class Snapshots
                     if (checkedObjects.Add(item.Hash))
                     {
                         if (!File.Exists(item.StoredPath)) { missing++; outcomes[item.Hash] = "missing"; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
-                        else if (AlreadyVerified(item, verifiedLinks)) { ok++; outcomes[item.Hash] = "ok"; }
                         else
                         {
                             try { ValidateEntry(item); ok++; outcomes[item.Hash] = "ok"; }
@@ -255,7 +167,7 @@ internal class RestoreEntry
     public long Size, ModifiedTicks, CreatedTicks;
 }
 
-// The files and folders of one point in time, from a manifest or from the current backup files.
+// The files and folders of one point in time, from a manifest.
 internal class Snapshot
 {
     public string Name;
@@ -263,7 +175,6 @@ internal class Snapshot
     public string CustomName; // optional name the user gave this restore point
     public List<RestoreEntry> Files = new List<RestoreEntry>();
     public List<string> Folders = new List<string>();
-    public HashSet<string> OldVersions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 }
 
 // The content objects of one backup's store. A restore point can name thousands of them, and every saved

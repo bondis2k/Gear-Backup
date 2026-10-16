@@ -68,21 +68,6 @@ static class AppSettings
                   ";   <BackupFolder>\\" + AppIdentity.BackupsFolderName + "\\profiles\\<profile>\\<date>\r\n" +
                   "; Leave it empty to use %USERPROFILE%\\Backup. Environment variables work,\r\n" +
                   "; e.g. BackupFolder=%USERPROFILE%\\Documents or BackupFolder=D:\\Backups\r\n" },
-        YesNo("SingleContentStore", "Single content store", c => c.SingleContentStore, (c, v) => c.SingleContentStore = v,
-            "; SingleContentStore: yes = store each distinct file content once and save a restore point for every backup run.\r\n" +
-            "; Restore through the app; there is no separate browsable copy. Set no for plain, browsable backup folders.\r\n" +
-            "; Default yes.\r\n"),
-        YesNo("PointInTimeHistory", "Point-in-time history", c => c.PointInTimeHistory, (c, v) => c.PointInTimeHistory = v,
-            "; PointInTimeHistory: yes = save restorable snapshots and a history content store.\r\n" +
-            "; no (default) = save backup files and checksums only, avoiding the second copy of their content.\r\n" +
-            "; Old file versions and separate full backups are still kept according to their retention settings.\r\n" +
-            "; Existing snapshots are not removed. HardLinks has no effect when this is no.\r\n" +
-            "; Ignored with SingleContentStore=yes: that mode always saves restore points.\r\n"),
-        YesNo("HardLinks", "Hard-linked history", c => c.HardLinks, (c, v) => c.HardLinks = v,
-            "; HardLinks: yes = on NTFS, store the point-in-time history as hard links to the backup files\r\n" +
-            "; instead of second copies: about half the disk space and faster backups. The backup folder and\r\n" +
-            "; its history then share one copy, so editing or damaging a backup file also changes its history.\r\n" +
-            "; no = keep separate copies (default). Other file systems always use copies.\r\n"),
         YesNo("Verify", "Verify copied files", c => c.Verify, (c, v) => c.Verify = v,
             "; Verify: yes = read every copied file back and compare its SHA-256 checksum\r\n" +
             "; with the original, to catch bad copies (slower). Also checks restore sources,\r\n" +
@@ -96,11 +81,6 @@ static class AppSettings
         Count("KeepBackups", "Backups to keep", c => c.KeepBackups, (c, v) => c.KeepBackups = v, "keep all",
             "; KeepBackups: how many backup folders to keep. After a successful backup the\r\n" +
             "; oldest extra ones are moved to the Recycle Bin (you're asked first). 0 = keep all.\r\n"),
-        Count("KeepOldVersions", "Old versions to keep", c => c.KeepOldVersions, (c, v) => c.KeepOldVersions = v, "keep all",
-            "; KeepOldVersions: how many old versions of each file to keep in a backup, when\r\n" +
-            "; incremental backups rename changed files (Song_2026-10-01_143000.m8s). After an\r\n" +
-            "; incremental backup the oldest extra ones are moved to the Recycle Bin (you're\r\n" +
-            "; asked first). 0 = keep all.\r\n"),
         YesNo("Recovery", "Recovery copies", c => c.Recovery, (c, v) => c.Recovery = v,
             "; Recovery: save PC recovery copies before replacing or removing files during restore.\r\n" +
             "; Default no. A recovery failure stops the restore before changing the target.\r\n"),
@@ -273,16 +253,12 @@ internal class Config
     public int KeepBackups = 0;     // 0 = keep all
     public int MaxNameLength = 64;  // 0 = don't check
     public EjectMode Eject = EjectMode.No;
-    public int KeepOldVersions = 0; // 0 = keep all
     public bool Recovery = false;
     public string RecoveryFolder = "";
     public string SourceFolder = "";
     public string Profile = "";
     public bool Thorough = false;
     public bool Preview = true;
-    public bool HardLinks = false;  // share history content with the backup files (NTFS)
-    public bool PointInTimeHistory = false; // opt in to snapshots and their content store
-    public bool SingleContentStore = true; // snapshots backed by one immutable content store
     public string Device = "auto";  // "auto" (detect) or a device id from Devices.cs, e.g. "m8"
     public string Theme = "original"; // global GUI colour palette
     public bool Zip = false;        // --zip / GUI checkbox: also save full backups as a zip (not saved in the ini)
