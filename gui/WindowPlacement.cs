@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
-using static Workflow;
+using static AtomicFile;
 
 // Remembers where the main window was, so the app opens there next time. The position is kept in
 // GearBackup.Window.ini beside GearBackup.ini (in the installed settings folder, or beside a portable

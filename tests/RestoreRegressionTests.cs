@@ -8,7 +8,7 @@ using static RestoreFlow;
 using static DeviceSelection;
 using static ProfileSettings;
 using static Session;
-using static Workflow;
+using static Histories;
 
 partial class Tests
 {

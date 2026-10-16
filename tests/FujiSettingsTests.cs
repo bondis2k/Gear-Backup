@@ -6,7 +6,6 @@ using System.Threading;
 using System.Xml;
 using static Checksums;
 using static FujiSettings;
-using static Workflow;
 
 partial class Tests
 {

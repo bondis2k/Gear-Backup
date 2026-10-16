@@ -16,7 +16,8 @@ using static PortableDevices;
 using static AppSettings;
 using static DeviceSelection;
 using static Session;
-using static Workflow;
+using static Histories;
+using static ProfileNaming;
 
 partial class Tests
 {

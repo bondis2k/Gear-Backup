@@ -6,7 +6,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $compiler = Get-CSharpCompiler
 $build = Join-Path $projectRoot 'tests/.build'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
-$sources = @(Get-ChildItem (Join-Path $projectRoot 'src') -Filter '*.cs' | Where-Object Name -ne 'Notifications.cs' | ForEach-Object FullName)
+$sources = @(Get-ChildItem (Join-Path $projectRoot 'src') -Filter '*.cs' -Recurse | Where-Object Name -ne 'Notifications.cs' | ForEach-Object FullName)
 # Reuse the test notification stub, so benchmarks never send desktop notifications.
 $sources += @(Get-ChildItem (Join-Path $projectRoot 'tests') -Filter '*.cs' | Where-Object Name -ne 'GuiTests.cs' | ForEach-Object FullName)
 if ($SourceRef) {

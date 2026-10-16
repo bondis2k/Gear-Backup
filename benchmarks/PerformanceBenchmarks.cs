@@ -45,7 +45,7 @@ static class PerformanceBenchmarks
             {
                 string backup = Path.Combine(history, "2026-01-" + i.ToString("D2"));
                 Directory.CreateDirectory(backup);
-                Workflow.AtomicText(Path.Combine(backup, AppIdentity.MetadataFolderName, "status.txt"), Status.Complete + "\n");
+                AtomicFile.AtomicText(Path.Combine(backup, AppIdentity.MetadataFolderName, "status.txt"), Status.Complete + "\n");
                 for (int f = 0; f < 200; f++) File.WriteAllBytes(Path.Combine(backup, f + ".wav"), new byte[32]);
             }
             Action dashboard = () => {

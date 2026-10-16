@@ -15,7 +15,10 @@ using static Backups;
 using static RestoreFlow;
 using static BackupZip;
 using static AppSettings;
-using static Workflow;
+using static BackupStatuses;
+using static Histories;
+using static PlanReview;
+using static ProfileNaming;
 using static Program;
 
 partial class Tests

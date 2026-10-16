@@ -14,10 +14,14 @@ using static ChangeSummary;
 using static BackupZip;
 using static AppSettings;
 using static ConsoleUi;
+using static Formatting;
 using static ProfileSettings;
 using static Session;
 using static SettingsLocation;
-using static Workflow;
+using static AtomicFile;
+using static BackupStatuses;
+using static Histories;
+using static PlanReview;
 using static DeviceSelection;
 
 partial class Tests

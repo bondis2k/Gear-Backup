@@ -80,7 +80,7 @@ internal sealed partial class MainForm
                     var result = new List<BackupSetItem>();
                     var paths = Backups.ListBackups(prepared.History);
                     for (int i = paths.Count - 1; i >= 0; i--)
-                        result.Add(new BackupSetItem { Path = paths[i], Label = BackupSetNames.Label(paths[i]) + "  [" + Workflow.BackupStatus(paths[i]) + "]" });
+                        result.Add(new BackupSetItem { Path = paths[i], Label = BackupSetNames.Label(paths[i]) + "  [" + BackupStatuses.BackupStatus(paths[i]) + "]" });
                     return result;
                 }
             });

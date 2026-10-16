@@ -22,6 +22,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Layer check
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build\check-layers.ps1
+
       - name: M8 reader tests (Rust)
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test

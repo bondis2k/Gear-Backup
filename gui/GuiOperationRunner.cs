@@ -12,7 +12,7 @@ using static FujiSettings;
 using static UsbDevices;
 using static ConsoleUi;
 using static Session;
-using static Workflow;
+using static Histories;
 using static MtpMirror;
 
 // Shared operations offered by the Backup and Restore tabs.

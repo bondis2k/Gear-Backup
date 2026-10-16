@@ -1,0 +1,100 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using static PathSafety;
+using static Backups;
+using static ConsoleUi;
+using static ProfileSettings;
+using static Session;
+
+// Backup histories (the folders under Gear Backups\profiles): finding, choosing, naming new folders and locking one.
+static class Histories
+{
+    // Lets the user pick a profile history containing backups. Null when cancelled.
+    internal static string ChooseHistory(string root, string preferred)
+    {
+        var roots = new List<string>();
+        CollectHistories(root, roots);
+        return ChooseHistoryList(roots, preferred, preferred ?? root);
+    }
+
+    // The histories with backups in every configured location. Looked up once per operation; callers
+    // get their own copy of the list.
+    internal static List<string> AvailableHistories(Config config)
+    {
+        List<string> locations = ConfiguredBackupLocations(config);
+        OperationContext context = OperationContext.Current;
+        Dictionary<string, List<string>> cache = context.HistoryCache;
+        string key = string.Join("|", locations.ConvertAll(location => Rooted(location)).ToArray());
+        List<string> roots;
+        if (cache == null || !cache.TryGetValue(key, out roots))
+        {
+            roots = new List<string>();
+            foreach (string location in locations)
+                CollectHistories(HistoriesRoot(new Config { BackupFolder = location }), roots);
+            roots.Sort(StringComparer.OrdinalIgnoreCase);
+            if (cache != null) cache[key] = roots;
+        }
+        return new List<string>(roots);
+    }
+
+    static void CollectHistories(string root, List<string> roots)
+    {
+        RejectRootLinks(root);
+        string profiles = Path.Combine(root, "profiles");
+        if (Directory.Exists(profiles))
+        {
+            RejectRootLinks(profiles);
+            foreach (string dir in Directory.GetDirectories(profiles))
+                if (ListBackups(dir).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(dir))) roots.Add(dir);
+        }
+    }
+
+    internal static string ChooseHistory(Config config, string preferred)
+    {
+        var roots = AvailableHistories(config);
+        if (preferred != null && ListBackups(preferred).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(preferred)))
+            roots.Add(preferred);
+        return ChooseHistoryList(roots, preferred, preferred ?? HistoriesRoot(config));
+    }
+
+    static string ChooseHistoryList(List<string> roots, string preferred, string fallback)
+    {
+        roots.Sort(StringComparer.OrdinalIgnoreCase);
+        if (roots.Count == 0) return fallback;
+        var labels = new List<string>();
+        foreach (string history in roots)
+            labels.Add(HistoryNames.DisplayName(history) + " — " + history +
+                (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
+        int pick = AskItem("Choose a backup history.", labels);
+        return pick == 0 ? null : roots[pick - 1];
+    }
+
+    internal static bool HasHistory(string root)
+    {
+        string profiles = Path.Combine(root, "profiles");
+        if (Directory.Exists(profiles))
+            foreach (string dir in Directory.GetDirectories(profiles)) if (ListBackups(dir).Count > 0) return true;
+        return false;
+    }
+
+    internal static bool HasHistory(Config config) { return AvailableHistories(config).Count > 0; }
+
+    // root\name, or root\name_2, name_3, ... if that folder already exists.
+    internal static string UniqueFolder(string root, string name)
+    {
+        string path = Path.Combine(root, name);
+        for (int n = 2; Directory.Exists(path); n++) path = Path.Combine(root, name + "_" + n);
+        return path;
+    }
+
+    // Holds .history.lock open without sharing, so a second program or window can't write to the same
+    // history at the same time. Windows releases it when the stream is disposed or the process ends.
+    internal static FileStream LockHistory(string root)
+    {
+        RejectRootLinks(root);
+        Directory.CreateDirectory(root);
+        try { return new FileStream(Path.Combine(root, ".history.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        catch (IOException) { throw new IOException("This backup history is already in use by another process."); }
+    }
+}
