@@ -75,6 +75,8 @@ namespace GearBackup.Gui
             workflowTabs.TabPages.Remove(songPage);
             deviceToolParking.Controls.Add(samplesTab.Build());
             deviceToolParking.Controls.Add(migrationTab.Build());
+            deviceToolParking.Controls.Add(trackerTab.Build());
+            deviceToolParking.Controls.Add(trackerTab.CheckContent);
             Controls.Add(deviceToolParking);
             // The tab control shows the new (still empty) page before our handler can move the inputs onto it, so the
             // window stops painting as soon as a switch is requested and paints once when the new page is ready.
@@ -129,6 +131,8 @@ namespace GearBackup.Gui
                     Control sampleContent = samplesTab.BuildContent;
                     deviceToolParking.Controls.Add(sampleContent);
                     deviceToolParking.Controls.Add(migrationTab.Content);
+                    deviceToolParking.Controls.Add(trackerTab.InspectorContent);
+                    deviceToolParking.Controls.Add(trackerTab.CheckContent);
                     for (int i = 0; i < 2; i++)
                     {
                         if (devicePlaceholders[i] == null)
@@ -155,6 +159,16 @@ namespace GearBackup.Gui
                             second.Text = "Card migration";
                             second.Controls.Add(migrationTab.Content);
                             migrationTab.Activate();
+                        }
+                        else if (gearIcons.Active.Device == Devices.TrackerMini)
+                        {
+                            first.Controls.Remove(devicePlaceholders[0]);
+                            first.Text = "Project inspector";
+                            first.Controls.Add(trackerTab.InspectorContent);
+                            second.Controls.Remove(devicePlaceholders[1]);
+                            second.Text = "Instrument check";
+                            second.Controls.Add(trackerTab.CheckContent);
+                            trackerTab.Activate();
                         }
                     }
                     else
@@ -290,8 +304,8 @@ namespace GearBackup.Gui
             sizingWorkflow = true;
             try
             {
-                bool samplePage = InDeviceMode && workflowTabs.SelectedIndex == 1 && gearIcons.Active.Device == Devices.M8;
-                bool migrationPage = InDeviceMode && workflowTabs.SelectedIndex == 2 && gearIcons.Active.Device == Devices.M8;
+                bool samplePage = InDeviceMode && workflowTabs.SelectedIndex == 1 && (gearIcons.Active.Device == Devices.M8 || gearIcons.Active.Device == Devices.TrackerMini);
+                bool migrationPage = InDeviceMode && workflowTabs.SelectedIndex == 2 && (gearIcons.Active.Device == Devices.M8 || gearIcons.Active.Device == Devices.TrackerMini);
                 // The read-only M8 tool owns its status and results; give it the space normally used by backup activity.
                 if (operationState != null) operationState.Visible = !(samplePage || migrationPage) || runner.IsBusy;
                 if (activityArea != null) activityArea.Visible = !(samplePage || migrationPage) || runner.IsBusy;

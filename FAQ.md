@@ -712,6 +712,10 @@ Restoring the XML files does not write settings into the camera. Apply settings 
 
 ## M8 Song viewer
 
+### Can Gear Backup find missing samples in a Tracker project?
+
+A Tracker instrument (`.pti`) keeps its sample inside the file and a project stores no sample paths, so a sample cannot go missing the way it can on the M8. The Tracker Mini view's **Instrument check** finds the equivalent problem: a note that plays an instrument number with no usable instrument file in the project's `instruments` folder.
+
 ### What can the Song tab show?
 
 The Song tab is part of the M8 view (choose the M8 icon in the header). It reads a `.m8s` and shows available name, firmware, tempo, transpose, quantize, length, used track rows, chain/phrase/table counts, and instruments with names/types/sample references.

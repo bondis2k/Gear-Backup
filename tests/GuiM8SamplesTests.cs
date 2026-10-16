@@ -126,7 +126,7 @@ partial class Tests
                     restoreSelection.Paths.Length == 1 && restoreSelection.Paths[0] == chosen.Relative && !restoreSelection.Exact,
                     "accepting opens individual restore with the precise saved point and only the chosen sample");
                 Assert(named("RestoreDestination").Text == root && File.ReadAllText(Path.Combine(card, "Samples", "kick.wav")) == "KICK", "restore handoff preserves destination and waits for the normal Restore action");
-                gears.SetActive(GearIconStrip.Gears[2]); Application.DoEvents();
+                gears.SetActive(GearIconStrip.Gears[3]); Application.DoEvents();
                 Assert(tabs.TabPages[1].Text == "Coming soon" && !named("CheckM8Samples").Visible, "M8 checking does not leak into other device pages");
                 gears.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
                 Assert(((DataGridView)named("SampleResults")).Rows.Count == 1, "M8 results survive switching device modes");

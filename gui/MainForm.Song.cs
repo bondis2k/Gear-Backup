@@ -10,6 +10,7 @@ namespace GearBackup.Gui
         readonly SongTab songTab;
         readonly M8SamplesTab samplesTab;
         readonly M8MigrationTab migrationTab;
+        readonly TrackerProjectTab trackerTab;
 
         // Tests replace the song file dialog.
         internal Func<string> SongFilePicker { get { return songTab.FilePicker; } set { songTab.FilePicker = value; } }

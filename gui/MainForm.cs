@@ -70,6 +70,7 @@ namespace GearBackup.Gui
             samplesTab = new M8SamplesTab(this, () => config.Clone(), () => source.Text, new GuiInteraction(this, p => { }));
             samplesTab.RestoreRequested = PrepareSampleRestore;
             migrationTab = new M8MigrationTab(this, () => config.Clone(), runner.RunMigration);
+            trackerTab = new TrackerProjectTab(this, () => source.Text, new GuiInteraction(this, p => { }));
             Disposed += delegate { if (samplesTab.BuildContent != null) samplesTab.BuildContent.Dispose(); };
             Text = AppIdentity.Name;
             // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
@@ -527,6 +528,7 @@ namespace GearBackup.Gui
         {
             displayedDevice = device;
             if (device == Devices.M8) samplesTab.SuggestCard(source.Text);
+            if (device == Devices.TrackerMini) trackerTab.SuggestCard(source.Text);
             // Gear Backup mode keeps all its tools when a device is identified; a device mode follows the device that is found.
             if (gearIcons != null && device != null && InDeviceMode) gearIcons.SetActive(GearIconStrip.For(device));
             zipRestore.UpdateNotice(); RefreshRestoreActionState();

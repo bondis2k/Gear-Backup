@@ -339,6 +339,10 @@ File backup captures exposed photo/video data separately from settings. Camera-a
 
 Restoring XML exports to a PC or restoring photos does not apply camera settings.
 
+## Tracker Mini project tools
+
+The Tracker Mini view has two read-only tabs. The **project inspector** reads a project's `project.mt`, its patterns (`.mtp`) and its instrument files (`.pti`) and shows the name, tempo, firmware, song length, each instrument's sample, length and channels, and the instruments each pattern plays. The **instrument check** lists instruments that notes play but that have no usable instrument file, song positions without a pattern file, and unreadable files. Instruments hold their sample inside the `.pti`, so the check is by instrument number rather than by sample path. Readers follow Polyend's tracker-lib file layouts and only the header of an instrument file is read.
+
 ## M8 Song viewer
 
 The Song tab, available in the M8 view only, opens a Dirtywave M8 `.m8s` and presents a read-only summary through the bundled native reader.
