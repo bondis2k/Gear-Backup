@@ -16,7 +16,7 @@ namespace GearBackup
 
     static class TrackerFiles
     {
-        internal const int ProjectLimit = 1 << 20, PatternLimit = 1 << 20, InstrumentHeaderSize = 394;
+        internal const int ProjectLimit = 1 << 20, PatternLimit = 1 << 20, InstrumentHeaderSize = 392;
 
         internal static ushort U16(byte[] b, int i) { return (ushort)(b[i] | b[i + 1] << 8); }
         internal static uint U32(byte[] b, int i) { return (uint)(b[i] | b[i + 1] << 8 | b[i + 2] << 16 | b[i + 3] << 24); }
@@ -167,7 +167,8 @@ namespace GearBackup
         }
     }
 
-    // One instrument's file: the sample it holds (the audio is stored inside the file, after its 394-byte header).
+    // One instrument's file: the sample it holds. A .pti keeps the audio inside the file after its 392-byte header (measured on
+    // real Tracker Mini cards); the original Tracker's .mti holds only the settings and the name of a wav file beside it.
     internal sealed class TrackerInstrumentFile
     {
         public string SampleName = "";
@@ -176,24 +177,33 @@ namespace GearBackup
         // 1 (mono), 2 (stereo), or 0 when the audio size matches neither.
         public int Channels;
         public string PlayMode = "";
+        // True for the original Tracker's .mti instrument, whose audio is a wav file in the project's samples folder.
+        public bool Legacy;
 
         static readonly string[] PlayModes = { "One shot", "Forward loop", "Backward loop", "Ping-pong loop", "Slice", "Beat slice", "Wavetable", "Granular" };
 
-        // Only the header is read; the audio itself is not loaded.
+        // Only the header is read; the audio itself is not loaded. The original Tracker's .mti files vary in size by firmware
+        // (388 and 392 bytes seen), so a legacy file needs only the part with the sample name.
         internal static TrackerInstrumentFile Read(string path)
         {
             PathSafety.RejectRootLinks(path);
-            var info = new FileInfo(path);
-            if (!info.Exists) throw new FileNotFoundException("Instrument file not found.", path);
-            if (info.Length < TrackerFiles.InstrumentHeaderSize) throw new TrackerFileException("The instrument file is too short.");
+            bool legacy = path.EndsWith(".mti", StringComparison.OrdinalIgnoreCase);
+            int need = legacy ? 64 : TrackerFiles.InstrumentHeaderSize;
             var header = new byte[TrackerFiles.InstrumentHeaderSize];
+            long fileSize;
             using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
+                PathSafety.RejectRootLinks(path);
+                fileSize = stream.Length;
+                if (fileSize < need) throw new TrackerFileException("The instrument file is too short.");
                 int done = 0, read;
                 while (done < header.Length && (read = stream.Read(header, done, header.Length - done)) > 0) done += read;
-                if (done < header.Length) throw new TrackerFileException("The instrument file is too short.");
+                if (done < need) throw new TrackerFileException("The instrument file is too short.");
             }
-            return Parse(header, info.Length);
+            TrackerInstrumentFile instrument = Parse(header, fileSize);
+            instrument.Legacy = legacy;
+            if (legacy) { instrument.Channels = 0; instrument.Frames = 0; instrument.AudioBytes = 0; }
+            return instrument;
         }
 
         internal static TrackerInstrumentFile Parse(byte[] header, long fileSize)

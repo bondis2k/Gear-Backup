@@ -772,15 +772,15 @@ A Tracker instrument (`.pti`) keeps its sample inside the file and a project sto
 
 ### What does "no instrument file" or "no usable sample" mean?
 
-The pattern plays instrument 7, but `instruments\instrument_07.pti` is not there ("no instrument file"), cannot be read ("the instrument file cannot be read"), or holds no audio ("no usable sample"). Restore the instrument from a backup, or load a sample into that slot on the Tracker. Instruments are matched by number, counting from 1 as the Tracker shows them; a folder that starts at `instrument_00.pti` is recognised too.
+The pattern plays instrument 7, but there is no instrument file for slot 7 (`7 <sample>.pti`, or `instrument_07.mti` with `samples\instr07.wav` in projects from the original Tracker) ("no instrument file"), cannot be read ("the instrument file cannot be read"), or holds no audio ("no usable sample"). Restore the instrument from a backup, or load a sample into that slot on the Tracker. Instruments are matched by slot number, counting from 1 as the Tracker shows them.
 
 ### Why does the check list a missing instrument I never hear?
 
 Only notes inside a track's length count, but a pattern that is not in the song can still play an instrument that is missing; the **In the song** column says No for those. Empty, off and cut steps are ignored. MIDI and synth instruments have no files, so they are counted separately and never reported as missing.
 
-### Why does it say a song position plays a pattern with no pattern file?
+### Why does it mention a song position with no pattern file?
 
-The project's song order names a pattern number, and there is no `patterns\pattern_NN.mtp` with that number. This usually means the pattern was removed from the folder or the project is only partly restored. Restore the whole project folder (not just `project.mt`) and run the check again.
+The project's song order names a pattern number, and there is no `patterns\pattern_NN.mtp` with that number. On real cards this is normally an empty pattern, which the Tracker does not save, so it is only a note and is not listed as a problem. If the pattern should have notes, restore the whole project folder (not just `project.mt`) and run the check again.
 
 ### Can I inspect a project that is only in a backup?
 

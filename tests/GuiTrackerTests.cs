@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using GearBackup;
 using GearBackup.Gui;
@@ -76,6 +77,58 @@ partial class Tests
             ((Button)form.Controls.Find("TrackerCheckButton", true)[0]).PerformClick();
             WaitForGui(() => missing.Rows.Count == 0, "re-check finds the new instrument");
             Assert(checkNotice.Text.Contains("Every instrument"), "with the instrument added the check passes: " + checkNotice.Text);
+
+            File.Delete(Path.Combine(project, "instruments", "instrument_01.pti"));
+            var legacy = new byte[388]; legacy[0] = (byte)'T'; legacy[1] = (byte)'I';
+            File.WriteAllBytes(Path.Combine(project, "instruments", "instrument_01.mti"), legacy);
+            Directory.CreateDirectory(Path.Combine(project, "samples"));
+            File.WriteAllBytes(Path.Combine(project, "samples", "instr01.wav"), new byte[46]);
+            ((Button)form.Controls.Find("TrackerCheckButton", true)[0]).PerformClick();
+            WaitForGui(() => inspect.Enabled, "legacy project re-check completes");
+            Assert(missing.Rows.Count == 0 && (string)instruments.Rows[0].Cells[5].Value == "Original Tracker" &&
+                (string)instruments.Rows[0].Cells[6].Value == "OK", "legacy sample presence agrees between the inspector and instrument check");
+
+            tabs.SelectedIndex = 1; Application.DoEvents();
+            var picker = (ComboBox)form.Controls.Find("TrackerProjectPicker", true)[0];
+            var browse = form.Controls.Find("TrackerBrowse", true)[0];
+            var originalInspector = tabUnderTest.Inspector;
+            using (var entered = new ManualResetEvent(false))
+            using (var release = new ManualResetEvent(false))
+            {
+                tabUnderTest.Inspector = (folder, context) => {
+                    entered.Set();
+                    if (!release.WaitOne(10000)) throw new Exception("Timed out waiting for the scan test.");
+                    context.CheckCancellation();
+                    return originalInspector(folder, context);
+                };
+                try
+                {
+                    inspect.PerformClick();
+                    WaitForGui(() => entered.WaitOne(0), "controlled Tracker scan starts");
+                    Assert(!path.Enabled && !picker.Enabled && !browse.Enabled && !viewButton.Enabled,
+                        "scan inputs and pattern browsing are locked while inspecting");
+                    path.Text = Path.Combine(root, "empty"); // programmatic changes must invalidate a running result too
+                    release.Set();
+                    WaitForGui(() => inspect.Enabled, "superseded scan settles");
+                    Assert(path.Enabled && browse.Enabled && tabUnderTest.Report == null && !summary.Visible && notice.Text.Contains("Choose a Tracker card"),
+                        "a superseded scan cannot publish results under the replacement path");
+                }
+                finally { release.Set(); tabUnderTest.Inspector = originalInspector; }
+            }
+            inspect.PerformClick();
+            WaitForGui(() => notice.Text.Contains("No Tracker project"), "replacement folder is inspected");
+
+            string second = Path.Combine(card, "Projects", "User", "Zed");
+            Directory.CreateDirectory(Path.Combine(second, "patterns")); Directory.CreateDirectory(Path.Combine(second, "instruments"));
+            File.WriteAllBytes(Path.Combine(second, "project.mt"), TrackerProject("Zed"));
+            path.Text = card; inspect.PerformClick();
+            WaitForGui(() => inspect.Enabled && picker.Items.Count == 2, "both projects are listed");
+            picker.SelectedIndex = 1;
+            WaitForGui(() => inspect.Enabled && tabUnderTest.Report.Project.Name == "Zed", "second project is selected");
+            tabs.SelectedIndex = 2; Application.DoEvents();
+            ((Button)form.Controls.Find("TrackerCheckButton", true)[0]).PerformClick();
+            WaitForGui(() => inspect.Enabled, "selected project check finishes");
+            Assert(tabUnderTest.Report.Project.Name == "Zed" && picker.SelectedIndex == 1, "Check project retains the selected project instead of returning to the first");
 
             strip.SetActive(GearIconStrip.Gears[0]); Application.DoEvents();
             Assert(titles() == "Device|Backup|Restore" && !onTabs(), "leaving the Tracker Mini view brings the normal tabs back");
