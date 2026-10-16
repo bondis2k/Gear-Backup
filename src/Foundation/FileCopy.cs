@@ -106,7 +106,7 @@ namespace GearBackup
 
         internal static void TryDelete(string path)
         {
-            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { } // best-effort cleanup of a temporary file
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // best-effort cleanup of a temporary file
         }
 
         internal static string ToHex(byte[] hash)
@@ -121,7 +121,7 @@ namespace GearBackup
         static HashAlgorithm NewSha256()
         {
             try { return new SHA256Cng(); }
-            catch (Exception) { return SHA256.Create(); }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is System.Security.Cryptography.CryptographicException || ex is PlatformNotSupportedException) { return SHA256.Create(); }
         }
 
         internal static string CopyAndHash(string from, string to)
@@ -166,7 +166,7 @@ namespace GearBackup
                 finally
                 {
                     // Never leave a read running after the streams close (e.g. when cancelled or a write fails).
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
+                    if (pending != null) try { pending.Wait(); } catch (AggregateException) { } // the read-ahead failed too; the original error is the one reported
                     context.ReturnBuffer(current);
                     context.ReturnBuffer(spare);
                 }
@@ -273,7 +273,7 @@ namespace GearBackup
                 finally
                 {
                     // Never free a buffer, or close the file, while a background read still uses it.
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
+                    if (pending != null) try { pending.Wait(); } catch (AggregateException) { } // the read-ahead failed too; the original error is the one reported
                     Marshal.FreeHGlobal(rawCurrent);
                     Marshal.FreeHGlobal(rawSpare);
                     context.ReturnBuffer(buffer);
@@ -302,14 +302,14 @@ namespace GearBackup
                     return string.Format("Not enough space on {0}: needs {1}, but only {2} is free.",
                                          root, FormatSize(needed), FormatSize(free));
             }
-            catch (Exception) { } // If the free space cannot be read, the copy goes ahead and a full disk fails there with its own error.
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // If the free space cannot be read, the copy goes ahead and a full disk fails there with its own error.
             return null;
         }
 
         internal static string FreeSpaceText(string root)
         {
             try { return FormatSize(new DriveInfo(root).AvailableFreeSpace); }
-            catch (Exception) { return "unknown"; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return "unknown"; }
         }
 
         // "1.2 GB of 7.4 GB"; DriveInfo rejects network paths (\\server\share), which give "unknown".
@@ -320,7 +320,7 @@ namespace GearBackup
                 var drive = new DriveInfo(root);
                 return FormatSize(drive.AvailableFreeSpace) + " of " + FormatSize(drive.TotalSize);
             }
-            catch (Exception) { return "unknown"; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return "unknown"; }
         }
     }
 

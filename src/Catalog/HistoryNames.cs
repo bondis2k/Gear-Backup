@@ -52,7 +52,7 @@ namespace GearBackup
                 string name = Records.ReadText(path, Records.SmallLimit, "History nickname").Trim();
                 return Valid(name) ? name : null;
             }
-            catch (Exception) { return null; }  // An unreadable nickname only falls back to the automatic name.
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return null; }  // An unreadable nickname only falls back to the automatic name.
         }
 
         // Gives a history a nickname; an empty one goes back to the automatic name.

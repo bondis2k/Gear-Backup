@@ -68,7 +68,7 @@ namespace GearBackup
                             }
                         }
                         catch (OperationCanceledException) { throw; }
-                        catch (Exception) { }  // only used for the statistics
+                        catch (Exception ex) when (ExpectedFailure.Is(ex)) { }  // only used for the statistics
                         continue;
                     }
                     scan.Folders.Add(sub);

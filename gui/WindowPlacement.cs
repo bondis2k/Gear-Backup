@@ -33,7 +33,7 @@ namespace GearBackup.Gui
                 if (maximized) form.WindowState = FormWindowState.Maximized;
                 return true;
             }
-            catch (Exception) { return false; }  // A damaged file only loses the remembered position.
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return false; }  // A damaged file only loses the remembered position.
         }
 
         // Saves the window's normal position and size (the ones it returns to when not maximized).
@@ -44,7 +44,7 @@ namespace GearBackup.Gui
                 Rectangle bounds = form.WindowState == FormWindowState.Normal ? form.Bounds : form.RestoreBounds;
                 AtomicText(Path.Combine(settingsDirectory, FileName), Format(bounds, form.WindowState == FormWindowState.Maximized));
             }
-            catch (Exception) { }  // Not being able to save the position must never get in the way of closing.
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { }  // Not being able to save the position must never get in the way of closing.
         }
 
         internal static string Format(Rectangle bounds, bool maximized)

@@ -428,7 +428,7 @@ namespace GearBackup.Gui
                 if (device != null || name.Length > 0)
                     folder = ResolveProfileSettings(options, device == null ? options.Device : device.Id, name).BackupFolder;
             }
-            catch (Exception) { /* Keep partially edited paths visible; validation happens when starting. */ }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { /* Keep partially edited paths visible; validation happens when starting. */ }
             // A source folder set in More options replaces device detection, so it's shown even while collapsed.
             string sourceFolder = (Restoring ? restoreDestination : source).Text.Trim();
             string sourcePart = sourceFolder.Length == 0 || Selected == GuiOperation.Check || Selected == GuiOperation.CameraSettings ? ""
@@ -585,7 +585,7 @@ namespace GearBackup.Gui
                 using (Stream stream = Resource(name))
                     return stream == null ? null : new Bitmap(Image.FromStream(stream));
             }
-            catch (Exception) { return null; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { return null; }
         }
         public void PrepareOperation(bool migration = false)
         {

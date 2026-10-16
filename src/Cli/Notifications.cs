@@ -115,15 +115,15 @@ namespace GearBackup.Cli
                     char c = char.ToLowerInvariant(Console.ReadKey(true).KeyChar);
                     if (c != 'y' && c != 'n') continue;
                     answer = c == 'y';
-                    try { ToastNotificationManager.History.Remove(toast.Tag, toast.Group, AppId); } catch (Exception) { } // an old toast that stays in the list is harmless
+                    try { ToastNotificationManager.History.Remove(toast.Tag, toast.Group, AppId); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { } // an old toast that stays in the list is harmless
                     break;
                 }
                 Console.WriteLine(answer == true ? "yes" : answer == false ? "no" : "");
                 return failed ? null : answer;
             }
-            catch (Exception)
+            catch (Exception ex) when (ExpectedFailure.Is(ex) || ex is InvalidOperationException)
             {
-                return null;
+                return null; // no notification could be shown; the result is already in the console
             }
         }
 

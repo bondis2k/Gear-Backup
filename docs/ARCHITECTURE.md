@@ -132,7 +132,7 @@ The layer of a file is its top-level folder under `src`:
 
 Failures that callers may want to tell apart have their own types in `Foundationrrors.cs` (`DamagedContentException`, `UnsafePathException`, `HistoryBusyException`, `UnsupportedBackupException`). They derive from `IOException`, so existing handlers still catch them, and `ErrorHints.For` gives the advice the CLI and GUI show after the message.
 
-Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure.
+Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure. A catch-all that quietly gives up (a best-effort lookup or cleanup) filters with `when (ExpectedFailure.Is(ex))`, so a bug in the code still surfaces; the check fails a bare `catch (Exception)` that neither filters nor rethrows. Catch-alls that remain are at a boundary where the error is shown to the user (the operation runner, a background task finishing, a dialog button).
 
 The namespace commit re-indented every source file, so `git blame` would credit it for most lines. `.git-blame-ignore-revs` lists it (and any later mechanical rewrite); run `git config blame.ignoreRevsFile .git-blame-ignore-revs` once, and `git diff -w` hides the indentation in that commit.
 

@@ -65,7 +65,7 @@ namespace GearBackup.Gui
             string selectedPath = selected == null ? null : selected.Path;
             Config options;
             try { options = CaptureConfig(); }
-            catch (Exception) { incrementalBackup.Items.Clear(); return; }
+            catch (Exception ex) when (ExpectedFailure.Is(ex)) { incrementalBackup.Items.Clear(); return; }
             SourceChoice choice = backupSetSource;
             if (options.SourceFolder.Length != 0 && (choice == null || string.IsNullOrEmpty(choice.Path) || !string.Equals(options.SourceFolder.TrimEnd('\\'), choice.Path.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase)))
                 choice = new SourceChoice { Path = options.SourceFolder };

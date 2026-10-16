@@ -120,7 +120,7 @@ namespace GearBackup.Gui
             restoreBackupCaption.Text = device == null ? "Available backups · all devices" : "Backups for " + device.Name;
             restoreBackup.AccessibleName = restoreBackupCaption.Text;
             Config options;
-            try { options = CaptureConfig(); } catch (Exception) { return; }
+            try { options = CaptureConfig(); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { return; }
             string key = (device == null ? "" : device.Id) + "|" + options.BackupFolder;
             if (!force && key == restoreContextKey) { if (restoreSet != null) UpdateRestoreSelectionNotice(); return; }
             bool sameContext = key == restoreContextKey;
