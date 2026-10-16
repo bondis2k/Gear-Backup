@@ -38,8 +38,9 @@ partial class Tests
         Put(Path.Combine(source, "Projects", "Demo", "project.mt"), "PROJECT");
         Put(Path.Combine(source, relative), "SAMPLE");
         string history = Path.Combine(HistoriesRoot(new Config { BackupFolder = alternate }), "profiles", "Studio");
-        new BackupEngine().Run(source, history, null, false, ResolveProfileSettings(config, "tracker-mini", "Studio"),
+        OperationResult made = new BackupEngine().Run(source, history, null, false, ResolveProfileSettings(config, "tracker-mini", "Studio"),
             new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.TrackerMini });
+        Assert(made.ExitCode == 0, "the fixture backup succeeds: " + made.Summary);
         using (var form = new MainForm(true))
         {
             typeof(MainForm).GetField("config", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).SetValue(form, config);
@@ -334,6 +335,8 @@ partial class Tests
         var picker = (ComboBox)form.Controls.Find("RestorePoint", true)[0];
         DateTime deadline = DateTime.UtcNow.AddSeconds(15);
         while ((!picker.Enabled || picker.SelectedItem == null) && DateTime.UtcNow < deadline) { Application.DoEvents(); Thread.Sleep(10); }
-        Assert(picker.Enabled && picker.SelectedItem != null, "restore picker loads matching device backups and defaults to the latest point");
+        string notice = "";
+        foreach (Control control in form.Controls.Find("RestoreNotice", true)) notice = control.Text;
+        Assert(picker.Enabled && picker.SelectedItem != null, "restore picker loads matching device backups and defaults to the latest point: enabled=" + picker.Enabled + ", items=" + picker.Items.Count + ", notice=" + notice);
     }
 }
