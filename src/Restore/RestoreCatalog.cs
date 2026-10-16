@@ -174,7 +174,7 @@ namespace GearBackup
             using (Histories.LockUnlessPreview(history))
             using (OperationContext.Current.UseDevice(device))
             {
-                if (Within(target, request.Backup) || Within(request.Backup, target)) throw new IOException("The restore destination and backup must not contain one another.");
+                RestoreFlow.ValidateRestoreDestination(request.Backup, target, config);
                 RestoreSet set = Load(request.Backup, device);
                 RestorePoint point = set.Points.Find(p => p.Id == request.Point);
                 if (point == null || Stamp(point.Snapshot) != request.Stamp) throw new IOException("The selected backup changed. Refresh the restore selection and review the files again.");
@@ -184,10 +184,12 @@ namespace GearBackup
                 if (snapshot.Files.Count == 0 && snapshot.Folders.Count == 0) throw new IOException("No files or folders selected.");
                 if (request.Exact && request.Paths != null) throw new IOException("Exact restore requires a complete saved restore point and full-backup restore.");
                 Config effective = ProfileSettings.ResolveProfileSettings(config, device.Id, Path.GetFileName(history));
+                RestoreFlow.ValidateRestoreDestination(request.Backup, target, effective);
                 if (!RestoreFlow.ConfirmRestoreTarget(request.Backup, target)) return new OperationResult { Cancelled = true };
                 OperationOutput.WriteLine("  Restore inventory: " + (set.Sqlite ? "SQLite (catalog.sqlite)." : "recovery records."));
                 OperationOutput.WriteLine("  Selected backup: " + BackupSetNames.Label(request.Backup) + " · " + point.Label);
-                return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, request.Exact, effective, OperationContext.Current);
+                return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, request.Exact, effective, OperationContext.Current,
+                    () => RestoreFlow.ValidateRestoreDestination(request.Backup, target, effective));
             }
         }
     }

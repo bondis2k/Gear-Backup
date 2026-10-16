@@ -134,9 +134,12 @@ namespace GearBackup
                 try
                 {
                     long before = done;
-                    source.Download(item, temp, bytes => OperationContext.Current.Progress(Stage.Downloading, item.RelativePath, before + bytes, total));
+                    source.Download(item, temp, bytes => {
+                        if (bytes < 0 || bytes > item.Size) throw new IOException("MTP download exceeds its declared size: " + item.RelativePath);
+                        OperationContext.Current.Progress(Stage.Downloading, item.RelativePath, checked(before + bytes), total);
+                    });
                     long size = new FileInfo(temp).Length;
-                    if (item.Size > 0 && size != item.Size)
+                    if (size != item.Size)
                         throw new IOException("the download of " + item.RelativePath + " was incomplete (" + size + " of " + item.Size + " bytes)");
                     // Keep the device's date, however old: the next sync compares it to spot changes. (The OP-1
                     // reports some factory sounds as 1970, which FAT cards can't store but the PC's disk can.)

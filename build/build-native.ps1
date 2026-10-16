@@ -50,6 +50,7 @@ if (-not (Test-Path -LiteralPath $dll)) { throw "Expected $dll after the build."
 
 # Refuse to ship a DLL that still carries the builder's folders, or lacks the protections it is built with.
 $bytes = [IO.File]::ReadAllBytes($dll)
+& (Join-Path $PSScriptRoot 'check-native-imports.ps1') -Path $dll | Out-Null
 $characteristics = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 24 + 70)
 foreach ($required in @(@{ Bit = 0x0040; Name = 'ASLR' }, @{ Bit = 0x0100; Name = 'DEP' }, @{ Bit = 0x4000; Name = 'Control Flow Guard' })) {
     if (-not ($characteristics -band $required.Bit)) { throw "m8_reader.dll was built without $($required.Name)." }

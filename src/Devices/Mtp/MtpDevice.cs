@@ -353,6 +353,7 @@ namespace GearBackup
         // Copies a file's content from the device into `to` (which must not exist yet).
         public void Download(MtpObject item, string to, Action<long> progress)
         {
+            if (item.Size < 0) throw new IOException("Invalid MTP file size.");
             uint bufferSize = 0;
             CT.IStream stream;
             PropertyKey key = DefaultResource;
@@ -365,22 +366,35 @@ namespace GearBackup
                 {
                     using (var output = new FileStream(to, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.WriteThrough))
                     {
-                        long done = 0;
-                        while (true)
-                        {
-                            OperationContext.Current.CheckCancellation();
-                            stream.Read(buffer, buffer.Length, readCount);
-                            int read = Marshal.ReadInt32(readCount);
-                            if (read <= 0) break;
-                            output.Write(buffer, 0, read);
-                            done += read;
-                            if (progress != null) progress(done);
-                        }
+                        CopyDownload((bytes, count) => {
+                            Marshal.WriteInt32(readCount, 0);
+                            stream.Read(bytes, count, readCount);
+                            return Marshal.ReadInt32(readCount);
+                        }, output, buffer, item.Size, progress);
                     }
                 }
                 finally { Marshal.FreeCoTaskMem(readCount); }
             }
             finally { Marshal.ReleaseComObject(stream); }
+        }
+
+        // Enforce the device's byte budget before writing, even for an advertised empty file.
+        internal static void CopyDownload(Func<byte[], int, int> readChunk, Stream output, byte[] buffer, long size, Action<long> progress)
+        {
+            if (size < 0) throw new IOException("Invalid MTP file size.");
+            long done = 0;
+            while (true)
+            {
+                OperationContext.Current.CheckCancellation();
+                int read = readChunk(buffer, buffer.Length);
+                if (read < 0 || read > buffer.Length) throw new IOException("Invalid MTP read count.");
+                if (read == 0) break;
+                long next = checked(done + read);
+                if (next > size) throw new IOException("MTP download exceeds its declared size.");
+                output.Write(buffer, 0, read); done = next;
+                if (progress != null) progress(done);
+            }
+            if (done != size) throw new IOException("MTP download ended before its declared size.");
         }
     }
 

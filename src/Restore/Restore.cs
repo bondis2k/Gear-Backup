@@ -46,6 +46,7 @@ namespace GearBackup
 
         static OperationResult RestoreSelectedBackup(string m8, string backup, Config config)
         {
+            ValidateRestoreDestination(backup, m8, config);
             Snapshot snapshot = ChooseSnapshot(backup);
             bool historical = snapshot != null;
             if (!historical)
@@ -79,7 +80,21 @@ namespace GearBackup
             // Exact restore is available only for manifests, whose file membership is authoritative.
             bool exact = historical && mode == RestoreMode.All && Ask("How should the snapshot be restored?", new Option('m', "Merge"),
                 new Option('e', "Exact snapshot (remove extra files)")) == 'e';
-            return new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current);
+            return new RestoreEngine().RunSelected(m8, snapshot, items, mode, bundle, exact, config, OperationContext.Current,
+                () => ValidateRestoreDestination(backup, m8, config));
+        }
+
+        internal static void ValidateRestoreDestination(string backup, string target, Config config = null)
+        {
+            RejectRootLinks(backup); RejectRootLinks(target);
+            if (Within(target, backup) || Within(backup, target))
+                throw new IOException("The restore destination and backup must not contain one another.");
+            if (config != null)
+            {
+                foreach (string protectedRoot in new[] { Path.Combine(config.BackupFolder, AppIdentity.BackupsFolderName), RecoveryRoot(config) })
+                    if (Within(target, protectedRoot) || Within(protectedRoot, target))
+                        throw new IOException("Restore outside the backup repository and recovery storage: " + protectedRoot);
+            }
         }
 
         // Returns the exit code; title/summary are for the final notification (null if nothing was done).
