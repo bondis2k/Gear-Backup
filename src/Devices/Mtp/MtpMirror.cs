@@ -144,7 +144,7 @@ namespace GearBackup
                     // Keep the device's date, however old: the next sync compares it to spot changes. (The OP-1
                     // reports some factory sounds as 1970, which FAT cards can't store but the PC's disk can.)
                     if (item.Modified != DateTime.MinValue)
-                        try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { }
+                        try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { } // a date the file system cannot store keeps the download time
                     RejectRootLinks(path);
                     TryDelete(path);
                     File.Move(temp, path);

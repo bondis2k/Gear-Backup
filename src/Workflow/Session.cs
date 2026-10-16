@@ -161,6 +161,7 @@ namespace GearBackup
                     return "The detected device changed, so it was left connected.";
                 return null;
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex) { return "Could not confirm the device for ejection: " + ex.Message; }
         }
     }

@@ -106,7 +106,7 @@ namespace GearBackup
 
         internal static void TryDelete(string path)
         {
-            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { }
+            try { if (File.Exists(path)) File.Delete(path); } catch (Exception) { } // best-effort cleanup of a temporary file
         }
 
         internal static string ToHex(byte[] hash)
@@ -166,7 +166,7 @@ namespace GearBackup
                 finally
                 {
                     // Never leave a read running after the streams close (e.g. when cancelled or a write fails).
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { }
+                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
                     context.ReturnBuffer(current);
                     context.ReturnBuffer(spare);
                 }
@@ -273,7 +273,7 @@ namespace GearBackup
                 finally
                 {
                     // Never free a buffer, or close the file, while a background read still uses it.
-                    if (pending != null) try { pending.Wait(); } catch (Exception) { }
+                    if (pending != null) try { pending.Wait(); } catch (Exception) { } // the read-ahead failed too; the original error is the one reported
                     Marshal.FreeHGlobal(rawCurrent);
                     Marshal.FreeHGlobal(rawSpare);
                     context.ReturnBuffer(buffer);
@@ -302,7 +302,7 @@ namespace GearBackup
                     return string.Format("Not enough space on {0}: needs {1}, but only {2} is free.",
                                          root, FormatSize(needed), FormatSize(free));
             }
-            catch (Exception) { }
+            catch (Exception) { } // If the free space cannot be read, the copy goes ahead and a full disk fails there with its own error.
             return null;
         }
 

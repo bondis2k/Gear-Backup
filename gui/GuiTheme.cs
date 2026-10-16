@@ -28,6 +28,14 @@ namespace GearBackup.Gui
             return new Label { Text = text, AutoSize = true, ForeColor = color, Font = Font(size), Margin = new Padding(0, 0, 0, 8) };
         }
 
+        // A small caption above a field.
+        public static Label Caption(string text)
+        {
+            var label = Label(text, 9, Muted);
+            label.Margin = new Padding(0, 8, 0, 6);
+            return label;
+        }
+
         // A section heading inside a card, e.g. "Activity".
         public static Label SectionTitle(string text)
         {

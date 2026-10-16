@@ -47,6 +47,7 @@ namespace GearBackup
                             Field(header, "Filesystem", drive.DriveFormat);
                         }
                     }
+                    // Volume details are extra information; an unreadable drive just leaves them out.
                     catch (IOException) { }
                     catch (UnauthorizedAccessException) { }
                     catch (ArgumentException) { }

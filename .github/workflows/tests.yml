@@ -36,6 +36,10 @@ jobs:
           key: rust-${{ runner.os }}-tests-${{ hashFiles('native/m8-reader/Cargo.lock', 'native/m8-reader/rust-toolchain.toml') }}
           restore-keys: rust-${{ runner.os }}-tests-
 
+      - name: Catch check
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build\check-catches.ps1
+
       - name: M8 reader tests (Rust)
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test

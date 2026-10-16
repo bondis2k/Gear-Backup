@@ -18,9 +18,13 @@ namespace GearBackup
     // files, shows the preview), then Run carries out the approved plan.
     internal sealed class RestoreEngine
     {
+        // The operation this engine is running, set when a run starts; the methods below report progress and cancellation through it.
+        OperationContext context;
+
         public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode,
             string bundle, bool exact, Config config, OperationContext context, Action beforeRestore = null, string planLabel = null)
         {
+            this.context = context;
             var timer = System.Diagnostics.Stopwatch.StartNew();
             using (context.Activate())
             {
@@ -45,6 +49,7 @@ namespace GearBackup
         public OperationResult Run(string targetRoot, List<RestoreEntry> copies, List<string> removals, List<string> folders,
             List<string> extraFolders, Dictionary<string, string> targetHashes, Config config, OperationContext context)
         {
+            this.context = context;
             var timer = System.Diagnostics.Stopwatch.StartNew();
             using (context.Activate())
             {
@@ -116,7 +121,7 @@ namespace GearBackup
             foreach (RestoreEntry item in items)
             {
                 sizes[item.Relative] = item.Size;
-                OperationContext.Current.Progress(Stage.PlanningRestore, item.Relative, 0, 0);
+                context.Progress(Stage.PlanningRestore, item.Relative, 0, 0);
                 string target = SafePath(m8, item.Relative);
                 CheckParents(m8, target);
                 if (Directory.Exists(target)) throw new IOException("A folder blocks the file: " + item.Relative);
@@ -203,12 +208,12 @@ namespace GearBackup
             int copied = 0, failed = 0, removed = 0;
             foreach (string folder in folders)
             {
-                OperationContext.Current.CheckCancellation();
+                context.CheckCancellation();
                 Directory.CreateDirectory(SafePath(targetRoot, folder));
             }
             foreach (RestoreEntry item in copies)
             {
-                OperationContext.Current.Progress(Stage.Restoring, item.Relative, 0, 0);
+                context.Progress(Stage.Restoring, item.Relative, 0, 0);
                 string target = SafePath(targetRoot, item.Relative);
                 string temp = Path.Combine(Path.GetDirectoryName(target), ".gearrestore-" + Guid.NewGuid().ToString("N") + ".tmp");
                 try
@@ -225,7 +230,7 @@ namespace GearBackup
                     // Copying can take time: check the current folders again before committing the staged file.
                     target = SafePath(targetRoot, item.Relative);
                     AssertTargetUnchanged(target, targetHashes[item.Relative]);
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     if (File.Exists(target)) ReplaceSafely(temp, target);
                     else File.Move(temp, target);
                     copied++;
@@ -240,7 +245,7 @@ namespace GearBackup
             {
                 foreach (string relative in removals)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     try
                     {
                         string path = SafePath(targetRoot, relative);
@@ -254,7 +259,7 @@ namespace GearBackup
                 extraFolders.Sort((a, b) => b.Length.CompareTo(a.Length));
                 if (failed == 0) foreach (string relative in extraFolders)
                 {
-                    OperationContext.Current.CheckCancellation();
+                    context.CheckCancellation();
                     string folder = SafePath(targetRoot, relative);
                     if (Directory.Exists(folder) && Directory.GetFileSystemEntries(folder).Length == 0) Directory.Delete(folder);
                 }

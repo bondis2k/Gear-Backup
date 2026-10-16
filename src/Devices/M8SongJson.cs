@@ -100,7 +100,7 @@ namespace GearBackup
             foreach (object value in values)
             {
                 if (index >= target.Length) break;
-                try { target[index] = Convert.ToInt32(value, CultureInfo.InvariantCulture); } catch (FormatException) { } catch (InvalidCastException) { }
+                try { target[index] = Convert.ToInt32(value, CultureInfo.InvariantCulture); } catch (FormatException) { } catch (InvalidCastException) { } // a value that is not a number leaves the default
                 index++;
             }
         }

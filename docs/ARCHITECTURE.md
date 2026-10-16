@@ -49,7 +49,7 @@ A layer may use its own layer and the ones below it, never the ones above. `buil
 
 Engines never read the console or show windows. They talk to an `IOperationInteraction` (questions, output, plan approval, progress), which the CLI implements with the console, the GUI with dialogs, and the tests with a scripted fake.
 
-The running operation is reached through `OperationContext.Current`, a per-thread ambient value, so helpers do not need it passed to every call. It carries the interaction, the cancellation token, preview mode, the current device and per-operation caches. Every operation starts its own context (`new OperationContext(...).Activate()`): the CLI's `Main`, the GUI's operation runner and tool windows, and each test. Nothing in it outlives the operation.
+The running operation is reached through `OperationContext.Current`, a per-thread ambient value, so helpers do not need it passed to every call. It carries the interaction, the cancellation token, preview mode, the current device and per-operation caches. The engines (`BackupEngine`, `ContentStoreBackup`, `RestoreEngine`, `IntegrityEngine`, `ArchiveBackup`) take the context as a parameter and use that, not the ambient value; only the shared helpers they call (file copying, console output, plan review) read `OperationContext.Current`. New engine code should take the context the same way. Every operation starts its own context (`new OperationContext(...).Activate()`): the CLI's `Main`, the GUI's operation runner and tool windows, and each test. Nothing in it outlives the operation.
 
 Rules of thumb: ask the context for interaction and cancellation; pass a `DeviceProfile` explicitly when you have one rather than reading `CurrentDevice`, which is only for code that cannot easily be given it.
 
@@ -107,6 +107,8 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 | `build-installer.cmd` | Builds the installer and portable packages. |
 | `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |
 | `build\check-layers.ps1` | The layer check, run before the core tests and in CI. |
+| `build\check-catches.ps1` | Fails an empty `catch` without a comment, run before the core tests and in CI. |
+| `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`). At the last run: 83% of statements, 77% of branches; the device-bound code (`FujiPtp`, `UsbDevices`, `MtpDevice`) is largely untested because it needs hardware. |
 | `benchmarks\run-benchmarks.ps1` | Performance scenarios; see `benchmarks\README.md`. |
 
 A test is a method of the `Tests` class marked `[Test("name")]` (`tests\TestHarness.cs`); the runners find them by reflection, so there is no list to keep. A test takes no argument or one fixture folder, and each runs in its own operation context. GUI tests are marked `Gui = true`, live in `tests\Gui*Tests.cs` by area, and run in the GUI test program on an STA thread.
@@ -129,6 +131,8 @@ The layer of a file is its top-level folder under `src`:
 `build\check-layers.ps1` scans the sources and fails when a file mentions a type declared in a higher layer. There are no known violations; `build\layer-baseline.txt` is empty and exists so a violation that cannot be fixed at once can be recorded (run `build\check-layers.ps1 -UpdateBaseline`) while only new ones fail.
 
 Failures that callers may want to tell apart have their own types in `Foundationrrors.cs` (`DamagedContentException`, `UnsafePathException`, `HistoryBusyException`, `UnsupportedBackupException`). They derive from `IOException`, so existing handlers still catch them, and `ErrorHints.For` gives the advice the CLI and GUI show after the message.
+
+Errors are never swallowed silently: `build\check-catches.ps1` (run by the tests and CI) fails an empty `catch` that has no comment saying why ignoring the error is safe. Code that catches `Exception` rethrows `OperationCanceledException` first, so a cancel is never reported as a failure.
 
 ## Where does new code go?
 
