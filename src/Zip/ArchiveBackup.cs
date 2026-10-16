@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using static PathSafety;
+using static SourceScan;
 
 // A standalone full backup: stream the source into a ZIP, then publish the completed archive.
 // No history, content store or second full copy is created.
@@ -35,7 +36,7 @@ internal static class ArchiveBackup
         string parent = Path.GetDirectoryName(destination);
         if (!Directory.Exists(parent)) throw new IOException("Archive destination folder does not exist: " + parent);
         if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
-        var scan = new ScanResult(); Backups.CollectFiles(source, scan);
+        var scan = new ScanResult(); SourceScan.CollectFiles(source, scan);
         foreach (var item in Directory.EnumerateFileSystemEntries(source))
             if (string.Equals(Path.GetFileName(item), ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))
@@ -47,7 +48,7 @@ internal static class ArchiveBackup
             string path = Relative(source, file.FullName); actions.Add("Copy: " + path); sizes[path] = file.Length; total += file.Length;
         }
         OperationOutput.WriteLine("  ZIP archive: " + destination);
-        if (!PlanReview.ShowPlan("ZIP archive preview", actions, total, config, sizes))
+        if (!PlanReview.ShowPlan("ZIP archive preview", actions, total, config.Preview, sizes))
             return new OperationResult { Cancelled = !context.PreviewOnly, Summary = context.PreviewOnly ? "ZIP preview complete; no archive created." : "ZIP archive cancelled.", Elapsed = timer.Elapsed };
         var previous = File.Exists(destination) ? new FileInfo(destination) : null;
         long previousSize = previous == null ? 0 : previous.Length, previousTime = previous == null ? 0 : previous.LastWriteTimeUtc.Ticks;

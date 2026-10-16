@@ -22,6 +22,8 @@ using static BackupStatuses;
 using static Histories;
 using static PlanReview;
 using static DeviceSelection;
+using static BackupFolders;
+using static SourceScan;
 
 partial class Tests
 {
@@ -462,7 +464,7 @@ partial class Tests
         Assert(offered.Count == 1 && offered[0] == "Studio card — " + history, "history pickers show the nickname with the folder: " + string.Join(" | ", offered.ToArray()));
         BackupCatalog catalog;
         using (new OperationContext(new TestInteraction(), CancellationToken.None).Activate()) catalog = StorageCatalog.ScanDashboardCatalog(config);
-        Assert(catalog.Backups.Count == 1 && catalog.Backups[0].Profile == "Studio card", "Dashboard and Storage show the nickname");
+        Assert(catalog.BackupList.Count == 1 && catalog.BackupList[0].Profile == "Studio card", "Dashboard and Storage show the nickname");
 
         HistoryNames.SetNickname(history, "");
         Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E", "clearing the nickname brings back the automatic name");

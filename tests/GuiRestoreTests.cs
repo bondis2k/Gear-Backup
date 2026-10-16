@@ -20,6 +20,8 @@ using static ProfileSettings;
 using static Session;
 using static ProfileNaming;
 using static GearGui;
+using static BackupFolders;
+using static Histories;
 
 partial class Tests
 {
@@ -137,7 +139,7 @@ partial class Tests
         var config = new Config { BackupFolder = root, SettingsDirectory = Folder(root, "settings"), Preview = false };
         foreach (DeviceProfile device in new[] { Devices.M8, Devices.OP1Field })
         using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = device }.Activate())
-            RunBackup(source, Path.Combine(Session.HistoriesRoot(config), "profiles", device.Id), null, false, config);
+            RunBackup(source, Path.Combine(Histories.HistoriesRoot(config), "profiles", device.Id), null, false, config);
         using (var form = new MainForm(true, config))
         {
             form.Show(); form.SelectOperation(GuiOperation.Restore); Application.DoEvents(); WaitForRestorePicker(form);

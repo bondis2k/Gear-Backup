@@ -14,40 +14,13 @@ using static PlanReview;
 using static DeviceSelection;
 using static ConsoleUi;
 using static Formatting;
+using static SourceScan;
+using static BackupFolders;
 
 // One immutable content store per backup set. A manifest commits a complete restore point; the
 // current pointer is published last. SQLite is rebuilt from those records and is never needed to restore.
 internal sealed class ContentStoreBackup
 {
-    // Every backup is a content store, marked by storage-mode.txt (written first, so even a first backup that failed has it).
-    // Backups made by older versions in a plain-folder layout have no marker and are no longer supported.
-    internal static bool IsContentStore(string backup)
-    {
-        if (backup == null) return false;
-        string path = Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt");
-        if (!File.Exists(path))
-        {
-            if (File.Exists(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt")))
-                throw new IOException("Content-store backup is missing its storage-mode metadata.");
-            return false;
-        }
-        string mode = Records.ReadText(path, Records.SmallLimit, "Backup storage mode").Trim();
-        if (mode != "single") throw new IOException("Unknown backup storage mode.");
-        return true;
-    }
-
-    internal static void RequireContentStore(string backup)
-    {
-        if (!IsContentStore(backup))
-            throw new IOException("This backup was made in a layout older versions of Gear Backup used, which is no longer supported: " + backup +
-                ". Make a new full backup; the old folder can stay for reference.");
-    }
-    internal static Snapshot Current(string backup, ObjectChecks objects = null)
-    {
-        string pointer = Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt");
-        string name = Records.ReadText(pointer, Records.SmallLimit, "Current restore point").Trim();
-        return ReadSnapshot(backup, SafePath(SnapshotRoot(backup), name + ".manifest"), objects);
-    }
     sealed class PlannedFile
     {
         internal FileInfo Source;
@@ -81,7 +54,7 @@ internal sealed class ContentStoreBackup
                 }
             }
         }
-        else if (incremental && File.Exists(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"))) current = Current(backup, store);
+        else if (incremental && File.Exists(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"))) current = ContentStore.Current(backup, store);
         var old = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
         if (current != null) foreach (var item in current.Files) old.Add(item.Relative, item);
         var scan = new ScanResult(); CollectFiles(source, scan);
@@ -140,7 +113,7 @@ internal sealed class ContentStoreBackup
         string free = CheckFreeSpace(history, needed + (config.Zip && !incremental ? logicalBytes + logicalBytes / 100 + 65536 : 0) + 1024 * 1024);
         if (free != null) return new OperationResult { ExitCode = 1, Summary = free };
         if (PreviewOnly || actions.Count != 0)
-            if (!ShowPlan("Single content store backup preview", actions, needed, config, sizes)) return new OperationResult();
+            if (!ShowPlan("Single content store backup preview", actions, needed, config.Preview, sizes)) return new OperationResult();
         OperationContext.Current.CheckCancellation();
         Directory.CreateDirectory(backup);
         AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt"), "single\n");

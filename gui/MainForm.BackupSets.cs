@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static BackupFolders;
 
 internal sealed partial class MainForm
 {
@@ -78,7 +79,7 @@ internal sealed partial class MainForm
                 {
                     PreparedSource prepared = Session.PrepareSource(options, choice);
                     var result = new List<BackupSetItem>();
-                    var paths = Backups.ListBackups(prepared.History);
+                    var paths = BackupFolders.ListBackups(prepared.History);
                     for (int i = paths.Count - 1; i >= 0; i--)
                         result.Add(new BackupSetItem { Path = paths[i], Label = BackupSetNames.Label(paths[i]) + "  [" + BackupStatuses.BackupStatus(paths[i]) + "]" });
                     return result;

@@ -22,7 +22,7 @@ partial class Tests
             var result = BackupWithLock(source, history, true, config);
             Assert(result.ExitCode == 0 && result.OutputFolder == first, "incremental updates explicitly selected older full set");
             Assert(BackupSetNames.Read(first) == "Live set — October" && BackupSetNames.Read(second) == "Studio", "incremental preserves set names");
-            Assert(ContentStoreBackup.Current(first).Files[0].Size != ContentStoreBackup.Current(second).Files[0].Size, "other full set remains unchanged");
+            Assert(ContentStore.Current(first).Files[0].Size != ContentStore.Current(second).Files[0].Size, "other full set remains unchanged");
             config.IncrementalBackup = source;
             bool rejected = false;
             try { BackupWithLock(source, history, true, config); } catch (IOException) { rejected = true; }

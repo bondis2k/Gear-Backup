@@ -65,7 +65,7 @@ internal sealed class IntegrityEngine
         {
             OperationContext.Current.CheckCancellation();
             OperationOutput.WriteLine("  " + Path.GetFileName(backup));
-            if (!ContentStoreBackup.IsContentStore(backup))
+            if (!ContentStore.IsContentStore(backup))
             {
                 WriteColored("    Made in a layout older versions used, which is no longer supported; not checked.", ConsoleColor.Yellow);
                 OperationOutput.WriteLine();
@@ -76,7 +76,7 @@ internal sealed class IntegrityEngine
             int beforeOk = ok, beforeDamaged = damaged, beforeMissing = missing, beforeUnchecked = unchecked_;
             CheckSnapshots(backup, ref ok, ref damaged, ref missing, catalogResults);
             // The latest restore point is also the backup's "current" listing in the catalog.
-            string latest = ContentStoreBackup.Current(backup).Name;
+            string latest = ContentStore.Current(backup).Name;
             foreach (var result in catalogResults.FindAll(r => r.SnapshotId == latest))
                 catalogResults.Add(new CatalogVerification { Path = result.Path, ExpectedHash = result.ExpectedHash,
                     ObservedHash = result.ObservedHash, Result = result.Result, CheckedUtc = result.CheckedUtc });

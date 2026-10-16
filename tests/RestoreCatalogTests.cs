@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using static Backups;
 using static Snapshots;
+using static Histories;
 
 partial class Tests
 {
@@ -20,7 +21,7 @@ partial class Tests
             Put(Path.Combine(source, "Samples", "kick.wav"), "SAMPLE");
             Directory.CreateDirectory(Path.Combine(source, "Songs", "Empty", "Nested"));
             var config = new Config { BackupFolder = root, Preview = false, FullBackupName = "Live" };
-            string history = Path.Combine(Session.HistoriesRoot(config), "profiles", "Studio");
+            string history = Path.Combine(Histories.HistoriesRoot(config), "profiles", "Studio");
             string backup;
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
                 backup = RunBackup(source, history, null, false, config).OutputFolder;
@@ -29,7 +30,7 @@ partial class Tests
             File.Delete(Path.Combine(source, "Songs", "Other", "two.m8s"));
             Put(Path.Combine(source, "Songs", "one.m8s"), "LATEST INCREMENTAL CONTENT");
             RunBackup(source, history, backup, true, config);
-            string otherHistory = Path.Combine(Session.HistoriesRoot(config), "profiles", "OtherDevice");
+            string otherHistory = Path.Combine(Histories.HistoriesRoot(config), "profiles", "OtherDevice");
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.OP1Field }.Activate())
                 RunBackup(source, otherHistory, null, false, config);
             Assert(RestoreCatalog.BackupsForDevice(config, Devices.M8).Count == 1 && RestoreCatalog.BackupsForDevice(config, null).Count == 2,
@@ -117,7 +118,7 @@ partial class Tests
         string plain = Folder(dir, "restore-current-only"), plainSource = Folder(plain, "source");
         Put(Path.Combine(plainSource, "one.txt"), "ORIGINAL");
         var plainConfig = new Config { BackupFolder = plain, Preview = false };
-        string plainHistory = Path.Combine(Session.HistoriesRoot(plainConfig), "profiles", "Plain");
+        string plainHistory = Path.Combine(Histories.HistoriesRoot(plainConfig), "profiles", "Plain");
         string first = RunBackup(plainSource, plainHistory, null, false, plainConfig).OutputFolder;
         string second = RunBackup(plainSource, plainHistory, first, false, plainConfig).OutputFolder;
         RunBackup(plainSource, plainHistory, first, true, plainConfig);
@@ -142,7 +143,7 @@ partial class Tests
         try
         {
             Throws(() => new InventoryPathCache(root).Resolve(@"Songs\one.m8s"), "a new inventory scope rechecks links");
-            Throws(() => RestoreFlow.ValidateEntry(new RestoreEntry { StoredPath = resolved, Relative = @"Songs\one.m8s", Size = 4 }, false),
+            Throws(() => Snapshots.ValidateEntry(new RestoreEntry { StoredPath = resolved, Relative = @"Songs\one.m8s", Size = 4 }, false),
                 "restore rechecks cached source paths before opening files even when checksum verification is off");
         }
         finally { Directory.Delete(child); }
@@ -153,7 +154,7 @@ partial class Tests
         string root = Folder(dir, "clock-point-names"), source = PathSafety.Rooted(Folder(root, "source"));
         Put(Path.Combine(source, "one.m8s"), "SONG");
         var config = new Config { BackupFolder = root, Preview = false };
-        string backup = RunBackup(source, Path.Combine(Session.HistoriesRoot(config), "profiles", "Clock"), null, false, config).OutputFolder;
+        string backup = RunBackup(source, Path.Combine(Histories.HistoriesRoot(config), "profiles", "Clock"), null, false, config).OutputFolder;
         string full = Path.GetFileNameWithoutExtension(Directory.GetFiles(SnapshotRoot(backup), "*.manifest")[0]);
         var started = new DateTime(2026, 10, 1, 23, 59, 58, DateTimeKind.Local);
         RestorePointNames.SaveMetadata(backup, full, started.AddHours(-1), false);
@@ -191,7 +192,7 @@ partial class Tests
             string root = Folder(dir, "incremental-names-" + single), source = Folder(root, "source");
             Put(Path.Combine(source, "one.m8s"), "FULL");
             var config = new Config { BackupFolder = root, Preview = false };
-            string history = Path.Combine(Session.HistoriesRoot(config), "profiles", "Names"), backup;
+            string history = Path.Combine(Histories.HistoriesRoot(config), "profiles", "Names"), backup;
             using (new OperationContext(new TestInteraction(), CancellationToken.None) { Device = Devices.M8 }.Activate())
                 backup = RunBackup(source, history, null, false, config).OutputFolder;
             Put(Path.Combine(source, "one.m8s"), "FIRST");

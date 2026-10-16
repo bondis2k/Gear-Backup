@@ -51,7 +51,7 @@ partial class Tests
         string secret = Path.Combine(root, "secret.txt"); Put(secret, "AUDIT-SECRET");
         Put(Path.Combine(source, "a.txt"), "FIRST"); Put(Path.Combine(source, "b.txt"), "SECOND");
         string backup = RunBackup(source, history, null, false, new Config { Preview = false }).OutputFolder;
-        var entries = ContentStoreBackup.Current(backup).Files;
+        var entries = ContentStore.Current(backup).Files;
         string objectA = entries.Find(e => e.Relative == "a.txt").StoredPath, objectB = entries.Find(e => e.Relative == "b.txt").StoredPath;
         byte[] savedA = File.ReadAllBytes(objectA), savedB = File.ReadAllBytes(objectB);
 

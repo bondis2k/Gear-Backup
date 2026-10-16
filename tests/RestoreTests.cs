@@ -13,6 +13,7 @@ using static RestoreFlow;
 using static SampleDependencies;
 using static AtomicFile;
 using static PlanReview;
+using static SongRestoreDependencies;
 
 partial class Tests
 {

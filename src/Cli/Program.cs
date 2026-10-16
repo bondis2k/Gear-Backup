@@ -19,6 +19,9 @@ using static Histories;
 using static PlanReview;
 using static SourceSelection;
 using static Notifications;
+using static FujiSettingsBackup;
+using static BackupFolders;
+using static HistoryLock;
 
 // Entry point of GearBackup.exe.
 static class Program

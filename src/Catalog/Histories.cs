@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static PathSafety;
-using static Backups;
+using static PlanReview;
 using static ConsoleUi;
 using static ProfileSettings;
-using static Session;
+using static BackupFolders;
+using static ProfileNaming;
+using static HistoryLock;
 
 // Backup histories (the folders under Gear Backups\profiles): finding, choosing, naming new folders and locking one.
 static class Histories
@@ -88,13 +90,38 @@ static class Histories
         return path;
     }
 
-    // Holds .history.lock open without sharing, so a second program or window can't write to the same
-    // history at the same time. Windows releases it when the stream is disposed or the process ends.
-    internal static FileStream LockHistory(string root)
+
+
+    internal static string HistoriesRoot(Config config)
     {
-        RejectRootLinks(root);
-        Directory.CreateDirectory(root);
-        try { return new FileStream(Path.Combine(root, ".history.lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
-        catch (IOException) { throw new IOException("This backup history is already in use by another process."); }
+        return Path.Combine(config.BackupFolder, AppIdentity.BackupsFolderName);
+    }
+
+    // Checks the source against the backup location and returns this source's history folder.
+    internal static string HistoryFor(Config config, string source)
+    {
+        string histories = HistoriesRoot(config);
+        if (Within(histories, source) || Within(source, histories))
+            throw new IOException("The backup folder and source must not contain one another.");
+        return ProfileFolder(Path.Combine(histories, "profiles"), source, config.Profile);
+    }
+
+    // The history to check: the named profile, or one the user picks. Null when cancelled.
+    internal static string HistoryToCheck(Config config)
+    {
+        string histories = HistoriesRoot(config);
+        if (config.Profile.Length == 0) return ChooseHistory(config, null);
+        var found = AvailableHistories(config).FindAll(path =>
+            Path.GetFileName(Path.GetDirectoryName(path)).Equals("profiles", StringComparison.OrdinalIgnoreCase) &&
+            Path.GetFileName(path).Equals(config.Profile, StringComparison.OrdinalIgnoreCase));
+        if (found.Count == 1) return found[0];
+        if (found.Count > 1) { int pick = AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
+        return Path.Combine(histories, "profiles", config.Profile);
+    }
+
+    // Locks a history against a second writer; a preview changes nothing, so it takes no lock.
+    internal static IDisposable LockUnlessPreview(string history)
+    {
+        return PreviewOnly ? null : LockHistory(history);
     }
 }

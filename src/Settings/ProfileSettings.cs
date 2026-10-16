@@ -11,8 +11,8 @@ using static AppSettings;
 using static DeviceSelection;
 using static SettingsLocation;
 using static AtomicFile;
-using static Histories;
 using static ProfileNaming;
+using static HistoryLock;
 
 static class ProfileSettings
 {

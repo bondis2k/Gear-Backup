@@ -16,10 +16,10 @@ partial class Tests
         TestInteraction ui = WithUi(() => light = StorageCatalog.ScanDashboardCatalog(config));
         Assert(!light.StorageDetails && light.Cleanup.Count == 0 && light.Counted.Count == 0,
             "Dashboard does not calculate storage identities or cleanup");
-        Assert(light.Backups.Count == full.Backups.Count, "Dashboard retains all backup rows");
-        foreach (CatalogBackup row in full.Backups)
+        Assert(light.BackupList.Count == full.BackupList.Count, "Dashboard retains all backup rows");
+        foreach (CatalogBackup row in full.BackupList)
         {
-            CatalogBackup metadata = light.Backups.Find(b => b.Path == row.Path);
+            CatalogBackup metadata = light.BackupList.Find(b => b.Path == row.Path);
             Assert(metadata.Status == row.Status && metadata.CompletedUtc == row.CompletedUtc &&
                 metadata.CheckedUtc == row.CheckedUtc && metadata.CheckResult == row.CheckResult &&
                 metadata.Device == row.Device && metadata.Latest == row.Latest, "Dashboard health matches full scan");

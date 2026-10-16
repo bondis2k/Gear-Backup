@@ -20,6 +20,8 @@ using static ProfileSettings;
 using static Session;
 using static ProfileNaming;
 using static GearGui;
+using static BackupFolders;
+using static Histories;
 
 partial class Tests
 {
@@ -62,9 +64,9 @@ partial class Tests
         Directory.CreateDirectory(Path.Combine(histories, "2026-09-01"));
         HistoryNames.SetNickname(named, "Studio card");
         var catalog = new BackupCatalog();
-        catalog.Backups.Add(new CatalogBackup { Profile = HistoryNames.DisplayName(named), History = named, Path = Path.Combine(named, "2026-10-01"),
+        catalog.BackupList.Add(new CatalogBackup { Profile = HistoryNames.DisplayName(named), History = named, Path = Path.Combine(named, "2026-10-01"),
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
-        catalog.Backups.Add(new CatalogBackup { Profile = "Unmanaged folder", History = histories, Path = Path.Combine(histories, "2026-09-01"),
+        catalog.BackupList.Add(new CatalogBackup { Profile = "Unmanaged folder", History = histories, Path = Path.Combine(histories, "2026-09-01"),
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
         using (var owner = new MainForm(true, config))
         {
@@ -101,9 +103,9 @@ partial class Tests
         Put(Path.Combine(photos, "Songs", "song.m8s"), "SONG");
         Put(Path.Combine(settings, "C1.xml"), "<GearBackupCameraSettings />");
         var catalog = new BackupCatalog();
-        catalog.Backups.Add(new CatalogBackup { Profile = "m8-card-1", History = Path.GetDirectoryName(photos), Path = photos,
+        catalog.BackupList.Add(new CatalogBackup { Profile = "m8-card-1", History = Path.GetDirectoryName(photos), Path = photos,
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.M8 });
-        catalog.Backups.Add(new CatalogBackup { Profile = "x100vi-settings-1", History = Path.GetDirectoryName(settings), Path = settings,
+        catalog.BackupList.Add(new CatalogBackup { Profile = "x100vi-settings-1", History = Path.GetDirectoryName(settings), Path = settings,
             Status = Status.Complete, CheckResult = "OK", Latest = true, Device = Devices.X100VI });
         foreach (bool storageMode in new[] { false, true })
         using (var owner = new MainForm(true, new Config { }))
@@ -133,7 +135,7 @@ partial class Tests
         var catalog = new BackupCatalog();
         foreach (var history in new[] { new { Profile = "m8-card-1", Device = Devices.M8 }, new { Profile = "Studio", Device = Devices.M8 },
                                        new { Profile = "op-xy-ABC", Device = Devices.OPXY }, new { Profile = "Old card", Device = (DeviceProfile)null } })
-            catalog.Backups.Add(new CatalogBackup { Profile = history.Profile, History = @"C:\Backups\" + history.Profile,
+            catalog.BackupList.Add(new CatalogBackup { Profile = history.Profile, History = @"C:\Backups\" + history.Profile,
                 Path = @"C:\Backups\" + history.Profile + @"\2026-10-01", Status = Status.Complete, CheckResult = "OK", Latest = true, Device = history.Device });
         using (var owner = new MainForm(true, new Config { }))
         using (var dashboard = new CatalogDialog(owner, new Config { }, false, catalog))
@@ -161,7 +163,7 @@ partial class Tests
 
         // Storage: the same filter for space usage and cleanup. Backups, old versions and ZIPs follow their
         // history's device; a mirror follows its folder name, so a device with only a mirror is listed too.
-        catalog.Backups.Add(new CatalogBackup { Profile = "m8-card-1", History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01",
+        catalog.BackupList.Add(new CatalogBackup { Profile = "m8-card-1", History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01",
             Status = Status.Complete, CheckResult = "OK", Latest = false, Device = Devices.M8 });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.OlderBackup, History = @"C:\Backups\m8-card-1", Path = @"C:\Backups\m8-card-1\2026-09-01", Bytes = 100, Folder = true });
         catalog.Cleanup.Add(new StorageItem { Kind = StorageKind.Zip, History = @"C:\Backups\op-xy-ABC", Path = @"C:\Backups\op-xy-ABC\2026-10-01.zip", Bytes = 30 });

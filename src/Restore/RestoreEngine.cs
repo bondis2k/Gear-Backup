@@ -10,6 +10,7 @@ using static ConsoleUi;
 using static Formatting;
 using static AtomicFile;
 using static PlanReview;
+using static SourceScan;
 
 // A restore runs in two halves: RunSelected plans it (compares with the target, asks about differing
 // files, shows the preview), then Run carries out the approved plan.
@@ -184,7 +185,7 @@ internal sealed class RestoreEngine
         }
         else OperationOutput.WriteLine("  Recovery copies: disabled (Recovery=no).");
         OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
-        if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config, sizes)) return new OperationResult();
+        if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config.Preview, sizes)) return new OperationResult();
         if (exact && !AskYesNo("Remove " + removals.Count + " extra file(s) from the selected target?")) return new OperationResult();
         if (beforeRestore != null) beforeRestore();
         OperationResult result = new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);

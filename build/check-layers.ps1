@@ -51,7 +51,7 @@ foreach ($relative in $info.Keys) {
     foreach ($type in $declaredIn.Keys) {
         $target = $declaredIn[$type]
         if ($target -eq $relative -or $info[$target].Layer -le $layer) { continue }
-        if ($text -match "\b$type\b") { [void]$violations.Add("$relative -> $target") }
+        if ($text -cmatch "\b$type\b") { [void]$violations.Add("$relative -> $target") }
     }
 }
 

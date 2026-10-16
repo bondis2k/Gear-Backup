@@ -19,7 +19,7 @@ internal sealed class ZipRestoreInfo
 // ZIPs are untrusted input. Validate the inventory, metadata and all hashes before changing the target.
 internal static class ZipRestore
 {
-    sealed class Inventory
+    sealed class ZipInventory
     {
         internal ZipRestoreInfo Info;
         internal readonly Dictionary<string, ZipArchiveEntry> Files = new Dictionary<string, ZipArchiveEntry>(StringComparer.OrdinalIgnoreCase);
@@ -165,9 +165,9 @@ internal static class ZipRestore
     static bool IsMetadata(string name)
     { return name.Equals(ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase) || name.Equals(ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase); }
 
-    static Inventory Read(ZipArchive zip)
+    static ZipInventory Read(ZipArchive zip)
     {
-        var result = new Inventory();
+        var result = new ZipInventory();
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string validationRoot = Rooted(Path.Combine(Path.GetTempPath(), "GearBackup-ZipValidation"));
         long content = 0, total = 0;

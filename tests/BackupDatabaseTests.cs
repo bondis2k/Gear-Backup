@@ -5,6 +5,7 @@ using System.Threading;
 using static Snapshots;
 using static Backups;
 using static FileCopy;
+using static BackupFolders;
 
 partial class Tests
 {
@@ -101,7 +102,7 @@ partial class Tests
             foreach (string folder in expected.Folders) same &= folders.Exists(e => e.Path == folder);
             Assert(same, "the catalog lists exactly the files and folders of restore point " + expected.Name);
         }
-        Snapshot now = ContentStoreBackup.Current(backup);
+        Snapshot now = ContentStore.Current(backup);
         Assert(data.Files.FindAll(e => e.SnapshotId == "current" && !e.IsDirectory).Count == now.Files.Count && now.Files.Count == 5 &&
             CurrentEntry(data, @"Songs\three.m8s") != null && CurrentEntry(data, "root.txt") == null, "the current listing matches the newest restore point");
         Assert(Directory.GetFiles(AppIdentity.MetadataRoot(backup), ".gearcatalog-*").Length == 0, "no staging file is left behind");

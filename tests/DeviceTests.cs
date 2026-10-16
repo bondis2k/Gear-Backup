@@ -18,6 +18,9 @@ using static DeviceSelection;
 using static Session;
 using static Histories;
 using static ProfileNaming;
+using static HistoryLock;
+using static BackupFolders;
+using static SongRestoreDependencies;
 
 partial class Tests
 {

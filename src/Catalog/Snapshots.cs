@@ -6,14 +6,21 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static FileCopy;
 using static PathSafety;
-using static Backups;
-using static RestoreFlow;
 using static ConsoleUi;
 using static AtomicFile;
 using static Snapshots;
 
 static class Snapshots
 {
+    internal static void ValidateEntry(RestoreEntry item, bool verify = true)
+    {
+        RejectRootLinks(item.StoredPath);
+        if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
+            throw new IOException("Backup file is missing or truncated: " + item.Relative);
+        if (verify && item.Hash != null && HashFile(item.StoredPath) != item.Hash)
+            throw new IOException("Backup file is damaged: " + item.Relative);
+    }
+
     internal static bool ValidHash(string hash)
     {
         if (hash == null || hash.Length != 64) return false;
@@ -119,7 +126,7 @@ static class Snapshots
     // The latest restore point of a backup.
     internal static Snapshot CurrentBackup(string backup)
     {
-        return ContentStoreBackup.Current(backup);
+        return ContentStore.Current(backup);
     }
 
     // Checks every history object referenced by any manifest in this backup; each object once.

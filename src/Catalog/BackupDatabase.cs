@@ -64,10 +64,10 @@ internal static class BackupDatabase
     static string Key(string snapshot, string path) { return snapshot + "\0" + path; }
     static CatalogData Inventory(string backup)
     {
-        ContentStoreBackup.RequireContentStore(backup);
+        ContentStore.RequireContentStore(backup);
         var data = new CatalogData();
         var objects = new ObjectChecks(backup);
-        Snapshot current = ContentStoreBackup.Current(backup, objects);
+        Snapshot current = ContentStore.Current(backup, objects);
         foreach (string folder in current.Folders) Add(data, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
         foreach (var item in current.Files) Add(data, new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
             ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });

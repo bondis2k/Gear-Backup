@@ -26,7 +26,7 @@ static class BackupZip
     // Written under a temporary name and renamed when complete, so a zip that exists is always whole.
     internal static string ZipBackup(string backup)
     {
-        var snapshot = ContentStoreBackup.Current(backup);
+        var snapshot = ContentStore.Current(backup);
         string path = ZipPathFor(backup), temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         RejectRootLinks(path);
         bool created = false;
