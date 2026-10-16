@@ -27,9 +27,8 @@ namespace GearBackup.Gui
             cancel = GuiTheme.Button("Cancel", false), settings = GuiTheme.GhostButton("Settings"), detect = GuiTheme.Button("Detect device", true),
             about = GuiTheme.GhostButton("About"), help = GuiTheme.GhostButton("Help");
         readonly RichTextBox log = new RichTextBox();
-        readonly Label sourceCaption = GuiTheme.Label("", 9, GuiTheme.Muted), deviceName = GuiTheme.Label("No device detected", 10, GuiTheme.Muted),
+        readonly Label sourceCaption = GuiTheme.Label("", 9, GuiTheme.Muted),
             metrics = GuiTheme.Label("", 9, GuiTheme.Muted), counts = GuiTheme.Label("", 10, GuiTheme.Ink);
-        readonly Label deviceConnection = GuiTheme.Label("", 10, GuiTheme.Muted);
         readonly Button openFolder = GuiTheme.Button("Open backup folder", false);
         readonly Button dashboard = GuiTheme.GhostButton("Dashboard"), storage = GuiTheme.GhostButton("Storage"),
             profiles = GuiTheme.GhostButton("Device && backup settings");
@@ -41,9 +40,6 @@ namespace GearBackup.Gui
         readonly ToolTip hints = new ToolTip();
         readonly Label status = new Label { Text = "Ready", AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(16), Margin = new Padding(0, 0, 12, 4) }, detail = GuiTheme.Label("Choose your source and an operation to begin.", 10, GuiTheme.Muted);
         readonly GuiProgressBar progress = new GuiProgressBar();
-        // The detected device's picture on the Device tab; see ShowDevice.
-        readonly PictureBox deviceImage = new PictureBox { Name = "DeviceImage", Size = new Size(88, 88),
-            SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 16, 0) };
         readonly CardPanel inputs = new CardPanel();
         readonly Button optionsToggle = GuiTheme.GhostButton("More options ▾");
         readonly Label destinationSummary = new Label { Name = "BackupDestinationSummary", AutoEllipsis = true, Dock = DockStyle.Top, Height = 28, ForeColor = GuiTheme.Muted };
@@ -67,6 +63,7 @@ namespace GearBackup.Gui
         {
             runner = new GuiOperationRunner(this);
             songTab = new SongTab(this);
+            deviceCard = new DeviceCard(this);
             zipRestore = new ZipRestoreSection(this);
             backupSets = new BackupSetsSection(this);
             restoreSection = new RestoreSection(this);
@@ -90,9 +87,7 @@ namespace GearBackup.Gui
             cancel.Name = "CancelOperation"; status.Name = "OperationStatus";
             about.Name = "AboutApplication";
             settings.Name = "OpenSettings";
-            sourceCaption.Name = "SourceCaption"; deviceName.Name = "DetectedDevice";
-            deviceConnection.Name = "DeviceConnectionMode";
-            deviceName.MaximumSize = new Size(520, 0); deviceConnection.MaximumSize = new Size(520, 0);
+            sourceCaption.Name = "SourceCaption";
             metrics.Name = "ProgressMetrics"; counts.Name = "CompletionCounts"; openFolder.Name = "OpenOutputFolder";
             detail.Name = "OperationDetail";
             counts.Visible = false; metrics.Visible = false;
@@ -152,7 +147,7 @@ namespace GearBackup.Gui
             displayTimer.Tick += delegate { DrainDisplay(); };
             displayTimer.Start();
             Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); restoreSection.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
+            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); restoreSection.Close(); displayTimer.Dispose(); hints.Dispose(); deviceCard.Close(); };
         }
 
         void BuildLayout()
@@ -185,7 +180,6 @@ namespace GearBackup.Gui
             title.Margin = new Padding(0, 0, 0, 0);
             branding.Controls.Add(title);
             branding.Controls.Add(GuiTheme.Label("Your gear. Safely backed up.", 10, GuiTheme.Muted));
-            deviceName.Margin = new Padding(0, 0, 0, 0);
             header.Controls.Add(branding, 0, 0);
             gearIcons = new GearIconStrip(hints) { Anchor = AnchorStyles.Left };
             // A gear icon looks for a device of that type; the icon of the device that is found becomes active (ShowDevice).
@@ -557,24 +551,8 @@ namespace GearBackup.Gui
             restoreSection.ForgetContext();
             if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();
             UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);
-            deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also back up a local folder or restore saved files without connecting a device." :
-                "Click Detect device to refresh storage and connection details.";
             RefreshDestinationSummary();
-            deviceName.Text = device == null ? "No device detected" : device.Name + " · detected";
-            deviceName.Font = device == null ? GuiTheme.Font(10) : GuiTheme.Heading(17);
-            deviceName.ForeColor = device == null ? GuiTheme.Muted : GuiTheme.AccentDark;
-            deviceName.BackColor = device == null ? Color.Transparent : GuiTheme.AccentSoft;
-            deviceName.Padding = device == null ? Padding.Empty : new Padding(10, 4, 10, 5);
-            deviceConnection.Text = mode ?? "";
-            deviceConnection.Visible = device != null && !string.IsNullOrEmpty(mode);
-            string picture = device == null ? "Backup" : device.IconName;
-            if (picture == null) return;
-            Image image = LoadImage(picture + "-256.png");
-            if (image == null) return;
-            Image old = deviceImage.Image;
-            deviceImage.Image = image;
-            deviceImage.AccessibleName = device == null ? "No device detected" : device.Name;
-            if (old != null) old.Dispose();
+            deviceCard.Show(device, mode);
         }
 
         // build-gui.cmd embeds the device pictures from the assets folder under their file names.

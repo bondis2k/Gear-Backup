@@ -15,10 +15,9 @@ namespace GearBackup.Gui
         readonly ComboBox backupMode = new ComboBox { Name = "BackupOperation", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill },
             restoreMode = new ComboBox { Name = "RestoreOperation", DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
         readonly TextBox restoreDestination = new TextBox { Name = "RestoreDestination", AccessibleName = "Restore destination" };
-        readonly Label deviceDetails = GuiTheme.Label("", 10, GuiTheme.Ink);
         FieldPanel sourceField, restoreField;
-        Control workflowHost, deviceOverview, operationState, activityArea;
-        Button goToBackup, goToRestore;
+        Control workflowHost, operationState, activityArea;
+        readonly DeviceCard deviceCard;
         readonly Label[] devicePlaceholders = new Label[2];
         bool synchronizingNavigation, backupOptionsExpanded, sizingWorkflow;
         bool cameraSettingsAvailable;
@@ -66,28 +65,9 @@ namespace GearBackup.Gui
         {
             foreach (string title in new[] { "Device", "Backup", "Restore", "Song" })
                 workflowTabs.TabPages.Add(new TabPage(title) { BackColor = GuiTheme.Surface, Padding = new Padding(12), AutoScroll = true });
-            deviceDetails.Name = "DeviceStorageDetails";
-            deviceDetails.MaximumSize = new Size(650, 0);
-            deviceDetails.Margin = new Padding(0, 12, 0, 10);
-            var deviceCard = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2 };
-            deviceOverview = deviceCard;
-            deviceCard.SizeChanged += delegate { RefreshWorkflowLayout(); };
             inputs.SizeChanged += delegate { RefreshWorkflowLayout(); };
-            deviceCard.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            deviceCard.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            deviceCard.Controls.Add(deviceImage, 0, 0);
-            var information = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-            information.Controls.Add(deviceName); information.Controls.Add(deviceConnection); information.Controls.Add(deviceDetails);
-            var shortcuts = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = Padding.Empty };
-            var toBackup = goToBackup = GuiTheme.Button("Go to Backup", false); toBackup.Name = "GoToBackup";
-            var toRestore = goToRestore = GuiTheme.Button("Go to Restore", false); toRestore.Name = "GoToRestore";
-            toBackup.Click += delegate { workflowTabs.SelectedIndex = 1; };
-            toRestore.Click += delegate { workflowTabs.SelectedIndex = 2; };
             detect.Name = "DetectDevice";
-            shortcuts.Controls.Add(detect); shortcuts.Controls.Add(toBackup); shortcuts.Controls.Add(toRestore);
-            information.Controls.Add(shortcuts);
-            deviceCard.Controls.Add(information, 1, 0);
-            workflowTabs.TabPages[0].Controls.Add(deviceCard);
+            workflowTabs.TabPages[0].Controls.Add(deviceCard.Build(detect, delegate { workflowTabs.SelectedIndex = 1; }, delegate { workflowTabs.SelectedIndex = 2; }));
             workflowTabs.TabPages[1].Controls.Add(inputs);
             workflowTabs.TabPages[SongTabIndex].Controls.Add(songTab.Build());
             deviceToolParking.Controls.Add(samplesTab.Build());
@@ -133,14 +113,14 @@ namespace GearBackup.Gui
 
         void ApplyGearMode()
         {
-            if (workflowTabs.TabPages.Count < 3 || goToBackup == null) return;
+            if (workflowTabs.TabPages.Count < 3 || !deviceCard.Built) return;
             bool device = InDeviceMode;
             using (new RedrawFreeze(this))
             {
                 bool previous = synchronizingNavigation; synchronizingNavigation = true;
                 try
                 {
-                    goToBackup.Visible = goToRestore.Visible = !device;
+                    deviceCard.SetShortcutsVisible(!device);
                     TabPage first = workflowTabs.TabPages[1], second = workflowTabs.TabPages[2];
                     Control sampleContent = samplesTab.BuildContent;
                     deviceToolParking.Controls.Add(sampleContent);
@@ -297,7 +277,7 @@ namespace GearBackup.Gui
                 // The read-only M8 tool owns its status and results; give it the space normally used by backup activity.
                 if (operationState != null) operationState.Visible = !(samplePage || migrationPage) || runner.IsBusy;
                 if (activityArea != null) activityArea.Visible = !(samplePage || migrationPage) || runner.IsBusy;
-                int desired = workflowTabs.SelectedIndex == 0 ? Math.Max(Font.Height * 17, deviceOverview.Height + Font.Height * 5)
+                int desired = workflowTabs.SelectedIndex == 0 ? Math.Max(Font.Height * 17, deviceCard.ContentHeight + Font.Height * 5)
                     : workflowTabs.SelectedIndex == SongTabIndex ? Math.Max(Font.Height * 13, songTab.ContentHeight + Font.Height * 5)
                     : InDeviceMode && workflowTabs.SelectedIndex == 1 && gearIcons.Active.Device == Devices.M8 ? samplesTab.ContentHeight + Font.Height * 5
                     : InDeviceMode ? Font.Height * 13 : Math.Max(Font.Height * 13, inputs.Height + Font.Height * 5);
@@ -316,7 +296,7 @@ namespace GearBackup.Gui
             finally { sizingWorkflow = false; }
         }
 
-        internal void ShowDeviceInformation(string text) { deviceDetails.Text = text; RefreshWorkflowLayout(); }
+        internal void ShowDeviceInformation(string text) { deviceCard.ShowInformation(text); }
     }
 
 }
