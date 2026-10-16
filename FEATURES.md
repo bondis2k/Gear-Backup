@@ -1,168 +1,569 @@
 # Gear Backup features
 
-Gear Backup is a Windows application for backing up music gear, camera content, memory cards and local folders. This document describes the capabilities implemented in the current source tree. For installation, see the [README](README.md); for instructions, see the [manual](MANUAL.md).
+Gear Backup is a Windows application for backing up music gear, camera files, memory cards and ordinary folders. It combines full and incremental content-store backups, complete restore points, standalone ZIP archives, integrity checks and device-aware recovery workflows.
+
+This inventory describes capabilities implemented in Gear Backup 0.9.5, including the October 2026 security changes. Device-specific placeholder tabs and other unimplemented capabilities are identified separately below.
+
+For setup and step-by-step procedures, see the [user manual](MANUAL.md). For common questions, see the [FAQ](FAQ.md). For a first backup, see the [quick start guide](QuickStartGuide.md).
+
+## Contents
+
+- [Available operations](#available-operations)
+- [Supported sources](#supported-sources)
+- [File backup](#file-backup)
+- [History and storage](#history-and-storage)
+- [ZIP archives and export](#zip-archives-and-export)
+- [Restore and recovery](#restore-and-recovery)
+- [Integrity checks](#integrity-checks)
+- [MTP transfers and mirrors](#mtp-transfers-and-mirrors)
+- [X100VI settings and recipes](#x100vi-settings-and-recipes)
+- [M8 Song viewer](#m8-song-viewer)
+- [Profiles and backup management](#profiles-and-backup-management)
+- [Graphical interface](#graphical-interface)
+- [Command-line capabilities](#command-line-capabilities)
+- [Safety and resource controls](#safety-and-resource-controls)
+- [Defaults and everyday controls](#defaults-and-everyday-controls)
+- [Distribution](#distribution)
+- [Current limitations](#current-limitations)
 
 ## Available operations
 
-| Capability | Graphical app | Command-line app |
-| --- | --- | --- |
-| Full and incremental file backups | Yes | Yes |
-| Standalone ZIP archive backup | Yes | Yes, with `--zip-archive` |
-| Restore files and saved snapshots | Yes | Yes |
-| Restore a standalone ZIP with device matching | Yes | — |
-| Check backup integrity | Yes | Yes |
-| Capture X100VI recipes and shooting settings | Yes | Yes |
-| Preview backup and restore plans | Yes | Yes |
-| Select sources, destinations and profiles | Yes | Yes, through arguments and INI settings |
-| Review backup health in a dashboard | Yes | — |
-| Inspect storage and select cleanup items | Yes | — |
-| Edit device and profile preferences | Yes | Edit the shared INI file |
-| View recipes, copy them and export readable text | Yes | — |
+The graphical application and CLI share backup engines and settings, with different selection and management interfaces.
 
-Both apps use the same backup engine and settings. The GUI provides file and folder pickers, a responsive activity log, progress, cancellation and shortcuts to open operation results. The CLI provides an interactive menu and arguments for source, profile, restore, checks, camera capture, ZIP export and preview.
+| Capability | Graphical application | Command line |
+| --- | --- | --- |
+| Full content-store backup | New independent set, optional display name | Normal backup workflow with menu or Mode setting |
+| Incremental backup | Choose an existing set and optionally name its new point | Update the latest set in the resolved history |
+| Standalone full ZIP | Zip archive with save-location picker | `--zip-archive`, optional output/name arguments |
+| Additional ZIP after full backup | Additional-ZIP option | `--zip` |
+| Restore a complete saved point | Set/point selectors and target picker | History/set/point and scope prompts |
+| Restore selected content | Checked file/folder browser | Search-and-pick and device-specific scopes |
+| Merge or exact point restore | Full-point option to remove target extras | Merge/Exact choice for applicable saved-point restores |
+| Restore a standalone ZIP | Archive picker and detected device-type validation | Not implemented |
+| Check saved content | Check backups operation and management actions | `--check` |
+| Rebuild a catalog explicitly | Recovery/fallback behavior in normal workflows | `--rebuild-catalog` |
+| Preview backup/restore work | Preview action and review dialogs | `--preview` and normal review settings |
+| Capture X100VI recipes/settings | Camera-settings operation for the detected camera | `--camera-settings` |
+| View recipes and export readable text | Recipe viewer | Not implemented |
+| Inspect M8 song structure | Song tab | Not implemented |
+| Dashboard, storage accounting and selected cleanup | Dedicated management windows | No equivalent dashboard/cleanup command |
+| Edit global and device/history preferences | Settings and Device & backup settings | Shared INI configuration |
+| Cancellation | Cancel action and close-to-cancel behavior | Ctrl+C |
+| Result reporting | Activity, status, counts and output-folder shortcuts | Console output, summaries, exit codes and applicable Windows notifications |
+
+The CLI remains interactive where source selection, mode, review, replacement, resume or retention decisions are required. `--no-pause` suppresses the final exit wait rather than making every operation unattended.
 
 ## Supported sources
 
-| Source | Connection | Device-specific behavior |
+### Device profiles
+
+| Source | Connection | Implemented device-specific behavior |
 | --- | --- | --- |
-| **Dirtywave M8** | USB disk mode or SD card reader | Song change summaries, bundle restore, song-and-samples restore, filename warnings |
-| **Polyend Tracker Mini** | USB drive mode or SD card reader | Card recognition through `trackerConfig`, project change summaries, whole-project restore |
-| **Teenage Engineering OP-1 Field** | MTP | Local mirroring of exposed device files, including synths, drums, tapes and mixdowns |
-| **Teenage Engineering OP-XY** | MTP | Local mirroring and `.xy` project summaries; automatic project backups are copied but omitted from project summaries |
-| **Fujifilm X100VI** | MTP for media; USB RAW CONV./BACKUP RESTORE mode for settings | Photo/video backup, connection-mode display, recipe and shooting-settings capture |
-| **Memory cards and local folders** | Accessible filesystem path | Manual source selection and separate backup histories |
+| **Dirtywave M8** | USB disk mode or SD card reader | `.m8s` song identification, song-change summaries, bundle restore, supported song-with-samples restore and filename compatibility warnings |
+| **Polyend Tracker Mini** | USB drive mode or SD card reader | Recognition through the `trackerConfig` card marker, `.mt` project identification, project summaries and whole-project-folder restore |
+| **OP-1 Field** | MTP | Local mirroring of exposed files, including device folders for synths, drums, tapes and mixdowns |
+| **OP-XY** | MTP | Local mirroring, `.xy` project summaries, and exclusion of automatic project-backup folders from the project summary while still backing up their exposed files |
+| **Fujifilm X100VI media** | MTP file transfer or card reader | Photo/video file backup, connection-mode information, camera capture timestamps where reported, and camera-specific restore guidance |
+| **Fujifilm X100VI settings** | USB RAW CONV./BACKUP RESTORE mode | C1–C7 recipe and current shooting-setting capture as XML, stored separately from media histories |
+| **Local folders and memory cards** | Accessible filesystem paths | Manual source selection, explicit device interpretation and separate source histories |
 
-Supported connected devices are detected automatically. USB-drive detection includes drive-label fallbacks for the M8 and Tracker Mini. A device type can be assigned explicitly when using a card or local copy.
+### Source selection and identity
 
-MTP transfers first refresh a local PC mirror, downloading new or changed content before backup. MTP backups restore to a local folder for manual transfer; Gear Backup does not write files back to MTP devices. OP-XY backup covers the content exposed by the device, rather than factory content that is unavailable over MTP.
+- Automatic discovery of supported connected USB-drive and MTP sources.
+- Drive-label fallback detection for supported M8 and Tracker Mini cards.
+- Manual folder/drive selection when discovery is unavailable or another source is required.
+- Explicit Device preference for manual sources that cannot be identified automatically.
+- Whole-drive history identity normally based on volume serial number, helping a card retain its history after a drive-letter/reader change.
+- Folder identity derived from its full path; MTP identity derived from its device mirror naming.
+- Optional History name/Profile to replace automatic grouping with an explicit name.
+
+An unrecognized manual source defaults to the M8 device profile. A manual path takes precedence over automatic source selection. Detection selects an available supported device; users should confirm the displayed source when several are connected.
+
+### Scope of device support
+
+Device backup covers files exposed by the selected filesystem or protocol. OP-XY factory content unavailable through MTP is outside that scope. Normal file backup does not upload files to a device.
+
+MTP-backed content is restored to an ordinary PC folder and transferred back manually with Explorer. X100VI settings capture is distinct from both photo backup and camera-settings write-back.
+
+See [Connecting a device](MANUAL.md#connecting-a-device) for operating modes and connection procedures.
 
 ## File backup
 
-- **Full backup:** capture the source into a new dated backup set using the selected storage layout. An optional GUI name identifies that set without changing its folder or history.
-- **Zip archive:** both apps can save a standalone full backup to a chosen ZIP file, without creating a backup set or content store. The optional name becomes the filename; blank uses device name plus date/time. The CLI uses `--zip-archive`, with optional `--output` (a ZIP file path or existing folder) and `--name` (the suggested filename when choosing a folder). Omitting `--output` prompts for a destination. Includes source files and empty folders with normal exclusions, plus a `checksums.sha256` manifest of every file (even with verification off), supports preview and optional verification, and publishes only a completed archive. Existing destinations require replacement confirmation. Extract the ZIP with Windows or another archive tool.
-- **Incremental backup:** the GUI lists full backup sets for the current source/history and updates the selected set; the CLI uses the latest set. Names, dates and completion status make sets identifiable. Earlier states are retained through restore-point membership.
-- **Incremental point names:** saved runs use the date and time, `yyyy-MM-dd_HH.mm.ss`, with numbered suffixes only when a name is already taken. Full capture timestamps remain in metadata and SQLite for chronological restore selection across days; the GUI shows the selected run's full date separately.
-- **Comparison choices:** use size and modified time, with a two-second timestamp tolerance, or enable SHA-256 content comparison. Files without usable timestamps are compared by content: using SHA-256.
-- **Resume:** continue an incomplete or failed backup in the same folder, using the selected comparison mode. Detected suspect copies are moved aside.
-- **Folder preservation:** keep empty folders and skip common operating-system leftovers such as `.DS_Store`, `Thumbs.db` and trash folders.
-- **Space planning:** estimate required space for copies, history and optional ZIP output before copying.
-- **Path-length check:** stop before copying, with the offending path named, when a backup or restore would create a path over Windows' 260-character limit.
-- **ZIP export:** optionally create a separate archive after a successful full backup. It contains files, empty folders and checksums, with internal history omitted.
+### Independent full backups
 
-Incremental previews list actions rather than skipped files. If there are no new or changed files to copy, the normal run skips the proceed prompt. Full-backup progress suppresses individual file paths.
+Full backup creates a new dated content-store set and records its complete captured membership. The GUI can assign a display name without changing the history or physical set-folder identity.
 
-Standalone ZIP archives include `gearbackup-info.txt` with the device profile, source name, connection type, available device identifiers, backup time, app version and file/folder counts. It records source-content bytes and the exact total extracted bytes, including both generated metadata files but excluding filesystem allocation overhead. The information file is covered by `checksums.sha256`. Both metadata filenames are reserved at the source root.
+Separate full sets are independent. They do not share their content objects across set boundaries, even when their source data is identical. This provides independent sets at the cost of additional space.
+
+### Incremental capture
+
+- Adds a complete point within an existing set.
+- Stores newly required content while reusing identical content already in that set.
+- Records changed file membership, including additions, renamed paths and removals from the latest state.
+- Retains earlier points and their referenced content.
+- Creates a point even when no new file content is needed.
+- Offers a GUI selector for the full set to update, with optional incremental-point naming.
+- Uses the latest set in the resolved history for CLI incremental work.
+
+Restore points carry capture times for chronological selection. Date/time names and collision suffixes prevent a newly saved point from overwriting an existing one.
+
+### Comparison behavior
+
+| Comparison | Behavior |
+| --- | --- |
+| Default | Compare sizes and usable modified times, with a two-second timestamp tolerance. |
+| Missing/unusable timestamps | Compare bytes rather than trusting a missing or pre-1980 date. |
+| Thorough content comparison | Use SHA-256 for applicable change comparisons, including when size/time alone might match. |
+
+Thorough comparison is separate from optional verification of copies. It can identify same-size, same-timestamp edits and avoid treating a timestamp-only difference as different content. Extra reading/hashing can increase operation time.
+
+### Resume and publication
+
+An unfinished latest file-backup set can be offered for resume. Completed work can be reused according to the comparison/checking behavior, and a complete new point is published only after capture succeeds.
+
+Backup status distinguishes complete, incomplete and failed work. Interrupted capture does not deliberately publish a partial point as complete. Unreferenced objects can remain after interruption; the existence of a dated set folder alone does not establish successful completion.
+
+### Folder handling and exclusions
+
+The source inventory preserves empty directories while excluding common operating-system leftovers: dot-prefixed items, `lost+found`, `FSCK0000.REC`-style fragments, editor files ending in `~`, `Thumbs.db`, `ehthumbs.db`, `desktop.ini`, Windows system-volume folders and the Recycle Bin.
+
+Device-specific summaries report recognized songs, projects or camera files. Compatibility warnings identify applicable device filename issues without automatically renaming the data.
+
+### Planning and performance
+
+- Change previews describe planned actions before the selected backup operation is committed.
+- Space estimation accounts for planned content and applicable extra ZIP output.
+- Path-length checks identify planned writes that would exceed classic Windows limits.
+- Small content captures, up to 4 MiB each, can use four parallel workers; larger files are copied sequentially.
+- Catalog updates reuse existing inventory where valid rather than rereading all previous points after every ordinary run.
+- Aggregate progress limits per-file display overhead during full captures.
+
+These optimizations do not change point membership or make separate full sets share objects. Throughput depends on storage, device, file sizes, verification and comparison settings.
 
 ## History and storage
 
-Every backup is a content store. Each run records the files and folders present at that time as a restore point, so a saved state can be selected later. Each distinct content is stored once within a backup set, including across its restore points; unchanged incrementals still record a dated point. Restore and ZIP export reconstruct files from the store, and a backup has no browsable file tree. Backups made by older versions in plain folders are not supported.
+### Content-store format
 
-Contents are shared within one set, not between separate full backups. Every point remains until its whole set is removed; `KeepBackups` still limits full backup sets. New points omit deleted source files while older points retain them. Interrupted captures do not replace the latest point, though unused content objects can remain after interruption. The X100VI recipe viewer reads the latest recipes directly from this store.
+Every current-format backup set uses a content store. File bytes are addressed by SHA-256, while point records retain original relative paths, metadata and membership.
+
+The layout under a configured backup location is:
+
+```text
+<BackupFolder>\Gear Backups\profiles\<history>\<dated set>\
+  .gearbackup\
+    objects\
+    snapshots\
+    catalog.sqlite
+    current-snapshot.txt
+    device.txt
+    storage-mode.txt
+    status.txt
+```
+
+Additional records support names, completion/check information and catalog freshness. Dated folders/points can include suffixes where needed to keep names unique.
+
+### Point-in-time membership
+
+Each successful run records a complete inventory. A file removed from the source disappears from the new point while remaining recoverable through older points that reference its content. A rename changes the inventory path without necessarily requiring a new content object.
+
+All points remain until the whole set is removed. The app does not offer individual point pruning. A normal set is not an Explorer-browsable copy of the original tree: restore or export reconstructs ordinary files under their recorded names.
+
+### Rebuildable catalog
+
+SQLite supports efficient current inventory, point membership, file browsing and recorded integrity results. Catalogs are built/updated locally and published as closed files rather than edited in place on a backup share.
+
+Missing, stale or unreadable indexes can fall back to authoritative backup records where supported and can be rebuilt. Explicit CLI catalog rebuild operates on one set. An index rebuild cannot recreate missing objects or convert an unsupported storage format.
+
+### Portability of complete sets
+
+Complete histories/sets can be copied to other storage. Discovery uses the configured `Gear Backups\profiles` layout. Hidden metadata and content objects must move with the set; a catalog or manifest by itself is insufficient.
+
+Changing backup locations and device/history overrides makes the new storage discoverable. Post-move checks and test restores provide evidence that a copied set is usable.
+
+## ZIP archives and export
+
+### Standalone full ZIP
+
+Both interfaces create standalone archives without first creating a normal history/set. The GUI offers a save picker; the CLI uses `--zip-archive` with optional `--output` and `--name`.
+
+Features include:
+
+- Original relative file paths and empty directories, subject to ordinary source exclusions.
+- SHA-256 manifest generation while archiving, even with automatic Verify disabled.
+- `gearbackup-info.txt` identifying the device profile, source/connection, capture time, version, counts, sizes and identifiers where available.
+- Checksum coverage for the information file itself.
+- Exact logical extracted-size metadata including generated files, while excluding filesystem allocation overhead.
+- Optional post-write archive verification.
+- Confirmation before replacing an existing output.
+- Staging/publication so incomplete output is not presented as the completed archive.
+
+The two metadata filenames are reserved at the source root. Output must be outside the source. CLI output may be an explicit `.zip` file or an existing directory receiving a suggested filename. Name supplies a suggestion, not an override for an explicit file path.
+
+### Additional ZIP export
+
+An additional option / `--zip` exports the current point after an applicable full content-store backup. It writes a ZIP beside the set, with ordinary files, empty directories and a checksum manifest. Internal backup metadata is omitted.
+
+This does not run after incrementals and does not force the CLI into Full mode. It also does not add the standalone information file required by the app's ZIP-restore workflow. The archive can be extracted with ordinary ZIP tools, or the original set can be restored through the app.
+
+### ZIP interoperability
+
+Standalone ZIPs can be opened by other ZIP tools. The GUI's **Restore ZIP archive** supports the app's validated standalone format rather than accepting every ordinary ZIP. ZIP-content verification is mandatory in that workflow.
+
+See [ZIP workflows](MANUAL.md#restore) and the [CLI reference](MANUAL.md#cli-command-reference) for the distinctions between creation, export and restore.
 
 ## Restore and recovery
 
-The GUI Restore tab offers **Restore full backup**, **Restore individual files** and **Restore ZIP archive**. Without a detected device it lists all available backups, labelled by device type, across configured backup locations. After detection it lists only matching backups. Both full and individual restores can recover files to a PC folder without the original device. SQLite supplies the file/folder browser and saved-run membership; missing, stale or damaged databases fall back to checksum lists and manifests. The most recently successful backup set and its newest saved run are selected by default. Saved full and incremental runs are labelled by their capture time; older runs without type metadata are labelled Saved run. Backups without retained history offer their latest files only.
+### Content-store restore
 
-**Choose files…** opens a checked folder/file tree for the selected backup and point. Checking a folder includes its subtree and empty folders; unchecking a child retains the other checked content. Changing the backup or point clears the file selection. Full restore merges by default; **Remove extra target files** enables exact restore for complete saved points and still requires removal confirmation. The operation rechecks device match, allowed backup location and selected inventory before touching the target. The CLI keeps its device-specific choices for bundles, songs with referenced samples and Tracker Mini project folders.
+GUI restore provides full-set and individual-file modes, saved-point selectors and a separate destination field. Without a detected device, it lists recognized backups for all device types across configured locations. Detection filters by device type rather than physical-unit serial number.
 
-**Restore ZIP archive** opens a ZIP picker, reads `gearbackup-info.txt`, and requires a matching detected device type. It validates entry paths, metadata, inventory sizes and checksum coverage, verifies every file before target changes, and checks device/PC destination and temporary extraction space. Files and empty folders are merged; generated metadata is excluded. USB drive/card restores can use the detected destination directly. MTP restores require a PC folder for manual transfer, and the device's own capacity cannot be checked. Preview leaves target files unchanged; temporary extraction files are cleaned up. Restore preferences and recovery copies still apply, and the detected device is rechecked after approval.
+The latest applicable set/point is selected initially. Selecting another point reconstructs that point's full membership directly; there is no sequential application of incremental archives. The selected backup's recorded device/history determines device-specific choices and preferences.
 
-Device-specific restore choices and preferences follow the selected backup; new backups record the device even when a custom profile name is used.
+An original device is not required to restore a content-store set to an ordinary PC folder. This supports recovery from unavailable devices and inspection before copying files back.
 
-- **Merge:** restore selected content while keeping extra target files.
-- **Exact:** remove extra target content after successful copying and a separate confirmation.
-- **Overwrite choices:** replace differing files, keep the target versions or cancel; newer target files are highlighted. Keeping differing files disables exact removal.
-- **Target checks:** recheck files before replacement or removal to detect changes since planning.
-- **Staged replacement:** write replacement files beside their destinations and use Windows file replacement with rollback handling.
-- **Optional recovery:** copy files that will be replaced or removed to a configurable PC location before any target changes begin. A recovery-copy failure stops the restore.
+### Individual selection
 
-Restore progresses file by file. Completed restores remain in place if a later step fails or is cancelled. X100VI media restore recommends a PC folder and asks before restoring onto a memory card.
+The GUI's checked browser supports folder/subtree and individual-file selection, including empty folders. Folder selections include unopened descendants. Lazy population reduces startup work for large inventories. Selecting another set/point clears obsolete file selections.
+
+The CLI has search-and-pick plus applicable device-specific scopes:
+
+- All files.
+- M8 bundle and its contents.
+- Tracker whole-project folder.
+- Single file.
+- Supported M8 song with referenced samples.
+
+Firmware-6 M8 dependency extraction includes references from unused sampler slots and refuses a complete dependency restore when referenced samples are unavailable. Other layouts can use bundle/full restore or explicit selection.
+
+### Merge and exact behavior
+
+| Behavior | Implemented effect |
+| --- | --- |
+| Merge | Recover selected saved content while retaining unrelated target files. |
+| Replace | Permit differing target files to be replaced by saved versions. |
+| Keep | Preserve differing existing target versions and copy missing files; exact removals are disabled. |
+| Exact full point | Remove scanned files/empty directories absent from complete saved membership after successful copying and confirmation. |
+
+Newer target versions are highlighted. Target state is rechecked to detect changes since planning. Individual-file restore does not remove unrelated target contents. Exact cleanup follows normal scan exclusions and is not disk formatting or a sector clone.
+
+### Staged writes and recovery copies
+
+Replacements are staged beside targets and use Windows replacement/rollback handling. Copy failures prevent exact cleanup from proceeding as if copying succeeded. Completed files remain when later work fails or is cancelled.
+
+Optional Recovery saves existing target files that will be replaced/removed to a configurable PC location before mutation. A recovery failure stops the restore. The default is `<BackupFolder>\Gear Recovery`, and recovery storage must be outside the target.
+
+### Destination isolation
+
+CLI and GUI content-store restores share guards against equal/overlapping backup and destination paths. Configured repositories and recovery storage are protected too. Relevant checks repeat after approval, alongside fresh link/path checks before writes.
+
+Use a separate destination outside the backup repository. MTP restores use a PC folder outside the working mirror, followed by manual transfer. Camera-media restore recommends a PC folder and warns about putting old files on a card.
+
+### Standalone ZIP restore
+
+The GUI archive picker reads/validates device metadata and requires a matching detected device type, including for a PC-folder target. USB drive/card targets can use the detected filesystem destination; MTP requires a separate PC folder.
+
+Before modifying the target, the workflow validates names, structure, metadata, counts, lengths and checksum coverage, checks destination/temporary space, extracts into staging, and verifies content. Device validation and applicable space checks repeat before execution.
+
+ZIP restore merges original content and empty folders, excludes generated archive metadata and retains unrelated target files. Ordinary comparison/replacement/recovery preferences still apply. Temporary workspaces are cleaned where possible after completion, cancellation or failure.
+
+Preview can require temporary extraction space but does not commit target changes. This workflow is GUI-only; the CLI does not implement a ZIP-restore switch.
 
 ## Integrity checks
 
-Every backup records SHA-256 checksums: in the restore-point manifests. **Check backups** rereads selected backups and snapshot content for missing or damaged files without needing the source device. Shared objects are checked once per operation.
+### Recorded SHA-256 and explicit checking
 
-Each backup also contains `.gearbackup\catalog.sqlite`, a rebuildable SQLite index of file/folder paths, sizes, timestamps, expected hashes and snapshot membership. Integrity checks record each file's latest verification time/result and retain the last 100 check summaries. Added files without a recorded checksum stay unchecked; missing recorded files remain listed. Changed versions lose their previous verification status. Backup and cleanup operations refresh the index; unchanged incrementals keep an existing catalog without rewriting it.
+Captured objects have recorded SHA-256 values. **Check backups** reads saved content and compares it with restore-point hashes, checking shared objects once rather than once per reference.
 
-Incremental backups use SQLite's current file/folder inventory first, including sizes, timestamps and expected hashes; historical rows are excluded from that query. A revision marker and recovery-record metadata identify stale inventories, and unfinished backups use recovery records. Backups recorded integrity damage prevents a file from being skipped. SHA-256 comparison remains optional. A missing checksum export can be regenerated from a current database without replacing its expected hashes. The activity log identifies SQLite use or explains a fallback; successful fallback runs refresh the catalog, including unchanged incrementals. Preview does not repair the database.
+Users can choose one set or all sets within a history. Checks do not require a connected source device. Results include good, damaged, missing and unchecked states where applicable, and recorded outcomes support later management views.
 
-Checksum lists and snapshot manifests remain authoritative for checks, CLI restores and database recovery. A damaged/missing catalog can be rebuilt with `GearBackup.exe --rebuild-catalog "BACKUP_FOLDER" --no-pause`, without hashing files to create a new baseline. The index uses Windows' built-in SQLite engine, is built locally and published as a closed single file, and is excluded from device restores and ZIPs alongside internal metadata. Missing or damaged indexes can be rebuilt for current-format backups.
+Checking reports damage rather than repairing content. Unsupported older sets can be reported as unchecked; a successful process return does not prove that skipped content was verified.
 
-Two independent options control automatic comparison:
+### Independent controls
 
-| Option | Purpose |
-| --- | --- |
-| **Compare file contents** (`Thorough`) | Use SHA-256 for change detection during backup, resume and restore. |
-| **Verify copies** (`Verify`) | Read copied files back and compare checksums; also verify restore sources, history objects and recovery copies. |
+| Control | Purpose | Default |
+| --- | --- | --- |
+| Thorough / Compare file contents | Content-based change comparison during supported operations | Off |
+| Verify / Verify copied files | Applicable automatic integrity/read-back checking | Off |
+| Explicit Check | Later verification of saved content against point records | User-invoked operation |
 
-Both default to off. With size/time comparison, an edit preserving both can be missed. Recording checksums does not itself mean a backup has been verified; explicit integrity checks use them even when automatic verification is disabled.
+Hashes are captured even with Verify off. Recording hashes alone is not proof of a read-back check. Default size/time comparison can miss edits retaining both values, while Thorough performs additional content reads.
 
-Backups record complete, incomplete or failed status. Path validation rejects linked or escaping paths and checks current folders again after restore previews and before committing restored files. ZIP export checks metadata for links during enumeration and immediately before reading each entry. History locks prevent concurrent writes, and MTP mirror locks coordinate transfers with cleanup. Windows system DLLs are loaded from System32.
+### Failure reporting
+
+Known failure categories distinguish damaged content, a busy history, an unsupported old layout and unsafe paths. CLI errors include targeted advice where available. Operation summaries identify reported failures rather than relying only on the presence of a set folder.
+
+Checksums establish consistency with recorded hashes, not authorship: content and manifests can be replaced together by someone controlling the backup. The app does not encrypt backup data.
+
+## MTP transfers and mirrors
+
+### Read-only device file access
+
+Portable device APIs provide listing and file download. There is no device file creation, upload, rename or deletion workflow. Windows Explorer can transfer files back independently after a PC-folder restore.
+
+The mirror is persistent for efficient later captures. New/changed device files are downloaded; unchanged eligible files can be reused. Files no longer exposed by the device can be removed from the mirror without changing historical points in the saved set.
+
+### Transfer safeguards
+
+- Free-space preflight uses validated listed sizes before download work.
+- Running byte budgets refuse an over-declared chunk before writing.
+- Final byte counts must match, including advertised empty files.
+- Invalid read counts, incomplete downloads and cancellation are reported.
+- Downloads use unique temporary files and clean incomplete staging where possible.
+- Path/link checks protect mirror writes and stale-file cleanup.
+- Enumeration limits bound item counts, folder listing/depth and implausible paths.
+- Mirror operations coordinate locking with application cleanup.
+
+Preparing an MTP source can create/update this working mirror even for a later preview. Preview is therefore scoped to the selected backup/restore plan, not a guarantee that preparation performs no local writes.
 
 ## X100VI settings and recipes
 
-The camera-settings operation captures **C1–C7 names and 23 raw properties per recipe**, plus current shooting settings, in **USB RAW CONV./BACKUP RESTORE** mode. XML exports retain raw bytes, numeric values, model, serial and firmware; unavailable properties are marked explicitly.
+### Settings capture
 
-Each capture creates a dated full backup in its own history, never the photo history: `x100vi-settings-<serial>` automatically, or `<profile>-settings` for a named profile, using that profile's preferences. Checksums, optional history and ZIP export are supported. Camera capture restores and verifies the original recipe read selector, checks that shooting values stayed unchanged, and prevents concurrent Gear Backup captures of the same camera.
+The camera-settings operation reads C1–C7 recipe names and supported raw properties, plus current shooting settings, in USB RAW CONV./BACKUP RESTORE mode. XML exports retain values and available model, serial and firmware information; unavailable properties are identified explicitly.
 
-The X100VI recipe viewer opens from **View recipes** in Dashboard or Storage (available for settings backups), and from there any saved backup folder or individual XML export, without a connected camera. It shows readable film simulations, white balance, grain strength/size, tone values and noise reduction alongside protocol numbers and raw bytes. Selected recipes can be copied or exported as text. Unmapped values remain labelled as protocol values.
+Each capture creates a full settings backup in a separate history. Automatic naming distinguishes it from media; explicit profiles use a corresponding settings history. Device/profile storage, verification preferences and applicable full-backup ZIP export can be used.
 
-Settings capture does not provide incremental backup or resume. It does not export full-camera setup menus or native Fujifilm backup files, and it cannot restore settings to the camera. Settings preview temporarily selects recipe read banks and restores the selector.
+The camera reader temporarily selects recipe banks, restores/verifies the read selector, checks shooting values for unintended changes and prevents concurrent Gear Backup captures of the same camera.
 
-For media, Gear Backup copies `DCIM`, preserves camera-reported capture times and reports JPG, RAF, HIF and MOV files. A JPG/RAF pair counts as one shot in summaries.
+This is not a full camera-configuration image or Fujifilm X Acquire backup. It does not provide incremental/resume settings capture or write saved settings back to the camera.
+
+### Offline recipe viewer
+
+**View recipes** is available for supported settings backups in Dashboard/Storage. The viewer can also open an appropriate folder or individual XML export without a camera attached.
+
+Readable film simulations, white balance, grain, tones and other mapped values are displayed alongside protocol/raw information. Unknown values remain explicit protocol values. Selected recipes can be copied/exported as readable text, which is a reference rather than a camera import format.
+
+### Camera media
+
+File backup captures exposed photo/video data separately from settings. Camera-aware summaries recognize JPG, RAF, HIF and MOV content; matching image/raw shot names can be grouped in summaries. Camera-reported dates are retained where provided.
+
+Restoring XML exports to a PC or restoring photos does not apply camera settings.
+
+## M8 Song viewer
+
+The Song tab opens a Dirtywave M8 `.m8s` and presents a read-only summary through the bundled native reader.
+
+Available information includes:
+
+- Song name, firmware and tempo.
+- Transpose, quantize and related song information supplied by the reader.
+- Song length and used rows per track.
+- Used chain, phrase and table counts.
+- Instrument slot, type, name and sample reference.
+
+The viewer does not play, edit, save or repair songs. Sample references do not establish that sample files are available. Restore a song to an ordinary named file if it is only present as a content-store object.
+
+Native input is bounded, parser panics are converted to error results where caught, and displayed file-derived text is sanitized for control/bidirectional formatting characters. Missing/incompatible libraries and unreadable inputs produce errors. A 64-bit application process is required.
 
 ## Profiles and backup management
 
-Dashboard uses a metadata-only scan for backup health, success times, integrity results and device filters. Detailed size accounting and cleanup scans run in Storage. Unchanged completed backups without retention avoid redundant checksum/statistics writes while still checking file/folder inventories and updating the Dashboard success time.
+### History identity and naming
 
-Automatic profiles separate histories by source: card volume identity, folder path or MTP device identity. A card can retain its history after a reader or drive-letter change. Named profiles provide an explicit history name.
+Automatic histories distinguish sources through drive volume identity, folder path or MTP device identity. Explicit History name/Profile provides controlled grouping. Readable names and user nicknames make histories easier to distinguish without changing physical folder identities.
 
-Restore and check history selection covers all configured backup locations, with location labels distinguishing profiles that share a name.
+Full-set labels and incremental-point labels are separate from history grouping. Location labels help distinguish histories sharing names across configured storage roots.
 
-Preferences are shared by both interfaces through `GearBackup.ini` and `GearBackup.Profiles.ini`. Installed copies use `%APPDATA%\GearBackup`; portable copies and local builds keep settings beside the executables. Installed settings are read only from AppData; executable-folder files are not imported. Before version 1.0.0, only current settings and backup formats are supported, without automatic migration. Previews remain read-only. Device defaults override global settings; profile preferences override device defaults. The GUI profile editor can set backup destinations, history, comparison, verification, retention, recovery locations, previews, filename warnings and ejection, or leave values inherited. Values are checked when saved; an invalid value in the file is reported and the inherited value is used.
+### Shared preference hierarchy
 
-**Device & backup settings** separates device settings from settings for one backup history (listed by readable name or nickname), groups options into Backup, Restore and Advanced tabs, and shows each setting's default. Uncheck **Use default** to customize a value; **New backup name**, **Save changes** and **Reset to defaults** provide explicit actions. Histories are shown by readable names ("M8 · card DCE92C2E", "X100VI · photos") everywhere, and **Rename…** in Dashboard or Storage gives a history a nickname kept with its backups.
+Installed copies use AppData; portable/local builds use settings beside the executables. The two apps share global `GearBackup.ini` and device/history `GearBackup.Profiles.ini` preferences.
 
-The GUI provides two management views across configured backup locations:
+Supported overrides resolve from global values to device defaults to history preferences. The GUI editor groups relevant controls, shows inherited defaults and offers explicit save/reset actions. Available overrides include storage, comparison, verification, review, retention, recovery, filename-warning length and ejection.
 
-- **Dashboard:** last successful backup, latest run status, latest backup's integrity-check time/result, profile storage total and attention indicators. Backups older than seven days are marked overdue. A **Device** filter (default: all devices) lists one device's profiles. Actions open folders, check backups and view saved recipes.
-- **Storage:** sizes for stored content, metadata, ZIPs and MTP mirrors. The unique-content total measures file content rather than allocated disk space. A **Device** filter (default: all devices) shows one device's backups, ZIPs and mirrors.
+Global identity controls and Theme are not arbitrary per-history override keys. CLI Source/Profile overrides apply to the invocation rather than saving a new global identity setting.
 
-Cleanup starts with nothing selected. Choose older backup folders, ZIPs or mirrors, then review the plan before moving them to the Recycle Bin. The latest backup folder and individual history objects are protected. Cleanup rechecks scanned items, respects operation locks.
+### Dashboard
 
-Retention can limit whole backup folders, with confirmation before recycling. Recycled items occupy disk space until the Recycle Bin is emptied; removing a mirror requires downloading it again on the next backup.
+Dashboard uses metadata-oriented scanning for backup completion/health, last-success and recorded integrity information. It supports device filtering, readable history names/nicknames and actions to open storage, check backups and view supported recipes.
+
+Recorded results reflect the most recent applicable operation, not continuous disk monitoring. Detailed storage accounting belongs to Storage rather than making every Dashboard refresh read all content bytes.
+
+### Storage accounting and selected cleanup
+
+Storage reports categories for saved objects, metadata, ZIPs and MTP mirrors. Logical/unique content totals describe file bytes rather than guaranteed allocated-disk consumption. Device filtering applies to both usage and cleanup.
+
+Cleanup starts without selected removals. Older full sets, archive copies and mirror caches can be selected, previewed and recycled. The latest set in a history and individual internal objects are protected from ordinary selected cleanup. Fresh state/path checks reject changed items and operations respect relevant locks.
+
+### Automatic retention
+
+KeepBackups limits full sets, with zero meaning unlimited. Extra old sets can be offered after successful backup. Confirmation remains required.
+
+Retention revalidates folder identity and metadata after approval and immediately before recycling, and rechecks latest-set protection. Removing a set removes its points together. Recycle Bin contents may continue occupying space until emptied; removing a mirror requires a later download.
+
+## Graphical interface
+
+### Main workflow
+
+The complete Gear Backup mode provides Device, Backup, Restore and Song workflows with shared progress/activity. Backup offers full, incremental and standalone ZIP choices; Restore offers full, individual, standalone ZIP and integrity-check choices.
+
+Device-specific header modes select a device type and reserve dedicated placeholder tabs. They are navigational modes, not a claim that unimplemented device tools are already available. The Gear Backup icon returns to the complete workflow.
+
+### Selection and review tools
+
+- Device/source detection with connection details and available storage information.
+- Distinct backup-source and restore-destination fields.
+- More options for secondary workflow inputs.
+- Set and point selectors with readable labels and completion information.
+- Themed folder browsing, path entry and applicable folder creation.
+- Checked restore browser with lazy descendants and selection summaries.
+- Preview tables with search/action filters that do not change the underlying execution plan.
+- Responsive activity, operation stages, counts and elapsed time where available.
+- Cancel and output-folder shortcuts.
+
+MTP connection details do not substitute the PC mirror's disk statistics for the device's own capacity. Clearing/changing detection updates the available operation context rather than retaining an unrelated USB drive as an MTP source.
+
+### Appearance and usability
+
+Four shared appearances are available: Original, Original (dark), Windows and Retro. Original is the default. Windows follows supported system light/dark, accent and high-contrast settings, including changes while windows are open.
+
+The GUI includes tooltips, accessible control names, keyboard navigation, DPI-aware layouts and remembered main-window placement. Help/F1 opens the matching offline manual; screenshots remain Original across manual editions.
+
+## Command-line capabilities
+
+### Implemented switches
+
+| Switch | Capability |
+| --- | --- |
+| `--restore` | Enter content-store restore rather than normal backup selection. |
+| `--check` | Select and verify saved backups without requiring the source device. |
+| `--camera-settings` | Capture X100VI recipes/current shooting settings. |
+| `--zip-archive` | Create a standalone full archive. |
+| `--rebuild-catalog PATH` | Rebuild one set's SQLite catalog from existing records. |
+| `--source PATH` | Override filesystem source, or target in a restore workflow. |
+| `--profile NAME` | Use explicit history grouping and preference context. |
+| `--zip` | Request additional ZIP export after an applicable full backup. |
+| `--output PATH` | Choose standalone archive file or existing output directory. |
+| `--name NAME` | Supply the standalone archive naming suggestion. |
+| `--preview` | Prepare/display the selected work without committing its plan. |
+| `--no-pause` | Remove the final exit-key wait. |
+
+The parser accepts these 12 switches with their documented argument/combination rules. There are no short aliases, positional source arguments or `--key=value` forms. Full/incremental mode, verification, device choice and backup storage use settings/menu behavior rather than invented flags.
+
+### Interactive operation and scripting visibility
+
+Normal CLI backup resolves settings/source/history, then uses Mode or prompts to choose work. Restore/check provide history/set selection; restore adds point/scope/replacement decisions. Source paths are quoted normally, and an installed CLI can be added to the current user's PATH.
+
+Console output reports stages, results and targeted errors. Exit codes distinguish ordinary return (`0`), workflow errors (`1`) and reported failed work/content problems (`2`). Zero can also mean preview, cancellation or declined work, so it is not proof that a new backup was written.
+
+Output can be logged by the shell, but redirection does not answer hidden prompts. There is no universal unattended confirmation-bypass flag. Ctrl+C requests cancellation; No-pause affects only the final wait.
+
+### Preview scope
+
+Normal review can continue after approval; explicit Preview does not commit the selected plan. Catalog-rebuild preview prints the intended action. Check with Preview exits without performing verification.
+
+Device preparation may still download/update a mirror, and camera-settings preview can communicate with the camera and prepare temporary files. GUI ZIP restore preview uses extraction space. These preparation effects are distinct from committing backup/restore target changes.
+
+The [manual CLI reference](MANUAL.md#command-line-and-exit-codes) documents syntax, every switch, invalid combinations and examples.
+
+## Safety and resource controls
+
+### Filesystem writes
+
+- Canonical relative-path validation and containment checks.
+- Rejection of traversal, alternate-stream forms, unsafe Windows reserved names, junctions and symbolic links in protected operations.
+- Fresh path checks after review and before applicable file commits/removals.
+- Unique CreateNew staging files instead of truncating predictable temporary names.
+- Staged replacement/rollback handling rather than deliberate delete-before-copy replacement in restore.
+- Source/target state checks and operation cancellation checks at meaningful boundaries.
+- History/mirror coordination for concurrent Gear Backup operations.
+
+These controls are defensive checks, not a reason to select an untrusted destination or discard independent backups.
+
+### Bounded input processing
+
+| Input | Implemented bounds/checks |
+| --- | --- |
+| Metadata records | One opened read handle, size checks and running byte limits; bounded stream decoding/line reading. |
+| ZIP directory | Preflight validates actual central-directory structure/counts before framework entry allocation; independent 32 MiB directory budget. |
+| ZIP entries | At most 1,000,000 entries, names up to 1,024 bytes, per-entry extra data/comments up to 4,096 bytes. |
+| ZIP restore content | Validated lengths/counts/coverage, checked arithmetic, staging and mandatory hash verification. |
+| MTP | Listing/path/depth bounds and exact streamed byte budgets, including empty files. |
+| M8 songs | Bounded native file reads; inputs above 16 MiB refused. |
+| Recipe XML | Document limits, prohibited DTDs and disabled external entity resolution. |
+| SQLite | Local read copies, bound parameter values, defensive/untrusted-schema configuration and execution/resource checks. |
+
+ZIP/ZIP64 support is for validated single-disk structures. Unusual legitimate input may be refused by safety budgets. Inputs below a limit are not automatically valid or supported.
+
+### Native-library loading
+
+Windows system imports are restricted to System32. The M8 reader is loaded by its full application-directory path with System32-only dependency resolution. Its environment-path override is absent.
+
+Native builds check PE protection flags and import dependencies. The reader is built with source-path remapping and Control Flow Guard alongside ASLR/DEP checks. CI tests the import policy against unexpected, delay-loaded and malformed dependency data. These are component safeguards, not a claim of application signing or a complete security guarantee.
+
+### Privacy and trust boundaries
+
+Backups, archives, settings exports, mirrors and recovery copies are not encrypted by the application. Metadata can include filenames, device identifiers and source information. Users control storage permissions, encryption and independent copies.
+
+Hash verification detects inconsistency with records rather than proving authorship. Packages are not currently Authenticode-signed; release/reference checksum trust remains separate from backup-content verification.
 
 ## Defaults and everyday controls
 
-Backups default to `%USERPROFILE%\Backup`. Starting a backup asks before creating a missing destination, including device/profile overrides and X100VI settings backups. Choosing No cancels; previews do not create the folder.
-
-| Setting | Default |
+| Behavior | Default |
 | --- | --- |
-| Change previews | On |
-| Restore points | Every successful run saves one |
-| SHA-256 change comparison | Off |
-| Automatic copy verification | Off |
-| Restore recovery copies | Off |
-| Backup retention limit | Unlimited |
-| Automatic ejection | Off |
 | Backup location | `%USERPROFILE%\Backup` |
+| New set storage | Content store |
+| Restore points | Every successful run, including unchanged incrementals |
+| Change review | Enabled |
+| SHA-256 content comparison | Disabled |
+| Automatic copy verification | Disabled |
+| Recovery copies | Disabled |
+| Retention limit | Unlimited (`KeepBackups=0`) |
+| Ejection | Disabled |
+| CLI normal backup Mode | Ask |
+| Explicit source/history | Empty; automatic selection/grouping where available |
+| Device interpretation | Auto, with M8 fallback for unrecognized sources |
+| Appearance | Original |
 
-The GUI preview table supports search and action filters without changing the execution plan. Cancel or Ctrl+C stops further work and requests cleanup; interrupted file backups can be resumed. Progress includes stages, processed bytes and elapsed time where available.
+Starting an ordinary backup asks before creating a missing configured destination. A refusal cancels rather than creating that destination. Preview avoids committing the backup plan, though device/source preparation can have its own working-copy effects.
 
-Backup reports contain counts, sizes, speed, warnings, failures and free space, with device-aware change summaries. The GUI shows results and output-folder shortcuts; the CLI sends Windows result notifications. Detected USB-drive devices can be offered for safe ejection or ejected automatically after confirming they still own the selected source.
+Supported detected USB-drive devices can be offered for ejection or ejected according to settings after checking that the detected device still owns the selected source. Manual folders and MTP connections do not provide an equivalent general drive-ejection action.
 
-Keyboard shortcuts, accessible control names, tooltips and DPI-aware layouts support GUI navigation. **Help** and **F1** open the illustrated offline HTML manual.
-
-The main window has **Device**, **Backup** and **Restore** tabs and starts on Device. Detection shows the device picture, connection/camera mode, and drive capacity, used/free space, volume label and filesystem where available. MTP connections show available identity and backup scope without substituting the PC mirror's storage statistics. Backup exposes only backup types, with folders, profile and ZIP under **More options**. X100VI settings backup appears only when detection identifies that camera in USB RAW CONV./BACKUP RESTORE mode; switching modes or clearing detection removes it. Restore has backup/run selectors (all devices without detection, matching devices after detection), full/individual/ZIP choices, a checked file browser, a separate destination field and a check-backups choice. Changing restore destinations preserves the backup source. Progress, activity and Cancel remain shared across tabs.
-
-Detected devices have a large highlighted name and picture, with the connection/camera mode shown separately. Detecting an MTP device clears the previous USB source path and drive selection.
-
-**Settings → Appearance** offers **Original** (light gray and teal; default), **Original (dark)** (charcoal and teal), **Windows** and **Retro** (teal, navy, gray and cream), in that order. Windows follows the user's app light/dark mode, accent color and high-contrast colors, updating open windows when system preferences change. Saving applies the theme immediately and persists `Theme=original`, `Theme=original-dark`, `Theme=windows` or `Theme=retro` in the global INI. Help opens the matching themed manual; the Windows manual follows the browser's system light/dark preference. Windows appearance uses system title-bar colors; other themes use the selected palette on Windows 11, with standard dark title bars on supported earlier Windows versions. App dialogs share the Gear Backup icon.
+The [INI reference](MANUAL.md#all-ini-settings) lists all 14 global settings and which support device/history overrides.
 
 ## Distribution
 
-Per-user setup and portable extraction packages include both apps and the offline manual. Updates preserve personal INI settings. Portable extraction creates no shortcuts or uninstall entry; backup paths remain configurable and MTP mirrors still use the PC's Local AppData folder.
+### Runtime packages
 
-Setup offers an **Add CLI to PATH** checkbox, unchecked by default, for running `GearBackup.exe` from any folder in a new terminal. It updates the current user's PATH, avoids duplicate entries and remembers the choice on upgrades. Deselection or uninstall removes installer-added entries while preserving pre-existing entries. Portable extraction leaves PATH unchanged.
+Per-user Setup and portable extraction packages include both applications, matching shared/native libraries, the offline manual and its image assets. Setup adds Start menu/uninstall integration and optional desktop/PATH choices. Portable extraction does not add shortcuts, uninstall registration or PATH changes.
 
-Before version 1.0.0, only current-format settings and backups are supported. Build and automated-test instructions are in the [manual](MANUAL.md#building-and-testing).
+Updates preserve personal INI settings. Installed copies read AppData configuration; portable/local copies read beside the programs. Neither implies that backups or MTP mirrors live entirely within the application folder.
+
+### CLI integration
+
+Setup's Add CLI to PATH option starts unchecked. It operates on the current user's environment and takes effect in new terminals. Installer-owned entries are managed on upgrade/deselection/uninstall while pre-existing entries are preserved by the integration logic.
+
+Without PATH, invoke the executable using its full path or from its folder. PowerShell requires `.\` for a local executable or the call operator for a quoted full path.
+
+### Documentation and development checks
+
+The repository includes the manual, FAQ, quick start, changelog and security reporting policy. HTML Help is generated from the manual in all four themes, with illustrations kept beside it.
+
+Build/test workflows cover core behavior, GUI workflows, native parsing and dependency policy. CI also configures Rust linting, seeded corruption testing and dependency auditing. Test coverage and configured checks are evidence mechanisms, not guarantees that every device or hostile input has been exercised.
+
+See [Building and testing](MANUAL.md#building-and-testing) for developer prerequisites and commands.
+
+## Current limitations
+
+The following are not implemented or deliberately outside the current feature scope:
+
+| Area | Limitation |
+| --- | --- |
+| Platform | Windows application, not a cross-platform desktop package. |
+| Disk imaging | File-tree backup, not a sector image or forensic clone. |
+| Source scope | Only exposed/accessible content; normal scan exclusions apply. |
+| Old layouts | No current support or automatic conversion for former plain-folder/hard-linked sets. |
+| Deduplication | Within a full set, not between independent full sets. |
+| Point cleanup | No individual restore-point pruning control. |
+| MTP write-back | Restore to PC plus manual transfer; no device upload workflow. |
+| ZIP restore | GUI-only and requires a valid standalone archive plus detected matching device type. |
+| Generic ZIP acceptance | Additional full-set exports and arbitrary ZIPs do not automatically satisfy standalone restore metadata requirements. |
+| Camera settings | XML recipe/shooting snapshots, not full-camera/X Acquire backup or settings upload. |
+| M8 Song | Inspection only, without playback/edit/save/repair. |
+| Sample dependency extraction | Supported firmware-6 M8 layout, not every possible song format. |
+| Header device modes | Dedicated tool tabs remain Coming soon/Planned placeholders. |
+| Unattended operation | No universal Yes/Force/Silent confirmation-bypass switch. |
+| Cancellation | Completed restore copies can remain; the whole operation is not rolled back. |
+| Encryption/authentication | No built-in backup encryption or cryptographic proof of archive authorship. |
+| Release signing | Packages are not currently Authenticode-signed. |
+| Input size/path freedom | Resource budgets, format validation and classic Windows path checks can refuse input. |
+
+The [manual](MANUAL.md) explains supported alternatives and operating procedures; the [FAQ](FAQ.md) addresses common expectations and misunderstandings.
