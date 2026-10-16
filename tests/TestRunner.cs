@@ -222,8 +222,10 @@ partial class Tests
         public readonly Queue<char> Keys = new Queue<char>();
         public readonly List<string> Questions = new List<string>();
         public readonly List<IList<Option>> Options = new List<IList<Option>>();
+        public Action<string> OnQuestion;
         public char Choose(string question, IList<Option> options)
         {
+            if (OnQuestion != null) OnQuestion(question);
             Questions.Add(question);
             Options.Add(options);
             return Keys.Count > 0 ? Keys.Dequeue() : options[0].Key;

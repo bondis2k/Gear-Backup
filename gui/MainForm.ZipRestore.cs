@@ -15,7 +15,9 @@ namespace GearBackup.Gui
         ZipRestoreInfo archiveRestoreInfo;
         bool loadingArchive;
         int archiveRead;
+        CancellationTokenSource archiveInspection;
         internal Func<string> ArchiveSourcePicker { get; set; }
+        internal Func<string, CancellationToken, ZipRestoreInfo> ArchiveInspector { get; set; }
         internal Action<SourceChoice> ArchiveRestoreDeviceValidator { get; set; }
 
         Control BuildArchiveRestoreField()
@@ -53,6 +55,8 @@ namespace GearBackup.Gui
                 path = picker.ShowDialog(this) == DialogResult.OK ? picker.FileName : null;
             if (string.IsNullOrEmpty(path)) return;
             restoreArchive.Text = path; archiveRestoreInfo = null; loadingArchive = true;
+            if (archiveInspection != null) archiveInspection.Cancel();
+            var inspection = new CancellationTokenSource(); archiveInspection = inspection;
             hints.SetToolTip(restoreArchive, path);
             restoreArchive.Select(path.Length, 0); restoreArchive.ScrollToCaret();
             int read = ++archiveRead;
@@ -61,11 +65,16 @@ namespace GearBackup.Gui
             try
             {
                 info = await Task.Run(delegate {
-                    using (new OperationContext(new GuiInteraction(this, p => { }), CancellationToken.None) { PreviewOnly = true }.Activate())
-                        return ZipRestore.Inspect(path);
+                    using (new OperationContext(new GuiInteraction(this, p => { }), inspection.Token) { PreviewOnly = true }.Activate())
+                        return ArchiveInspector == null ? ZipRestore.Inspect(path) : ArchiveInspector(path, inspection.Token);
                 });
             }
             catch (Exception ex) { error = ex.Message; }
+            finally
+            {
+                if (ReferenceEquals(archiveInspection, inspection)) archiveInspection = null;
+                inspection.Dispose();
+            }
             RestoreUi(delegate {
                 if (read != archiveRead) return;
                 loadingArchive = false; archiveRestoreInfo = info;

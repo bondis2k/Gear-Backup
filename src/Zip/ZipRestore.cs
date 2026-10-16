@@ -37,7 +37,10 @@ namespace GearBackup
         {
             RejectRootLinks(path);
             using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var zip = new ZipArchive(file, ZipArchiveMode.Read)) return Read(zip).Info;
+            {
+                ZipPreflight.Validate(file, MaxEntries);
+                using (var zip = new ZipArchive(file, ZipArchiveMode.Read)) return Read(zip).Info;
+            }
         }
 
         internal static OperationResult Run(string path, SourceChoice detected, string target, Config config,
@@ -60,33 +63,36 @@ namespace GearBackup
             try
             {
                 using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
                 {
-                    var inventory = Read(zip);
-                    if (inventory.Info.Device.Id != detected.Detected.Id)
-                        throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
-                    using (context.UseDevice(inventory.Info.Device))
+                    ZipPreflight.Validate(file, MaxEntries);
+                    using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
                     {
-                        Snapshot snapshot = BuildSnapshot(inventory, path, target, stage);
-                        long reserve = RestoreFlow.RestoreSpaceNeeded(target, ChangedFiles(snapshot, target, config));
-                        bool sameVolume = string.Equals(Path.GetPathRoot(parent), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase);
-                        RequireSpace(space, target, checked(reserve + (sameVolume ? inventory.Info.ContentBytes : 0)));
-                        RequireSpace(space, parent, checked(inventory.Info.ContentBytes + (sameVolume ? reserve : 0)));
-                        OperationOutput.WriteLine("  ZIP backup: " + inventory.Info.Device.Name + " · taken " + inventory.Info.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
-                        OperationOutput.WriteLine("  Backup content: " + Formatting.FormatSize(inventory.Info.ContentBytes) + "; target working space: " + Formatting.FormatSize(reserve) + ".");
-                        OperationOutput.WriteLine("  Checking ZIP SHA-256 checksums before restore.");
-                        context.CheckCancellation();
-                        Directory.CreateDirectory(stage); created = true;
-                        ExtractAndVerify(inventory, snapshot, stage, context);
-                        // Recheck space and device after verification and again after the user approves the plan.
-                        Action guard = delegate {
-                            context.CheckCancellation(); RejectRootLinks(target);
-                            if (!Directory.Exists(target)) throw new IOException("Restore destination is no longer available.");
-                            if (validateDevice != null) validateDevice();
-                            RequireSpace(space, target, reserve);
-                        };
-                        guard();
-                        return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false, config, context, guard);
+                        var inventory = Read(zip);
+                        if (inventory.Info.Device.Id != detected.Detected.Id)
+                            throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
+                        using (context.UseDevice(inventory.Info.Device))
+                        {
+                            Snapshot snapshot = BuildSnapshot(inventory, path, target, stage);
+                            long reserve = RestoreFlow.RestoreSpaceNeeded(target, ChangedFiles(snapshot, target, config));
+                            bool sameVolume = string.Equals(Path.GetPathRoot(parent), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase);
+                            RequireSpace(space, target, checked(reserve + (sameVolume ? inventory.Info.ContentBytes : 0)));
+                            RequireSpace(space, parent, checked(inventory.Info.ContentBytes + (sameVolume ? reserve : 0)));
+                            OperationOutput.WriteLine("  ZIP backup: " + inventory.Info.Device.Name + " · taken " + inventory.Info.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+                            OperationOutput.WriteLine("  Backup content: " + Formatting.FormatSize(inventory.Info.ContentBytes) + "; target working space: " + Formatting.FormatSize(reserve) + ".");
+                            OperationOutput.WriteLine("  Checking ZIP SHA-256 checksums before restore.");
+                            context.CheckCancellation();
+                            Directory.CreateDirectory(stage); created = true;
+                            ExtractAndVerify(inventory, snapshot, stage, context);
+                            // Recheck space and device after verification and again after the user approves the plan.
+                            Action guard = delegate {
+                                context.CheckCancellation(); RejectRootLinks(target);
+                                if (!Directory.Exists(target)) throw new IOException("Restore destination is no longer available.");
+                                if (validateDevice != null) validateDevice();
+                                RequireSpace(space, target, reserve);
+                            };
+                            guard();
+                            return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false, config, context, guard);
+                        }
                     }
                 }
             }
@@ -186,6 +192,7 @@ namespace GearBackup
 
         static ZipInventory Read(ZipArchive zip)
         {
+            OperationContext.Current.CheckCancellation();
             var result = new ZipInventory();
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string validationRoot = Rooted(Path.Combine(Path.GetTempPath(), "GearBackup-ZipValidation"));

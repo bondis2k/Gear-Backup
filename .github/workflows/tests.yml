@@ -44,6 +44,10 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-tests.ps1
 
+      - name: Native dependency loading policy
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-native-import-tests.ps1
+
       - name: GUI tests
         if: success() || failure()
         shell: powershell

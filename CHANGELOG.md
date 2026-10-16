@@ -35,6 +35,11 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - The settings `SingleContentStore`, `PointInTimeHistory`, `HardLinks` and `KeepOldVersions`, their controls in Settings and Device & backup settings, and the per-file ("browsable") backup layout they selected, including dated old versions, NTFS hard-linked history, the per-file `checksums.sha256` list, `backup-statistics` reports and old-version cleanup in Storage.
 
 ### Security
+- Refuse restore destinations overlapping the source backup, configured backup repository or recovery storage; CLI and GUI use the same checks, repeated after approval.
+- Enforce MTP download sizes while streaming, including empty files, and reject invalid read counts before writing.
+- Inspect ZIP/ZIP64 central directories with bounded buffers before allocating archive entries (32 MB directory, 1 KB entry names, 4 KB per-entry extra data/comments). Replaced inspections and window closure cancel pending reads.
+- Enforce metadata byte limits on the opened stream, and revalidate retention folder identity, contents and latest-backup protection after confirmation and before recycling.
+- Restrict native reader dependency loading to System32 and check its PE import table during builds; CI tests reject unexpected and delay-loaded dependencies.
 - The M8 reader DLL is built with source paths remapped, so it no longer contains the builder's user name or folders, and the build refuses to produce a DLL that does.
 - `m8_reader.dll` is loaded by full path with its own dependencies restricted to System32. The `GEARBACKUP_M8_READER` override is removed, so the load path cannot be redirected through the environment.
 - Windows device names (CON, PRN, AUX, NUL, COM0-9, LPT0-9, CONIN$, CONOUT$, with any extension) are refused in every path from a backup, ZIP or MTP device, not only in ZIPs.

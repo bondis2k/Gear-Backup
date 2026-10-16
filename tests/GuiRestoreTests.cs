@@ -28,6 +28,49 @@ using GearBackup.Gui;
 
 partial class Tests
 {
+    [Test("Audit: ZIP inspection cancellation", Gui = true, Folder = "audit-zip-cancel")]
+    static void TestGuiArchiveInspectionCancellation(string root)
+    {
+        var config = new Config { BackupFolder = Folder(root, "backups"), SettingsDirectory = Folder(root, "settings") };
+        using (var firstStarted = new ManualResetEventSlim())
+        using (var firstStopped = new ManualResetEventSlim())
+        using (var thirdStarted = new ManualResetEventSlim())
+        using (var thirdStopped = new ManualResetEventSlim())
+        using (var form = new MainForm(true, config))
+        {
+            form.Show(); Application.DoEvents();
+            int picked = 0;
+            form.ArchiveSourcePicker = () => Path.Combine(root, "inspection-" + (++picked) + ".zip");
+            form.ArchiveInspector = (path, token) => {
+                if (path.EndsWith("inspection-1.zip") || path.EndsWith("inspection-3.zip"))
+                {
+                    bool first = path.EndsWith("inspection-1.zip");
+                    (first ? firstStarted : thirdStarted).Set();
+                    try
+                    {
+                        if (!token.WaitHandle.WaitOne(5000)) throw new Exception("Inspection was not cancelled.");
+                        token.ThrowIfCancellationRequested();
+                    }
+                    finally { (first ? firstStopped : thirdStopped).Set(); }
+                }
+                return new ZipRestoreInfo { Device = Devices.M8, TakenUtc = DateTime.UtcNow };
+            };
+            form.SelectOperation(GuiOperation.RestoreZip);
+            WaitForGui(() => firstStarted.IsSet, "first inspection started");
+            var browse = (Button)form.Controls.Find("BrowseRestoreArchive", true)[0];
+            browse.PerformClick();
+            WaitForGui(() => firstStopped.IsSet, "superseded inspection cancelled");
+            WaitForGui(() => !(bool)typeof(MainForm).GetField("loadingArchive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form), "second inspection finished");
+            var info = typeof(MainForm).GetField("archiveRestoreInfo", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(form);
+            Assert(info != null && picked == 2, "stale cancellation does not overwrite the latest inspection");
+            browse.PerformClick();
+            WaitForGui(() => thirdStarted.IsSet, "third inspection started");
+            form.Close();
+            WaitForGui(() => thirdStopped.IsSet, "closing the window cancels inspection");
+            Assert(thirdStopped.IsSet, "closing the window stops its pending archive reader");
+        }
+    }
+
     [Test("Restore locations", Gui = true, Folder = "restore-locations")]
     static void TestRestoreLocationsGui(string root)
     {

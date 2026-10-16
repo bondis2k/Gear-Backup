@@ -144,7 +144,7 @@ namespace GearBackup.Gui
             displayTimer.Tick += delegate { DrainDisplay(); };
             displayTimer.Start();
             Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
+            FormClosed += delegate { if (archiveInspection != null) archiveInspection.Cancel(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
         }
 
         void BuildLayout()
