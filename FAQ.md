@@ -714,7 +714,7 @@ Restoring the XML files does not write settings into the camera. Apply settings 
 
 ### What can the Song tab show?
 
-It reads a `.m8s` and shows available name, firmware, tempo, transpose, quantize, length, used track rows, chain/phrase/table counts, and instruments with names/types/sample references.
+The Song tab is part of the M8 view (choose the M8 icon in the header). It reads a `.m8s` and shows available name, firmware, tempo, transpose, quantize, length, used track rows, chain/phrase/table counts, and instruments with names/types/sample references.
 
 It does not play, edit or save the song. Viewing a sample path does not prove the sample is present.
 

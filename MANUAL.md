@@ -172,7 +172,7 @@ Use distinct history names for sources you want kept separate. Reusing the same 
 
 ### Header modes
 
-The **Gear Backup** icon selects the complete app, including Device, Backup, Restore and Song. The M8, Tracker Mini, OP-XY and OP-1 Field header icons select device-specific modes and search for that device type. M8 mode includes **Sample check** and **Card migration**; other devices' **Coming soon** and **Planned** tabs are placeholders. Return to the Gear Backup icon for the normal Backup and Restore tabs.
+The **Gear Backup** icon selects the complete app: Device, Backup and Restore. The M8, Tracker Mini, OP-XY and OP-1 Field header icons select device-specific modes and search for that device type. M8 mode includes **Sample check**, **Card migration** and **Song**; other devices' **Coming soon** and **Planned** tabs are placeholders. Return to the Gear Backup icon for the normal Backup and Restore tabs.
 
 Detecting a device while in Gear Backup mode keeps the backup tools available. A device-specific placeholder is not an error or a missing installation component.
 
@@ -448,7 +448,7 @@ Use copy/export actions to make a readable text reference. A text report is for 
 
 ## M8 Song viewer
 
-Open **Song**, browse to a Dirtywave M8 `.m8s` file, and wait for the summary. It can be read from a source card, ordinary folder or restored copy. Restore a song to an ordinary folder first if it is only available as a content-store object.
+Choose the **M8** icon in the header, open **Song**, browse to a Dirtywave M8 `.m8s` file, and wait for the summary. It can be read from a source card, ordinary folder or restored copy. Restore a song to an ordinary folder first if it is only available as a content-store object.
 
 The view includes available song name, firmware, tempo, transpose, quantize, song length, used rows per track, chain/phrase/table counts, and instruments with slot, type, name and sample reference.
 

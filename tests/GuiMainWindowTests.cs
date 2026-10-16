@@ -67,9 +67,9 @@ partial class Tests
             var optionalFields = form.Controls.Find("OptionalBackupFields", true)[0];
             var workflowTabs = (TabControl)form.Controls.Find("WorkflowTabs", true)[0];
             var restoreTargetBox = (TextBox)form.Controls.Find("RestoreDestination", true)[0];
-            Assert(workflowTabs.TabPages.Count == 4 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" &&
-                workflowTabs.TabPages[3].Text == "Song" && workflowTabs.SelectedIndex == 0,
-                "main window starts with Device, followed by separate Backup and Restore tabs and a Song tab");
+            Assert(workflowTabs.TabPages.Count == 3 && workflowTabs.TabPages[0].Text == "Device" && workflowTabs.TabPages[1].Text == "Backup" && workflowTabs.TabPages[2].Text == "Restore" &&
+                workflowTabs.SelectedIndex == 0 && form.Controls.Find("BrowseSong", true).Length == 0,
+                "main window starts with Device, followed by separate Backup and Restore tabs, and no Song tab");
             Assert(!optionalFields.Visible && !sourceBox.Visible && !backupBox.Visible && !form.Controls.Find("Profile", true)[0].Visible && !cancel.Visible,
                 "main window initially focuses on detection and backup instead of optional fields");
             workflowTabs.SelectedIndex = 1;

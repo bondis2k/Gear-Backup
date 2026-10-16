@@ -69,7 +69,10 @@ namespace GearBackup.Gui
             detect.Name = "DetectDevice";
             workflowTabs.TabPages[0].Controls.Add(deviceCard.Build(detect, delegate { workflowTabs.SelectedIndex = 1; }, delegate { workflowTabs.SelectedIndex = 2; }));
             workflowTabs.TabPages[1].Controls.Add(inputs);
-            workflowTabs.TabPages[SongTabIndex].Controls.Add(songTab.Build());
+            songPage = workflowTabs.TabPages[SongTabIndex];
+            songPage.Controls.Add(songTab.Build());
+            // Song inspection belongs to the M8 view; the other views start without it (see ApplyGearMode).
+            workflowTabs.TabPages.Remove(songPage);
             deviceToolParking.Controls.Add(samplesTab.Build());
             deviceToolParking.Controls.Add(migrationTab.Build());
             Controls.Add(deviceToolParking);
@@ -121,6 +124,7 @@ namespace GearBackup.Gui
                 try
                 {
                     deviceCard.SetShortcutsVisible(!device);
+                    SetSongTabVisible(device && gearIcons.Active.Device == Devices.M8);
                     TabPage first = workflowTabs.TabPages[1], second = workflowTabs.TabPages[2];
                     Control sampleContent = samplesTab.BuildContent;
                     deviceToolParking.Controls.Add(sampleContent);
@@ -162,6 +166,20 @@ namespace GearBackup.Gui
                 finally { synchronizingNavigation = previous; }
                 if (!device && (workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2)) ShowOperationTab();
                 RefreshWorkflowLayout();
+            }
+        }
+
+        TabPage songPage;
+
+        // The Song tab (reading an M8 song) is shown only in the M8 view.
+        void SetSongTabVisible(bool visible)
+        {
+            if (songPage == null || workflowTabs.TabPages.Contains(songPage) == visible) return;
+            if (visible) workflowTabs.TabPages.Add(songPage);
+            else
+            {
+                if (workflowTabs.SelectedTab == songPage) workflowTabs.SelectedIndex = 0;
+                workflowTabs.TabPages.Remove(songPage);
             }
         }
 
