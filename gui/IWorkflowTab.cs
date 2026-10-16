@@ -20,8 +20,20 @@ namespace GearBackup.Gui
         IDisposable FreezeRedraw();
     }
 
+    // What the sections that follow the selected operation and read the window's options need.
+    internal interface IOperationSectionHost : IWorkflowTabHost
+    {
+        GuiOperation SelectedOperation { get; }
+        // False until the window has its settings.
+        bool HasOptions { get; }
+        // The settings the window currently shows; throws when a field is invalid.
+        Config CaptureOptions();
+        // An interaction that shows nothing, for background reads.
+        IOperationInteraction QuietInteraction();
+    }
+
     // What a section of the Restore area (it shares the window's inputs with other operations) asks of the window.
-    internal interface IRestoreSectionHost : IWorkflowTabHost
+    internal interface IRestoreSectionHost : IOperationSectionHost
     {
         // The device that is currently identified, or null.
         DeviceProfile DisplayedDevice { get; }
@@ -29,8 +41,6 @@ namespace GearBackup.Gui
         string RestoreDestinationText { get; }
         // Enables or disables Start and Preview from the current state.
         void RefreshActionState();
-        // An interaction that shows nothing, for background reads.
-        IOperationInteraction QuietInteraction();
     }
 
     // One tab of the workflow area, built once and then driven by its own events.

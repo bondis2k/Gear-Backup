@@ -68,6 +68,7 @@ namespace GearBackup.Gui
             runner = new GuiOperationRunner(this);
             songTab = new SongTab(this);
             zipRestore = new ZipRestoreSection(this);
+            backupSets = new BackupSetsSection(this);
             samplesTab = new M8SamplesTab(this, () => config.Clone(), () => source.Text, new GuiInteraction(this, p => { }));
             samplesTab.RestoreRequested = PrepareSampleRestore;
             migrationTab = new M8MigrationTab(this, () => config.Clone(), runner.RunMigration);
@@ -123,10 +124,10 @@ namespace GearBackup.Gui
             settings.Click += delegate { EditSettings(); };
             about.Click += delegate { using (var dialog = new AboutDialog()) dialog.ShowDialog(this); };
             help.Click += delegate { OpenManual(); };
-            source.TextChanged += delegate { backupSetSource = null; ShowDevice(null); RefreshDestinationSummary(); RefreshBackupSets(); };
+            source.TextChanged += delegate { backupSets.ClearSource(); ShowDevice(null); RefreshDestinationSummary(); backupSets.Refresh(); };
             restoreDestination.TextChanged += delegate { RefreshDestinationSummary(); RefreshRestoreActionState(); };
-            backupFolder.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); RefreshRestoreBackups(); };
-            profile.TextChanged += delegate { RefreshDestinationSummary(); RefreshBackupSets(); };
+            backupFolder.TextChanged += delegate { RefreshDestinationSummary(); backupSets.Refresh(); RefreshRestoreBackups(); };
+            profile.TextChanged += delegate { RefreshDestinationSummary(); backupSets.Refresh(); };
             optionsToggle.Click += delegate { SetOptionsExpanded(!optionsExpanded); };
             openFolder.Click += delegate { OpenOutputFolder(); };
             dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles";
@@ -150,7 +151,7 @@ namespace GearBackup.Gui
             displayTimer.Tick += delegate { DrainDisplay(); };
             displayTimer.Start();
             Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { zipRestore.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
+            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
         }
 
         void BuildLayout()
@@ -225,7 +226,7 @@ namespace GearBackup.Gui
             for (int i = 0; i < 3; i++) actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             zip.ForeColor = GuiTheme.Ink;
             actions.Controls.Add(BuildOperationSelectors(), 0, 0);
-            actions.Controls.Add(BuildBackupSetField(), 1, 0);
+            actions.Controls.Add(backupSets.Build(), 1, 0);
             actions.Controls.Add(BuildRestoreBackupField(), 1, 0);
             actions.Controls.Add(zipRestore.BuildField(), 1, 0);
             preview.Anchor = start.Anchor = AnchorStyles.Bottom;
@@ -359,19 +360,19 @@ namespace GearBackup.Gui
                 if (!ArchiveRestoreReady) throw new IOException("Choose a valid ZIP archive and detect a matching destination device.");
                 copy.RestoreArchive = zipRestore.ArchivePath;
             }
-            if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(fullBackupName.Text);
+            if (forOperation && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.ZipArchive)) copy.FullBackupName = BackupSetNames.Validate(backupSets.FullName);
             if (forOperation && Selected == GuiOperation.IncrementalBackup)
             {
-                copy.IncrementalBackupName = BackupSetNames.Validate(incrementalName.Text);
-                var item = incrementalBackup.SelectedItem as BackupSetItem;
-                if (loadingBackupSets || item == null) throw new IOException("Choose a full backup to update. Detect the device or choose a source first.");
-                copy.IncrementalBackup = item.Path;
+                copy.IncrementalBackupName = BackupSetNames.Validate(backupSets.IncrementalName);
+                string chosen = backupSets.SelectedBackup;
+                if (chosen == null) throw new IOException("Choose a full backup to update. Detect the device or choose a source first.");
+                copy.IncrementalBackup = chosen;
             }
             return copy;
         }
         void RefreshOperationControls()
         {
-            RefreshBackupSetField();
+            backupSets.RefreshField();
             RefreshRestoreControls();
             bool checking = Selected == GuiOperation.Check, restoring = Restoring, cameraSettings = Selected == GuiOperation.CameraSettings;
             sourceCaption.Text = cameraSettings ? "X100VI · USB RAW CONV./BACKUP RESTORE · C1–C7 and shooting settings" :
@@ -515,7 +516,7 @@ namespace GearBackup.Gui
             if (gearIcons != null) gearIcons.Enabled = !busy;
             workflowTabs.Enabled = !busy; backupMode.Enabled = restoreMode.Enabled = !busy;
             migrationTab.UpdateAvailability();
-            backupSetField.Enabled = !busy;
+            backupSets.SetEnabled(!busy);
             restoreBackupField.Enabled = restoreDetails.Enabled = !busy;
             preview.Enabled = !busy && Selected != GuiOperation.Check; cancel.Enabled = busy;
             cancel.Visible = busy;
