@@ -101,7 +101,9 @@ static class Snapshots
 
     // Reads and validates a manifest. A damaged or tampered manifest must not be able to write outside
     // the target, so paths are checked, duplicates rejected, and no file may sit where a folder must go.
-    internal static Snapshot ReadSnapshot(string backup, string manifest, ObjectChecks objects = null)
+    // `validNames`, shared by the manifests of one backup, remembers names already found valid: the check is a pure
+    // string check (CheckedPath never touches the disk) and every restore point of a long history repeats the same names.
+    internal static Snapshot ReadSnapshot(string backup, string manifest, ObjectChecks objects = null, HashSet<string> validNames = null)
     {
         // Checked once for the whole manifest (and, when given, shared by every manifest of a backup).
         RejectRootLinks(backup);
@@ -116,7 +118,11 @@ static class Snapshots
             string[] parts = rows[i].Split('\t');
             if (parts.Length < 2) throw new IOException("Invalid snapshot row.");
             string relative = Decode(parts[1]).Replace('/', '\\');
-            CheckedPath(backup, relative);
+            if (validNames == null || !validNames.Contains(relative))
+            {
+                CheckedPath(backup, relative);
+                if (validNames != null) validNames.Add(relative); // only after it passed
+            }
             if (!names.Add(relative)) throw new IOException("Duplicate snapshot path: " + relative);
             if (parts[0] == "D" && parts.Length == 2) result.Folders.Add(relative);
             else if (parts[0] == "F" && parts.Length == 6)
@@ -209,13 +215,14 @@ static class Snapshots
         string root = SnapshotRoot(backup);
         if (!Directory.Exists(root)) return;
         var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var validNames = new HashSet<string>(StringComparer.Ordinal);
         var outcomes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
         {
             OperationContext.Current.Progress(Stage.CheckingHistory, manifest, 0, 0);
             try
             {
-                Snapshot snapshot = ReadSnapshot(backup, manifest);
+                Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
                 foreach (RestoreEntry item in snapshot.Files)
                 {
                     if (checkedObjects.Add(item.Hash))

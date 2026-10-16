@@ -34,7 +34,8 @@ internal static class BackupDatabase
         var previous = new CatalogData();
         if (File.Exists(path))
         {
-            try { previous = Read(backup); }
+            // A rebuild only carries forward recorded checks and the check history, so it reads just those rows.
+            try { previous = Read(backup, false, null, true); }
             catch (OperationCanceledException) { throw; }
             catch (IOException ex) { OperationOutput.WriteLine("  Rebuilding the unreadable catalog from checksum lists and manifests: " + ex.Message); }
         }
@@ -90,10 +91,11 @@ internal static class BackupDatabase
             if (!present.Contains(sum.Key)) Add(data, new CatalogEntry { Path = sum.Key, Hash = sum.Value });
         string snapshots = SnapshotRoot(backup);
         RejectRootLinks(snapshots);
+        var validNames = new HashSet<string>(StringComparer.Ordinal);
         if (Directory.Exists(snapshots)) foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest"))
         {
             OperationContext.Current.CheckCancellation();
-            Snapshot snapshot = ReadSnapshot(backup, manifest, objects);
+            Snapshot snapshot = ReadSnapshot(backup, manifest, objects, validNames);
             data.RestorePoints.Add(snapshot.Name);
             data.PointKinds[snapshot.Name] = ReadPointKind(backup, snapshot.Name);
             data.PointTimes[snapshot.Name] = snapshot.TakenUtc;
@@ -124,8 +126,12 @@ internal static class BackupDatabase
         {
             using (var db = new SqliteDatabase(local, false))
             {
-                db.Execute("PRAGMA journal_mode=DELETE");
-                db.Execute("PRAGMA synchronous=FULL");
+                // This is a staging file: it is copied to the backup and flushed to disk below, and a half-written one is
+                // simply discarded, so it needs no journal or sync of its own. One transaction covers the schema and the rows,
+                // instead of a commit (and disk sync) per statement.
+                db.Execute("PRAGMA journal_mode=OFF");
+                db.Execute("PRAGMA synchronous=OFF");
+                db.Execute("BEGIN IMMEDIATE");
                 db.Execute("PRAGMA application_id=" + ApplicationId);
                 db.Execute("PRAGMA user_version=" + SchemaVersion);
                 db.Execute("CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
@@ -134,7 +140,6 @@ internal static class BackupDatabase
                 db.Execute("CREATE INDEX files_integrity ON files(verification_result)");
                 db.Execute("CREATE INDEX files_path ON files(path)");
                 db.Execute("CREATE TABLE check_runs (id INTEGER PRIMARY KEY, checked_utc TEXT NOT NULL, summary TEXT NOT NULL)");
-                db.Execute("BEGIN IMMEDIATE");
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "built_utc", DateTime.UtcNow.ToString("O"));
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "app_version", AppIdentity.Version);
                 db.Execute("INSERT INTO metadata VALUES (?,?)", "backup_name", BackupSetNames.Read(backup));
@@ -181,7 +186,9 @@ internal static class BackupDatabase
         }
     }
 
-    internal static CatalogData Read(string backup, bool currentOnly = false, InventoryPathCache inventoryPaths = null)
+    // currentOnly: just the current listing. verifiedOnly: just the rows that carry a recorded check, and the check runs, not
+    // the restore point list; what Rebuild needs from the old catalog (every other row is rebuilt from the manifests).
+    internal static CatalogData Read(string backup, bool currentOnly = false, InventoryPathCache inventoryPaths = null, bool verifiedOnly = false)
     {
         inventoryPaths = inventoryPaths ?? new InventoryPathCache(backup);
         string path = CatalogPath(backup);
@@ -206,7 +213,8 @@ internal static class BackupDatabase
                     if (stamp.Read()) result.InventoryStamp = stamp.String(0);
                 using (var generation = db.Prepare("SELECT value FROM metadata WHERE key='inventory_generation'"))
                     if (generation.Read()) result.InventoryGeneration = generation.String(0);
-                using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" : "")))
+                using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" :
+                    verifiedOnly ? " WHERE verification_result IS NOT 'unchecked' OR last_verified_utc IS NOT NULL OR observed_sha256 IS NOT NULL" : "")))
                     while (files.Read())
                     {
                         string relative = files.String(1), hash = files.String(6), observed = files.String(10), status = files.String(9);
@@ -220,7 +228,7 @@ internal static class BackupDatabase
                             Size = files.String(3) == null ? -1 : files.Number(3), ModifiedTicks = files.Number(4), CreatedTicks = files.Number(5),
                             Hash = hash, Present = files.Number(7) != 0, VerifiedUtc = time, Result = status, ObservedHash = observed });
                     }
-                if (!currentOnly)
+                if (!currentOnly && !verifiedOnly)
                 {
                     using (var times = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_taken:%'"))
                         while (times.Read())

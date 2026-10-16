@@ -55,6 +55,7 @@ partial class Tests
         RunTest("Security: statistics hard links", () => TestStatisticsHardLink(dir));
         RunTest("Security: ZIP metadata symbolic links", () => TestZipMetadataLinks(dir));
         RunTest("SQLite: backup inventory and check results", () => TestBackupDatabase(dir));
+        RunTest("SQLite: catalog of a long history", () => TestCatalogHistory(dir));
         RunTest("SQLite: rebuild, interruption and links", () => TestBackupDatabaseSafety(dir));
         RunTest("SQLite: primary incremental inventory and recovery", () => TestIncrementalInventory(dir));
         RunTest("SQLite: device-filtered full and individual restores", () => TestRestoreCatalog(dir));
