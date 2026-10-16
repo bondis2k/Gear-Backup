@@ -29,8 +29,13 @@ namespace GearBackup
             catch (ArgumentException) { return DateTime.MinValue; }
         }
 
+        // Where the connected devices come from; the tests replace it with a list they control.
+        internal static Func<string, List<MtpDeviceInfo>> ListMtpDevices = WindowsMtpDevices;
+
         // Connected portable (MTP) devices whose USB instance ID contains usbVendorId, e.g. "VID_2367".
-        internal static List<MtpDeviceInfo> FindMtpDevices(string usbVendorId)
+        internal static List<MtpDeviceInfo> FindMtpDevices(string usbVendorId) { return ListMtpDevices(usbVendorId); }
+
+        static List<MtpDeviceInfo> WindowsMtpDevices(string usbVendorId)
         {
             var found = new List<MtpDeviceInfo>();
             using (var search = new ManagementObjectSearcher("SELECT DeviceID, Name, PNPClass FROM Win32_PnPEntity WHERE PNPClass = 'WPD'"))
