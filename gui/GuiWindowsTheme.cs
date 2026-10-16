@@ -27,6 +27,7 @@ namespace GearBackup.Gui
                 using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
                     darkMode = key != null && key.GetValue("AppsUseLightTheme") is int && (int)key.GetValue("AppsUseLightTheme") == 0;
             }
+            // Without the registry value the light theme is used.
             catch (System.Security.SecurityException) { }
             catch (UnauthorizedAccessException) { }
             catch (System.IO.IOException) { }

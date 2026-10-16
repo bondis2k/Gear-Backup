@@ -15,6 +15,7 @@ namespace GearBackup
             if (config.SourceFolder.Length > 0) return new SourceChoice { Path = config.SourceFolder };
             SourceChoice found = null;
             try { found = DetectSource(); }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex) { OperationOutput.WriteLine("  Automatic detection failed: " + ex.Message); }
             if (found != null)
             {

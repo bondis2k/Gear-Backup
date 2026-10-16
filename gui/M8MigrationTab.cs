@@ -146,7 +146,7 @@ namespace GearBackup.Gui
                     if (paths.Count > 0) LoadPoints(); else { notice.Text = "No M8 backups found in the configured locations."; UpdateAvailability(); }
                 });
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { } // a newer load or closing the tab cancelled this one
             catch (Exception ex) { host.RunOnUi(delegate { if (!closed && scan == generation) { loading = false; notice.Text = "Cannot load backups: " + ex.Message; UpdateAvailability(); } }); }
             finally { if (ReferenceEquals(inventory, cancellation)) inventory = null; cancellation.Dispose(); }
         }
@@ -171,7 +171,7 @@ namespace GearBackup.Gui
                     ShowSelection();
                 });
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException) { } // a newer read or closing the tab cancelled this one
             catch (Exception ex) { host.RunOnUi(delegate { if (!closed && scan == generation) { loading = false; notice.Text = "Cannot read backup: " + ex.Message; UpdateAvailability(); } }); }
             finally { if (ReferenceEquals(inventory, cancellation)) inventory = null; cancellation.Dispose(); }
         }

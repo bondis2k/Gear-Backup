@@ -25,6 +25,7 @@ namespace GearBackup
                     if (name.Length != 0) return name;
                 }
             }
+            // An unreadable or invalid name only falls back to the folder name below.
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
             catch (ArgumentException) { }

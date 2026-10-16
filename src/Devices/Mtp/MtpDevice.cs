@@ -212,7 +212,7 @@ namespace GearBackup
 
         public void Dispose()
         {
-            try { device.Close(); } catch (COMException) { }
+            try { device.Close(); } catch (COMException) { } // the device may already be unplugged
         }
 
         // Every file and folder below the device's storage, with paths relative to it. With a single
@@ -311,7 +311,7 @@ namespace GearBackup
             try { values.GetGuidValue(ref typeKey, out type); } catch (COMException) { type = Guid.Empty; }
             item.IsFolder = type == FolderType || type == FunctionalObjectType;
             ulong size;
-            try { values.GetUnsignedLargeIntegerValue(ref sizeKey, out size); item.Size = (long)size; } catch (COMException) { }
+            try { values.GetUnsignedLargeIntegerValue(ref sizeKey, out size); item.Size = (long)size; } catch (COMException) { } // some objects report no size; it stays 0
             // The modified date, or for a camera (which reports none) the date the photo was taken.
             item.Modified = DateValue(values, DateModifiedKey);
             if (item.Modified == DateTime.MinValue) item.Modified = DateValue(values, DateCreatedKey);

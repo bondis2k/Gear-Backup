@@ -194,6 +194,7 @@ namespace GearBackup.Gui
                     found.Add(directory.Name);
                 }
             }
+            // A folder that cannot be listed simply shows no subfolders.
             catch (UnauthorizedAccessException) { }
             catch (IOException) { }
             found.Sort(StringComparer.CurrentCultureIgnoreCase);

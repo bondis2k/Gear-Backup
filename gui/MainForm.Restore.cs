@@ -160,7 +160,7 @@ namespace GearBackup.Gui
                     {
                         try { var recorded = DeviceSelection.BackupDevice(path); if (recorded != null) label = recorded.Name + " · " + label; }
                         catch (IOException) { } // Loading the selected set reports a changed/unreadable record.
-                        catch (UnauthorizedAccessException) { }
+                        catch (UnauthorizedAccessException) { } // same: the selected set reports it
                     }
                     restoreBackup.Items.Add(new RestoreBackupItem { Path = path, Label = label });
                 }

@@ -7,6 +7,9 @@ New-Item -ItemType Directory -Path $testBuild -Force | Out-Null
 # The core keeps its layers (docs\ARCHITECTURE.md); new violations fail before anything is compiled.
 & (Join-Path $projectRoot 'build\check-layers.ps1')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# An empty catch block must say why it is safe to ignore the error.
+& (Join-Path $projectRoot 'build\check-catches.ps1')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 . (Join-Path $projectRoot 'build\csharp-compiler.ps1')
 $compilerPath = Get-CSharpCompiler
 # The native M8 song reader is optional for the tests: without Rust the tests that need it are skipped.
