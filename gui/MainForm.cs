@@ -69,6 +69,7 @@ namespace GearBackup.Gui
             songTab = new SongTab(this);
             zipRestore = new ZipRestoreSection(this);
             backupSets = new BackupSetsSection(this);
+            restoreSection = new RestoreSection(this);
             samplesTab = new M8SamplesTab(this, () => config.Clone(), () => source.Text, new GuiInteraction(this, p => { }));
             samplesTab.RestoreRequested = PrepareSampleRestore;
             migrationTab = new M8MigrationTab(this, () => config.Clone(), runner.RunMigration);
@@ -151,7 +152,7 @@ namespace GearBackup.Gui
             displayTimer.Tick += delegate { DrainDisplay(); };
             displayTimer.Start();
             Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
+            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); restoreSection.Close(); displayTimer.Dispose(); hints.Dispose(); if (deviceImage.Image != null) deviceImage.Image.Dispose(); };
         }
 
         void BuildLayout()
@@ -227,13 +228,13 @@ namespace GearBackup.Gui
             zip.ForeColor = GuiTheme.Ink;
             actions.Controls.Add(BuildOperationSelectors(), 0, 0);
             actions.Controls.Add(backupSets.Build(), 1, 0);
-            actions.Controls.Add(BuildRestoreBackupField(), 1, 0);
+            actions.Controls.Add(restoreSection.BuildBackupField(), 1, 0);
             actions.Controls.Add(zipRestore.BuildField(), 1, 0);
             preview.Anchor = start.Anchor = AnchorStyles.Bottom;
             actions.Controls.Add(preview, 2, 0); actions.Controls.Add(start, 3, 0);
             cancel.Enabled = false; cancel.Visible = false;
             inputLayout.Controls.Add(actions, 0, 0);
-            inputLayout.Controls.Add(BuildRestoreDetails(), 0, 1);
+            inputLayout.Controls.Add(restoreSection.BuildDetails(), 0, 1);
             inputLayout.Controls.Add(zipRestore.BuildDetails(), 0, 1);
             inputLayout.Controls.Add(destinationSummary, 0, 2);
             optionsToggle.Name = "ToggleBackupOptions"; optionsToggle.Margin = new Padding(0, 4, 0, 4);
@@ -517,7 +518,7 @@ namespace GearBackup.Gui
             workflowTabs.Enabled = !busy; backupMode.Enabled = restoreMode.Enabled = !busy;
             migrationTab.UpdateAvailability();
             backupSets.SetEnabled(!busy);
-            restoreBackupField.Enabled = restoreDetails.Enabled = !busy;
+            restoreSection.SetEnabled(!busy);
             preview.Enabled = !busy && Selected != GuiOperation.Check; cancel.Enabled = busy;
             cancel.Visible = busy;
             zip.Enabled = !busy && ZipApplies;
@@ -553,7 +554,7 @@ namespace GearBackup.Gui
             // Gear Backup mode keeps all its tools when a device is identified; a device mode follows the device that is found.
             if (gearIcons != null && device != null && InDeviceMode) gearIcons.SetActive(GearIconStrip.For(device));
             zipRestore.UpdateNotice(); RefreshRestoreActionState();
-            restoreContextKey = null;
+            restoreSection.ForgetContext();
             if (Selected != GuiOperation.RestoreZip) RefreshRestoreBackups();
             UpdateCameraSettingsAvailability(device == Devices.X100VI && cameraSettingsMode);
             deviceDetails.Text = device == null ? "Connect your device and click Detect device. You can also back up a local folder or restore saved files without connecting a device." :
@@ -602,7 +603,7 @@ namespace GearBackup.Gui
         {
             operationProgressActive = false;
             elapsed.Stop();
-            if (!previewOnly && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.IncrementalBackup || Selected == GuiOperation.CameraSettings)) restoreContextKey = null;
+            if (!previewOnly && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.IncrementalBackup || Selected == GuiOperation.CameraSettings)) restoreSection.ForgetContext();
             SetBusy(false);
             status.Text = result.Cancelled ? "Cancelled" : result.ExitCode != 0 ? "Needs attention" : previewOnly ? "Preview complete" : "Complete";
             status.ForeColor = result.ExitCode != 0 ? GuiTheme.Danger : GuiTheme.Ink;
@@ -630,7 +631,7 @@ namespace GearBackup.Gui
                 config = next; status.Text = "Settings saved"; detail.Text = "Saved to " + AppIdentity.ConfigFileName + " for both interfaces.";
                 GuiTheme.ApplyTheme(config.Theme, this);
                 backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
-                restoreContextKey = null; RefreshRestoreBackups();
+                restoreSection.ForgetContext(); RefreshRestoreBackups();
                 RefreshDestinationSummary();
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Could not save settings", MessageBoxButtons.OK, MessageBoxIcon.Warning); }

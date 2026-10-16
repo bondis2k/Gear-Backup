@@ -35,6 +35,14 @@ namespace GearBackup.Gui
     // What a section of the Restore area (it shares the window's inputs with other operations) asks of the window.
     internal interface IRestoreSectionHost : IOperationSectionHost
     {
+        // The window itself, for dialogs that belong to it.
+        MainForm Window { get; }
+        // False until the window has a handle to deliver results to.
+        bool WindowReady { get; }
+        // The restore scope chosen in the window: 0 everything, 1 chosen files, 2 a ZIP, 3 check.
+        int RestoreScope { get; }
+        // Shows a line under the operation heading.
+        void SetDetail(string text);
         // The device that is currently identified, or null.
         DeviceProfile DisplayedDevice { get; }
         // The folder the user chose to restore into.
