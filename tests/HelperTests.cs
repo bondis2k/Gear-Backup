@@ -469,4 +469,28 @@ partial class Tests
         HistoryNames.SetNickname(history, "");
         Assert(HistoryNames.DisplayName(history) == "M8 · card DCE92C2E", "clearing the nickname brings back the automatic name");
     }
+
+    [Test("Command line options", Folder = "helpers")]
+    static void TestCommandLine()
+    {
+        var config = new Config();
+        CommandLine line = CommandLine.Parse(new[] { "--restore", "--source", "X", "--profile", "Studio", "--preview", "--no-pause" }, config);
+        line.Validate(config);
+        Assert(line.Restore && line.Preview && line.NoPause && line.SourceGiven && line.ProfileGiven && config.Profile == "Studio", "options are read and settings applied");
+        config = new Config();
+        line = CommandLine.Parse(new[] { "--zip" }, config);
+        Assert(line.Zip && config.Zip, "--zip turns on the ZIP export");
+        string[][] refused = {
+            new[] { "--bogus" }, new[] { "--source" }, new[] { "--output" }, new[] { "--output", "--name" }, new[] { "--rebuild-catalog" },
+            new[] { "--restore", "--check" }, new[] { "--output", "a.zip" }, new[] { "--zip-archive", "--check" }, new[] { "--zip-archive", "--zip" },
+            new[] { "--rebuild-catalog", "X", "--source", "Y" }, new[] { "--camera-settings", "--source", "Y" }, new[] { "--zip", "--restore" } };
+        foreach (string[] args in refused)
+        {
+            var test = new Config();
+            Throws(() => CommandLine.Parse(args, test).Validate(test), "refused: " + string.Join(" ", args));
+        }
+        var archive = new Config();
+        CommandLine.Parse(new[] { "--zip-archive", "--output", "a.zip", "--name", "Live" }, archive).Validate(archive);
+        Assert(true, "an archive with an output and a name is accepted");
+    }
 }
