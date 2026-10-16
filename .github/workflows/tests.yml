@@ -128,7 +128,7 @@ jobs:
 
       - name: Core coverage
         shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-coverage.ps1 -Minimum 80
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-coverage.ps1 -Minimum 85
 
       - name: Keep the coverage report
         if: success() || failure()
