@@ -56,6 +56,7 @@ partial class Tests
         }
     }
 
+    [Test("Security: MTP device limits", Folder = "mtp-limits")]
     static void TestMtpDeviceLimits(string dir)
     {
         string mirror = Path.Combine(dir, "limits-mirror");
@@ -88,6 +89,7 @@ partial class Tests
         finally { MtpMirror.MaxItems = original; }
     }
 
+    [Test("OP-1 Field: MTP mirror", Folder = "helpers")]
     static void TestMtpMirror(string dir)
     {
         string mirror = Path.Combine(dir, "op1-mirror");
@@ -159,6 +161,7 @@ partial class Tests
         Assert(ProfileId(Path.Combine(MirrorRoot, "op1-field-L1PRC121"), "") == "op1-field-L1PRC121", "a mirrored device's history is named after it");
     }
 
+    [Test("OP-XY: projects and backup", Folder = "helpers")]
     static void TestOpXy(string dir)
     {
         DeviceProfile xy = Devices.OPXY;
@@ -204,6 +207,7 @@ partial class Tests
             Assert(!File.ReadAllText(report).Contains("ghost"), "files in program metadata are never reported as removed projects");
     }
 
+    [Test("Tracker Mini: project folders", Folder = "helpers")]
     static void TestTrackerMini(string dir)
     {
         DeviceProfile tracker = Devices.TrackerMini;
@@ -267,6 +271,7 @@ partial class Tests
             "other projects are left alone");
     }
 
+    [Test("X100VI: photos", Folder = "helpers")]
     static void TestX100VI(string dir)
     {
         DeviceProfile camera = Devices.X100VI;
@@ -328,6 +333,7 @@ partial class Tests
     }
 
     // Device/source pairs are independent; history names do not migrate or infer another device.
+    [Test("History names per device", Folder = "helpers")]
     static void TestProfileNames(string dir)
     {
         string source = Rooted(Path.Combine(dir, "named-source")); Directory.CreateDirectory(source);
@@ -345,6 +351,7 @@ partial class Tests
             Assert(ProfileFolder(profiles, source, "") == Path.Combine(profiles, "m8-" + key), "another device has its own source history");
     }
 
+    [Test("OP-1 Field: backup of a mirrored device", Folder = "helpers")]
     static void TestOp1FieldBackup(string dir)
     {
         Assert(Devices.Find("op1-field") == Devices.OP1Field && Devices.OP1Field.Mtp && !Devices.M8.Mtp, "the OP-1 Field is an MTP device");
@@ -372,6 +379,7 @@ partial class Tests
         Assert(second.Summary.Contains("1 new, 0 changed file(s)."), "OP-1 Field summaries count files, not songs");
     }
 
+    [Test("Device profiles", Folder = "helpers")]
     static void TestDevices(string dir)
     {
         // The M8 profile holds what used to be spread around the code.
@@ -424,6 +432,7 @@ partial class Tests
         Assert(OperationContext.Current.Device == Devices.M8, "the device setting ends with its operation");
     }
 
+    [Test("MTP disconnection preserves mirror", Folder = "helpers")]
     static void TestMtpDisconnect(string dir)
     {
         string mirror = Folder(dir, "disconnect-mirror");
@@ -452,6 +461,7 @@ partial class Tests
 
     // An MTP device going through the same detect -> prepare -> run steps as a real one, with a fake
     // device: its mirror is synced, backed up, and only downloads changes the next time.
+    [Test("MTP devices through the shared flow", Folder = "helpers/mtp-flow")]
     static void TestMtpSharedFlow(string dir)
     {
         var day = new DateTime(2026, 1, 1, 10, 0, 0);
@@ -508,6 +518,7 @@ partial class Tests
     }
 
     // Values a faulty MTP device could report.
+    [Test("MTP: values from a faulty device")]
     static void TestMtpDeviceValues()
     {
         Assert(OleDate(45000.5) == DateTime.FromOADate(45000.5), "a valid device date is read");

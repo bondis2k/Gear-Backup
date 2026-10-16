@@ -20,6 +20,7 @@ partial class Tests
         return null;
     }
 
+    [Test("M8 song reader")]
     static void TestM8Song()
     {
         M8SongSummary song = M8SongJson.Parse(SampleSongJson);

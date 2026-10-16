@@ -12,6 +12,7 @@ partial class Tests
     static CatalogEntry CurrentEntry(CatalogData data, string path)
     { return data.Files.Find(e => e.SnapshotId == "current" && e.Path == path); }
 
+    [Test("SQLite: backup inventory and check results", Folder = "helpers")]
     static void TestBackupDatabase(string dir)
     {
         string root = Folder(dir, "sqlite-index"), source = Folder(root, "source");
@@ -58,6 +59,7 @@ partial class Tests
 
     // A long history: the catalog (built with one shared name check and a staging database without its own journal)
     // must list exactly what every restore point's manifest lists.
+    [Test("SQLite: catalog of a long history", Folder = "helpers")]
     static void TestCatalogHistory(string dir)
     {
         string root = Folder(dir, "catalog-history"), source = Folder(root, "source"), history = Path.Combine(root, "history");
@@ -140,6 +142,7 @@ partial class Tests
         foreach (string fake in new[] { good, bad, dup }) { File.Delete(fake); File.Delete(Path.ChangeExtension(fake, ".taken")); }
     }
 
+    [Test("SQLite: rebuild, interruption and links", Folder = "helpers")]
     static void TestBackupDatabaseSafety(string dir)
     {
         string root = Folder(dir, "sqlite-safety"), backup = Folder(root, "backup");

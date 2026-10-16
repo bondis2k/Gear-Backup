@@ -1,6 +1,6 @@
 // Focused tests for the helpers the backup, restore and check workflows depend on: change summaries,
 // name warnings, file classification, comparisons, path safety, checksum lists, settings, retention,
-// the resume question and the zip's failure paths. Each runs as a named test; see RunTests in TestRunner.cs.
+// the resume question and the zip's failure paths. Each runs as a named test; see TestHarness.cs.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -26,60 +26,8 @@ using static DeviceSelection;
 
 partial class Tests
 {
-    static void TestHelpers(string root)
-    {
-        string dir = Path.Combine(root, "helpers");
-        Directory.CreateDirectory(dir);
-        RunTest("Helpers: file classification", TestClassification);
-        RunTest("Helpers: comparisons", () => TestComparisons(dir));
-        RunTest("Helpers: path safety", () => TestPathSafety(dir));
-        RunTest("Helpers: change summary and name warnings", () => TestChangesAndNames(dir));
-        RunTest("Helpers: checksum lists", () => TestChecksumLists(dir));
-        RunTest("Helpers: settings", () => TestSettings(dir));
-        RunTest("Installed and portable settings locations", () => TestSettingsLocations(Folder(root, "settings-locations")));
-        RunTest("Helpers: retention", () => TestRetention(dir));
-        RunTest("Helpers: resume question", () => TestResumeQuestion(dir));
-        RunTest("Helpers: zip failures", () => TestZipFailures(dir));
-        RunTest("Standalone ZIP archive backup", () => TestArchiveBackup(Folder(root, "archive-backup")));
-        RunTest("CLI standalone ZIP archive", () => TestCliArchive(Folder(root, "cli-archive")));
-        RunTest("ZIP archive restore", () => TestZipRestore(Folder(root, "zip-restore")));
-        RunTest("Security: ZIP entry limit", () => TestZipEntryLimit(Folder(root, "zip-limit")));
-        RunTest("M8 song reader", () => TestM8Song());
-        RunTest("Security hardening", () => TestSecurity(dir));
-        RunTest("Security: reserved Windows names", () => TestReservedNames());
-        RunTest("Security: MTP device limits", () => TestMtpDeviceLimits(Folder(root, "mtp-limits")));
-        RunTest("Security: MTP mirror links", () => TestMirrorLinks(dir));
-        RunTest("Security: additional mirror link types", () => TestAdditionalMirrorLinks(dir));
-        RunTest("Security: file symbolic links in mirrors", () => TestMirrorFileSymlinks(dir));
-        RunTest("MTP disconnection preserves mirror", () => TestMtpDisconnect(dir));
-        RunTest("Exact restore preserves extras after failure", () => TestPartialExactRestore(dir));
-        RunTest("Malformed snapshot manifests", () => TestMalformedSnapshots(dir));
-        RunTest("Security: atomic text temporary files", () => TestAtomicText(dir));
-        RunTest("Security: restore folder changed after preview", () => TestRestoreFolderSubstitution(dir));
-        RunTest("Security: statistics hard links", () => TestStatisticsHardLink(dir));
-        RunTest("Security: ZIP metadata symbolic links", () => TestZipMetadataLinks(dir));
-        RunTest("SQLite: backup inventory and check results", () => TestBackupDatabase(dir));
-        RunTest("SQLite: catalog of a long history", () => TestCatalogHistory(dir));
-        RunTest("SQLite: rebuild, interruption and links", () => TestBackupDatabaseSafety(dir));
-        RunTest("SQLite: primary incremental inventory and recovery", () => TestIncrementalInventory(dir));
-        RunTest("SQLite: device-filtered full and individual restores", () => TestRestoreCatalog(dir));
-        RunTest("Single store: incremental points and restore", () => TestSingleContentStore(dir));
-        RunTest("Named full backup sets and incremental selection", () => TestBackupSetNames(dir));
-        RunTest("Named incremental backups", () => TestIncrementalBackupNames(dir));
-        RunTest("Single store: interrupted publication and migration", () => TestSingleContentStoreSafety(dir));
-        RunTest("Console questions", TestConsoleQuestions);
-        RunTest("Device profiles", () => TestDevices(dir));
-        RunTest("OP-1 Field: MTP mirror", () => TestMtpMirror(dir));
-        RunTest("OP-1 Field: backup of a mirrored device", () => TestOp1FieldBackup(dir));
-        RunTest("OP-XY: projects and backup", () => TestOpXy(dir));
-        RunTest("Tracker Mini: project folders", () => TestTrackerMini(dir));
-        RunTest("MTP devices through the shared flow", () => TestMtpSharedFlow(Folder(dir, "mtp-flow")));
-        RunTest("History names per device", () => TestProfileNames(dir));
-        RunTest("X100VI: photos", () => TestX100VI(dir));
-        RunTest("X100VI: settings capture and selector safety", () => TestFujiSettings(Folder(dir, "fuji-settings")));
-        RunTest("Gear Backup current format", () => TestCurrentIdentity(Folder(root, "current-identity")));
-    }
 
+    [Test("Installed and portable settings locations", Folder = "settings-locations")]
     static void TestSettingsLocations(string root)
     {
         string app = Folder(root, "installed"), roaming = Path.Combine(root, "roaming");
@@ -108,6 +56,7 @@ partial class Tests
         Assert(loaded.SettingsDirectory == portable && loaded.Theme == "retro", "portable settings remain beside the executable");
     }
 
+    [Test("Gear Backup current format", Folder = "current-identity")]
     static void TestCurrentIdentity(string root)
     {
         string settings = Folder(root, "settings");
@@ -143,6 +92,7 @@ partial class Tests
         return output.ToString();
     }
 
+    [Test("Console questions")]
     static void TestConsoleQuestions()
     {
         char key = ' ';
@@ -186,6 +136,7 @@ partial class Tests
         return ui;
     }
 
+    [Test("Helpers: file classification")]
     static void TestClassification()
     {
         foreach (string name in new[] { ".DS_Store", "._Song.m8s", "notes.txt~", "FSCK0000.REC", "fsck0123.rec", "Thumbs.db", "desktop.ini", "ehthumbs.db" })
@@ -215,6 +166,7 @@ partial class Tests
         Assert(FormatTime(TimeSpan.FromSeconds(125)) == "2m 5s", "times over a minute show minutes and seconds");
     }
 
+    [Test("Helpers: comparisons", Folder = "helpers")]
     static void TestComparisons(string dir)
     {
         string a = Path.Combine(dir, "cmp-a.bin"), b = Path.Combine(dir, "cmp-b.bin");
@@ -230,6 +182,7 @@ partial class Tests
         Assert(Compare(new FileInfo(a), Path.Combine(dir, "missing.bin")) == FileState.New, "a missing copy counts as new");
     }
 
+    [Test("Helpers: path safety", Folder = "helpers")]
     static void TestPathSafety(string dir)
     {
         string safeRoot = Path.Combine(dir, "safe");
@@ -245,6 +198,7 @@ partial class Tests
         Throws(() => CheckParents(safeRoot, Path.Combine(safeRoot, @"blocker\a.m8s")), "a file where a folder must go is reported");
     }
 
+    [Test("Helpers: change summary and name warnings", Folder = "helpers")]
     static void TestChangesAndNames(string dir)
     {
         string source = Rooted(Path.Combine(dir, "changes-card"));
@@ -282,6 +236,7 @@ partial class Tests
         Assert(!CheckNames(scan, source, 0).Exists(w => w.Contains("characters long")), "MaxNameLength=0 turns off the length check");
     }
 
+    [Test("Helpers: checksum lists", Folder = "helpers")]
     static void TestChecksumLists(string dir)
     {
         string backup = Path.Combine(dir, "sums-backup");
@@ -316,6 +271,7 @@ partial class Tests
         Assert(unchecked2 == 1 && LoadChecksums(bare) == null, "declining to create a list counts the backup as unchecked");
     }
 
+    [Test("Helpers: settings", Folder = "helpers")]
     static void TestSettings(string dir)
     {
         // Every saved setting survives a save and reload; Zip is per run and isn't saved.
@@ -377,6 +333,7 @@ partial class Tests
             "preferences are saved under their proper key and read like the INI");
     }
 
+    [Test("Helpers: retention", Folder = "helpers")]
     static void TestRetention(string dir)
     {
         // Backup folders: only date-named ones count, sorted oldest first.
@@ -424,6 +381,7 @@ partial class Tests
             "a taken old-version name gets _2");
     }
 
+    [Test("Helpers: resume question", Folder = "helpers")]
     static void TestResumeQuestion(string dir)
     {
         string backup = Path.Combine(dir, "resume-backup");
@@ -452,6 +410,7 @@ partial class Tests
             "a backup location inside the source is rejected");
     }
 
+    [Test("Helpers: zip failures", Folder = "helpers")]
     static void TestZipFailures(string dir)
     {
         string source = Rooted(Path.Combine(dir, "zipfail-card"));
@@ -495,6 +454,7 @@ partial class Tests
 
     // The verification hash reads two chunks at a time; it must match the plain hash at every size
     // around a chunk boundary.
+    [Test("Verification hash at chunk boundaries", Folder = "hash-from-disk")]
     static void TestHashFromDisk(string dir)
     {
         Directory.CreateDirectory(dir);
@@ -512,6 +472,7 @@ partial class Tests
     }
 
     // Statuses keep their text on disk, and restore modes their menu keys.
+    [Test("Named values: statuses, stages, modes, kinds")]
     static void TestNamedValues()
     {
         Assert(Status.FromText("complete") == Status.Complete && Status.FromText("failed").Unfinished && Status.FromText("incomplete").Unfinished,
@@ -529,6 +490,7 @@ partial class Tests
     // There is no hidden, long-lived context: outside an operation, operation state is refused with a
     // clear error, while work that is also done outside operations (writing a settings file) still works.
     // A device switch is scoped and always switches back.
+    [Test("Operation context: no hidden context, scoped devices", Folder = "operation-context")]
     static void TestOperationContext(string dir)
     {
         Exception outside = null;
@@ -556,6 +518,7 @@ partial class Tests
     }
 
     // Histories are shown by readable names, or a nickname kept in the history folder.
+    [Test("History names and nicknames", Folder = "history-names")]
     static void TestHistoryNames(string root)
     {
         var expected = new Dictionary<string, string> {

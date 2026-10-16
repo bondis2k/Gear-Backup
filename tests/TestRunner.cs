@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Text;
@@ -12,9 +13,9 @@ using static ConsoleUi;
 
 class TestRunner
 {
-    static int Main()
+    static int Main(string[] args)
     {
-        try { return Tests.RunTests(); }
+        try { return Tests.RunSelected(args, false); }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 }
@@ -86,12 +87,21 @@ partial class Tests
     // caches start fresh; console input is reset afterwards so it can't leak into the next test.
     static void RunTest(string name, Action test)
     {
+        Record(name, test, new ConsoleInteraction());
+    }
+
+    // Runs `test` (in an operation context with this interaction, or in none when it is null), and records ok, skipped
+    // or failed with how long it took.
+    static void Record(string name, Action test, IOperationInteraction interaction)
+    {
         int before = assertions;
         TextReader input = Console.In;
+        var timer = Stopwatch.StartNew();
         try
         {
-            using (new OperationContext(new ConsoleInteraction(), CancellationToken.None).Activate()) test();
-            results.Add(string.Format("  ok    {0} ({1} checks)", name, assertions - before));
+            if (interaction == null) test();
+            else using (new OperationContext(interaction, CancellationToken.None).Activate()) test();
+            results.Add(string.Format("  ok    {0} ({1} checks, {2} ms)", name, assertions - before, timer.ElapsedMilliseconds));
         }
         catch (TestSkippedException ex)
         {
@@ -127,53 +137,6 @@ partial class Tests
         }
         Console.WriteLine("FAIL: " + failedTests + " of " + results.Count + " tests failed. Fixtures kept: " + root);
         return 1;
-    }
-
-    public static int RunTests()
-    {
-        string root = Path.Combine(Environment.CurrentDirectory, ".test-runs", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        RunTest("Settings and profiles", () => TestSettingsAndProfiles(Folder(root, "settings")));
-        RunTest("Full and incremental backup", () => TestFullAndIncremental(Folder(root, "backup")));
-        RunTest("Resume repairs partial copies", () => TestResume(Folder(root, "resume")));
-        RunTest("Point-in-time restore with recovery", () => TestHistoricalRestore(Folder(root, "historical")));
-        RunTest("Restore safety: no recovery, locked files, changed targets", () => TestRestoreSafety(Folder(root, "restore-safety")));
-        RunTest("Interactive bundle restore and restore preview", () => TestRestoreMenus(Folder(root, "restore-menus")));
-        RunTest("Song dependencies", () => TestSongDependencies(Folder(root, "dependencies")));
-        RunTest("Command-line entry flow", () => TestCommandLine(Folder(root, "cli")));
-        RunTest("Exact and keep restore workflows", () => TestExactAndKeep(Folder(root, "exact")));
-        RunTest("History integrity and damage", () => TestHistoryIntegrity(Folder(root, "integrity")));
-        RunTest("Verify=no behaviour", () => TestVerifyOff(Folder(root, "verify-off")));
-        RunTest("Undated files", () => TestUndatedFiles(Folder(root, "undated")));
-        RunTest("Byte comparison, drive space and settings copy", () => TestSmallHelpers(Folder(root, "small")));
-        RunTest("History lock", () => TestHistoryLock(Folder(root, "lock")));
-        RunTest("Engine operations", () => TestEngineOperations(Folder(root, "engine")));
-        RunTest("Optimizations", () => TestOptimizations(Folder(root, "optimizations")));
-        RunTest("Dashboard metadata scan", () => TestDashboardMetadata(Folder(root, "dashboard-metadata")));
-        RunTest("Unchanged incremental housekeeping", () => TestUnchangedHousekeeping(Folder(root, "unchanged-housekeeping")));
-        RunTest("Reusable copy and hash buffers", () => TestReusableBuffers(Folder(root, "reusable-buffers")));
-        RunTest("Backup without point-in-time history", () => TestWithoutHistory(Folder(root, "without-history")));
-        RunTest("Device and profile preferences", () => TestProfilePreferences(Folder(root, "profile-preferences")));
-        RunTest("Storage management and dashboard records", () => TestBackupManagement(Folder(root, "management")));
-        RunTest("MTP: values from a faulty device", TestMtpDeviceValues);
-        RunTest("Named values: statuses, stages, modes, kinds", TestNamedValues);
-        RunTest("Operation context: no hidden context, scoped devices", () => TestOperationContext(Folder(root, "operation-context")));
-        RunTest("History names and nicknames", () => TestHistoryNames(Folder(root, "history-names")));
-        RunTest("Security: record reads and writes check links", () => TestRecordAccess(Folder(root, "record-access")));
-        RunTest("Verification hash at chunk boundaries", () => TestHashFromDisk(Folder(root, "hash-from-disk")));
-        RunTest("Storage cleanup updates checksum lists once", () => TestCleanupChecksums(Folder(root, "cleanup-checksums")));
-        RunTest("Fast catalog scan", () => TestCatalogShortcuts(Folder(root, "catalog-shortcuts")));
-        RunTest("Readable X100VI recipes", () => TestRecipeReading(Folder(root, "recipe-reading")));
-        RunTest("Shared source flow", () => TestSharedFlow(Folder(root, "shared-flow")));
-        RunTest("Backup destination defaults and creation", () => TestBackupDestination(Folder(root, "destination")));
-        RunTest("Copy pipeline", () => TestCopyPipeline(Folder(root, "pipeline")));
-        RunTest("Zip", () => TestZip(Folder(root, "zip")));
-        RunTest("Paths over Windows' length limit", () => TestLongPaths(Folder(root, "long-paths")));
-        RunTest("Current restore preserves dated source names", () => TestDatedRestoreNames(Folder(root, "dated-restore")));
-        RunTest("History selection across configured locations", () => TestHistoryLocations(Folder(root, "history-locations")));
-        RunTest("Restore uses saved device and preferences", () => TestRestoreDevicePreferences(Folder(root, "restore-device")));
-        TestHelpers(root);
-        return Summarize(root);
     }
 
     static string Folder(string root, string name)

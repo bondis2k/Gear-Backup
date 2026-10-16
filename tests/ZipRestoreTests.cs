@@ -6,6 +6,7 @@ using System.Threading;
 
 partial class Tests
 {
+    [Test("Security: ZIP entry limit", Folder = "zip-limit")]
     static void TestZipEntryLimit(string root)
     {
         string source = Folder(root, "source"), archive = Path.Combine(root, "limit.zip");
@@ -22,6 +23,7 @@ partial class Tests
         finally { ZipRestore.MaxEntries = original; }
     }
 
+    [Test("ZIP archive restore", Folder = "zip-restore")]
     static void TestZipRestore(string root)
     {
         string source = Folder(root, "source"), target = Folder(root, "target"), scratch = Folder(root, "scratch"), archive = Path.Combine(root, "backup.zip");

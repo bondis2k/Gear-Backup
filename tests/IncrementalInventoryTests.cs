@@ -6,6 +6,7 @@ using static Checksums;
 
 partial class Tests
 {
+    [Test("SQLite: primary incremental inventory and recovery", Folder = "helpers")]
     static void TestIncrementalInventory(string dir)
     {
         foreach (bool single in new[] { false, true })

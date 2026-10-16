@@ -8,7 +8,7 @@ $build = Join-Path $projectRoot 'tests/.build'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 $sources = @(Get-ChildItem (Join-Path $projectRoot 'src') -Filter '*.cs' -Recurse | Where-Object Name -ne 'Notifications.cs' | ForEach-Object FullName)
 # Reuse the test notification stub, so benchmarks never send desktop notifications.
-$sources += @(Get-ChildItem (Join-Path $projectRoot 'tests') -Filter '*.cs' | Where-Object Name -ne 'GuiTests.cs' | ForEach-Object FullName)
+$sources += @(Get-ChildItem (Join-Path $projectRoot 'tests') -Filter '*.cs' | Where-Object Name -notlike 'Gui*' | ForEach-Object FullName)
 if ($SourceRef) {
     # Compile a Git revision into an isolated folder without changing the working tree.
     $commit = & git -C $projectRoot rev-parse --verify --end-of-options "$SourceRef^{commit}"
@@ -17,7 +17,7 @@ if ($SourceRef) {
     $sources = @()
     $files = & git -C $projectRoot ls-tree -r --name-only $commit -- src tests
     if ($LASTEXITCODE -ne 0) { throw 'Could not enumerate revision sources.' }
-    foreach ($file in $files | Where-Object { $_ -like '*.cs' -and $_ -notmatch '(Notifications|GuiTests)\.cs$' }) {
+    foreach ($file in $files | Where-Object { $_ -like '*.cs' -and $_ -notmatch '(Notifications|Gui\w*Tests)\.cs$' }) {
         $destination = Join-Path $snapshot $file
         New-Item -ItemType Directory -Path (Split-Path $destination -Parent) -Force | Out-Null
         $content = & git -C $projectRoot show "${commit}:$file"

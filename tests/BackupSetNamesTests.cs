@@ -5,6 +5,7 @@ using static Session;
 
 partial class Tests
 {
+    [Test("Named full backup sets and incremental selection", Folder = "helpers")]
     static void TestBackupSetNames(string dir)
     {
         foreach (bool single in new[] { false, true })

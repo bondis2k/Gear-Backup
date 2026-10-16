@@ -16,6 +16,7 @@ using static BackupStatuses;
 
 partial class Tests
 {
+    [Test("Security: additional mirror link types", Folder = "helpers")]
     static void TestAdditionalMirrorLinks(string dir)
     {
         string root = Folder(dir, "extra-mirror-links");
@@ -47,6 +48,7 @@ partial class Tests
 
     }
 
+    [Test("Security: file symbolic links in mirrors", Folder = "helpers")]
     static void TestMirrorFileSymlinks(string dir)
     {
         string root = Folder(dir, "mirror-file-symlinks");
@@ -92,6 +94,7 @@ partial class Tests
         Assert((File.GetAttributes(link) & FileAttributes.ReparsePoint) != 0, "fixture is a symbolic link, not a regular file");
     }
 
+    [Test("Exact restore preserves extras after failure", Folder = "helpers")]
     static void TestPartialExactRestore(string dir)
     {
         Fixture f = BackedUpCard(Folder(dir, "partial-exact-fixture"), false);
@@ -125,6 +128,7 @@ partial class Tests
             "failed exact replacement removes the staged temporary file");
     }
 
+    [Test("Malformed snapshot manifests", Folder = "helpers")]
     static void TestMalformedSnapshots(string dir)
     {
         string backup = Folder(dir, "malformed-backup");
@@ -163,6 +167,7 @@ partial class Tests
             "valid manifest remains accepted with a final newline and zero dates");
     }
 
+    [Test("Security: MTP mirror links", Folder = "helpers")]
     static void TestMirrorLinks(string dir)
     {
         string mirror = Folder(dir, "linked-mirror");
@@ -210,6 +215,7 @@ partial class Tests
         }
     }
 
+    [Test("Security: atomic text temporary files", Folder = "helpers")]
     static void TestAtomicText(string dir)
     {
         string folder = Folder(dir, "atomic-text");
@@ -241,6 +247,7 @@ partial class Tests
             "cancellation leaves the text and temporary folder unchanged");
     }
 
+    [Test("Security hardening", Folder = "helpers")]
     static void TestSecurity(string dir)
     {
         // 1. A cfgmgr32.dll planted next to the program must not be loaded. The fake is garbage, so
@@ -299,6 +306,7 @@ partial class Tests
 
     // Metadata reads and writes all check for links and size limits in one place (Records, AtomicText),
     // including writes that used to skip the check (checksum lists, status, snapshots, settings).
+    [Test("Security: record reads and writes check links", Folder = "record-access")]
     static void TestRecordAccess(string root)
     {
         string elsewhere = Path.Combine(root, "elsewhere"), backup = Path.Combine(root, "backup");
@@ -318,6 +326,7 @@ partial class Tests
         Put(plain, "complete");
         Assert(Records.ReadText(plain, Records.SmallLimit, "Backup status record").Trim() == "complete", "an ordinary record reads normally");
     }
+    [Test("Security: reserved Windows names")]
     static void TestReservedNames()
     {
         string root = Path.Combine(Path.GetTempPath(), "gearbackup-reserved-names");

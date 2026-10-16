@@ -22,6 +22,7 @@ using static ProfileNaming;
 
 partial class Tests
 {
+    [Test("Backup destination defaults and creation", Folder = "destination")]
     static void TestBackupDestination(string root)
     {
         string expected = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Backup");
@@ -65,6 +66,7 @@ partial class Tests
         Assert(result.Cancelled && !Directory.Exists(config.BackupFolder), "camera settings backup also honors declined creation");
     }
 
+    [Test("Device and profile preferences", Folder = "profile-preferences")]
     static void TestProfilePreferences(string root)
     {
         var global = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "global"), SettingsDirectory = root, PointInTimeHistory = true };
@@ -112,6 +114,7 @@ partial class Tests
     }
     // Several old versions recycled from one backup leave its checksum list in one rewrite, and a
     // cleanup that fails part-way still takes out what it already recycled.
+    [Test("Storage cleanup updates checksum lists once", Folder = "cleanup-checksums")]
     static void TestCleanupChecksums(string root)
     {
         var config = new Config { SingleContentStore = false, BackupFolder = Path.Combine(root, "store"), SettingsDirectory = root, Preview = false };
@@ -149,6 +152,7 @@ partial class Tests
         Assert(ok == 1 && damaged == 0 && missing == 0, "the backup checks clean after cleanup");
     }
 
+    [Test("Storage management and dashboard records", Folder = "management")]
     static void TestBackupManagement(string root)
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
@@ -238,6 +242,7 @@ partial class Tests
         }
     }
     // Detection, preferences, history and the run itself are shared by the CLI and GUI.
+    [Test("Shared source flow", Folder = "shared-flow")]
     static void TestSharedFlow(string root)
     {
         string card = Rooted(Path.Combine(root, "tracker-card"));
@@ -282,6 +287,7 @@ partial class Tests
     }
 
     // The Dashboard/Storage scan's shortcuts give the same answers as the slow ways.
+    [Test("Fast catalog scan", Folder = "catalog-shortcuts")]
     static void TestCatalogShortcuts(string root)
     {
         Config config;
@@ -312,6 +318,7 @@ partial class Tests
         }
     }
 
+    [Test("Readable X100VI recipes", Folder = "recipe-reading")]
     static void TestRecipeReading(string root)
     {
         Dictionary<string, byte[]> files;

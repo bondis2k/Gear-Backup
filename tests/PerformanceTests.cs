@@ -7,6 +7,7 @@ using System.Threading;
 
 partial class Tests
 {
+    [Test("Dashboard metadata scan", Folder = "dashboard-metadata")]
     static void TestDashboardMetadata(string root)
     {
         Config config;
@@ -31,6 +32,7 @@ partial class Tests
         Assert(stopped, "metadata scan remains cancellable");
     }
 
+    [Test("Unchanged incremental housekeeping", Folder = "unchanged-housekeeping")]
     static void TestUnchangedHousekeeping(string root)
     {
         string source = Path.Combine(root, "source"), history = Path.Combine(root, "history");
@@ -88,6 +90,7 @@ partial class Tests
             "unchanged clean backup still creates requested history");
     }
 
+    [Test("Reusable copy and hash buffers", Folder = "reusable-buffers")]
     static void TestReusableBuffers(string root)
     {
         var ui = new TestInteraction();

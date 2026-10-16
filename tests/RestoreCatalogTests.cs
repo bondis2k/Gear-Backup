@@ -7,6 +7,7 @@ using static Snapshots;
 
 partial class Tests
 {
+    [Test("SQLite: device-filtered full and individual restores", Folder = "helpers")]
     static void TestRestoreCatalog(string dir)
     {
         TestRestoreInventoryPathScope(dir);
@@ -178,6 +179,7 @@ partial class Tests
     }
 
     // An incremental backup can be given a name, shown beside its date and time in both storage layouts.
+    [Test("Named incremental backups", Folder = "helpers")]
     static void TestIncrementalBackupNames(string dir)
     {
         foreach (bool single in new[] { false, true })
