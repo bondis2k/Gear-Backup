@@ -6,6 +6,20 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 
 ## [Unreleased]
 
+### Added
+- Optional **Link replacement card to the original backup history** during M8 migration, saved after successful verification and song checks. Future backups use the original history, location and preferences across drive-letter changes; explicit profiles override linking.
+- M8 **Card migration** restores a selected complete backup point to an empty replacement card or test folder, with mandatory preview/checksums, target identity checks, post-copy file verification, song dependency checks, progress/cancellation and a saveable migration report. It does not format storage or delete existing content.
+- M8 mode now has a Sample check tab: inspect a song's sample references against a card folder and search M8 backup histories, including older restore points. Results include referencing instrument slots, exact-path and filename-only matches, and SHA-256 verification of matching saved objects. Checking can be cancelled and does not restore or modify song/sample files.
+- Double-clicking a verified sample backup copy asks to restore it and opens individual restore with the matching backup, saved point and file selected for destination review.
+- M8 Sample check has a **Check all songs on card** button, which scans songs recursively, reports missing samples per song, distinguishes unreadable songs and invalid references, and supports selection of per-song details, progress and cancellation.
+
+### Fixed
+- M8 migration locks its path inputs while copying and cancels superseded inventory loads. Saved card-history links reject ambiguous relative paths and report duplicate identities clearly.
+- The sample backup restore confirmation uses the application's theme, including its title bar, details and action buttons.
+- Toggling M8 backup-history search preserves card results. Re-enabling it refreshes the selected song's backup copies automatically, including selections from the whole-card list.
+- Sample check path fields retain readable theme colours after a check and when changing themes while the tab is inactive. Detecting an M8 also fills an empty card-root field.
+- Individual and whole-card M8 sample checks resolve relative sample paths beside the actual song, fixing false missing-sample reports for demo/bundle songs such as SNOWYDAY. Paths beginning with `/` remain rooted at the card; backup matching uses the resolved location.
+
 ## [0.9.5] - 2026-10-16
 
 ### Added

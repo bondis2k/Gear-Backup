@@ -20,6 +20,7 @@ For complete procedures and the reference for every command-line switch, use the
 - [Command line](#command-line)
 - [X100VI settings and recipes](#x100vi-settings-and-recipes)
 - [M8 Song viewer](#m8-song-viewer)
+- [M8 card migration](#m8-card-migration)
 - [Troubleshooting and reporting problems](#troubleshooting-and-reporting-problems)
 
 ## Getting started and installation
@@ -110,7 +111,7 @@ The normal source scan also excludes common filesystem leftovers. Gear Backup is
 
 ### Why do the device header tabs say Coming soon or Planned?
 
-You selected a device-specific header mode. Its dedicated tools are placeholders. Select the **Gear Backup** header icon to return to the complete Backup and Restore interface.
+You selected a device-specific header mode. M8 mode includes **Sample check** and **Card migration** in builds containing those features; other dedicated tools are still placeholders. Select the **Gear Backup** header icon to return to the complete Backup and Restore interface.
 
 Detection from Gear Backup mode keeps those normal tools available. A placeholder tab does not mean the installation is broken.
 
@@ -728,6 +729,52 @@ The viewer does not gather samples or perform dependency restore. Those are sepa
 It may be truncated, damaged, unsupported or too large; inputs above 16 MiB are refused. The native reader also needs a 64-bit process and the matching bundled DLL.
 
 Try a known-good file and re-extract/reinstall the matching package if library loading fails. The viewer reports an error rather than repairing the song.
+
+### Can I check which samples an M8 song is missing?
+
+Select the **M8** header icon and open **Sample check**. Choose the song and the root of its card or extracted card folder, then choose **Check samples**. References include unused sampler slots and are grouped with their instrument slot numbers. Card presence checks accessibility, not audio validity. This feature is available in builds after 0.9.5.
+
+### Can I check all songs on the M8 at once?
+
+Choose the card root on **M8 → Sample check**, then click **Check all songs on card**. It finds `.m8s` songs recursively and reports which songs have missing sample references. Select a song to see its references; double-click it for an individual check with the current backup-search setting. The whole-card scan only checks card contents. Unreadable songs, invalid references and incomplete scans are reported separately. Cancel stops the scan without changing songs or samples.
+
+### How are sample paths in demo or bundled songs resolved?
+
+`/Samples/kick.wav` starts at the card root. `Samples/kick.wav` starts in the folder containing the song, so a song in `Songs\Demos` uses `Songs\Demos\Samples\kick.wav`. Both individual and whole-card checks use the song's actual location. An outdated embedded song directory does not change that lookup. Hover over a reference to see the resolved path; keep the song inside the selected card tree when checking relative references.
+
+### How do I search older backups for sample copies?
+
+If you turn **Search M8 backup histories** off, card results stay visible and history copies are hidden. Turn it back on to automatically search again for the selected song. This also works for selections in the whole-card results list.
+
+Enable backup search and select your backup location. The checker searches M8 histories and their saved restore points, including configured device/history locations. Select a reference to see matching backup folders, restore points and original paths. Exact-path matches and filename-only candidates are distinguished; matching objects are verified against saved hashes. A matching path or name does not prove that it is the version intended by the song. Warnings indicate incomplete searches or the 100-match limit per reference.
+
+### Does Sample check repair the song or restore files automatically?
+
+No. Double-click a verified copy in the lower table and confirm to open **Restore individual files** with its set, saved point and file selected. Review the destination and click **Restore** to recover it. Filename-only candidates retain their original folder path. You can search backups without a card by leaving the card-root field empty, or check only the card by disabling backup search. Cancel stops the current check; changing inputs clears old results.
+
+## M8 card migration
+
+### Can Gear Backup help move to a replacement M8 card?
+
+Yes. Open **M8 → Card migration**, choose a completed M8 backup and full restore point, then choose an empty replacement card root or empty test folder. Review the preview before copying. The assistant always verifies the restored files and then checks all restored songs for missing samples. Save the detailed report if you want a record. This feature is available in builds after 0.9.5.
+
+### Does Card migration format the card or overwrite my existing files?
+
+No. Prepare the card separately. Migration requires an empty destination and refuses ordinary existing content. At a drive root it tolerates Windows' system-volume and recycle-bin directories. Use normal Restore for a destination already containing files. Migration does not flash firmware, edit song files or automatically eject storage.
+
+### Can the replacement card continue the original backup history?
+
+Yes. Check **Link replacement card to the original backup history** before migrating to the card's drive root. After a successful copy, verification and song scan, the app saves the new card's volume ID against the selected original history. Future backups use that history, its backup location and preferences, even if the card's drive letter changes. Old restore points remain available. An explicit Profile/History name takes priority. Linking is off by default and cannot be used with rehearsal folders.
+
+The report confirms whether linking succeeded. Cancelled, failed or needs-attention migrations do not save a link. Links live in `GearBackup.CardLinks.ini` with the app's settings; preserve that file when moving PCs and keep the original backup path accessible. Without linking, the new card gets its own automatic history, and you can still restore old backups normally.
+
+### Why does migration need attention when all files were copied?
+
+The chosen backup may already have missing song samples or unreadable songs. The report separates file verification from dependency checks and records incomplete scans. A complete copy does not fix missing dependencies in the backup.
+
+### Can I resume a cancelled migration?
+
+Completed copies can remain, so the destination is no longer empty. Use ordinary Restore to continue into it, or choose another empty destination. Cancellation does not roll back completed files, and final verification/song checks may not have run.
 
 ## Troubleshooting and reporting problems
 

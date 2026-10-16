@@ -353,7 +353,39 @@ Available information includes:
 
 The viewer does not play, edit, save or repair songs. Sample references do not establish that sample files are available. Restore a song to an ordinary named file if it is only present as a content-store object.
 
+### M8 sample dependency checker (after 0.9.5)
+
+M8 header mode has a **Sample check** tab for a chosen `.m8s` song:
+
+- Check card-root references against a connected card or extracted folder, including unused sampler slots.
+- Resolve paths beginning with `/` at the card root and relative references beside the actual song file, including demo and bundle sample folders. Tooltips show the resolved card-relative path; missing location context is reported explicitly.
+- **Check all songs on card** recursively inspects `.m8s` songs, including bundles, and lists songs with missing samples, unreadable songs and invalid references. Select a song for reference details or double-click for its individual check. Whole-card scanning checks card contents only and supports progress, cancellation and incomplete-scan warnings.
+- Group duplicate references and show all referencing instrument slots.
+- Search M8 backup histories and older saved restore points in the selected and configured backup locations.
+- Distinguish exact-path copies from filename-only candidates and show set folder, restore point and original path.
+- Verify matching saved objects against their recorded size and SHA-256 hash; mark unavailable/damaged objects explicitly.
+- Double-click a verified backup copy and confirm to open individual restore with its saved point and sample selected; normal destination review and Restore remain required.
+- Support card-only and backup-only checks, background execution, cancellation, bounded match lists and warnings for incomplete searches.
+- Preserve card results when backup search is disabled; re-enabling it refreshes history for the selected song, including selections in the whole-card list.
+
+The checker does not alter songs or recover samples automatically. Card presence does not validate audio contents; matching paths/names do not identify the intended historical sample version. Recover selected copies through the existing restore interface.
+
 Native input is bounded, parser panics are converted to error results where caught, and displayed file-derived text is sanitized for control/bidirectional formatting characters. Missing/incompatible libraries and unreadable inputs produce errors. A 64-bit application process is required.
+
+### M8 card migration assistant (after 0.9.5)
+
+The **M8 → Card migration** tab restores a complete saved point from a completed M8 content-store backup to an existing empty replacement card or test folder.
+
+- Backup-set and restore-point selection, including older points and configured backup locations.
+- Optional replacement-card link to the original history: future backups retain its location and preferences, using the new card's volume ID across drive-letter changes. Saved only after successful migration checks; explicit profiles take priority.
+- Mandatory copy-plan review, checksum validation and content comparison without changing saved preferences.
+- Empty-destination checks and directory/volume identity revalidation; existing files are never removed to make room.
+- Post-restore size/SHA-256 comparison for every expected file, plus expected-folder checks.
+- A song dependency scan using both card-root and song-relative paths.
+- Per-song results, detailed reports and text-report export; missing dependencies or incomplete checks produce a needs-attention result.
+- Shared operation progress and cancellation. Completed files can remain after cancellation; ordinary Restore can continue into a partial destination.
+
+This is file migration, without partitioning/formatting, firmware flashing, song editing, hardware compatibility testing or automatic ejection. Prepare the replacement card separately. A PC folder can be used to rehearse recovery before using another card.
 
 ## Profiles and backup management
 
@@ -559,7 +591,7 @@ The following are not implemented or deliberately outside the current feature sc
 | Camera settings | XML recipe/shooting snapshots, not full-camera/X Acquire backup or settings upload. |
 | M8 Song | Inspection only, without playback/edit/save/repair. |
 | Sample dependency extraction | Supported firmware-6 M8 layout, not every possible song format. |
-| Header device modes | Dedicated tool tabs remain Coming soon/Planned placeholders. |
+| Header device modes | M8 has Sample check and Card migration in builds after 0.9.5; other dedicated tools remain Coming soon/Planned placeholders. |
 | Unattended operation | No universal Yes/Force/Silent confirmation-bypass switch. |
 | Cancellation | Completed restore copies can remain; the whole operation is not rolled back. |
 | Encryption/authentication | No built-in backup encryption or cryptographic proof of archive authorship. |

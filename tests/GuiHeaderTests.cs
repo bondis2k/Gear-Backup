@@ -59,10 +59,10 @@ partial class Tests
                 Assert(strip.Active.Device == null && titles() == "Device|Backup|Restore|Song" && form.Controls.Find("StartOperation", true).Length > 0,
                     "identifying a device in Gear Backup mode keeps every backup tool");
                 strip.SetActive(GearIconStrip.Gears[1]); Application.DoEvents();
-                Assert(titles() == "Device|Coming soon|Planned|Song" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
-                    "a device mode replaces Backup and Restore with placeholder tabs and drops the shortcuts to them: " + titles());
-                Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("GearPlaceholder1").Text.Contains("M8"),
-                    "the backup controls are gone from a device mode, while Detect device and the placeholder text remain");
+                Assert(titles() == "Device|Sample check|Card migration|Song" && !named("GoToBackup").Visible && !named("GoToRestore").Visible,
+                    "M8 mode replaces Backup with Sample check and drops backup/restore shortcuts: " + titles());
+                Assert(form.Controls.Find("StartOperation", true).Length == 0 && named("DetectDevice").Visible && named("CheckM8Samples") != null,
+                    "M8 mode exposes Detect device and sample checking without backup controls");
                 form.ShowDevice(Devices.TrackerMini); Assert(strip.Active.Device == Devices.TrackerMini && named("GearPlaceholder1").Text.Contains("Tracker Mini"), "in a device mode an identified device of another type switches to its mode");
                 form.ShowDevice(null); Assert(strip.Active.Device == Devices.TrackerMini, "no device keeps the chosen mode");
                 form.ShowDevice(Devices.X100VI);
@@ -93,7 +93,7 @@ partial class Tests
                     "clicking OP-XY enters the OP-XY mode and looks for an OP-XY");
                 available = false;
                 click(1);
-                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Coming soon|Planned|Song",
+                Assert(asked[asked.Count - 1] == Devices.M8 && strip.Active.Device == Devices.M8 && titles() == "Device|Sample check|Card migration|Song",
                     "clicking M8 selects the M8 mode even when no M8 is connected");
                 click(0);
                 Assert(asked[asked.Count - 1] == null && strip.Active.Device == null && titles() == "Device|Backup|Restore|Song",

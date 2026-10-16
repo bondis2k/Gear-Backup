@@ -21,6 +21,21 @@ namespace GearBackup.Gui
         string restoreContextKey;
         int restoreScan, restorePointScan, rememberedRestoreScope;
         bool fillingRestore, loadingRestore;
+        M8SampleMatch pendingSampleRestore;
+
+        void PrepareSampleRestore(M8SampleMatch match, string cardRoot, Config searchConfig)
+        {
+            if (runner.IsBusy) return;
+            backupFolder.Text = searchConfig.BackupFolder;
+            restoreDestination.Text = cardRoot ?? "";
+            gearIcons.SetActive(GearIconStrip.Gears[0]);
+            rememberedRestoreScope = 1;
+            restoreMode.SelectedIndex = 1;
+            restoreExact.Checked = false;
+            SelectOperation(GuiOperation.Restore);
+            pendingSampleRestore = match;
+            RefreshRestoreBackups(true);
+        }
 
         sealed class RestoreBackupItem
         {
@@ -133,6 +148,7 @@ namespace GearBackup.Gui
         void FinishRestoreBackups(int scan, List<string> paths, string oldPath, DeviceProfile device, string error)
         {
             if (scan != restoreScan) return;
+            if (pendingSampleRestore != null) oldPath = pendingSampleRestore.Backup;
             fillingRestore = true;
             try
             {
@@ -153,6 +169,13 @@ namespace GearBackup.Gui
             }
             finally { fillingRestore = false; }
             loadingRestore = false; restoreBackup.Enabled = paths.Count > 0 && !runner.IsBusy;
+            if (pendingSampleRestore != null && !paths.Exists(p => string.Equals(p, pendingSampleRestore.Backup, StringComparison.OrdinalIgnoreCase)))
+            {
+                pendingSampleRestore = null;
+                restoreNotice.Text = "The selected sample backup is no longer available. Run Sample check again.";
+                RefreshRestoreActionState();
+                return;
+            }
             if (paths.Count == 0) restoreNotice.Text = error != null ? "Cannot list backups: " + error : device == null ? "No backups found at the configured backup locations." : "No backups found for " + device.Name + " at the configured backup locations.";
             else LoadRestorePoints();
             RefreshRestoreActionState();
@@ -184,6 +207,22 @@ namespace GearBackup.Gui
             foreach (var point in set.Points) restorePoint.Items.Add(point);
             if (restorePoint.Items.Count > 0) restorePoint.SelectedIndex = 0;
             restorePoint.Enabled = !runner.IsBusy && set.Points.Count > 0;
+            if (pendingSampleRestore != null && string.Equals(set.Backup, pendingSampleRestore.Backup, StringComparison.OrdinalIgnoreCase))
+            {
+                var selected = pendingSampleRestore;
+                pendingSampleRestore = null;
+                var point = set.Points.Find(p => p.Id == selected.PointId);
+                if (point == null || !point.Snapshot.Files.Exists(f => f.Relative == selected.Relative && f.Hash == selected.Hash))
+                {
+                    restorePaths = null;
+                    UpdateRestoreSelectionNotice();
+                    restoreNotice.Text = "The selected sample or restore point changed. Run Sample check again.";
+                    return;
+                }
+                restorePoint.SelectedItem = point;
+                restorePaths = new[] { selected.Relative };
+                detail.Text = "Sample selected. Review the restore destination, then click Restore.";
+            }
             UpdateRestoreSelectionNotice();
         }
         void RestoreUi(Action action)

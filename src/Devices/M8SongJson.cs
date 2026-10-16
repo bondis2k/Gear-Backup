@@ -35,7 +35,7 @@ namespace GearBackup
                 var instrument = item as Dictionary<string, object>;
                 if (instrument == null) continue;
                 result.Instruments.Add(new M8InstrumentInfo { Slot = Int(instrument, "slot"), Kind = Text(instrument, "kind"),
-                    Name = Text(instrument, "name"), Sample = Text(instrument, "sample") });
+                    Name = Text(instrument, "name"), Sample = Text(instrument, "sample"), RawSample = RawText(instrument, "sample") });
             }
             var mixer = Object(song, "mixer");
             if (mixer != null)
@@ -61,8 +61,13 @@ namespace GearBackup
 
         static string Text(Dictionary<string, object> source, string key)
         {
+            return Clean(RawText(source, key));
+        }
+
+        static string RawText(Dictionary<string, object> source, string key)
+        {
             object value;
-            return source.TryGetValue(key, out value) && value != null ? Clean(Convert.ToString(value, CultureInfo.InvariantCulture)) : "";
+            return source.TryGetValue(key, out value) && value != null ? Convert.ToString(value, CultureInfo.InvariantCulture) : "";
         }
 
         // Names and paths come from a file anyone can hand you and are shown as they are, so control characters,

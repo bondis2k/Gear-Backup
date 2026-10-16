@@ -109,16 +109,18 @@ namespace GearBackup
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern bool GetFileInformationByHandle(SafeFileHandle handle, out DirectoryInformation information);
 
-        static string DirectoryIdentity(string path)
+        internal static string DirectoryIdentity(string path)
         {
             // BACKUP_SEMANTICS opens directories; OPEN_REPARSE_POINT inspects a substituted link itself.
-            using (var handle = CreateFileW(path.TrimEnd('\\'), 0, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero))
+            string full = Path.GetFullPath(path);
+            string opened = full.Length > Path.GetPathRoot(full).Length ? full.TrimEnd('\\') : full;
+            using (var handle = CreateFileW(opened, 0, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero))
             {
                 DirectoryInformation information;
                 if (handle.IsInvalid || !GetFileInformationByHandle(handle, out information))
-                    throw new IOException("Cannot identify retention directory: " + path, new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
+                    throw new IOException("Cannot identify directory: " + path, new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
                 if ((information.Attributes & (uint)FileAttributes.ReparsePoint) != 0)
-                    throw new UnsafePathException("Linked retention directory: " + path);
+                    throw new UnsafePathException("Linked directory: " + path);
                 return information.Volume + ":" + information.IndexHigh + ":" + information.IndexLow;
             }
         }

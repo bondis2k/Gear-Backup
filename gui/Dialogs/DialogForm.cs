@@ -20,6 +20,7 @@ namespace GearBackup.Gui
             layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(24), RowCount = 3, ColumnCount = 1 };
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var title = GuiTheme.Label(heading.Trim().TrimEnd(',', ':'), 12, GuiTheme.Ink); title.AutoSize = false; title.Dock = DockStyle.Fill;
+            title.UseMnemonic = false;
             title.Font = GuiTheme.Heading(12.5f);
             layout.Controls.Add(title, 0, 0);
             buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Padding = new Padding(0, 10, 0, 0) };

@@ -37,22 +37,41 @@ namespace GearBackup.Gui
 
         // Runs one operation on a background thread with its own context and cancellation, then reports the
         // result back on the UI thread.
-        void RunWorker(Func<OperationContext, OperationResult> action, bool previewOnly)
+        void RunWorker(Func<OperationContext, OperationResult> action, bool previewOnly, bool migration = false, Action<OperationResult> finished = null)
         {
             cancellation = new CancellationTokenSource();
             var context = new OperationContext(new GuiInteraction(form), cancellation.Token) { PreviewOnly = previewOnly };
-            form.PrepareOperation();
+            form.PrepareOperation(migration);
             Task.Factory.StartNew(delegate {
                 OperationResult result;
                 try { using (context.Activate()) result = action(context); }
                 catch (OperationCanceledException) { result = new OperationResult { Cancelled = true, Summary = "Operation cancelled." }; }
                 catch (Exception ex) { result = new OperationResult { ExitCode = 1, Title = "Could not complete operation", Summary = ex.Message + HintAfter(ex) }; }
                 form.AppendActivity(Environment.NewLine + (result.Summary ?? "No files changed.") + Environment.NewLine);
-                form.BeginInvoke((Action)delegate { form.DrainDisplay(); cancellation.Dispose(); cancellation = null; form.CompleteOperation(result, previewOnly); });
+                form.BeginInvoke((Action)delegate {
+                    form.DrainDisplay(); cancellation.Dispose(); cancellation = null; form.CompleteOperation(result, previewOnly);
+                    if (finished != null && !form.IsDisposed && !form.Disposing) finished(result);
+                });
             });
         }
 
         static string HintAfter(Exception error) { string hint = ErrorHints.For(error); return hint == null ? "" : " " + hint; }
+
+        internal void RunMigration(Config options, RestoreRequest request, string target, bool linkHistory, Action<M8MigrationReport> completed)
+        {
+            M8MigrationReport report = null;
+            var reader = M8SongReaders.Current;
+            RunWorker(context => {
+                try { report = M8CardMigration.Run(target, options, request, reader, linkHistory); }
+                catch (OperationCanceledException)
+                {
+                    report = new M8MigrationReport { Backup = request.Backup, Point = request.Point, Target = target,
+                        Operation = new OperationResult { Cancelled = true, OutputFolder = target,
+                            Summary = "Migration cancelled. Any completed files remain; verification or song checks may be incomplete." } };
+                }
+                return report.Operation;
+            }, false, true, result => completed(report ?? new M8MigrationReport { Operation = result, Backup = request.Backup, Point = request.Point, Target = target }));
+        }
 
         // Drives populate the source; MTP uses detection at backup time, never a previous drive path.
         internal void ShowDetected(SourceChoice found)

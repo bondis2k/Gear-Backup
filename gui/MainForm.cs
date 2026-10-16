@@ -61,11 +61,16 @@ namespace GearBackup.Gui
         readonly System.Windows.Forms.Timer displayTimer = new System.Windows.Forms.Timer { Interval = 150 };
         readonly GuiOperationRunner runner;
         bool closeAfterCancel;
+        bool cardMigrationOperation;
 
         public MainForm(bool designPreview, Config startupOptions = null)
         {
             runner = new GuiOperationRunner(this);
             songTab = new SongTab(this);
+            samplesTab = new M8SamplesTab(this, () => config.Clone(), () => source.Text, new GuiInteraction(this, p => { }));
+            samplesTab.RestoreRequested = PrepareSampleRestore;
+            migrationTab = new M8MigrationTab(this, () => config.Clone(), runner.RunMigration);
+            Disposed += delegate { if (samplesTab.BuildContent != null) samplesTab.BuildContent.Dispose(); };
             Text = AppIdentity.Name;
             // The window and taskbar always use the general icon embedded in the exe (build-gui.cmd adds
             // assets\Backup.ico); only the header picture changes when a device is detected.
@@ -234,6 +239,7 @@ namespace GearBackup.Gui
             inputLayout.Controls.Add(fields, 0, 4);
 
             var state = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 5, Margin = new Padding(0, 0, 0, 14), BackColor = GuiTheme.Background, Padding = new Padding(12) };
+            operationState = state;
             for (int i = 0; i < 5; i++) state.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             var resultHeader = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, WrapContents = true };
             resultHeader.Controls.Add(status); openFolder.Visible = false; resultHeader.Controls.Add(openFolder); resultHeader.Controls.Add(cancel);
@@ -245,6 +251,7 @@ namespace GearBackup.Gui
 
             // The activity card: a heading with the tools on the right, then the log.
             var activityCard = new CardPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(18, 12, 12, 14) };
+            activityArea = activityCard;
             var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = GuiTheme.Surface, RowCount = 3, ColumnCount = 2, Margin = Padding.Empty };
             activity.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             activity.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -511,6 +518,7 @@ namespace GearBackup.Gui
             start.Enabled = !busy; settings.Enabled = !busy;
             if (gearIcons != null) gearIcons.Enabled = !busy;
             workflowTabs.Enabled = !busy; backupMode.Enabled = restoreMode.Enabled = !busy;
+            migrationTab.UpdateAvailability();
             backupSetField.Enabled = !busy;
             restoreBackupField.Enabled = restoreDetails.Enabled = !busy;
             preview.Enabled = !busy && Selected != GuiOperation.Check; cancel.Enabled = busy;
@@ -544,6 +552,7 @@ namespace GearBackup.Gui
         public void ShowDevice(DeviceProfile device, string mode = null, bool cameraSettingsMode = false)
         {
             displayedDevice = device;
+            if (device == Devices.M8) samplesTab.SuggestCard(source.Text);
             // Gear Backup mode keeps all its tools when a device is identified; a device mode follows the device that is found.
             if (gearIcons != null && device != null && InDeviceMode) gearIcons.SetActive(GearIconStrip.For(device));
             UpdateArchiveRestoreNotice(); RefreshRestoreActionState();
@@ -582,11 +591,13 @@ namespace GearBackup.Gui
             }
             catch (Exception) { return null; }
         }
-        public void PrepareOperation()
+        public void PrepareOperation(bool migration = false)
         {
+            cardMigrationOperation = migration;
             operationProgressActive = true;
             lock (queueLock) { pendingLog.Length = 0; pendingProgress = null; }
             SetBusy(true);
+            RefreshWorkflowLayout();
             counts.Text = ""; counts.Visible = false; openFolder.Visible = false; outputFolder = null; latestProgress = null; elapsed.Restart();
             log.Clear();
         }
@@ -603,7 +614,7 @@ namespace GearBackup.Gui
                 result.Counts.Copied, result.Counts.Unchanged, result.Counts.Removed, result.Counts.Failed);
             counts.Visible = result.Counts != null;
             outputFolder = previewOnly ? null : result.OutputFolder;
-            openFolder.Text = Restoring ? "Open restore folder" : Selected == GuiOperation.ZipArchive ? "Open archive folder" : "Open backup folder";
+            openFolder.Text = cardMigrationOperation ? "Open replacement card" : Restoring ? "Open restore folder" : Selected == GuiOperation.ZipArchive ? "Open archive folder" : "Open backup folder";
             openFolder.Visible = !string.IsNullOrEmpty(outputFolder) && Directory.Exists(outputFolder);
             metrics.Text = "Elapsed " + FormatTime(result.Elapsed > TimeSpan.Zero ? result.Elapsed : elapsed.Elapsed);
             metrics.Visible = true;

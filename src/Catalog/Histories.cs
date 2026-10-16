@@ -102,6 +102,16 @@ namespace GearBackup
         // Checks the source against the backup location and returns this source's history folder.
         internal static string HistoryFor(Config config, string source)
         {
+            string linked = ProfileLinks.Find(config, source);
+            if (linked != null)
+            {
+                RejectRootLinks(linked);
+                string location = Path.Combine(ProfileLinks.BackupLocation(linked), AppIdentity.BackupsFolderName);
+                if (Within(location, source) || Within(source, location))
+                    throw new IOException("The backup folder and source must not contain one another.");
+                if (!Directory.Exists(linked)) throw new IOException("The linked backup history is unavailable: " + linked);
+                return linked;
+            }
             string histories = HistoriesRoot(config);
             if (Within(histories, source) || Within(source, histories))
                 throw new IOException("The backup folder and source must not contain one another.");

@@ -234,6 +234,7 @@ partial class Tests
                     new PreviewDialog(new OperationPlan { Label = "Review changes", Actions = new List<string> { "New: song.txt" } }),
                     new SelectionDialog("Choose backup", new List<string> { "Backup" }),
                     new ChoiceDialog("Continue?", new List<Option>()), new SearchDialog("Search", "Enter a name"),
+                    new SampleRestoreDialog("Restore Samples/kick.wav from the selected backup?"),
                     new CatalogDialog(owner, config, false, catalog), new CatalogDialog(owner, config, true, catalog),
                     new RecipeViewerDialog(owner, null), new RestoreBrowserDialog(owner, new Snapshot { Name = "Theme test" }), profiles.CreateProfilePrompt()
                 };

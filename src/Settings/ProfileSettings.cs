@@ -88,6 +88,13 @@ namespace GearBackup
         // The settings for a source, once its device is known (the current device).
         internal static Config ResolveSourceSettings(Config global, string source)
         {
+            string linked = ProfileLinks.Find(global, source);
+            if (linked != null)
+            {
+                Config effective = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(linked));
+                effective.BackupFolder = ProfileLinks.BackupLocation(linked);
+                return effective;
+            }
             return ResolveProfileSettings(global, CurrentDevice.Id, ProfileId(source, global.Profile));
         }
 
@@ -135,6 +142,11 @@ namespace GearBackup
         internal static List<string> ConfiguredBackupLocations(Config config)
         {
             var locations = new List<string> { config.BackupFolder };
+            foreach (string history in ProfileLinks.Read(config).Values)
+            {
+                string location = ProfileLinks.BackupLocation(history);
+                if (!locations.Exists(p => Rooted(p) == Rooted(location))) locations.Add(location);
+            }
             foreach (var section in ReadProfileSettings(config).Values)
             {
                 string value;

@@ -19,7 +19,7 @@ namespace GearBackup
     internal sealed class RestoreEngine
     {
         public OperationResult RunSelected(string targetRoot, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode,
-            string bundle, bool exact, Config config, OperationContext context, Action beforeRestore = null)
+            string bundle, bool exact, Config config, OperationContext context, Action beforeRestore = null, string planLabel = null)
         {
             var timer = System.Diagnostics.Stopwatch.StartNew();
             using (context.Activate())
@@ -29,7 +29,7 @@ namespace GearBackup
                     context.CheckCancellation();
                     targetRoot = Rooted(targetRoot);
                     RejectRootLinks(targetRoot);
-                    OperationResult result = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config, beforeRestore);
+                    OperationResult result = PlanRestore(targetRoot, snapshot, items, mode, bundle, exact, config, beforeRestore, planLabel);
                     result.Cancelled |= context.Cancellation.IsCancellationRequested;
                     result.Elapsed = timer.Elapsed;
                     return result;
@@ -67,7 +67,7 @@ namespace GearBackup
 
         // Returns a result with no title when the user cancels at a prompt (nothing was changed).
         OperationResult PlanRestore(string m8, Snapshot snapshot, List<RestoreEntry> items, RestoreMode mode, string bundle, bool exact,
-            Config config, Action beforeRestore)
+            Config config, Action beforeRestore, string planLabel)
         {
             var removals = new List<string>();
             var extraFolders = new List<string>();
@@ -187,7 +187,7 @@ namespace GearBackup
             }
             else OperationOutput.WriteLine("  Recovery copies: disabled (Recovery=no).");
             OperationOutput.WriteLine("  SHA-256 integrity comparison: " + (config.Verify ? "enabled" : "disabled (Verify=no)"));
-            if (!ShowPlan("Restore preview (" + identical + " unchanged)", plan, bytes, config.Preview, sizes)) return new OperationResult();
+            if (!ShowPlan((planLabel ?? "Restore preview") + " (" + identical + " unchanged)", plan, bytes, config.Preview, sizes)) return new OperationResult();
             if (exact && !AskYesNo("Remove " + removals.Count + " extra file(s) from the selected target?")) return new OperationResult();
             if (beforeRestore != null) beforeRestore();
             OperationResult result = new RestoreEngine().Run(m8, toCopy, removals, folders, extraFolders, targetHashes, config, OperationContext.Current);
