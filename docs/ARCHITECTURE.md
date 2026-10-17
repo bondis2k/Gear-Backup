@@ -112,7 +112,7 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 
 | Script | What it does |
 |---|---|
-| `build.cmd`, `build-gui.cmd` | Build `GearBackup.Core.dll` from `src` (recursively, without `src\Cli`), then the CLI (`src\Cli`) or the GUI (`gui`) against it, in the same folder. The GUI build also builds `m8_reader.dll` and the HTML manual. |
+| `build.cmd`, `build-gui.cmd` | Build `GearBackup.Core.dll` from `src` (recursively, without `src\Cli`), then the CLI (`src\Cli`) or the GUI (`gui`) against it, in `dist/app/` by default. The GUI build also places `m8_reader.dll`, all HTML manual variants and their images beside the app. An explicit output path overrides this directory, including for installer payloads. |
 | `build\build-native.ps1` | Builds the Rust reader (`-Test` runs its tests), remaps build paths and checks the DLL's protections. |
 | `build-installer.cmd` | Builds the installer and portable packages. |
 | `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. `-BuildDirectory path` overrides the build directory (relative paths start at the repository root). Defaults are `tests\.build\core` and `tests\.build\gui`, so both suites can run concurrently. |

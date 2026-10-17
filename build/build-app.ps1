@@ -12,9 +12,10 @@ $metadataPath = Join-Path $env:WINDIR 'System32\WinMetadata'
 # References to .NET Framework itself still come from its folder; only the compiler is newer.
 . (Join-Path $PSScriptRoot 'csharp-compiler.ps1')
 $compilerPath = Get-CSharpCompiler
-if (-not $Output) { $Output = if ($Target -eq 'GUI') { 'GearBackup.GUI.exe' } else { 'GearBackup.exe' } }
+if (-not $Output) { $Output = if ($Target -eq 'GUI') { 'dist\app\GearBackup.GUI.exe' } else { 'dist\app\GearBackup.exe' } }
 if (-not [IO.Path]::IsPathRooted($Output)) { $Output = Join-Path $projectRoot $Output }
 $outputDirectory = Split-Path $Output -Parent
+New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 $corePath = Join-Path $outputDirectory 'GearBackup.Core.dll'
 $sourceRoot = Join-Path $projectRoot 'src'
 $cliSources = @(Get-ChildItem -LiteralPath (Join-Path $sourceRoot 'Cli') -Filter '*.cs' | ForEach-Object FullName)

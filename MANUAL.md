@@ -1142,7 +1142,7 @@ The managed app targets .NET Framework and uses the modern Visual Studio/Build T
 From the repository root:
 
 ```powershell
-# Application build wrappers accept --no-pause.
+# Application build wrappers accept --no-pause; output goes to dist/app.
 .\build.cmd --no-pause
 .\build-gui.cmd --no-pause
 
@@ -1150,7 +1150,7 @@ From the repository root:
 pwsh -NoProfile -File .\installer\build-installer.ps1
 
 # All offline HTML editions from MANUAL.md.
-pwsh -NoProfile -File .\build\build-manual.ps1 -OutputDirectory .
+pwsh -NoProfile -File .\build\build-manual.ps1 -OutputDirectory .\dist\app
 
 # Core and GUI suites.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
@@ -1166,7 +1166,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run-native-import-te
 
 Packaging tests are `tests\run-installer-tests.ps1` and `tests\run-portable-tests.ps1`. They exercise installation/integration, not just compilation: read prerequisites before running. Installer tests refuse an already registered installation and should use an appropriate separate test environment. Some security fixtures require permission to create Windows links/junctions.
 
-Builds place `GearBackup.Core.dll` beside the apps and check native reader protections/imports. Distribute required libraries and Help assets with the programs. See the repository architecture document for internal component organization.
+Default application builds write executables, `GearBackup.Core.dll`, `m8_reader.dll`, HTML manuals and their images to `dist/app/`. Run the local build with `.\dist\app\GearBackup.GUI.exe` or `.\dist\app\GearBackup.exe`; portable settings live beside these executables. An optional second wrapper argument selects another executable path, for example `.\build.cmd --no-pause dist\custom\GearBackup.exe`; companion files follow that output directory. Installer builds use `dist/installer-payload/` and write packages/checksums to `dist/`. Builds check native reader protections/imports. Distribute required libraries and Help assets with the programs. See the repository architecture document for internal component organization.
 
 ## Glossary
 

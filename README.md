@@ -95,7 +95,9 @@ build.cmd --no-pause
 build-gui.cmd --no-pause
 ```
 
-These produce `GearBackup.exe`, `GearBackup.GUI.exe`, the shared `GearBackup.Core.dll` (keep it beside the executables) and five offline manuals (`Manual.html`, `Manual-original.html`, `Manual-original-dark.html`, `Manual-windows.html`, `Manual-retro.html`). Generated executables and personal settings are excluded from Git.
+These write to `dist/app/`: `GearBackup.exe`, `GearBackup.GUI.exe`, the shared `GearBackup.Core.dll`, `m8_reader.dll` and five offline manuals (`Manual.html`, `Manual-original.html`, `Manual-original-dark.html`, `Manual-windows.html`, `Manual-retro.html`). Manual images are copied to `dist/app/assets/manual/`. Keep this output together; launch `dist\app\GearBackup.GUI.exe` or `dist\app\GearBackup.exe`. Local portable settings are saved beside these executables. Generated output and personal settings are excluded from Git.
+
+Both build commands accept an optional second argument for an alternate executable path, for example `build.cmd --no-pause dist\custom\GearBackup.exe`. The shared DLL and GUI help files follow that executable's directory. Source documentation stays in the repository root.
 
 To build both installer packages, also install **Inno Setup 6.3 or newer**, then run:
 
