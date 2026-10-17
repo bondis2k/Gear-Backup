@@ -2,7 +2,7 @@
 rem Builds the CLI using the shared compiler setup.
 setlocal
 cd /d "%~dp0"
-set OUT=GearBackup.exe
+set OUT=dist\app\GearBackup.exe
 rem Optional second argument lets a build finish while the usual exe is running.
 if not "%~2"=="" set OUT=%~2
 

@@ -2,8 +2,8 @@
 # Usage: powershell -File assets\make-manual-pictures.ps1
 # The two GUI screenshots come from the app's synthetic preview (no real device or INI):
 # After build-gui.cmd --no-pause, run these commands from the repository root:
-# .\GearBackup.GUI.exe --render-preview assets\manual\gui-main.png
-# .\GearBackup.GUI.exe --render-settings assets\manual\gui-settings.png
+# .\dist\app\GearBackup.GUI.exe --render-preview assets\manual\gui-main.png
+# .\dist\app\GearBackup.GUI.exe --render-settings assets\manual\gui-settings.png
 param([string]$OutDir = (Join-Path $PSScriptRoot 'manual'))
 Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = 'Stop'
