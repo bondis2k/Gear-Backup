@@ -46,7 +46,7 @@ partial class Tests
         }
     }
 
-    [Test("MTP failure: completed transfers, backup isolation and reconnect")]
+    [Test("MTP failure: completed transfers, backup isolation and reconnect", Folder = "mtp-reconnect")]
     static void TestMtpPartialRunReconnect(string root)
     {
         var source = new FaultingMtpSource();
@@ -59,6 +59,7 @@ partial class Tests
         var context = new OperationContext(new TestInteraction(), CancellationToken.None);
         var prepared = Session.PrepareSource(config, new SourceChoice { Path = mirror, Detected = Devices.OP1Field, Mtp = mtp }, true, context);
         var initial = Session.RunPrepared(prepared, false, false, context);
+        Assert(initial.Succeeded && initial.OutputFolder != null, "initial backup completes before disconnect: " + initial.Summary);
         string point = ContentStore.Current(initial.OutputFolder).Name;
         Put(Path.Combine(mirror, "stale.wav"), "KEEP UNTIL SUCCESS");
         source.Data.File("a.wav", "NEW A", day.AddDays(1)); source.Data.File("b.wav", "NEW B", day.AddDays(1));
