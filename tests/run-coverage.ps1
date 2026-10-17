@@ -73,6 +73,6 @@ $covered = ($rows | Measure-Object Covered -Sum).Sum; $total = ($rows | Measure-
 $percent = if ($total) { [Math]::Round(100.0 * $covered / $total, 1) } else { 0 }
 $summary = $document.CoverageSession.Summary
 Write-Output "Core statement coverage: $percent% ($covered of $total). Branch coverage: $($summary.branchCoverage)%. Full list: $out\coverage-summary.csv"
-if ($testResult -ne 0) { Write-Warning 'Some tests failed; coverage reflects that run.' }
+if ($testResult -ne 0) { Write-Warning 'Some tests failed; coverage reflects that run.'; exit $testResult }
 if ($percent -lt $Minimum) { Write-Error "Coverage $percent% is below the required $Minimum%."; exit 1 }
 exit 0

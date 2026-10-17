@@ -16,6 +16,7 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - M8 Sample check has a **Check all songs on card** button, which scans songs recursively, reports missing samples per song, distinguishes unreadable songs and invalid references, and supports selection of per-song details, progress and cancellation.
 
 ### Fixed
+- Coverage reporting returns a failing test process's exit code even when coverage meets the minimum. Restore inventory reads are cancelled when superseded or closed, and obsolete results cannot replace the current backup selection.
 - Tracker checks use the 392-byte Mini instrument layout, retain legacy `.mti` sample checks, and lock scan inputs to prevent stale results. Project/file discovery streams bounded entries and reports incomplete checks instead of claiming all instruments are usable.
 - M8 migration locks its path inputs while copying and cancels superseded inventory loads. Saved card-history links reject ambiguous relative paths and report duplicate identities clearly.
 - The sample backup restore confirmation uses the application's theme, including its title bar, details and action buttons.

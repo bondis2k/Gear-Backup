@@ -24,8 +24,11 @@ namespace GearBackup.Gui
         string[] paths;
         string contextKey;
         int scan, pointScan;
+        CancellationTokenSource backupRead, pointRead;
         bool filling, loading, closed;
         M8SampleMatch pendingSample;
+        internal Func<Config, DeviceProfile, OperationContext, List<string>> BackupReader = RestoreCatalog.BackupsForDevice;
+        internal Func<string, DeviceProfile, OperationContext, RestoreSet> PointReader = RestoreCatalog.Load;
 
         internal RestoreSection(IRestoreSectionHost host) { this.host = host; }
 
@@ -40,7 +43,7 @@ namespace GearBackup.Gui
         {
             get
             {
-                return !host.Busy && !loading && set != null && points.SelectedItem is RestorePoint &&
+                return !closed && !host.Busy && !loading && set != null && points.SelectedItem is RestorePoint &&
                     (host.RestoreScope != 1 || (paths != null && paths.Length != 0));
             }
         }
@@ -56,6 +59,7 @@ namespace GearBackup.Gui
             backups.SelectedIndexChanged += delegate { if (!filling) LoadPoints(); };
             host.Hints.SetToolTip(backups, "All backups when no device is detected; matching backups when a device is detected. Detect again to refresh the list.");
             points.SelectedIndexChanged += delegate { paths = null; UpdateNotice(); };
+            panel.Disposed += delegate { Close(); };
             backupField = panel;
             return panel;
         }
@@ -83,9 +87,22 @@ namespace GearBackup.Gui
         }
 
         internal void SetEnabled(bool enabled) { backupField.Enabled = details.Enabled = enabled; }
-        internal void Close() { closed = true; }
+        internal void Close() { closed = true; CancelBackupRead(); CancelPointRead(); }
         // The next refresh reads the backups again even if nothing about the device or location changed.
-        internal void ForgetContext() { contextKey = null; }
+        internal void ForgetContext()
+        {
+            contextKey = null; CancelBackupRead(); CancelPointRead();
+            set = null; paths = null; loading = false;
+            filling = true;
+            try { backups.Items.Clear(); points.Items.Clear(); }
+            finally { filling = false; }
+            backups.Enabled = points.Enabled = browse.Enabled = exact.Enabled = false;
+            UpdateNotice();
+        }
+
+        // Only the UI thread owns these sources. Each async reader disposes its own source after its worker ends.
+        void CancelBackupRead() { ++scan; if (backupRead != null) backupRead.Cancel(); backupRead = null; }
+        void CancelPointRead() { ++pointScan; if (pointRead != null) pointRead.Cancel(); pointRead = null; }
 
         // Shows the controls only while Restore is the selected operation.
         internal void RefreshControls()
@@ -128,16 +145,23 @@ namespace GearBackup.Gui
             backupCaption.Text = device == null ? "Available backups · all devices" : "Backups for " + device.Name;
             backups.AccessibleName = backupCaption.Text;
             Config options;
-            try { options = host.CaptureOptions(); } catch (Exception ex) when (ExpectedFailure.Is(ex)) { return; }
+            try { options = host.CaptureOptions(); }
+            catch (Exception ex) when (ExpectedFailure.Is(ex))
+            {
+                ForgetContext(); notice.Text = "Cannot list backups: " + ex.Message; return;
+            }
             string key = (device == null ? "" : device.Id) + "|" + options.BackupFolder;
             if (!force && key == contextKey) { if (set != null) UpdateNotice(); return; }
             bool sameContext = key == contextKey;
             contextKey = key;
-            int current = ++scan;
-            ++pointScan;
+            CancelBackupRead(); CancelPointRead();
+            int current = scan;
+            var cancellation = backupRead = new CancellationTokenSource();
+            var read = BackupReader;
+            var interaction = host.QuietInteraction();
             var previous = sameContext ? backups.SelectedItem as BackupItem : null;
             string oldPath = previous == null ? null : previous.Path;
-            loading = true; backups.Enabled = points.Enabled = browse.Enabled = false;
+            loading = true; backups.Enabled = points.Enabled = browse.Enabled = exact.Enabled = false;
             host.RefreshActionState();
             set = null; paths = null;
             notice.Text = device == null ? "Loading backups for all devices…" : "Loading " + device.Name + " backups…";
@@ -145,17 +169,19 @@ namespace GearBackup.Gui
             try
             {
                 found = await Task.Run(delegate {
-                    using (new OperationContext(host.QuietInteraction(), CancellationToken.None) { PreviewOnly = true, Device = device }.Activate())
-                        return RestoreCatalog.BackupsForDevice(options, device);
+                    var context = new OperationContext(interaction, cancellation.Token) { PreviewOnly = true, Device = device };
+                    using (context.Activate()) return read(options, device, context);
                 });
             }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; } // Superseded or closed: the new request owns the UI.
             catch (Exception ex) { error = ex.Message; } // shown in the notice
+            finally { if (ReferenceEquals(backupRead, cancellation)) backupRead = null; cancellation.Dispose(); }
             host.RunOnUi(delegate { FinishBackups(current, found, oldPath, device, error); });
         }
 
         void FinishBackups(int current, List<string> found, string oldPath, DeviceProfile device, string error)
         {
-            if (current != scan) return;
+            if (closed || current != scan) return;
             filling = true;
             try
             {
@@ -176,36 +202,47 @@ namespace GearBackup.Gui
             }
             finally { filling = false; }
             loading = false; backups.Enabled = found.Count > 0 && !host.Busy;
-            if (found.Count == 0) notice.Text = error != null ? "Cannot list backups: " + error : device == null ? "No backups found at the configured backup locations." : "No backups found for " + device.Name + ".";
+            if (found.Count == 0)
+            {
+                if (error != null) contextKey = null; // A failed location can be retried without changing settings.
+                notice.Text = error != null ? "Cannot list backups: " + error : device == null ? "No backups found at the configured backup locations." : "No backups found for " + device.Name + ".";
+            }
             else LoadPoints();
             host.RefreshActionState();
         }
 
         async void LoadPoints()
         {
-            int current = ++pointScan;
+            if (closed) return;
+            CancelPointRead();
+            int current = pointScan;
             var backup = backups.SelectedItem as BackupItem;
             DeviceProfile device = host.DisplayedDevice;
             set = null; paths = null;
             points.Items.Clear();
             if (backup == null) { loading = false; UpdateNotice(); return; }
-            loading = true; points.Enabled = browse.Enabled = false;
+            var cancellation = pointRead = new CancellationTokenSource();
+            var read = PointReader;
+            var interaction = host.QuietInteraction();
+            loading = true; points.Enabled = browse.Enabled = exact.Enabled = false;
             host.RefreshActionState();
             notice.Text = "Loading restore points from SQLite…";
             RestoreSet loaded = null; string error = null;
             try { loaded = await Task.Run(delegate {
-                using (new OperationContext(host.QuietInteraction(), CancellationToken.None) { PreviewOnly = true, Device = device }.Activate())
-                    return RestoreCatalog.Load(backup.Path, device);
+                var context = new OperationContext(interaction, cancellation.Token) { PreviewOnly = true, Device = device };
+                using (context.Activate()) return read(backup.Path, device, context);
             }); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; } // Superseded or closed: never replace the current selection.
             catch (Exception ex) { error = ex.Message; } // shown in the notice
+            finally { if (ReferenceEquals(pointRead, cancellation)) pointRead = null; cancellation.Dispose(); }
             host.RunOnUi(delegate { FinishPoints(current, loaded, error); });
         }
 
         void FinishPoints(int current, RestoreSet loaded, string error)
         {
-            if (current != pointScan) return;
+            if (closed || current != pointScan) return;
             loading = false; set = loaded;
-            if (loaded == null) { notice.Text = "Cannot read backup: " + error; return; }
+            if (loaded == null) { UpdateNotice(); notice.Text = "Cannot read backup: " + error; return; }
             foreach (var point in loaded.Points) points.Items.Add(point);
             if (points.Items.Count > 0) points.SelectedIndex = 0;
             points.Enabled = !host.Busy && loaded.Points.Count > 0;
@@ -234,7 +271,7 @@ namespace GearBackup.Gui
             var backup = backups.SelectedItem as BackupItem;
             var point = points.SelectedItem as RestorePoint;
             int scope = host.RestoreScope;
-            if (loading || set == null || backup == null || point == null) throw new IOException("Choose a backup and restore point first.");
+            if (closed || loading || set == null || backup == null || point == null) throw new IOException("Choose a backup and restore point first.");
             if (scope == 1 && (paths == null || paths.Length == 0)) throw new IOException("Click Choose files and check the folders or files to restore.");
             return new RestoreRequest { Backup = backup.Path, Point = point.Id, Stamp = RestoreCatalog.Stamp(point.Snapshot), DeviceId = set.Device.Id,
                 Paths = scope == 1 ? (string[])paths.Clone() : null, Exact = scope == 0 && exact.Enabled && exact.Checked };
