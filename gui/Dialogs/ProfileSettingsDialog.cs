@@ -203,37 +203,10 @@ namespace GearBackup.Gui
                 AccessibleName = "Use default for " + setting.Label, Margin = new Padding(0, 5, 0, 5) };
             row.Controls.Add(useDefault);
             var editorRow = new Panel { Dock = DockStyle.Top, Height = 42, Enabled = custom };
-            Control editor;
-            if (setting.Choices != null)
-            {
-                var list = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
-                GuiTheme.StyleComboBox(list);
-                Config normalized = inherited.Clone(); ApplySetting(normalized, setting.Key, value);
-                foreach (string choice in setting.Choices) list.Items.Add(new ValueChoice { Value = choice, Label = FriendlyValue(setting, choice) });
-                for (int i = 0; i < list.Items.Count; i++) if (((ValueChoice)list.Items[i]).Value == setting.Get(normalized)) list.SelectedIndex = i;
-                editor = list;
-            }
-            else if (setting.Location)
-            {
-                var path = new TextBox { Text = value, Dock = DockStyle.Fill };
-                var browse = GuiTheme.Button("Browse…", false); browse.Dock = DockStyle.Right; browse.Width = 100;
-                browse.Click += delegate { using (var picker = new FolderPickerDialog("Choose " + setting.Label.ToLowerInvariant(), System.IO.Directory.Exists(path.Text) ? path.Text : null, true)) if (picker.ShowDialog(this) == DialogResult.OK) path.Text = picker.SelectedPath; };
-                editorRow.Controls.Add(browse); editor = path;
-            }
-            else
-            {
-                int number; int.TryParse(value, out number);
-                editor = new NumericUpDown { Minimum = 0, Maximum = int.MaxValue, Value = Math.Max(0, number), Dock = DockStyle.Fill };
-            }
+            Control editor = CreateEditor(setting, inherited, value, editorRow);
             editor.Name = "ProfileValue_" + setting.Key; editor.AccessibleName = setting.Label;
             editorRow.Controls.Add(editor); editor.BringToFront(); row.Controls.Add(editorRow);
-            string help = setting.Key == "KeepBackups" ? "0 keeps everything." :
-                setting.Key == "Recovery" ? "Save existing files before restore replaces or removes them." :
-                setting.Key == "RecoveryFolder" ? "Leave blank to use the automatic recovery location." :
-                setting.Key == "Verify" ? "Read copies back to check their integrity. Adds time." :
-                setting.Key == "Thorough" ? "Compare contents instead of size and date. Adds reading time." :
-                setting.Key == "Preview" ? "Review the file plan before copying." :
-                setting.Key == "MaxNameLength" ? "0 disables name-length warnings." : "";
+            string help = HelpText(setting);
             if (help.Length > 0) row.Controls.Add(GuiTheme.Label(help, 9, GuiTheme.Muted));
             var field = new PreferenceField { Setting = setting, UseDefault = useDefault, Editor = editor, EditorRow = editorRow };
             fields.Add(field); page.Controls.Add(row);
@@ -255,6 +228,41 @@ namespace GearBackup.Gui
             editor.TextChanged += delegate { Changed(); };
             var combo = editor as ComboBox; if (combo != null) combo.SelectedIndexChanged += delegate { Changed(); };
             var numeric = editor as NumericUpDown; if (numeric != null) numeric.ValueChanged += delegate { Changed(); };
+        }
+
+        // The control that edits a setting: a list of choices, a path with a Browse button, or a number.
+        Control CreateEditor(Setting setting, Config inherited, string value, Panel editorRow)
+        {
+            if (setting.Choices != null)
+            {
+                var list = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+                GuiTheme.StyleComboBox(list);
+                Config normalized = inherited.Clone(); ApplySetting(normalized, setting.Key, value);
+                foreach (string choice in setting.Choices) list.Items.Add(new ValueChoice { Value = choice, Label = FriendlyValue(setting, choice) });
+                for (int i = 0; i < list.Items.Count; i++) if (((ValueChoice)list.Items[i]).Value == setting.Get(normalized)) list.SelectedIndex = i;
+                return list;
+            }
+            if (setting.Location)
+            {
+                var path = new TextBox { Text = value, Dock = DockStyle.Fill };
+                var browse = GuiTheme.Button("Browse…", false); browse.Dock = DockStyle.Right; browse.Width = 100;
+                browse.Click += delegate { using (var picker = new FolderPickerDialog("Choose " + setting.Label.ToLowerInvariant(), System.IO.Directory.Exists(path.Text) ? path.Text : null, true)) if (picker.ShowDialog(this) == DialogResult.OK) path.Text = picker.SelectedPath; };
+                editorRow.Controls.Add(browse);
+                return path;
+            }
+            int number; int.TryParse(value, out number);
+            return new NumericUpDown { Minimum = 0, Maximum = int.MaxValue, Value = Math.Max(0, number), Dock = DockStyle.Fill };
+        }
+
+        static string HelpText(Setting setting)
+        {
+            return setting.Key == "KeepBackups" ? "0 keeps everything." :
+                setting.Key == "Recovery" ? "Save existing files before restore replaces or removes them." :
+                setting.Key == "RecoveryFolder" ? "Leave blank to use the automatic recovery location." :
+                setting.Key == "Verify" ? "Read copies back to check their integrity. Adds time." :
+                setting.Key == "Thorough" ? "Compare contents instead of size and date. Adds reading time." :
+                setting.Key == "Preview" ? "Review the file plan before copying." :
+                setting.Key == "MaxNameLength" ? "0 disables name-length warnings." : "";
         }
         static string FriendlyValue(Setting setting, string value)
         {

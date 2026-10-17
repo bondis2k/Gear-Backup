@@ -14,6 +14,19 @@ namespace GearBackup
         {
             context = context ?? OperationContext.Current;
             context.CheckCancellation();
+            ulong count, size, offset;
+            long boundary;
+            LocateDirectory(file, context, out count, out size, out offset, out boundary);
+            if (maxEntries < 0 || count > (ulong)maxEntries) throw new IOException("ZIP entry count exceeds the restore limit.");
+            if (size > (ulong)MaxDirectoryBytes) throw new IOException("ZIP central directory exceeds the memory budget.");
+            if (offset > (ulong)boundary || size != (ulong)boundary - offset) throw Invalid();
+            WalkDirectory(file, count, offset, boundary, maxEntries, context);
+            file.Position = 0;
+        }
+
+        // Finds the end-of-central-directory record (and the ZIP64 one when present) and returns where the directory is.
+        static void LocateDirectory(Stream file, OperationContext context, out ulong count, out ulong size, out ulong offset, out long boundary)
+        {
             long length = file.Length;
             if (length < 22) throw Invalid();
             // Only the EOCD and its bounded comment can follow the central directory.
@@ -25,8 +38,9 @@ namespace GearBackup
                 if (U32(tail, i) == 0x06054b50) { end = i; break; }
             if (end < 0 || end + 22 + U16(tail, end + 20) != tail.Length ||
                 U16(tail, end + 4) != 0 || U16(tail, end + 6) != 0) throw Invalid();
-            long endOffset = length - tailLength + end, boundary = endOffset;
-            ulong count = U16(tail, end + 10), size = U32(tail, end + 12), offset = U32(tail, end + 16);
+            long endOffset = length - tailLength + end;
+            boundary = endOffset;
+            count = U16(tail, end + 10); size = U32(tail, end + 12); offset = U32(tail, end + 16);
             if (U16(tail, end + 8) != count) throw Invalid();
             bool needs64 = count == ushort.MaxValue || size == uint.MaxValue || offset == uint.MaxValue;
             byte[] locator = new byte[20];
@@ -37,27 +51,30 @@ namespace GearBackup
                 has64 = U32(locator, 0) == 0x07064b50;
             }
             if (needs64 && !has64) throw Invalid();
-            if (has64)
-            {
-                if (U32(locator, 4) != 0 || U32(locator, 16) != 1) throw Invalid();
-                ulong recordOffset = U64(locator, 8);
-                if (recordOffset > (ulong)Math.Max(0, endOffset - 20 - 56)) throw Invalid();
-                var record = new byte[56]; file.Position = (long)recordOffset; ReadExactly(file, record, record.Length, context);
-                ulong recordSize = U64(record, 4);
-                if (U32(record, 0) != 0x06064b50 || recordSize < 44 || recordSize > 65536 ||
-                    recordOffset + 12 + recordSize != (ulong)(endOffset - 20) || U32(record, 16) != 0 || U32(record, 20) != 0 ||
-                    U64(record, 24) != U64(record, 32)) throw Invalid();
-                ulong count64 = U64(record, 32), size64 = U64(record, 40), offset64 = U64(record, 48);
-                if ((count != ushort.MaxValue && count != count64) || (size != uint.MaxValue && size != size64) ||
-                    (offset != uint.MaxValue && offset != offset64)) throw Invalid();
-                count = count64; size = size64; offset = offset64; boundary = (long)recordOffset;
-            }
-            if (maxEntries < 0 || count > (ulong)maxEntries) throw new IOException("ZIP entry count exceeds the restore limit.");
-            if (size > (ulong)MaxDirectoryBytes) throw new IOException("ZIP central directory exceeds the memory budget.");
-            if (offset > (ulong)boundary || size != (ulong)boundary - offset) throw Invalid();
+            if (has64) ApplyZip64(file, locator, endOffset, context, ref count, ref size, ref offset, ref boundary);
+        }
+
+        static void ApplyZip64(Stream file, byte[] locator, long endOffset, OperationContext context, ref ulong count, ref ulong size, ref ulong offset, ref long boundary)
+        {
+            if (U32(locator, 4) != 0 || U32(locator, 16) != 1) throw Invalid();
+            ulong recordOffset = U64(locator, 8);
+            if (recordOffset > (ulong)Math.Max(0, endOffset - 20 - 56)) throw Invalid();
+            var record = new byte[56]; file.Position = (long)recordOffset; ReadExactly(file, record, record.Length, context);
+            ulong recordSize = U64(record, 4);
+            if (U32(record, 0) != 0x06064b50 || recordSize < 44 || recordSize > 65536 ||
+                recordOffset + 12 + recordSize != (ulong)(endOffset - 20) || U32(record, 16) != 0 || U32(record, 20) != 0 ||
+                U64(record, 24) != U64(record, 32)) throw Invalid();
+            ulong count64 = U64(record, 32), size64 = U64(record, 40), offset64 = U64(record, 48);
+            if ((count != ushort.MaxValue && count != count64) || (size != uint.MaxValue && size != size64) ||
+                (offset != uint.MaxValue && offset != offset64)) throw Invalid();
+            count = count64; size = size64; offset = offset64; boundary = (long)recordOffset;
+        }
+
+        // Reads every central-directory header, bounding the entry count and the name, extra and comment sizes.
+        static void WalkDirectory(Stream file, ulong count, ulong offset, long directoryEnd, int maxEntries, OperationContext context)
+        {
             file.Position = (long)offset;
             var header = new byte[46];
-            long directoryEnd = boundary;
             ulong actual = 0;
             while (file.Position < directoryEnd)
             {
@@ -74,7 +91,6 @@ namespace GearBackup
                 file.Position += skip;
             }
             if (actual != count) throw new IOException("ZIP entry count does not match its central directory.");
-            file.Position = 0;
         }
 
         static void ReadExactly(Stream input, byte[] bytes, int count, OperationContext context)

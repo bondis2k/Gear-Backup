@@ -129,48 +129,9 @@ namespace GearBackup.Gui
                     SetSongTabVisible(device && gearIcons.Active.Device == Devices.M8);
                     TabPage first = workflowTabs.TabPages[1], second = workflowTabs.TabPages[2];
                     Control sampleContent = samplesTab.BuildContent;
-                    deviceToolParking.Controls.Add(sampleContent);
-                    deviceToolParking.Controls.Add(migrationTab.Content);
-                    deviceToolParking.Controls.Add(trackerTab.InspectorContent);
-                    deviceToolParking.Controls.Add(trackerTab.CheckContent);
-                    for (int i = 0; i < 2; i++)
-                    {
-                        if (devicePlaceholders[i] == null)
-                            devicePlaceholders[i] = new Label { Name = "GearPlaceholder" + (i + 1), AutoSize = true, Dock = DockStyle.Top,
-                                ForeColor = GuiTheme.Muted, Font = GuiTheme.Font(10), Padding = new Padding(4, 12, 0, 0), MaximumSize = new Size(700, 0) };
-                        TabPage page = i == 0 ? first : second;
-                        if (devicePlaceholders[i].Parent != null) devicePlaceholders[i].Parent.Controls.Remove(devicePlaceholders[i]);
-                        if (device) page.Controls.Add(devicePlaceholders[i]);
-                    }
-                    if (device)
-                    {
-                        if (inputs.Parent != null) inputs.Parent.Controls.Remove(inputs);
-                        first.Text = FirstDeviceTab; second.Text = SecondDeviceTab;
-                        string name = gearIcons.Active.Name;
-                        devicePlaceholders[0].Text = "Tools for the " + name + " will be placed here.";
-                        devicePlaceholders[1].Text = "More " + name + " features are planned for this tab.";
-                        if (gearIcons.Active.Device == Devices.M8)
-                        {
-                            first.Controls.Remove(devicePlaceholders[0]);
-                            first.Text = "Sample check";
-                            first.Controls.Add(sampleContent);
-                            samplesTab.Activate();
-                            second.Controls.Remove(devicePlaceholders[1]);
-                            second.Text = "Card migration";
-                            second.Controls.Add(migrationTab.Content);
-                            migrationTab.Activate();
-                        }
-                        else if (gearIcons.Active.Device == Devices.TrackerMini)
-                        {
-                            first.Controls.Remove(devicePlaceholders[0]);
-                            first.Text = "Project inspector";
-                            first.Controls.Add(trackerTab.InspectorContent);
-                            second.Controls.Remove(devicePlaceholders[1]);
-                            second.Text = "Instrument check";
-                            second.Controls.Add(trackerTab.CheckContent);
-                            trackerTab.Activate();
-                        }
-                    }
+                    ParkDeviceTools(sampleContent);
+                    ResetPlaceholders(first, second, device);
+                    if (device) ShowDeviceTools(first, second, sampleContent);
                     else
                     {
                         first.Text = "Backup"; second.Text = "Restore";
@@ -180,6 +141,60 @@ namespace GearBackup.Gui
                 finally { synchronizingNavigation = previous; }
                 if (!device && (workflowTabs.SelectedIndex == 1 || workflowTabs.SelectedIndex == 2)) ShowOperationTab();
                 RefreshWorkflowLayout();
+            }
+        }
+
+        // The device tools leave the tabs while another view is shown; they wait in a hidden parking panel.
+        void ParkDeviceTools(Control sampleContent)
+        {
+            deviceToolParking.Controls.Add(sampleContent);
+            deviceToolParking.Controls.Add(migrationTab.Content);
+            deviceToolParking.Controls.Add(trackerTab.InspectorContent);
+            deviceToolParking.Controls.Add(trackerTab.CheckContent);
+        }
+
+        // Puts each tab's placeholder label in place for a device view, and takes them out for the Gear Backup view.
+        void ResetPlaceholders(TabPage first, TabPage second, bool device)
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                if (devicePlaceholders[i] == null)
+                    devicePlaceholders[i] = new Label { Name = "GearPlaceholder" + (i + 1), AutoSize = true, Dock = DockStyle.Top,
+                        ForeColor = GuiTheme.Muted, Font = GuiTheme.Font(10), Padding = new Padding(4, 12, 0, 0), MaximumSize = new Size(700, 0) };
+                TabPage page = i == 0 ? first : second;
+                if (devicePlaceholders[i].Parent != null) devicePlaceholders[i].Parent.Controls.Remove(devicePlaceholders[i]);
+                if (device) page.Controls.Add(devicePlaceholders[i]);
+            }
+        }
+
+        // The two tabs of a device view: its own tools, or placeholders for a device that has none yet.
+        void ShowDeviceTools(TabPage first, TabPage second, Control sampleContent)
+        {
+            if (inputs.Parent != null) inputs.Parent.Controls.Remove(inputs);
+            first.Text = FirstDeviceTab; second.Text = SecondDeviceTab;
+            string name = gearIcons.Active.Name;
+            devicePlaceholders[0].Text = "Tools for the " + name + " will be placed here.";
+            devicePlaceholders[1].Text = "More " + name + " features are planned for this tab.";
+            if (gearIcons.Active.Device == Devices.M8)
+            {
+                first.Controls.Remove(devicePlaceholders[0]);
+                first.Text = "Sample check";
+                first.Controls.Add(sampleContent);
+                samplesTab.Activate();
+                second.Controls.Remove(devicePlaceholders[1]);
+                second.Text = "Card migration";
+                second.Controls.Add(migrationTab.Content);
+                migrationTab.Activate();
+            }
+            else if (gearIcons.Active.Device == Devices.TrackerMini)
+            {
+                first.Controls.Remove(devicePlaceholders[0]);
+                first.Text = "Project inspector";
+                first.Controls.Add(trackerTab.InspectorContent);
+                second.Controls.Remove(devicePlaceholders[1]);
+                second.Text = "Instrument check";
+                second.Controls.Add(trackerTab.CheckContent);
+                trackerTab.Activate();
             }
         }
 

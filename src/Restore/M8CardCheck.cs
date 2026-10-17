@@ -31,6 +31,28 @@ namespace GearBackup
             PathSafety.RejectRootLinks(root);
             if (!Directory.Exists(root)) throw new IOException("The selected M8 card folder is unavailable.");
             var report = new M8CardReport();
+            List<string> songs = FindSongs(root, report, context);
+            foreach (string relative in songs)
+            {
+                context.CheckCancellation();
+                var song = new M8CardSongResult { Relative = relative };
+                try
+                {
+                    string path = PathSafety.SafePath(root, relative);
+                    song.Samples = M8SampleCheck.Run(reader.Read(path), root, null, path);
+                }
+                catch (Exception ex) when (ex is M8SongException || ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
+                { song.Error = ex.Message; }
+                report.Songs.Add(song);
+                if (progress != null) progress(report.Songs.Count, relative);
+            }
+            context.CheckCancellation();
+            return report;
+        }
+
+        // The card's .m8s songs (relative paths, sorted). Linked paths are skipped and limits stop the scan; both are warnings.
+        static List<string> FindSongs(string root, M8CardReport report, OperationContext context)
+        {
             var folders = new Stack<string>(); folders.Push(root);
             var songs = new List<string>();
             int entries = 0;
@@ -71,22 +93,7 @@ namespace GearBackup
             }
             if (limit) Warn(report, "Scan incomplete: reached the limit of " + MaxSongs + " songs or " + MaxEntries + " filesystem entries.");
             songs.Sort(StringComparer.OrdinalIgnoreCase);
-            foreach (string relative in songs)
-            {
-                context.CheckCancellation();
-                var song = new M8CardSongResult { Relative = relative };
-                try
-                {
-                    string path = PathSafety.SafePath(root, relative);
-                    song.Samples = M8SampleCheck.Run(reader.Read(path), root, null, path);
-                }
-                catch (Exception ex) when (ex is M8SongException || ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException)
-                { song.Error = ex.Message; }
-                report.Songs.Add(song);
-                if (progress != null) progress(report.Songs.Count, relative);
-            }
-            context.CheckCancellation();
-            return report;
+            return songs;
         }
 
         static void Warn(M8CardReport report, string text)

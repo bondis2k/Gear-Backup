@@ -87,75 +87,14 @@ namespace GearBackup
                 ContentStore.RequireContentStore(backup);
                 using (var db = new SqliteDatabase(local, false))
                 {
-                    using (var version = db.Prepare("PRAGMA user_version"))
-                        if (!version.Read() || version.Number(0) != SchemaVersion) return false;
-                    using (var id = db.Prepare("PRAGMA application_id"))
-                        if (!id.Read() || id.Number(0) != ApplicationId) return false;
+                    if (!HasCurrentSchema(db)) return false;
                     db.Execute("PRAGMA journal_mode=OFF");
                     db.Execute("PRAGMA synchronous=OFF");
                     db.Execute("BEGIN IMMEDIATE");
-                    var known = new HashSet<string>(StringComparer.Ordinal);
-                    using (var points = db.Prepare("SELECT name FROM restore_points"))
-                        while (points.Read()) known.Add(points.String(0));
-                    string snapshots = SnapshotRoot(backup);
-                    RejectRootLinks(snapshots);
-                    var onDisk = new Dictionary<string, string>(StringComparer.Ordinal);
-                    if (Directory.Exists(snapshots))
-                        foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest")) onDisk[Path.GetFileNameWithoutExtension(manifest)] = manifest;
-                    var fresh = new List<string>();
-                    foreach (string name in onDisk.Keys) if (!known.Contains(name)) fresh.Add(name);
-                    fresh.Sort(StringComparer.Ordinal);
-                    foreach (string name in known) if (!onDisk.ContainsKey(name)) return false;
-                    if (known.Count == 0 || fresh.Count > 16) return false;
-                    // Small per-point records can change after a point is saved (a rename, a repaired capture time); a mismatch means
-                    // the catalog is out of date in a way only a full rebuild fixes.
-                    var stored = new Dictionary<string, string>(StringComparer.Ordinal);
-                    using (var meta = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_%'"))
-                        while (meta.Read()) stored[meta.String(0)] = meta.String(1);
-                    foreach (string name in known)
-                    {
-                        context.CheckCancellation();
-                        string taken, kind, custom;
-                        stored.TryGetValue("point_taken:" + name, out taken); stored.TryGetValue("point_kind:" + name, out kind); stored.TryGetValue("point_name:" + name, out custom);
-                        if (taken != RestorePointNames.TakenUtc(backup, name).ToString("O", CultureInfo.InvariantCulture) || kind != ReadPointKind(backup, name) ||
-                            custom != RestorePointNames.ReadName(backup, name)) return false;
-                    }
-
-                    var objects = new ObjectChecks(backup);
-                    var old = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
-                    using (var rows = db.Prepare("SELECT path,size,modified_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files WHERE snapshot_id='current'"))
-                        while (rows.Read())
-                            old[rows.String(0)] = new CatalogEntry { Path = rows.String(0), Size = rows.String(1) == null ? -1 : rows.Number(1), ModifiedTicks = rows.Number(2),
-                                Hash = rows.String(3), Present = rows.Number(4) != 0, VerifiedUtc = rows.String(5), Result = rows.String(6), ObservedHash = rows.String(7) };
-                    db.Execute("DELETE FROM files WHERE snapshot_id='current'");
-                    using (var insert = db.Prepare("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
-                    {
-                        Snapshot current = ContentStore.Current(backup, objects);
-                        foreach (string folder in current.Folders) InsertEntry(insert, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
-                        foreach (var item in current.Files)
-                        {
-                            context.CheckCancellation();
-                            var entry = new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
-                                ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) };
-                            CatalogEntry prior;
-                            if (old.TryGetValue(item.Relative, out prior)) CarryCheck(entry, prior);
-                            InsertEntry(insert, entry);
-                        }
-                        var validNames = new HashSet<string>(StringComparer.Ordinal);
-                        foreach (string name in fresh)
-                        {
-                            context.CheckCancellation();
-                            Snapshot snapshot = ReadSnapshot(backup, onDisk[name], objects, validNames);
-                            foreach (string folder in snapshot.Folders) InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
-                            foreach (var item in snapshot.Files)
-                                InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = item.Relative, Hash = item.Hash,
-                                    Size = item.Size, ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
-                            db.Execute("INSERT INTO restore_points VALUES (?)", snapshot.Name);
-                            db.Execute("INSERT INTO metadata VALUES (?,?)", "point_kind:" + snapshot.Name, ReadPointKind(backup, snapshot.Name));
-                            db.Execute("INSERT INTO metadata VALUES (?,?)", "point_taken:" + snapshot.Name, snapshot.TakenUtc.ToString("O", CultureInfo.InvariantCulture));
-                            if (snapshot.CustomName != null) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + snapshot.Name, snapshot.CustomName);
-                        }
-                    }
+                    Dictionary<string, string> onDisk;
+                    List<string> fresh;
+                    if (!FindFreshPoints(backup, db, context, out onDisk, out fresh)) return false;
+                    ReplaceCurrentAndAddPoints(backup, db, onDisk, fresh, context);
                     SetMetadata(db, "built_utc", DateTime.UtcNow.ToString("O"));
                     SetMetadata(db, "app_version", AppIdentity.Version);
                     SetMetadata(db, "backup_name", BackupSetNames.Read(backup));
@@ -171,6 +110,96 @@ namespace GearBackup
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is InvalidOperationException || ex is ArgumentException)
             { return false; }
             finally { if (created) { FileCopy.TryDelete(local); FileCopy.TryDelete(local + "-journal"); } }
+        }
+
+        static bool HasCurrentSchema(SqliteDatabase db)
+        {
+            using (var version = db.Prepare("PRAGMA user_version"))
+                if (!version.Read() || version.Number(0) != SchemaVersion) return false;
+            using (var id = db.Prepare("PRAGMA application_id"))
+                return id.Read() && id.Number(0) == ApplicationId;
+        }
+
+        // The restore points on disk that the catalog does not know yet. False when the catalog can't be brought up to date by
+        // adding points: a stored point is gone or changed, there are none stored, or too many are new.
+        static bool FindFreshPoints(string backup, SqliteDatabase db, OperationContext context, out Dictionary<string, string> onDisk, out List<string> fresh)
+        {
+            onDisk = new Dictionary<string, string>(StringComparer.Ordinal);
+            fresh = new List<string>();
+            var known = new HashSet<string>(StringComparer.Ordinal);
+            using (var points = db.Prepare("SELECT name FROM restore_points"))
+                while (points.Read()) known.Add(points.String(0));
+            string snapshots = SnapshotRoot(backup);
+            RejectRootLinks(snapshots);
+            if (Directory.Exists(snapshots))
+                foreach (string manifest in Directory.GetFiles(snapshots, "*.manifest")) onDisk[Path.GetFileNameWithoutExtension(manifest)] = manifest;
+            foreach (string name in onDisk.Keys) if (!known.Contains(name)) fresh.Add(name);
+            fresh.Sort(StringComparer.Ordinal);
+            foreach (string name in known) if (!onDisk.ContainsKey(name)) return false;
+            if (known.Count == 0 || fresh.Count > 16) return false;
+            return StoredPointRecordsMatch(backup, db, known, context);
+        }
+
+        // Small per-point records can change after a point is saved (a rename, a repaired capture time); a mismatch means
+        // the catalog is out of date in a way only a full rebuild fixes.
+        static bool StoredPointRecordsMatch(string backup, SqliteDatabase db, HashSet<string> known, OperationContext context)
+        {
+            var stored = new Dictionary<string, string>(StringComparer.Ordinal);
+            using (var meta = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_%'"))
+                while (meta.Read()) stored[meta.String(0)] = meta.String(1);
+            foreach (string name in known)
+            {
+                context.CheckCancellation();
+                string taken, kind, custom;
+                stored.TryGetValue("point_taken:" + name, out taken); stored.TryGetValue("point_kind:" + name, out kind); stored.TryGetValue("point_name:" + name, out custom);
+                if (taken != RestorePointNames.TakenUtc(backup, name).ToString("O", CultureInfo.InvariantCulture) || kind != ReadPointKind(backup, name) ||
+                    custom != RestorePointNames.ReadName(backup, name)) return false;
+            }
+            return true;
+        }
+
+        // Replaces the current listing's rows (keeping recorded checks that still apply) and adds the new restore points.
+        static void ReplaceCurrentAndAddPoints(string backup, SqliteDatabase db, Dictionary<string, string> onDisk, List<string> fresh, OperationContext context)
+        {
+            var objects = new ObjectChecks(backup);
+            var old = new Dictionary<string, CatalogEntry>(StringComparer.OrdinalIgnoreCase);
+            using (var rows = db.Prepare("SELECT path,size,modified_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files WHERE snapshot_id='current'"))
+                while (rows.Read())
+                    old[rows.String(0)] = new CatalogEntry { Path = rows.String(0), Size = rows.String(1) == null ? -1 : rows.Number(1), ModifiedTicks = rows.Number(2),
+                        Hash = rows.String(3), Present = rows.Number(4) != 0, VerifiedUtc = rows.String(5), Result = rows.String(6), ObservedHash = rows.String(7) };
+            db.Execute("DELETE FROM files WHERE snapshot_id='current'");
+            using (var insert = db.Prepare("INSERT INTO files VALUES (?,?,?,?,?,?,?,?,?,?,?)"))
+            {
+                Snapshot current = ContentStore.Current(backup, objects);
+                foreach (string folder in current.Folders) InsertEntry(insert, new CatalogEntry { Path = folder, IsDirectory = true, Present = true, Size = 0 });
+                foreach (var item in current.Files)
+                {
+                    context.CheckCancellation();
+                    var entry = new CatalogEntry { Path = item.Relative, Hash = item.Hash, Size = item.Size,
+                        ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) };
+                    CatalogEntry prior;
+                    if (old.TryGetValue(item.Relative, out prior)) CarryCheck(entry, prior);
+                    InsertEntry(insert, entry);
+                }
+                var validNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (string name in fresh)
+                {
+                    context.CheckCancellation();
+                    AddPoint(backup, db, insert, ReadSnapshot(backup, onDisk[name], objects, validNames), objects);
+                }
+            }
+        }
+
+        static void AddPoint(string backup, SqliteDatabase db, SqliteDatabase.Statement insert, Snapshot snapshot, ObjectChecks objects)
+        {
+            foreach (string folder in snapshot.Folders) InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = folder, IsDirectory = true, Size = 0, Present = true });
+            foreach (var item in snapshot.Files)
+                InsertEntry(insert, new CatalogEntry { SnapshotId = snapshot.Name, Path = item.Relative, Hash = item.Hash,
+                    Size = item.Size, ModifiedTicks = item.ModifiedTicks, CreatedTicks = item.CreatedTicks, Present = objects.Present(item.Hash) });
+            db.Execute("INSERT INTO restore_points VALUES (?)", snapshot.Name);
+            db.Execute("INSERT INTO metadata VALUES (?,?)", "point_kind:" + snapshot.Name, ReadPointKind(backup, snapshot.Name));
+            db.Execute("INSERT INTO metadata VALUES (?,?)", "point_taken:" + snapshot.Name, snapshot.TakenUtc.ToString("O", CultureInfo.InvariantCulture));
+            if (snapshot.CustomName != null) db.Execute("INSERT INTO metadata VALUES (?,?)", "point_name:" + snapshot.Name, snapshot.CustomName);
         }
         static void SetMetadata(SqliteDatabase db, string key, string value)
         {
@@ -317,84 +346,107 @@ namespace GearBackup
                 { created = true; file.Write(contents, 0, contents.Length); }
                 using (var db = new SqliteDatabase(local, true))
                 {
-                    using (var version = db.Prepare("PRAGMA user_version"))
-                        if (!version.Read() || version.Number(0) != SchemaVersion) throw new IOException("Unsupported backup catalog schema.");
-                    using (var id = db.Prepare("PRAGMA application_id"))
-                        if (!id.Read() || id.Number(0) != ApplicationId) throw new IOException("Not a Gear Backup catalog.");
+                    RequireCatalogSchema(db);
                     var result = new CatalogData();
-                    using (var device = db.Prepare("SELECT value FROM metadata WHERE key='device_id'"))
-                        if (device.Read()) result.DeviceId = device.String(0);
-                    using (var stamp = db.Prepare("SELECT value FROM metadata WHERE key='inventory_stamp'"))
-                        if (stamp.Read()) result.InventoryStamp = stamp.String(0);
-                    using (var generation = db.Prepare("SELECT value FROM metadata WHERE key='inventory_generation'"))
-                        if (generation.Read()) result.InventoryGeneration = generation.String(0);
-                    using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" :
-                        verifiedOnly ? " WHERE verification_result IS NOT 'unchecked' OR last_verified_utc IS NOT NULL OR observed_sha256 IS NOT NULL" : "")))
-                        while (files.Read())
-                        {
-                            string relative = files.String(1), hash = files.String(6), observed = files.String(10), status = files.String(9);
-                            inventoryPaths.Resolve(relative);
-                            if ((hash != null && !ValidHash(hash)) || (observed != null && !ValidHash(observed)) ||
-                                (status != "unchecked" && status != "ok" && status != "damaged" && status != "missing" && status != "unreadable"))
-                                throw new IOException("Invalid backup catalog integrity record.");
-                            string snapshot = files.String(0), time = files.String(8);
-                            if (string.IsNullOrEmpty(snapshot) || snapshot.Length > 128 || (time != null && !ValidTime(time))) throw new IOException("Invalid backup catalog record.");
-                            Add(result, new CatalogEntry { SnapshotId = snapshot, Path = relative, IsDirectory = files.Number(2) != 0,
-                                Size = files.String(3) == null ? -1 : files.Number(3), ModifiedTicks = files.Number(4), CreatedTicks = files.Number(5),
-                                Hash = hash, Present = files.Number(7) != 0, VerifiedUtc = time, Result = status, ObservedHash = observed });
-                        }
-                    if (!currentOnly && !verifiedOnly)
-                    {
-                        using (var times = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_taken:%'"))
-                            while (times.Read())
-                            {
-                                if (result.PointTimes.Count >= RowLimit) throw new IOException("Too many restore point capture times.");
-                                string name = times.String(0).Substring(12); DateTime time;
-                                SafePath(SnapshotRoot(backup), name + ".taken");
-                                if (!DateTime.TryParseExact(times.String(1), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time) || time.Kind != DateTimeKind.Utc)
-                                    throw new IOException("Invalid restore point capture time.");
-                                result.PointTimes.Add(name, time);
-                            }
-                        using (var names = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_name:%'"))
-                            while (names.Read())
-                            {
-                                if (result.PointNames.Count >= RowLimit) throw new IOException("Too many restore point names.");
-                                string name = names.String(0).Substring(11), custom = names.String(1);
-                                if (custom == null || custom.Length == 0 || custom.Length > 80) throw new IOException("Invalid restore point name.");
-                                result.PointNames[name] = custom;
-                            }
-                        using (var kinds = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_kind:%'"))
-                            while (kinds.Read())
-                            {
-                                if (result.PointKinds.Count >= RowLimit) throw new IOException("Too many restore point kinds.");
-                                string name = kinds.String(0).Substring(11), kind = kinds.String(1);
-                                SafePath(SnapshotRoot(backup), name + ".kind");
-                                if (kind != "full" && kind != "incremental") throw new IOException("Invalid restore point kind.");
-                                result.PointKinds[name] = kind;
-                            }
-                        using (var points = db.Prepare("SELECT name FROM restore_points ORDER BY name"))
-                                while (points.Read())
-                                {
-                                    if (result.RestorePoints.Count >= RowLimit) throw new IOException("Too many restore points.");
-                                    string name = points.String(0);
-                                    SafePath(SnapshotRoot(backup), name + ".manifest");
-                                    if (string.IsNullOrEmpty(name) || name.Length > 128) throw new IOException("Invalid restore point name.");
-                                    if (!result.PointKinds.ContainsKey(name)) throw new IOException("Missing restore point kind.");
-                                    if (!result.PointTimes.ContainsKey(name)) throw new IOException("Missing restore point capture time.");
-                                    result.RestorePoints.Add(name);
-                                }
-                    }
-                    if (!currentOnly) using (var checks = db.Prepare("SELECT checked_utc,summary FROM check_runs ORDER BY id DESC LIMIT 100"))
-                        while (checks.Read())
-                        {
-                            string time = checks.String(0), summary = checks.String(1);
-                            if (!ValidTime(time) || summary == null || summary.Length > 4096) throw new IOException("Invalid backup catalog check run.");
-                            result.Checks.Add(new CatalogCheckRun { CheckedUtc = time, Summary = summary });
-                        }
+                    ReadCatalogIdentity(db, result);
+                    ReadFileRows(db, result, currentOnly, verifiedOnly, inventoryPaths);
+                    if (!currentOnly && !verifiedOnly) ReadPointRecords(backup, db, result);
+                    if (!currentOnly) ReadCheckRuns(db, result);
                     result.Checks.Reverse(); return result;
                 }
             }
             finally { if (created) FileCopy.TryDelete(local); }
+        }
+
+        static void RequireCatalogSchema(SqliteDatabase db)
+        {
+            using (var version = db.Prepare("PRAGMA user_version"))
+                if (!version.Read() || version.Number(0) != SchemaVersion) throw new IOException("Unsupported backup catalog schema.");
+            using (var id = db.Prepare("PRAGMA application_id"))
+                if (!id.Read() || id.Number(0) != ApplicationId) throw new IOException("Not a Gear Backup catalog.");
+        }
+
+        static void ReadCatalogIdentity(SqliteDatabase db, CatalogData result)
+        {
+            using (var device = db.Prepare("SELECT value FROM metadata WHERE key='device_id'"))
+                if (device.Read()) result.DeviceId = device.String(0);
+            using (var stamp = db.Prepare("SELECT value FROM metadata WHERE key='inventory_stamp'"))
+                if (stamp.Read()) result.InventoryStamp = stamp.String(0);
+            using (var generation = db.Prepare("SELECT value FROM metadata WHERE key='inventory_generation'"))
+                if (generation.Read()) result.InventoryGeneration = generation.String(0);
+        }
+
+        static void ReadFileRows(SqliteDatabase db, CatalogData result, bool currentOnly, bool verifiedOnly, InventoryPathCache inventoryPaths)
+        {
+            using (var files = db.Prepare("SELECT snapshot_id,path,is_directory,size,modified_ticks,created_ticks,expected_sha256,present,last_verified_utc,verification_result,observed_sha256 FROM files" + (currentOnly ? " WHERE snapshot_id='current'" :
+                verifiedOnly ? " WHERE verification_result IS NOT 'unchecked' OR last_verified_utc IS NOT NULL OR observed_sha256 IS NOT NULL" : "")))
+                while (files.Read())
+                {
+                    string relative = files.String(1), hash = files.String(6), observed = files.String(10), status = files.String(9);
+                    inventoryPaths.Resolve(relative);
+                    if ((hash != null && !ValidHash(hash)) || (observed != null && !ValidHash(observed)) ||
+                        (status != "unchecked" && status != "ok" && status != "damaged" && status != "missing" && status != "unreadable"))
+                        throw new IOException("Invalid backup catalog integrity record.");
+                    string snapshot = files.String(0), time = files.String(8);
+                    if (string.IsNullOrEmpty(snapshot) || snapshot.Length > 128 || (time != null && !ValidTime(time))) throw new IOException("Invalid backup catalog record.");
+                    Add(result, new CatalogEntry { SnapshotId = snapshot, Path = relative, IsDirectory = files.Number(2) != 0,
+                        Size = files.String(3) == null ? -1 : files.Number(3), ModifiedTicks = files.Number(4), CreatedTicks = files.Number(5),
+                        Hash = hash, Present = files.Number(7) != 0, VerifiedUtc = time, Result = status, ObservedHash = observed });
+                }
+        }
+
+        // The restore point list with each point's capture time, name and kind.
+        static void ReadPointRecords(string backup, SqliteDatabase db, CatalogData result)
+        {
+            using (var times = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_taken:%'"))
+                while (times.Read())
+                {
+                    if (result.PointTimes.Count >= RowLimit) throw new IOException("Too many restore point capture times.");
+                    string name = times.String(0).Substring(12); DateTime time;
+                    SafePath(SnapshotRoot(backup), name + ".taken");
+                    if (!DateTime.TryParseExact(times.String(1), "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out time) || time.Kind != DateTimeKind.Utc)
+                        throw new IOException("Invalid restore point capture time.");
+                    result.PointTimes.Add(name, time);
+                }
+            using (var names = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_name:%'"))
+                while (names.Read())
+                {
+                    if (result.PointNames.Count >= RowLimit) throw new IOException("Too many restore point names.");
+                    string name = names.String(0).Substring(11), custom = names.String(1);
+                    if (custom == null || custom.Length == 0 || custom.Length > 80) throw new IOException("Invalid restore point name.");
+                    result.PointNames[name] = custom;
+                }
+            using (var kinds = db.Prepare("SELECT key,value FROM metadata WHERE key LIKE 'point_kind:%'"))
+                while (kinds.Read())
+                {
+                    if (result.PointKinds.Count >= RowLimit) throw new IOException("Too many restore point kinds.");
+                    string name = kinds.String(0).Substring(11), kind = kinds.String(1);
+                    SafePath(SnapshotRoot(backup), name + ".kind");
+                    if (kind != "full" && kind != "incremental") throw new IOException("Invalid restore point kind.");
+                    result.PointKinds[name] = kind;
+                }
+            using (var points = db.Prepare("SELECT name FROM restore_points ORDER BY name"))
+                while (points.Read())
+                {
+                    if (result.RestorePoints.Count >= RowLimit) throw new IOException("Too many restore points.");
+                    string name = points.String(0);
+                    SafePath(SnapshotRoot(backup), name + ".manifest");
+                    if (string.IsNullOrEmpty(name) || name.Length > 128) throw new IOException("Invalid restore point name.");
+                    if (!result.PointKinds.ContainsKey(name)) throw new IOException("Missing restore point kind.");
+                    if (!result.PointTimes.ContainsKey(name)) throw new IOException("Missing restore point capture time.");
+                    result.RestorePoints.Add(name);
+                }
+        }
+
+        static void ReadCheckRuns(SqliteDatabase db, CatalogData result)
+        {
+            using (var checks = db.Prepare("SELECT checked_utc,summary FROM check_runs ORDER BY id DESC LIMIT 100"))
+                while (checks.Read())
+                {
+                    string time = checks.String(0), summary = checks.String(1);
+                    if (!ValidTime(time) || summary == null || summary.Length > 4096) throw new IOException("Invalid backup catalog check run.");
+                    result.Checks.Add(new CatalogCheckRun { CheckedUtc = time, Summary = summary });
+                }
         }
         static bool ValidTime(string text)
         { DateTime value; return DateTime.TryParseExact(text, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out value); }

@@ -223,6 +223,17 @@ namespace GearBackup.Gui
                 host.RefreshLayout();
                 return;
             }
+            ShowSummary(report);
+            FillInstruments(report);
+            FillPatterns(report);
+            ShowCheck(report);
+            host.RefreshLayout();
+        }
+
+        static string FormatSampleSize(long bytes) { return Formatting.FormatSize(bytes) + " wav"; }
+
+        void ShowSummary(TrackerProjectReport report)
+        {
             TrackerProjectFile project = report.Project;
             var text = new StringBuilder();
             text.Append(project.Name.Length > 0 ? project.Name : "(unnamed project)");
@@ -234,7 +245,10 @@ namespace GearBackup.Gui
             if (report.MidiOrSynthInstruments > 0) text.Append("  ·  ").Append(report.MidiOrSynthInstruments).Append(" MIDI or synth instruments in use");
             summary.Text = text.ToString(); summary.Visible = true;
             notice.Text = report.Folder + (report.Warnings.Count > 0 ? "  ·  " + string.Join(" ", report.Warnings) : "");
-            var inSong = new HashSet<int>(project.Playlist);
+        }
+
+        void FillInstruments(TrackerProjectReport report)
+        {
             foreach (TrackerInstrumentInfo item in report.Instruments)
             {
                 if (item.Error != null) { instruments.Rows.Add(item.Slot.ToString(CultureInfo.InvariantCulture), item.File, "", "", "", "", "Unreadable: " + item.Error); continue; }
@@ -250,6 +264,11 @@ namespace GearBackup.Gui
                 instruments.Rows.Add(item.Slot.ToString(CultureInfo.InvariantCulture), item.File, d.SampleName, d.Frames.ToString("N0", CultureInfo.InvariantCulture),
                     d.Channels == 0 ? "?" : d.Channels == 1 ? "Mono" : "Stereo", d.PlayMode, d.Wavetable ? "Wavetable" : usable ? "OK" : "No usable sample");
             }
+        }
+
+        void FillPatterns(TrackerProjectReport report)
+        {
+            var inSong = new HashSet<int>(report.Project.Playlist);
             foreach (TrackerPatternInfo item in report.Patterns)
             {
                 var used = new List<string>();
@@ -257,11 +276,7 @@ namespace GearBackup.Gui
                 patterns.Rows.Add(item.Number.ToString(CultureInfo.InvariantCulture), item.File, item.Error != null ? "" : item.Tracks.ToString(CultureInfo.InvariantCulture),
                     item.Error != null ? "Unreadable: " + item.Error : item.NoteSteps.ToString(CultureInfo.InvariantCulture), string.Join(", ", used), inSong.Contains(item.Number) ? "Yes" : "No");
             }
-            ShowCheck(report);
-            host.RefreshLayout();
         }
-
-        static string FormatSampleSize(long bytes) { return Formatting.FormatSize(bytes) + " wav"; }
 
         void ShowCheck(TrackerProjectReport report)
         {
