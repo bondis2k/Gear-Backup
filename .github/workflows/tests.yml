@@ -40,6 +40,10 @@ jobs:
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\check-catches.ps1
 
+      - name: Method length check
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build\check-method-length.ps1
+
       - name: M8 reader tests (Rust)
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build\build-native.ps1 -Test

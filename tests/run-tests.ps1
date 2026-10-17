@@ -12,6 +12,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 # An empty catch block must say why it is safe to ignore the error.
 & (Join-Path $projectRoot 'build\check-catches.ps1')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# A method longer than 60 lines must be split into helpers.
+& (Join-Path $projectRoot 'build\check-method-length.ps1')
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 . (Join-Path $projectRoot 'build\csharp-compiler.ps1')
 $compilerPath = Get-CSharpCompiler
 # The native M8 song reader is optional for the tests: without Rust the tests that need it are skipped.
