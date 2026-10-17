@@ -115,6 +115,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Coverage runner exit-code regressions
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tests\run-coverage-exit-tests.ps1
+
       # OpenCover is pinned to a release and checked against the SHA-256 its release publishes.
       - name: Get OpenCover
         shell: powershell
