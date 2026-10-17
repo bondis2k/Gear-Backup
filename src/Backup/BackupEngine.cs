@@ -40,7 +40,7 @@ namespace GearBackup
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " cancelled",
+                    return new OperationResult(OperationOutcome.Cancelled) { Title = AppIdentity.Name + " cancelled",
                         Summary = "Backup cancelled. Completed copies remain available; incomplete backups can be resumed.", Elapsed = timer.Elapsed };
                 }
                 finally { context.OverallProgressOnly = previousProgressMode; }

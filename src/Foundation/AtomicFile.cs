@@ -11,10 +11,10 @@ namespace GearBackup
     {
         // Writes a text file so readers see either the old or the new contents, never half a file:
         // the text goes to a temporary file that then replaces the original.
-        internal static void AtomicText(string path, string contents)
+        internal static void AtomicText(string path, string contents, OperationContext context = null)
         {
             // Also used outside operations (settings saved from a window), where there is nothing to cancel.
-            OperationContext active = OperationContext.Active;
+            OperationContext active = context ?? OperationContext.Active;
             if (active != null) active.CheckCancellation();
             // Never write through a link: it could redirect the file anywhere.
             RejectRootLinks(path);

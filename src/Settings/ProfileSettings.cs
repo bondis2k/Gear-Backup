@@ -86,16 +86,17 @@ namespace GearBackup
         }
 
         // The settings for a source, once its device is known (the current device).
-        internal static Config ResolveSourceSettings(Config global, string source)
+        internal static Config ResolveSourceSettings(Config global, string source, DeviceProfile device = null)
         {
-            string linked = ProfileLinks.Find(global, source);
+            device = device ?? CurrentDevice;
+            string linked = ProfileLinks.Find(global, source, device);
             if (linked != null)
             {
-                Config effective = ResolveProfileSettings(global, CurrentDevice.Id, Path.GetFileName(linked));
+                Config effective = ResolveProfileSettings(global, device.Id, Path.GetFileName(linked));
                 effective.BackupFolder = ProfileLinks.BackupLocation(linked);
                 return effective;
             }
-            return ResolveProfileSettings(global, CurrentDevice.Id, ProfileId(source, global.Profile));
+            return ResolveProfileSettings(global, device.Id, ProfileId(source, global.Profile, device));
         }
 
         // Replaces one scope's overrides (none removes the scope), keeping the other scopes. Values are

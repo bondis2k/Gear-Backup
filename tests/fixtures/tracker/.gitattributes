@@ -1,0 +1,6 @@
+# Preserve upstream bytes, including licenses verified by sources.json.
+*.pti -text
+*.mt -text
+*.mtp -text
+LICENSE-DataGreed.txt -text
+UNLICENSE-jaap3.txt -text

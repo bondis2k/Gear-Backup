@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -23,8 +22,7 @@ namespace GearBackup.Gui
         RestoreSet set;
         string[] paths;
         string contextKey;
-        int scan, pointScan;
-        CancellationTokenSource backupRead, pointRead;
+        readonly GuiBackgroundWork backupRead = new GuiBackgroundWork(), pointRead = new GuiBackgroundWork();
         bool filling, loading, closed;
         M8SampleMatch pendingSample;
         internal Func<Config, DeviceProfile, OperationContext, List<string>> BackupReader = RestoreCatalog.BackupsForDevice;
@@ -87,7 +85,7 @@ namespace GearBackup.Gui
         }
 
         internal void SetEnabled(bool enabled) { backupField.Enabled = details.Enabled = enabled; }
-        internal void Close() { closed = true; CancelBackupRead(); CancelPointRead(); }
+        internal void Close() { closed = true; backupRead.Dispose(); pointRead.Dispose(); }
         // The next refresh reads the backups again even if nothing about the device or location changed.
         internal void ForgetContext()
         {
@@ -100,9 +98,8 @@ namespace GearBackup.Gui
             UpdateNotice();
         }
 
-        // Only the UI thread owns these sources. Each async reader disposes its own source after its worker ends.
-        void CancelBackupRead() { ++scan; if (backupRead != null) backupRead.Cancel(); backupRead = null; }
-        void CancelPointRead() { ++pointScan; if (pointRead != null) pointRead.Cancel(); pointRead = null; }
+        void CancelBackupRead() { backupRead.Invalidate(); }
+        void CancelPointRead() { pointRead.Invalidate(); }
 
         // Shows the controls only while Restore is the selected operation.
         internal void RefreshControls()
@@ -155,8 +152,7 @@ namespace GearBackup.Gui
             bool sameContext = key == contextKey;
             contextKey = key;
             CancelBackupRead(); CancelPointRead();
-            int current = scan;
-            var cancellation = backupRead = new CancellationTokenSource();
+            var cancellation = backupRead.Begin();
             var read = BackupReader;
             var interaction = host.QuietInteraction();
             var previous = sameContext ? backups.SelectedItem as BackupItem : null;
@@ -175,13 +171,13 @@ namespace GearBackup.Gui
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; } // Superseded or closed: the new request owns the UI.
             catch (Exception ex) { error = ex.Message; } // shown in the notice
-            finally { if (ReferenceEquals(backupRead, cancellation)) backupRead = null; cancellation.Dispose(); }
-            host.RunOnUi(delegate { FinishBackups(current, found, oldPath, device, error); });
+            finally { cancellation.Dispose(); }
+            host.RunOnUi(delegate { FinishBackups(cancellation, found, oldPath, device, error); });
         }
 
-        void FinishBackups(int current, List<string> found, string oldPath, DeviceProfile device, string error)
+        void FinishBackups(GuiBackgroundWork.Request request, List<string> found, string oldPath, DeviceProfile device, string error)
         {
-            if (closed || current != scan) return;
+            if (!request.IsCurrent) return;
             filling = true;
             try
             {
@@ -215,13 +211,12 @@ namespace GearBackup.Gui
         {
             if (closed) return;
             CancelPointRead();
-            int current = pointScan;
             var backup = backups.SelectedItem as BackupItem;
             DeviceProfile device = host.DisplayedDevice;
             set = null; paths = null;
             points.Items.Clear();
             if (backup == null) { loading = false; UpdateNotice(); return; }
-            var cancellation = pointRead = new CancellationTokenSource();
+            var cancellation = pointRead.Begin();
             var read = PointReader;
             var interaction = host.QuietInteraction();
             loading = true; points.Enabled = browse.Enabled = exact.Enabled = false;
@@ -234,13 +229,13 @@ namespace GearBackup.Gui
             }); }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return; } // Superseded or closed: never replace the current selection.
             catch (Exception ex) { error = ex.Message; } // shown in the notice
-            finally { if (ReferenceEquals(pointRead, cancellation)) pointRead = null; cancellation.Dispose(); }
-            host.RunOnUi(delegate { FinishPoints(current, loaded, error); });
+            finally { cancellation.Dispose(); }
+            host.RunOnUi(delegate { FinishPoints(cancellation, loaded, error); });
         }
 
-        void FinishPoints(int current, RestoreSet loaded, string error)
+        void FinishPoints(GuiBackgroundWork.Request request, RestoreSet loaded, string error)
         {
-            if (closed || current != pointScan) return;
+            if (!request.IsCurrent) return;
             loading = false; set = loaded;
             if (loaded == null) { UpdateNotice(); notice.Text = "Cannot read backup: " + error; return; }
             foreach (var point in loaded.Points) points.Items.Add(point);

@@ -45,67 +45,84 @@ namespace GearBackup
         }
 
         // Checks the source and works out its device, preferences and history. Sets the current device.
-        internal static PreparedSource PrepareSource(Config global, SourceChoice choice, bool needsHistory = true)
+        internal static PreparedSource PrepareSource(Config global, SourceChoice choice, bool needsHistory = true, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (!Directory.Exists(choice.Path)) throw new IOException("Source folder does not exist: " + choice.Path);
             string path = Rooted(choice.Path);
             RejectRootLinks(path);
             DeviceProfile device = DeviceFor(global, choice.Detected, path);
-            OperationContext.Current.Device = device;
-            Config config = ResolveSourceSettings(global, path);
+            context.Device = device;
+            Config config = ResolveSourceSettings(global, path, device);
             return new PreparedSource { Source = choice, Path = path, Device = device, Global = global, Config = config,
-                Histories = HistoriesRoot(config), History = needsHistory ? HistoryFor(config, path) : null };
+                Histories = HistoriesRoot(config), History = needsHistory ? HistoryFor(config, path, context) : null };
         }
 
         // Runs a backup of the prepared source, or a restore to it from a history the user picks. An MTP
         // device's mirror is synced first, under the lock of the folder holding the mirrors (MirrorRoot),
         // which storage cleanup also takes before recycling a mirror.
-        internal static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental)
+        internal static OperationResult RunPrepared(PreparedSource prepared, bool restore, bool incremental, OperationContext context = null)
         {
-            MtpSource mtp = prepared.Source.Mtp;
-            if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
-            if (!restore && !EnsureBackupFolder(prepared.Config)) return BackupFolderCancelled();
-            using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+            context = context ?? OperationContext.Current;
+            using (context.Activate())
+            using (context.UseDevice(prepared.Device))
             {
-                string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
-                if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config);
-                string history = ChooseHistory(prepared.Global, prepared.History);
-                if (history == null) return new OperationResult { Cancelled = true, Summary = "Restore cancelled." };
-                List<string> backups = ListBackups(history);
-                if (backups.Count == 0) throw new IOException("No backups found at this location.");
-                OperationResult result;
-                // Resolve device and profile preferences after the backup itself is selected.
-                using (LockUnlessPreview(history)) result = RunRestore(source, backups, prepared.Config, prepared.Global);
-                result.Cancelled |= OperationContext.Current.Cancellation.IsCancellationRequested;
-                return result;
+                MtpSource mtp = prepared.Source.Mtp;
+                if (restore && mtp != null) throw new IOException(MtpRestoreUnsupported(mtp.Device));
+                if (!restore && !EnsureBackupFolder(prepared.Config, context)) return BackupFolderCancelled();
+                using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+                {
+                    string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+                    if (!restore) return BackupWithLock(source, prepared.History, incremental, prepared.Config, context);
+                    return RestoreFromHistory(prepared, source, context);
+                }
             }
         }
 
-        internal static OperationResult RunArchive(PreparedSource prepared, string destination)
+        static OperationResult RestoreFromHistory(PreparedSource prepared, string source, OperationContext context)
         {
-            MtpSource mtp = prepared.Source.Mtp;
-            using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+            string history = ChooseHistory(prepared.Global, prepared.History, context);
+            if (history == null) return new OperationResult(OperationOutcome.Cancelled) { Summary = "Restore cancelled." };
+            List<string> backups = ListBackups(history);
+            if (backups.Count == 0) throw new IOException("No backups found at this location.");
+            OperationResult result;
+            // Resolve device and profile preferences after the backup itself is selected.
+            using (LockUnlessPreview(history, context)) result = RunRestore(source, backups, prepared.Config, prepared.Global, context);
+            if (context.Cancellation.IsCancellationRequested && result.Outcome != OperationOutcome.Failed) result.SetOutcome(OperationOutcome.Cancelled);
+            return result;
+        }
+
+        internal static OperationResult RunArchive(PreparedSource prepared, string destination, OperationContext context = null)
+        {
+            context = context ?? OperationContext.Current;
+            using (context.Activate())
+            using (context.UseDevice(prepared.Device))
             {
-                string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
-                return ArchiveBackup.Run(source, destination, prepared.Config, prepared.Source);
+                MtpSource mtp = prepared.Source.Mtp;
+                using (mtp == null ? null : LockHistory(Path.GetDirectoryName(Rooted(mtp.Mirror).TrimEnd('\\'))))
+                {
+                    string source = mtp == null ? prepared.Path : SyncMtpSource(mtp);
+                    return ArchiveBackup.Run(source, destination, prepared.Config, prepared.Source, context);
+                }
             }
         }
 
         internal static OperationResult BackupFolderCancelled()
         {
-            return new OperationResult { Cancelled = true, Summary = "Backup cancelled. The destination folder was not created." };
+            return new OperationResult(OperationOutcome.Cancelled) { Summary = "Backup cancelled. The destination folder was not created." };
         }
 
         // Ask before the history lock or MTP sync creates anything for a backup. A preview stays read-only.
-        internal static bool EnsureBackupFolder(Config config)
+        internal static bool EnsureBackupFolder(Config config, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             string folder = Path.GetFullPath(config.BackupFolder);
             RejectRootLinks(folder);
             if (Directory.Exists(folder)) return true;
             if (File.Exists(folder)) throw new IOException("The backup location is a file, not a folder: " + folder);
-            if (PreviewOnly) return true;
-            if (!AskYesNo("The backup folder does not exist:\n" + folder + "\n\nCreate it and continue with the backup?")) return false;
-            OperationContext.Current.CheckCancellation();
+            if (context.PreviewOnly) return true;
+            if (!context.AskYesNo("The backup folder does not exist:\n" + folder + "\n\nCreate it and continue with the backup?")) return false;
+            context.CheckCancellation();
             RejectRootLinks(folder);
             Directory.CreateDirectory(folder);
             return true;
@@ -113,14 +130,15 @@ namespace GearBackup
 
         // When the latest backup didn't finish, asks whether to resume it. Returns the incremental choice
         // to use (unchanged if the latest backup is fine), or null when the user cancels.
-        internal static bool? ConfirmResume(string previous, bool incremental, Config config)
+        internal static bool? ConfirmResume(string previous, bool incremental, Config config, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (previous == null) return incremental;
             Status status = BackupStatus(previous);
             if (!status.Unfinished) return incremental;
-            OperationOutput.WriteLine("  Latest backup is " + status + ". Resume uses " +
+            context.WriteLine("  Latest backup is " + status + ". Resume uses " +
                 (config.Thorough ? "SHA-256 content comparison." : "size and modified time (Thorough=no)."));
-            char answer = Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),
+            char answer = context.Ask("Resume the unfinished backup?", new Option('r', "Resume into it"),
                 new Option('n', "New full backup"), new Option('c', "Cancel"));
             if (answer == 'c') return null;
             return answer == 'r';
@@ -129,9 +147,10 @@ namespace GearBackup
         // Runs a backup while holding the history lock. The latest backup is read under the lock, so a
         // backup finished by another window in the meantime is seen. `incremental` is the user's choice;
         // it's ignored when there's no backup yet.
-        internal static OperationResult BackupWithLock(string source, string history, bool incremental, Config config)
+        internal static OperationResult BackupWithLock(string source, string history, bool incremental, Config config, OperationContext context = null)
         {
-            using (LockUnlessPreview(history))
+            context = context ?? OperationContext.Current;
+            using (LockUnlessPreview(history, context))
             {
                 string previous = LatestBackup(history);
                 if (incremental && config.IncrementalBackup != null)
@@ -141,10 +160,10 @@ namespace GearBackup
                         throw new IOException("The selected backup no longer exists in this history. Choose a full backup again.");
                     RejectRootLinks(previous);
                 }
-                if (previous == null) OperationOutput.WriteLine("  First backup for this profile: creating a full backup.");
-                bool? choice = ConfirmResume(previous, incremental && previous != null, config);
-                if (choice == null) return new OperationResult { Cancelled = true, Summary = "Backup cancelled." };
-                return RunBackup(source, history, previous, choice.Value, config);
+                if (previous == null) context.WriteLine("  First backup for this profile: creating a full backup.");
+                bool? choice = ConfirmResume(previous, incremental && previous != null, config, context);
+                if (choice == null) return new OperationResult(OperationOutcome.Cancelled) { Summary = "Backup cancelled." };
+                return RunBackup(source, history, previous, choice.Value, config, context);
             }
         }
 

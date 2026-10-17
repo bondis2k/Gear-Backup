@@ -26,6 +26,7 @@ class TestRunner
 
 partial class Tests
 {
+    static string TestBuildDirectory { get { return Path.GetDirectoryName(typeof(Tests).Assembly.Location); } }
     static int assertions;
     static void Assert(bool condition, string message)
     {
@@ -40,8 +41,7 @@ partial class Tests
             Console.WriteLine("Fixtures kept: " + root);
             return;
         }
-        try { Directory.Delete(root, true); }
-        catch (Exception ex) { Console.WriteLine("Could not remove fixtures " + root + ": " + ex.Message); }
+        FixtureCleanup.Delete(root);
     }
     static void Throws(Action action, string message)
     {
@@ -150,9 +150,11 @@ partial class Tests
         Console.WriteLine();
         if (failedTests == 0)
         {
+            try { RemoveFixtures(root); }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            { Console.WriteLine("FAIL: fixture cleanup failed at " + root + ": " + ex.Message); return 1; }
             Console.WriteLine("PASS: " + (results.Count - skippedTests) + " tests, " + assertions + " assertions." +
                 (skippedTests > 0 ? " " + skippedTests + " test(s) skipped; see reasons above." : ""));
-            RemoveFixtures(root);
             return 0;
         }
         Console.WriteLine("FAIL: " + failedTests + " of " + results.Count + " tests failed. Fixtures kept: " + root);
@@ -212,9 +214,11 @@ partial class Tests
         public readonly List<OperationProgress> Progress = new List<OperationProgress>();
         public Action<OperationProgress> OnProgress;
         public Action<OperationPlan> OnReview;
+        public Action<string> OnWriteLine;
         public int Plans;
+        public bool ApprovePlans = true;
         public void Write(string text) { Output.Append(text); }
-        public void WriteLine(string text) { Output.AppendLine(text); }
+        public void WriteLine(string text) { Output.AppendLine(text); if (OnWriteLine != null) OnWriteLine(text); }
         public void WriteColored(string text, ConsoleColor color) { WriteLine(text); }
         public Func<string, string> OnAskText;
         public string AskText(string question) { if (OnAskText != null) return OnAskText(question); throw new Exception("Engine unexpectedly asked for text: " + question); }
@@ -237,7 +241,7 @@ partial class Tests
             if (OnChooseItem != null) return OnChooseItem(question, items);
             throw new Exception("Engine unexpectedly asked to pick from: " + question);
         }
-        public bool ReviewPlan(OperationPlan plan) { Plans++; if (OnReview != null) OnReview(plan); return !plan.PreviewOnly; }
+        public bool ReviewPlan(OperationPlan plan) { Plans++; if (OnReview != null) OnReview(plan); return ApprovePlans && !plan.PreviewOnly; }
         public void ReportProgress(OperationProgress progress)
         {
             // Copy workers report from several threads at once.
@@ -276,7 +280,8 @@ namespace GearBackup.Cli
 {
     static class Notifications
     {
+        internal static int FinishCalls;
         internal static bool? ShowToast(string title, string summary, bool ask) { return false; }
-        internal static void Finish(string pnp, string title, string summary, EjectMode mode) { }
+        internal static void Finish(string pnp, string title, string summary, EjectMode mode) { FinishCalls++; }
     }
 }

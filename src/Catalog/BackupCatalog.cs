@@ -274,12 +274,12 @@ namespace GearBackup
             if (File.Exists(status) && File.GetLastWriteTimeUtc(status) > row.CheckedUtc.Value) row.CheckResult += " (previous state)";
         }
 
-        internal static void SaveCheckRecord(string backup, int ok, int damaged, int missing, int uncheckedFiles)
+        internal static void SaveCheckRecord(string backup, int ok, int damaged, int missing, int uncheckedFiles, OperationContext context = null)
         {
             RejectRootLinks(backup);
             string result = damaged > 0 || missing > 0 ? "Problems found" : uncheckedFiles > 0 ? "Incomplete check" : "OK";
             string path = Path.Combine(AppIdentity.MetadataRoot(backup), "last-check.txt");
-            AtomicText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + "\n" + result + "\n");
+            AtomicText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + "\n" + result + "\n", context);
         }
 
         // Moves the selected items to the Recycle Bin (or passes them to `recycle`, for tests). Only items from

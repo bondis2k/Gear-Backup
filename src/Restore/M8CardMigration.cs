@@ -66,13 +66,13 @@ namespace GearBackup
             var timer = System.Diagnostics.Stopwatch.StartNew();
             if (request == null || request.DeviceId != Devices.M8.Id || request.Paths != null || request.Exact)
                 throw new IOException("Card migration requires a complete M8 restore point.");
-            if (!RestoreCatalog.BackupsForDevice(config, Devices.M8).Any(p => string.Equals(PathSafety.Rooted(p), PathSafety.Rooted(request.Backup), StringComparison.OrdinalIgnoreCase)))
+            if (!RestoreCatalog.BackupsForDevice(config, Devices.M8, context).Any(p => string.Equals(PathSafety.Rooted(p), PathSafety.Rooted(request.Backup), StringComparison.OrdinalIgnoreCase)))
                 throw new IOException("This M8 backup is no longer available. Refresh the backup list.");
             var report = new M8MigrationReport { Backup = request.Backup, Target = target };
             using (HistoryLock.LockHistory(Path.GetDirectoryName(request.Backup)))
             using (context.UseDevice(Devices.M8))
             {
-                RestoreSet set = RestoreCatalog.Load(request.Backup, Devices.M8);
+                RestoreSet set = RestoreCatalog.Load(request.Backup, Devices.M8, context);
                 RestorePoint point = set.Points.Find(p => p.Id == request.Point);
                 if (point == null || RestoreCatalog.Stamp(point.Snapshot) != request.Stamp)
                     throw new IOException("The selected restore point changed. Refresh it before migrating.");
@@ -91,18 +91,13 @@ namespace GearBackup
                     PathSafety.RejectRootLinks(target);
                     if (BackupFolders.DirectoryIdentity(target) != identity) throw new IOException("The replacement card or folder changed. Migration stopped.");
                 };
-                OperationOutput.WriteLine("M8 migration: " + request.Backup + " · " + point.Label + " -> " + target);
-                OperationOutput.WriteLine("Mandatory checksum verification; no formatting or removal of existing content.");
-                if (linkHistory) OperationOutput.WriteLine("After successful checks, link this card to backup history: " + history);
+                context.WriteLine("M8 migration: " + request.Backup + " · " + point.Label + " -> " + target);
+                context.WriteLine("Mandatory checksum verification; no formatting or removal of existing content.");
+                if (linkHistory) context.WriteLine("After successful checks, link this card to backup history: " + history);
                 report.Operation = new RestoreEngine().RunSelected(target, point.Snapshot, point.Snapshot.Files, RestoreMode.All, null, false,
                     effective, context, () => { sameTarget(); ValidateTarget(target, request.Backup, effective, context); },
                     "M8 card migration to " + target + (linkHistory ? " · Link backup history: " + history : ""));
-                if (report.Operation.Cancelled || report.Operation.ExitCode != 0) return report;
-                if (report.Operation.Title == null)
-                {
-                    report.Operation.Cancelled = true; report.Operation.Summary = "Migration cancelled; no files copied.";
-                    return report;
-                }
+                if (!report.Operation.Succeeded) return report;
                 sameTarget();
                 foreach (var file in point.Snapshot.Files)
                 {
@@ -110,7 +105,7 @@ namespace GearBackup
                     try
                     {
                         string path = PathSafety.SafePath(target, file.Relative);
-                        Snapshots.ValidateEntry(new RestoreEntry { Relative = file.Relative, StoredPath = path, Size = file.Size, Hash = file.Hash });
+                        Snapshots.ValidateEntry(new RestoreEntry { Relative = file.Relative, StoredPath = path, Size = file.Size, Hash = file.Hash }, true, context);
                         report.VerifiedFiles++;
                     }
                     catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { report.Issues.Add(file.Relative + ": " + ex.Message); }
@@ -121,11 +116,11 @@ namespace GearBackup
                     if (!Directory.Exists(PathSafety.SafePath(target, folder))) report.Issues.Add("Missing folder: " + folder);
                 }
                 sameTarget();
-                report.Songs = M8CardCheck.Run(target, reader);
+                report.Songs = M8CardCheck.Run(target, reader, context: context);
                 sameTarget();
                 int missing = report.Songs.Songs.Count(s => s.Missing > 0), attention = report.Songs.Songs.Count(s => s.NeedsAttention);
                 bool problem = report.Issues.Count != 0 || missing != 0 || attention != 0 || report.Songs.Warnings.Count != 0;
-                report.Operation.ExitCode = problem ? 2 : 0;
+                report.Operation.SetOutcome(problem ? OperationOutcome.Failed : OperationOutcome.Success, problem ? 2 : 0);
                 report.Operation.Title = problem ? "M8 migration needs attention" : "M8 migration complete";
                 report.Operation.Summary = report.VerifiedFiles + " / " + point.Snapshot.Files.Count + " file(s) verified; " + report.Songs.Songs.Count +
                     " song(s) checked; " + missing + " with missing samples; " + attention + " needing attention; " + report.Issues.Count + " verification issue(s)." +
@@ -143,11 +138,11 @@ namespace GearBackup
                     catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
                     {
                         report.HistoryLink = "Not saved: " + ex.Message;
-                        report.Operation.ExitCode = 2; report.Operation.Title = "M8 migration needs attention";
+                        report.Operation.SetOutcome(OperationOutcome.Failed, 2); report.Operation.Title = "M8 migration needs attention";
                         report.Operation.Summary += " Files migrated, but the history link could not be saved. See report.";
                     }
                 }
-                OperationOutput.WriteLine(report.Text());
+                context.WriteLine(report.Text());
                 report.Operation.Elapsed = timer.Elapsed;
                 return report;
             }

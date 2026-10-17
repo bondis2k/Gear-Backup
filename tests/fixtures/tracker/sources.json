@@ -1,0 +1,90 @@
+[
+  {
+    "File": "tone-10ms.pti",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/sample-test/1%20test-10ms.pti",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "fbf5206139b0980fbef7d330799b6f0cfe5df8ba",
+    "Bytes": 1274,
+    "Sha256": "eab80dff804b90526d770032a8fe8ead3760bae22985f715760f5067f020dad1"
+  },
+  {
+    "File": "default.pti",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/test/1%20ABCDEFGHIJKLMNOPQRSTUVWXYZabcde.pti",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "d76cd62c83873270fdba9ff9c8cf056bb7378581",
+    "Bytes": 22442,
+    "Sha256": "7f1ce4d107a6924fee62512495c2ec595c12365dc4755b312257e4245117d92b"
+  },
+  {
+    "File": "forward-loop.pti",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/test/24%20test.pti",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "0da1f49bf17ac331e57e03cf06cb48d507745ccc",
+    "Bytes": 22442,
+    "Sha256": "257b8b26b1e082e6e58827e6c85e858c0b43a66105de64d4716320f3701d2121"
+  },
+  {
+    "File": "wavetable.pti",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/test/29%20test.pti",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "5f12f6c75b8ebddf9ae3c83a9cff7d20babafe1e",
+    "Bytes": 22442,
+    "Sha256": "a100a760387a0cad1064716d178621c711cfa1925595616e6ae8ecd64bc577b9"
+  },
+  {
+    "File": "granular.pti",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/test/30%20test.pti",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "72f13638263215ee1d72bb29c6581787f7d643e4",
+    "Bytes": 22442,
+    "Sha256": "48a1448ca106f2b32e56b3e43bc2faa79d51a1ad4e9fa093cc016f373704cf50"
+  },
+  {
+    "File": "UNLICENSE-jaap3.txt",
+    "Source": "https://raw.githubusercontent.com/jaap3/pti-file-format/48dc9978397446296f601077fc1da6a9866a5f88/UNLICENSE",
+    "Commit": "48dc9978397446296f601077fc1da6a9866a5f88",
+    "Blob": "fdddb29aa445bf3d6a5d843d6dd77e10a9f99657",
+    "Bytes": 1211,
+    "Sha256": "6b0382b16279f26ff69014300541967a356a666eb0b91b422f6862f6b7dad17e"
+  },
+  {
+    "File": "bpm-131.mt",
+    "Source": "https://raw.githubusercontent.com/DataGreed/polyendtracker-midi-export/926fb62cbc45f402da73ef2881107f6f0435104a/reverse-engineering/session%203/bpm/131.mt",
+    "Commit": "926fb62cbc45f402da73ef2881107f6f0435104a",
+    "Blob": "5fa2577e5e6ebb556616b61cbd7eba80b64b3a1e",
+    "Bytes": 1572,
+    "Sha256": "8f790681b2fecbf886bf17b36b55f9e820e6d7f246b3c0e3af663d0be6d41f2b"
+  },
+  {
+    "File": "bpm-40.1.mt",
+    "Source": "https://raw.githubusercontent.com/DataGreed/polyendtracker-midi-export/926fb62cbc45f402da73ef2881107f6f0435104a/reverse-engineering/session%203/bpm/40.1.mt",
+    "Commit": "926fb62cbc45f402da73ef2881107f6f0435104a",
+    "Blob": "9591a47da96a25fa51b4090b268de23da2e67193",
+    "Bytes": 1572,
+    "Sha256": "ee0f8676be9916dd5c0f142f23efffdd93d5492f5c7bb0332f0ad19bd93fe48e"
+  },
+  {
+    "File": "chord-arp/project.mt",
+    "Source": "https://raw.githubusercontent.com/DataGreed/polyendtracker-midi-export/926fb62cbc45f402da73ef2881107f6f0435104a/reverse-engineering/test%20data/chords%20and%20arps/1%20chord%20arp%20test%20data%20project/project.mt",
+    "Commit": "926fb62cbc45f402da73ef2881107f6f0435104a",
+    "Blob": "22f9eb1da70c4c3bcd3efd9aa62215386e43f879",
+    "Bytes": 1572,
+    "Sha256": "1802c9249d571d13ef55ecc1302a7c8ae45b98de85b3aa3f8132820d897ef874"
+  },
+  {
+    "File": "chord-arp/patterns/pattern_01.mtp",
+    "Source": "https://raw.githubusercontent.com/DataGreed/polyendtracker-midi-export/926fb62cbc45f402da73ef2881107f6f0435104a/reverse-engineering/test%20data/chords%20and%20arps/1%20chord%20arp%20test%20data%20project/patterns/pattern_01.mtp",
+    "Commit": "926fb62cbc45f402da73ef2881107f6f0435104a",
+    "Blob": "1b6be4c25b2b1bc5c940bac04ba2283dabfeb8c7",
+    "Bytes": 6184,
+    "Sha256": "702376295fa1eab1dd4f17b8a077221666aac022e924d5d8b9408448721fb2ce"
+  },
+  {
+    "File": "LICENSE-DataGreed.txt",
+    "Source": "https://raw.githubusercontent.com/DataGreed/polyendtracker-midi-export/926fb62cbc45f402da73ef2881107f6f0435104a/LICENSE.txt",
+    "Commit": "926fb62cbc45f402da73ef2881107f6f0435104a",
+    "Blob": "dc818b76aece5126f455abc1111d907c8ffc887d",
+    "Bytes": 1071,
+    "Sha256": "e6cc210d3d463beddff5ce954eadb59136229665ca30c391f5bdab2c5a630723"
+  }
+]

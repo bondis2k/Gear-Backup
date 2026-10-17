@@ -28,7 +28,7 @@ partial class Tests
         for (int t = 0; t < tracks; t++)
         {
             int start = 28 + t * (1 + 128 * 6);
-            data[start] = (byte)length;
+            data[start] = (byte)(length - 1);
             for (int s = 0; s < 128; s++) data[start + 1 + s * 6] = 0xFF;      // empty step: note -1
         }
         foreach (int[] step in steps)

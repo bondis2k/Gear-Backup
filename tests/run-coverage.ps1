@@ -37,7 +37,7 @@ $targetArguments = ''; foreach ($text in $Filter) { $targetArguments += " --filt
 $xml = Join-Path $out 'coverage.xml'
 Push-Location $projectRoot
 try {
-    & $opencover -register:user "-target:$runner" "-targetargs:$targetArguments" "-output:$xml" '-filter:+[GearBackup.Core]*' -mergebyhash -returntargetcode | Out-Null
+    & $opencover -register:user "-target:$runner" "-targetargs:$targetArguments" "-output:$xml" '-filter:+[GearBackup.Core]*' -mergebyhash -returntargetcode | Tee-Object -FilePath (Join-Path $out 'test-output.log')
     $testResult = $LASTEXITCODE
 } finally { Pop-Location }
 if (-not (Test-Path -LiteralPath $xml)) { throw 'OpenCover produced no result.' }

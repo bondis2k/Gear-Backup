@@ -21,7 +21,7 @@ namespace GearBackup
             context = context ?? OperationContext.Current;
             var result = new List<string>();
             var times = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-            foreach (string history in AvailableHistories(config)) foreach (string backup in BackupFolders.ListBackups(history))
+            foreach (string history in AvailableHistories(config, context)) foreach (string backup in BackupFolders.ListBackups(history))
             {
                 context.CheckCancellation();
                 try
@@ -36,8 +36,8 @@ namespace GearBackup
                         result.Add(backup);
                     }
                 }
-                catch (IOException ex) { OperationOutput.WriteLine("  Skipping unreadable backup device record: " + ex.Message); }
-                catch (UnauthorizedAccessException ex) { OperationOutput.WriteLine("  Skipping unreadable backup device record: " + ex.Message); }
+                catch (IOException ex) { context.WriteLine("  Skipping unreadable backup device record: " + ex.Message); }
+                catch (UnauthorizedAccessException ex) { context.WriteLine("  Skipping unreadable backup device record: " + ex.Message); }
             }
             result.Sort((a, b) => {
                 int recent = times[b].CompareTo(times[a]);
@@ -60,62 +60,72 @@ namespace GearBackup
             ContentStore.RequireContentStore(backup);
             try
             {
-                var inventoryPaths = new InventoryPathCache(backup);
-                var objectPaths = new InventoryPathCache(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"));
-                CatalogData data = BackupDatabase.Read(backup, false, inventoryPaths);
-                if (BackupStatus(backup).Unfinished || data.DeviceId != recorded.Id || !BackupDatabase.IsCurrentInventory(backup, data))
-                    throw new IOException("catalog is stale or incomplete");
-                set.Sqlite = true;
-                var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
-                grouped.Add("current", new Snapshot { Name = "Latest backup files" });
-                foreach (string name in data.RestorePoints)
-                {
-                    if (name == "current") throw new IOException("invalid saved restore point name");
-                    string customName;
-                    data.PointNames.TryGetValue(name, out customName);
-                    grouped.Add(name, new Snapshot { Name = name, TakenUtc = data.PointTimes[name], CustomName = customName });
-                }
-                foreach (var entry in data.Files)
-                {
-                    context.CheckCancellation();
-                    if (AppIdentity.IsMetadataPath(inventoryPaths.Resolve(entry.Path))) throw new IOException("catalog contains internal metadata paths");
-                    if (entry.Size < 0 || entry.ModifiedTicks < 0 || entry.ModifiedTicks > DateTime.MaxValue.Ticks ||
-                        entry.CreatedTicks < 0 || entry.CreatedTicks > DateTime.MaxValue.Ticks) throw new IOException("invalid catalog metadata");
-                    Snapshot snapshot;
-                    if (!grouped.TryGetValue(entry.SnapshotId, out snapshot)) throw new IOException("catalog contains an unlisted restore point");
-                    if (entry.IsDirectory) snapshot.Folders.Add(entry.Path);
-                    else
-                    {
-                        if (!ValidHash(entry.Hash)) throw new IOException("Invalid snapshot checksum.");
-                        string stored = objectPaths.Resolve(entry.Hash);
-                        snapshot.Files.Add(new RestoreEntry { Relative = entry.Path, StoredPath = stored, Hash = entry.Hash,
-                            Size = entry.Size, ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks });
-                    }
-                }
-                AddPoints(set, grouped, data.PointKinds);
+                LoadSqlite(set, backup, recorded, context);
             }
             catch (OperationCanceledException) { throw; }
             catch (IOException ex) { set.Sqlite = false; set.Points.Clear(); set.Notice = "SQLite unavailable: " + ex.Message + ". Showing recovery records."; }
             catch (UnauthorizedAccessException ex) { set.Sqlite = false; set.Points.Clear(); set.Notice = "SQLite unavailable: " + ex.Message + ". Showing recovery records."; }
             if (!set.Sqlite)
             {
-                var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
-                var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
-                grouped.Add("current", Snapshots.CurrentBackup(backup));
-                string root = SnapshotRoot(backup);
-                RejectRootLinks(root);
-                var validNames = new HashSet<string>(StringComparer.Ordinal);
-                if (Directory.Exists(root)) foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
-                {
-                    context.CheckCancellation();
-                    Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
-                    grouped.Add(snapshot.Name, snapshot);
-                    kinds[snapshot.Name] = BackupDatabase.ReadPointKind(backup, snapshot.Name);
-                }
-                AddPoints(set, grouped, kinds);
+                LoadRecoveryRecords(set, backup, context);
             }
             if (set.Sqlite) set.Notice = "Inventory: SQLite.";
             return set;
+        }
+
+        static void LoadSqlite(RestoreSet set, string backup, DeviceProfile recorded, OperationContext context)
+        {
+            var inventoryPaths = new InventoryPathCache(backup);
+            var objectPaths = new InventoryPathCache(Path.Combine(AppIdentity.MetadataRoot(backup), "objects"));
+            CatalogData data = BackupDatabase.Read(backup, false, inventoryPaths);
+            if (BackupStatus(backup).Unfinished || data.DeviceId != recorded.Id || !BackupDatabase.IsCurrentInventory(backup, data))
+                throw new IOException("catalog is stale or incomplete");
+            set.Sqlite = true;
+            var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
+            grouped.Add("current", new Snapshot { Name = "Latest backup files" });
+            foreach (string name in data.RestorePoints)
+            {
+                if (name == "current") throw new IOException("invalid saved restore point name");
+                string customName;
+                data.PointNames.TryGetValue(name, out customName);
+                grouped.Add(name, new Snapshot { Name = name, TakenUtc = data.PointTimes[name], CustomName = customName });
+            }
+            foreach (var entry in data.Files)
+            {
+                context.CheckCancellation();
+                if (AppIdentity.IsMetadataPath(inventoryPaths.Resolve(entry.Path))) throw new IOException("catalog contains internal metadata paths");
+                if (entry.Size < 0 || entry.ModifiedTicks < 0 || entry.ModifiedTicks > DateTime.MaxValue.Ticks ||
+                    entry.CreatedTicks < 0 || entry.CreatedTicks > DateTime.MaxValue.Ticks) throw new IOException("invalid catalog metadata");
+                Snapshot snapshot;
+                if (!grouped.TryGetValue(entry.SnapshotId, out snapshot)) throw new IOException("catalog contains an unlisted restore point");
+                if (entry.IsDirectory) snapshot.Folders.Add(entry.Path);
+                else
+                {
+                    if (!ValidHash(entry.Hash)) throw new IOException("Invalid snapshot checksum.");
+                    string stored = objectPaths.Resolve(entry.Hash);
+                    snapshot.Files.Add(new RestoreEntry { Relative = entry.Path, StoredPath = stored, Hash = entry.Hash,
+                        Size = entry.Size, ModifiedTicks = entry.ModifiedTicks, CreatedTicks = entry.CreatedTicks });
+                }
+            }
+            AddPoints(set, grouped, data.PointKinds);
+        }
+
+        static void LoadRecoveryRecords(RestoreSet set, string backup, OperationContext context)
+        {
+            var grouped = new Dictionary<string, Snapshot>(StringComparer.Ordinal);
+            var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
+            grouped.Add("current", Snapshots.CurrentBackup(backup));
+            string root = SnapshotRoot(backup);
+            RejectRootLinks(root);
+            var validNames = new HashSet<string>(StringComparer.Ordinal);
+            if (Directory.Exists(root)) foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
+            {
+                context.CheckCancellation();
+                Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
+                grouped.Add(snapshot.Name, snapshot);
+                kinds[snapshot.Name] = BackupDatabase.ReadPointKind(backup, snapshot.Name);
+            }
+            AddPoints(set, grouped, kinds);
         }
 
         static void AddPoints(RestoreSet set, Dictionary<string, Snapshot> grouped, Dictionary<string, string> kinds)
@@ -171,26 +181,26 @@ namespace GearBackup
             context = context ?? OperationContext.Current;
             DeviceProfile device = Devices.Find(request.DeviceId);
             if (device == null) throw new IOException("The selected backup has no recognized device type. Refresh the restore selection.");
-            if (!BackupsForDevice(config, device).Exists(path => Rooted(path) == Rooted(request.Backup)))
+            if (!BackupsForDevice(config, device, context).Exists(path => Rooted(path) == Rooted(request.Backup)))
                 throw new IOException("The selected backup is no longer available for the identified device.");
             string history = Path.GetDirectoryName(request.Backup);
-            using (Histories.LockUnlessPreview(history))
+            using (Histories.LockUnlessPreview(history, context))
             using (context.UseDevice(device))
             {
                 RestoreFlow.ValidateRestoreDestination(request.Backup, target, config);
-                RestoreSet set = Load(request.Backup, device);
+                RestoreSet set = Load(request.Backup, device, context);
                 RestorePoint point = set.Points.Find(p => p.Id == request.Point);
                 if (point == null || Stamp(point.Snapshot) != request.Stamp) throw new IOException("The selected backup changed. Refresh the restore selection and review the files again.");
-                if (BackupStatus(request.Backup).Unfinished && !ConsoleUi.AskYesNo("This backup is unfinished. Restore its available files anyway?")) return new OperationResult { Cancelled = true };
+                if (BackupStatus(request.Backup).Unfinished && !context.AskYesNo("This backup is unfinished. Restore its available files anyway?")) return new OperationResult(OperationOutcome.Cancelled);
                 Snapshot snapshot = request.Paths == null ? Select(point.Snapshot, point.Snapshot.Files.ConvertAll(f => f.Relative).ToArray()) : Select(point.Snapshot, request.Paths);
                 if (request.Paths == null) snapshot.Folders = new List<string>(point.Snapshot.Folders);
                 if (snapshot.Files.Count == 0 && snapshot.Folders.Count == 0) throw new IOException("No files or folders selected.");
                 if (request.Exact && request.Paths != null) throw new IOException("Exact restore requires a complete saved restore point and full-backup restore.");
                 Config effective = ProfileSettings.ResolveProfileSettings(config, device.Id, Path.GetFileName(history));
                 RestoreFlow.ValidateRestoreDestination(request.Backup, target, effective);
-                if (!RestoreFlow.ConfirmRestoreTarget(request.Backup, target)) return new OperationResult { Cancelled = true };
-                OperationOutput.WriteLine("  Restore inventory: " + (set.Sqlite ? "SQLite (catalog.sqlite)." : "recovery records."));
-                OperationOutput.WriteLine("  Selected backup: " + BackupSetNames.Label(request.Backup) + " · " + point.Label);
+                if (!RestoreFlow.ConfirmRestoreTarget(request.Backup, target, context)) return new OperationResult(OperationOutcome.Cancelled);
+                context.WriteLine("  Restore inventory: " + (set.Sqlite ? "SQLite (catalog.sqlite)." : "recovery records."));
+                context.WriteLine("  Selected backup: " + BackupSetNames.Label(request.Backup) + " · " + point.Label);
                 return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, request.Exact, effective, context,
                     () => RestoreFlow.ValidateRestoreDestination(request.Backup, target, effective));
             }

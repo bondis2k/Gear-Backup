@@ -14,10 +14,7 @@ namespace GearBackup
         // Asks a question with a fixed set of answers; returns the chosen option's key.
         internal static char Ask(string question, params Option[] options)
         {
-            OperationContext.Current.CheckCancellation();
-            char answer = OperationContext.Current.Interaction.Choose(question, options);
-            OperationContext.Current.CheckCancellation();
-            return answer;
+            return OperationContext.Current.Ask(question, options);
         }
 
         internal static bool AskYesNo(string question)
@@ -28,19 +25,13 @@ namespace GearBackup
         // Lets the user pick one of `items`; 1..items.Count, or 0 for noneLabel / Enter (see ChooseItem).
         internal static int AskItem(string question, IList<string> items, string noneLabel = null)
         {
-            OperationContext.Current.CheckCancellation();
-            int answer = OperationContext.Current.Interaction.ChooseItem(question, items, noneLabel);
-            OperationContext.Current.CheckCancellation();
-            return answer;
+            return OperationContext.Current.AskItem(question, items, noneLabel);
         }
 
         // Free text such as a search or a path; null when cancelled.
         internal static string AskText(string question)
         {
-            OperationContext.Current.CheckCancellation();
-            string answer = OperationContext.Current.Interaction.AskText(question);
-            OperationContext.Current.CheckCancellation();
-            return answer;
+            return OperationContext.Current.AskText(question);
         }
 
         internal static void PrintProgress(long processedBytes, long totalBytes, int done, int total, long copiedBytes)
@@ -50,7 +41,7 @@ namespace GearBackup
 
         internal static void WriteColored(string text, ConsoleColor color)
         {
-            OperationContext.Current.Interaction.WriteColored(text, color);
+            OperationContext.Current.WriteColored(text, color);
         }
     }
 

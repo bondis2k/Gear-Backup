@@ -243,7 +243,7 @@ partial class Tests
             Assert(restoreTargetBox.Text == target, "returning to Backup preserves the independent restore destination");
             int backupsBefore = ListBackups(history).Count;
             start.PerformClick();
-            DriveGui(form, state, "Complete", true);
+            DriveGui(form, state, "Cancelled", true);
             Assert(ListBackups(history).Count == backupsBefore, "dismissing GUI acceptance dialog prevents writes");
 
             // Cancel inside a marshalled choice dialog: cancellation must survive Invoke.
@@ -301,7 +301,7 @@ partial class Tests
             using (var bitmap = new Bitmap(dialog.ClientSize.Width, dialog.ClientSize.Height))
             {
                 dialog.Controls[0].DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.ClientSize));
-                bitmap.Save(Path.Combine(Environment.CurrentDirectory, "tests", ".build", "preview-example.png"), System.Drawing.Imaging.ImageFormat.Png);
+                bitmap.Save(Path.Combine(TestBuildDirectory, "preview-example.png"), System.Drawing.Imaging.ImageFormat.Png);
             }
             filter.SelectedIndex = 3;
             Assert(grid.Rows.Count == 1 && grid.Rows[0].Cells[1].Value.ToString() == @"Samples\extra.wav", "removal filter exposes destructive changes");
@@ -449,7 +449,17 @@ partial class Tests
             string text = ((Label)form.Controls.Find("ProgressMetrics", true)[0]).Text;
             Assert(text.Contains("50%") && text.Contains("5 B / 10 B") && text.Contains("Elapsed"), "overall progress includes percentage, byte counts and elapsed time");
             Assert(!((Label)form.Controls.Find("OperationDetail", true)[0]).Text.Contains("private-file.wav"), "full backup progress does not expose individual paths");
-            form.CompleteOperation(new OperationResult { Summary = "Done", Counts = new OperationCounts { Copied = 1 } }, false);
+            form.CompleteOperation(new OperationResult(OperationOutcome.Success) { Summary = "Done", Counts = new OperationCounts { Copied = 1 } }, false);
+            var operationStatus = (Label)form.Controls.Find("OperationStatus", true)[0];
+            Assert(operationStatus.Text == "Complete", "a successful result needs no title to complete");
+            form.CompleteOperation(new OperationResult(OperationOutcome.Cancelled) { Title = "Stopped" }, false);
+            Assert(operationStatus.Text == "Cancelled", "cancelled selections are displayed as cancelled");
+            form.CompleteOperation(new OperationResult(OperationOutcome.Skipped), false);
+            Assert(operationStatus.Text == "No changes", "skipped work has its own status");
+            form.CompleteOperation(new OperationResult(OperationOutcome.Preview), false);
+            Assert(operationStatus.Text == "Preview complete", "the result can explicitly identify a preview");
+            form.CompleteOperation(new OperationResult(OperationOutcome.Failed, 2), false);
+            Assert(operationStatus.Text == "Needs attention", "verification failure is not displayed as complete");
             form.Close();
         }
     }
@@ -498,7 +508,7 @@ partial class Tests
     [Test("Layouts at larger text sizes", Gui = true)]
     static void TestScaledGuiLayouts()
     {
-        string output = Path.Combine(Environment.CurrentDirectory, "tests", ".build");
+        string output = TestBuildDirectory;
         foreach (int percent in new[] { 100, 150, 200 })
         {
             using (var form = new MainForm(true)) CheckGuiLayout(form, percent, Path.Combine(output, "main-" + percent + ".png"));

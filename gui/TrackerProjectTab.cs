@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -29,9 +28,8 @@ namespace GearBackup.Gui
         readonly Button viewPattern = GuiTheme.Button("View pattern", false);
         Button browse;
         Control inspectorContent, checkContent;
-        CancellationTokenSource running;
+        readonly GuiBackgroundWork work = new GuiBackgroundWork();
         bool closed, initialized, filling;
-        int generation;
         List<string> projects = new List<string>();
         List<string> projectWarnings = new List<string>();
         internal Func<string, string> FolderPicker { get; set; }
@@ -56,7 +54,7 @@ namespace GearBackup.Gui
             var row = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 3 };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             row.Controls.Add(new FieldPanel(path) { Dock = DockStyle.Fill }, 0, 0);
-            browse = GuiTheme.Button("Browse…", false); browse.Name = "TrackerBrowse"; browse.Click += delegate { if (running == null) Browse(); };
+            browse = GuiTheme.Button("Browse…", false); browse.Name = "TrackerBrowse"; browse.Click += delegate { if (!work.IsRunning) Browse(); };
             inspect.Name = "TrackerInspect"; inspect.Click += delegate { Run(); };
             row.Controls.Add(browse, 1, 0); row.Controls.Add(inspect, 2, 0);
             panel.Controls.Add(row);
@@ -74,8 +72,8 @@ namespace GearBackup.Gui
             patterns.CellDoubleClick += delegate(object sender, DataGridViewCellEventArgs e) { if (e.RowIndex >= 0) ViewPattern(); };
             patterns.SelectionChanged += delegate { viewPattern.Enabled = patterns.CurrentRow != null && Report != null && Report.Patterns.Count > patterns.CurrentRow.Index && Report.Patterns[patterns.CurrentRow.Index].Error == null; };
             panel.Controls.Add(viewPattern);
-            path.TextChanged += delegate { ++generation; if (running != null) running.Cancel(); ClearResults(); };
-            panel.Disposed += delegate { closed = true; ++generation; if (running != null) running.Cancel(); };
+            path.TextChanged += delegate { work.Invalidate(); SetBusy(false); ClearResults(); };
+            panel.Disposed += delegate { closed = true; work.Dispose(); };
             inspectorContent = panel;
 
             var second = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Margin = Padding.Empty };
@@ -101,7 +99,7 @@ namespace GearBackup.Gui
 
         internal void SuggestCard(string folder)
         {
-            if (running == null && string.IsNullOrWhiteSpace(path.Text) && !string.IsNullOrWhiteSpace(folder)) path.Text = folder;
+            if (!work.IsRunning && string.IsNullOrWhiteSpace(path.Text) && !string.IsNullOrWhiteSpace(folder)) path.Text = folder;
         }
 
         static void ConfigureGrid(DataGridView grid, string[] columns, int height)
@@ -135,7 +133,7 @@ namespace GearBackup.Gui
         // Opens the selected pattern's steps in a window.
         internal void ViewPattern()
         {
-            if (running != null || Report == null || patterns.CurrentRow == null || patterns.CurrentRow.Index >= Report.Patterns.Count) return;
+            if (work.IsRunning || Report == null || patterns.CurrentRow == null || patterns.CurrentRow.Index >= Report.Patterns.Count) return;
             TrackerPatternInfo info = Report.Patterns[patterns.CurrentRow.Index];
             if (info.Error != null) return;
             TrackerPatternFile file;
@@ -159,12 +157,11 @@ namespace GearBackup.Gui
         // Finds the projects below the chosen folder and inspects one (the first, or the one picked).
         internal async void Run(int index = 0)
         {
-            if (running != null || closed) return;
+            if (work.IsRunning || closed) return;
             string folder = path.Text.Trim();
             if (folder.Length == 0) { notice.Text = "Choose a Tracker card or project folder first."; return; }
-            int scan = ++generation;
             var knownProjects = new List<string>(projects);
-            var cancellation = running = new CancellationTokenSource();
+            var cancellation = work.Begin();
             SetBusy(true);
             notice.Text = "Reading the project…"; checkNotice.Text = notice.Text;
             List<string> found = projects; TrackerProjectReport report = null; string error = null;
@@ -186,11 +183,10 @@ namespace GearBackup.Gui
             }
             catch (OperationCanceledException) { error = "Cancelled."; }
             catch (Exception ex) { error = "Cannot read the project: " + ex.Message; } // shown in the notice
-            finally { if (ReferenceEquals(running, cancellation)) running = null; cancellation.Dispose(); }
+            finally { cancellation.Dispose(); }
             host.RunOnUi(delegate {
-                if (closed) return;
+                if (!cancellation.IsCurrent) return;
                 SetBusy(false);
-                if (scan != generation) return;
                 if (error != null) { notice.Text = error; checkNotice.Text = error; return; }
                 projectWarnings = discoveryWarnings;
                 Show(found, report, index);

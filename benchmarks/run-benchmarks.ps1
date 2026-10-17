@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 . (Join-Path $projectRoot 'build/csharp-compiler.ps1')
 $compiler = Get-CSharpCompiler
-$build = Join-Path $projectRoot 'tests/.build'
+$build = Join-Path $projectRoot 'tests/.build/benchmarks'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 $sources = @(Get-ChildItem (Join-Path $projectRoot 'src') -Filter '*.cs' -Recurse | Where-Object Name -ne 'Notifications.cs' | ForEach-Object FullName)
 # Reuse the test notification stub, so benchmarks never send desktop notifications.

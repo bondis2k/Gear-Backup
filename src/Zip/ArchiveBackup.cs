@@ -26,9 +26,9 @@ namespace GearBackup
             return name + ".zip";
         }
 
-        internal static OperationResult Run(string source, string destination, Config config, SourceChoice choice = null)
+        internal static OperationResult Run(string source, string destination, Config config, SourceChoice choice = null, OperationContext context = null)
         {
-            var context = OperationContext.Current;
+            context = context ?? OperationContext.Current;
             var timer = System.Diagnostics.Stopwatch.StartNew();
             DateTime takenUtc = DateTime.UtcNow;
             source = Rooted(source); destination = Path.GetFullPath(destination);
@@ -49,13 +49,13 @@ namespace GearBackup
             {
                 string path = Relative(source, file.FullName); actions.Add("Copy: " + path); sizes[path] = file.Length; total += file.Length;
             }
-            OperationOutput.WriteLine("  ZIP archive: " + destination);
-            if (!PlanReview.ShowPlan("ZIP archive preview", actions, total, config.Preview, sizes))
-                return new OperationResult { Cancelled = !context.PreviewOnly, Summary = context.PreviewOnly ? "ZIP preview complete; no archive created." : "ZIP archive cancelled.", Elapsed = timer.Elapsed };
+            context.WriteLine("  ZIP archive: " + destination);
+            if (!context.ShowPlan("ZIP archive preview", actions, total, config.Preview, sizes))
+                return new OperationResult(context.PreviewOnly ? OperationOutcome.Preview : OperationOutcome.Cancelled) { Summary = context.PreviewOnly ? "ZIP preview complete; no archive created." : "ZIP archive cancelled.", Elapsed = timer.Elapsed };
             var previous = File.Exists(destination) ? new FileInfo(destination) : null;
             long previousSize = previous == null ? 0 : previous.Length, previousTime = previous == null ? 0 : previous.LastWriteTimeUtc.Ticks;
             if (previous != null && !ConsoleUi.AskYesNo("Replace the existing ZIP archive?\n" + destination))
-                return new OperationResult { Cancelled = true, Summary = "ZIP archive cancelled; existing archive kept." };
+                return new OperationResult(OperationOutcome.Cancelled) { Summary = "ZIP archive cancelled; existing archive kept." };
             string temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
             bool created = false;
             var hashes = new Dictionary<string, string>();
@@ -114,7 +114,7 @@ namespace GearBackup
                 if ((current != null) != (previous != null) || (current != null && (current.Length != previousSize || current.LastWriteTimeUtc.Ticks != previousTime)))
                     throw new IOException("The archive destination changed during backup. Choose the destination again.");
                 if (File.Exists(destination)) AtomicFile.ReplaceSafely(temp, destination); else File.Move(temp, destination);
-                return new OperationResult { Title = "ZIP archive complete", Summary = "Saved full ZIP archive: " + destination,
+                return new OperationResult(OperationOutcome.Success) { Title = "ZIP archive complete", Summary = "Saved full ZIP archive: " + destination,
                     OutputFolder = parent, Counts = new OperationCounts { Copied = scan.Files.Count }, Elapsed = timer.Elapsed };
             }
             finally { if (created) FileCopy.TryDelete(temp); }

@@ -1,8 +1,10 @@
 # -Filter TEXT (more than one allowed) runs only the tests whose name contains it; -List shows the tests.
-param([string[]]$Filter = @(), [switch]$List)
+param([string[]]$Filter = @(), [switch]$List, [string]$BuildDirectory)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
-$testBuild = Join-Path $PSScriptRoot '.build'
+$testBuild = if (!$BuildDirectory) { Join-Path $PSScriptRoot '.build\gui' }
+    elseif ([IO.Path]::IsPathRooted($BuildDirectory)) { [IO.Path]::GetFullPath($BuildDirectory) }
+    else { [IO.Path]::GetFullPath((Join-Path $projectRoot $BuildDirectory)) }
 New-Item -ItemType Directory -Path $testBuild -Force | Out-Null
 . (Join-Path $projectRoot 'build\csharp-compiler.ps1')
 $compilerPath = Get-CSharpCompiler

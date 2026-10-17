@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using static GearBackup.PathSafety;
-using static GearBackup.PlanReview;
-using static GearBackup.ConsoleUi;
 using static GearBackup.ProfileSettings;
 using static GearBackup.BackupFolders;
 using static GearBackup.ProfileNaming;
@@ -15,19 +13,20 @@ namespace GearBackup
     static class Histories
     {
         // Lets the user pick a profile history containing backups. Null when cancelled.
-        internal static string ChooseHistory(string root, string preferred)
+        internal static string ChooseHistory(string root, string preferred, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             var roots = new List<string>();
             CollectHistories(root, roots);
-            return ChooseHistoryList(roots, preferred, preferred ?? root);
+            return ChooseHistoryList(roots, preferred, preferred ?? root, context);
         }
 
         // The histories with backups in every configured location. Looked up once per operation; callers
         // get their own copy of the list.
-        internal static List<string> AvailableHistories(Config config)
+        internal static List<string> AvailableHistories(Config config, OperationContext context = null)
         {
             List<string> locations = ConfiguredBackupLocations(config);
-            OperationContext context = OperationContext.Current;
+            context = context ?? OperationContext.Current;
             Dictionary<string, List<string>> cache = context.HistoryCache;
             string key = string.Join("|", locations.ConvertAll(location => Rooted(location)).ToArray());
             List<string> roots;
@@ -54,15 +53,16 @@ namespace GearBackup
             }
         }
 
-        internal static string ChooseHistory(Config config, string preferred)
+        internal static string ChooseHistory(Config config, string preferred, OperationContext context = null)
         {
-            var roots = AvailableHistories(config);
+            context = context ?? OperationContext.Current;
+            var roots = AvailableHistories(config, context);
             if (preferred != null && ListBackups(preferred).Count > 0 && !roots.Exists(p => Rooted(p) == Rooted(preferred)))
                 roots.Add(preferred);
-            return ChooseHistoryList(roots, preferred, preferred ?? HistoriesRoot(config));
+            return ChooseHistoryList(roots, preferred, preferred ?? HistoriesRoot(config), context);
         }
 
-        static string ChooseHistoryList(List<string> roots, string preferred, string fallback)
+        static string ChooseHistoryList(List<string> roots, string preferred, string fallback, OperationContext context)
         {
             roots.Sort(StringComparer.OrdinalIgnoreCase);
             if (roots.Count == 0) return fallback;
@@ -70,7 +70,7 @@ namespace GearBackup
             foreach (string history in roots)
                 labels.Add(HistoryNames.DisplayName(history) + " — " + history +
                     (string.Equals(history, preferred, StringComparison.OrdinalIgnoreCase) ? " (current source)" : ""));
-            int pick = AskItem("Choose a backup history.", labels);
+            int pick = context.AskItem("Choose a backup history.", labels);
             return pick == 0 ? null : roots[pick - 1];
         }
 
@@ -100,9 +100,10 @@ namespace GearBackup
         }
 
         // Checks the source against the backup location and returns this source's history folder.
-        internal static string HistoryFor(Config config, string source)
+        internal static string HistoryFor(Config config, string source, OperationContext context = null)
         {
-            string linked = ProfileLinks.Find(config, source);
+            context = context ?? OperationContext.Current;
+            string linked = ProfileLinks.Find(config, source, context.Device);
             if (linked != null)
             {
                 RejectRootLinks(linked);
@@ -115,26 +116,28 @@ namespace GearBackup
             string histories = HistoriesRoot(config);
             if (Within(histories, source) || Within(source, histories))
                 throw new IOException("The backup folder and source must not contain one another.");
-            return ProfileFolder(Path.Combine(histories, "profiles"), source, config.Profile);
+            return ProfileFolder(Path.Combine(histories, "profiles"), source, config.Profile, context.Device);
         }
 
         // The history to check: the named profile, or one the user picks. Null when cancelled.
-        internal static string HistoryToCheck(Config config)
+        internal static string HistoryToCheck(Config config, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             string histories = HistoriesRoot(config);
-            if (config.Profile.Length == 0) return ChooseHistory(config, null);
-            var found = AvailableHistories(config).FindAll(path =>
+            if (config.Profile.Length == 0) return ChooseHistory(config, null, context);
+            var found = AvailableHistories(config, context).FindAll(path =>
                 Path.GetFileName(Path.GetDirectoryName(path)).Equals("profiles", StringComparison.OrdinalIgnoreCase) &&
                 Path.GetFileName(path).Equals(config.Profile, StringComparison.OrdinalIgnoreCase));
             if (found.Count == 1) return found[0];
-            if (found.Count > 1) { int pick = AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
+            if (found.Count > 1) { int pick = context.AskItem("Choose the location for this profile.", found); return pick == 0 ? null : found[pick - 1]; }
             return Path.Combine(histories, "profiles", config.Profile);
         }
 
         // Locks a history against a second writer; a preview changes nothing, so it takes no lock.
-        internal static IDisposable LockUnlessPreview(string history)
+        internal static IDisposable LockUnlessPreview(string history, OperationContext context = null)
         {
-            return PreviewOnly ? null : LockHistory(history);
+            context = context ?? OperationContext.Current;
+            return context.PreviewOnly ? null : LockHistory(history);
         }
     }
 

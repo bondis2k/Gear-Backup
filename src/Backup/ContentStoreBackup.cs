@@ -12,9 +12,6 @@ using static GearBackup.Backups;
 using static GearBackup.AtomicFile;
 using static GearBackup.BackupStatuses;
 using static GearBackup.Histories;
-using static GearBackup.PlanReview;
-using static GearBackup.DeviceSelection;
-using static GearBackup.ConsoleUi;
 using static GearBackup.Formatting;
 using static GearBackup.SourceScan;
 using static GearBackup.BackupFolders;
@@ -37,7 +34,7 @@ namespace GearBackup
         }
 
         // One run's state, shared by the phases below (a ContentStoreBackup is made for each run).
-    readonly OperationContext context;
+        readonly OperationContext context;
         string source, history, backup, pointName, manifest;
         bool incremental;
         Config config;
@@ -58,15 +55,15 @@ namespace GearBackup
 
         internal ContentStoreBackup(OperationContext context) { this.context = context; }
 
-    internal OperationResult Run(string source, string history, string previous, bool incremental, Config config)
+        internal OperationResult Run(string source, string history, string previous, bool incremental, Config config)
         {
             this.source = source; this.history = history; this.incremental = incremental; this.config = config;
             started = DateTime.Now;
             timer = System.Diagnostics.Stopwatch.StartNew();
             backup = incremental ? previous : Path.Combine(history, started.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
             if (!incremental && Directory.Exists(backup)) backup = UniqueFolder(history, started.ToString("yyyy-MM-dd_HHmmss_fffffff", CultureInfo.InvariantCulture));
-            OperationOutput.WriteLine("  " + (incremental ? "Updating" : "Creating") + " single content store: " + backup);
-            OperationOutput.WriteLine("  A restore point is saved for this backup run. Files are restored through Gear Backup.");
+            context.WriteLine("  " + (incremental ? "Updating" : "Creating") + " single content store: " + backup);
+            context.WriteLine("  A restore point is saved for this backup run. Files are restored through Gear Backup.");
             store = new ObjectChecks(backup);
             StartAfterLatestPoint();
             LoadCurrentPoint();
@@ -86,11 +83,11 @@ namespace GearBackup
             catch (Exception ex)
             {
                 if (!committed) SetBackupStatus(backup, Status.Failed);
-                OperationOutput.WriteLine("  " + (committed ? "Follow-up failed: " : "Backup failed: ") + ex.Message);
+                context.WriteLine("  " + (committed ? "Follow-up failed: " : "Backup failed: ") + ex.Message);
                 string hint = ErrorHints.For(ex);
-                if (hint != null) OperationOutput.WriteLine("  " + hint);
-                return new OperationResult { Title = AppIdentity.Name + (committed ? " follow-up failed" : " backup failed"),
-                    Summary = ex.Message + (committed ? " The restore point was saved." : " Previous restore points are preserved."), ExitCode = 2,
+                if (hint != null) context.WriteLine("  " + hint);
+                return new OperationResult(OperationOutcome.Failed, 2) { Title = AppIdentity.Name + (committed ? " follow-up failed" : " backup failed"),
+                    Summary = ex.Message + (committed ? " The restore point was saved." : " Previous restore points are preserved."),
                     OutputFolder = backup, Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged, Failed = 1 } };
             }
             finally { RemoveUnpublishedPoint(); }
@@ -137,12 +134,26 @@ namespace GearBackup
         // here (a path too long, too little space, a declined plan), null to go on.
         OperationResult PlanFiles()
         {
+            string nameRoot = Path.GetPathRoot(Path.GetFullPath(backup));
+            PathLengthCheck length = ScanFiles(nameRoot);
+            WarnAboutNames();
+            string problem = length.Problem("Choose a shorter backup location.");
+            if (problem != null) return new OperationResult(OperationOutcome.Failed, 1) { Summary = problem };
+            PlanFolders(nameRoot);
+            string free = CheckFreeSpace(history, needed + (config.Zip && !incremental ? logicalBytes + logicalBytes / 100 + 65536 : 0) + 1024 * 1024);
+            if (free != null) return new OperationResult(OperationOutcome.Failed, 1) { Summary = free };
+            if (context.PreviewOnly || actions.Count != 0)
+                if (!context.ShowPlan("Single content store backup preview", actions, needed, config.Preview, sizes)) return OperationResult.PlanStopped(context);
+            return null;
+        }
+
+        PathLengthCheck ScanFiles(string nameRoot)
+        {
             var old = new Dictionary<string, RestoreEntry>(StringComparer.OrdinalIgnoreCase);
             if (current != null) foreach (var item in current.Files) old.Add(item.Relative, item);
             scan = new ScanResult(); CollectFiles(source, scan, context);
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var length = new PathLengthCheck();
-            string nameRoot = Path.GetPathRoot(Path.GetFullPath(backup));
             pointName = RestorePointNames.Create(backup, started, incremental);
             length.File(Path.Combine(AppIdentity.MetadataRoot(backup), "objects", new string('0', 64)), 5);
             length.File(Path.Combine(SnapshotRoot(backup), pointName + ".manifest"));
@@ -160,15 +171,7 @@ namespace GearBackup
                 files.Add(planned);
             }
             foreach (string relative in old.Keys) if (!names.Contains(relative)) actions.Add("Removed from new restore point: " + relative);
-            WarnAboutNames();
-            string problem = length.Problem("Choose a shorter backup location.");
-            if (problem != null) return new OperationResult { ExitCode = 1, Summary = problem };
-            PlanFolders(nameRoot);
-            string free = CheckFreeSpace(history, needed + (config.Zip && !incremental ? logicalBytes + logicalBytes / 100 + 65536 : 0) + 1024 * 1024);
-            if (free != null) return new OperationResult { ExitCode = 1, Summary = free };
-            if (PreviewOnly || actions.Count != 0)
-                if (!ShowPlan("Single content store backup preview", actions, needed, config.Preview, sizes)) return new OperationResult();
-            return null;
+            return length;
         }
 
         // Whether a source file equals the stored one: by size and time, or by checksum when asked or when its time can't be trusted.
@@ -191,11 +194,11 @@ namespace GearBackup
 
         void WarnAboutNames()
         {
-            List<string> nameWarnings = CurrentDevice.NameWarnings ? ChangeSummary.CheckNames(scan, source, config.MaxNameLength) : new List<string>();
+            List<string> nameWarnings = context.Device.NameWarnings ? ChangeSummary.CheckNames(scan, source, config.MaxNameLength) : new List<string>();
             if (nameWarnings.Count == 0) return;
-            WriteColored("  " + nameWarnings.Count + " name(s) the " + CurrentDevice.Name + " may not handle well:", ConsoleColor.Yellow);
-            for (int i = 0; i < nameWarnings.Count && i < 10; i++) OperationOutput.WriteLine("    " + nameWarnings[i]);
-            if (nameWarnings.Count > 10) OperationOutput.WriteLine("    ... and " + (nameWarnings.Count - 10) + " more");
+            context.WriteColored("  " + nameWarnings.Count + " name(s) the " + context.Device.Name + " may not handle well:", ConsoleColor.Yellow);
+            for (int i = 0; i < nameWarnings.Count && i < 10; i++) context.WriteLine("    " + nameWarnings[i]);
+            if (nameWarnings.Count > 10) context.WriteLine("    ... and " + (nameWarnings.Count - 10) + " more");
         }
 
         // Changes to a source folder's membership also belong to the new point.
@@ -216,11 +219,11 @@ namespace GearBackup
         {
             context.CheckCancellation();
             Directory.CreateDirectory(backup);
-            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt"), "single\n");
+            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "storage-mode.txt"), "single\n", context);
             SetBackupStatus(backup, Status.Incomplete);
             BackupDatabase.BeginInventoryUpdate(backup);
             if (!incremental) BackupSetNames.Write(backup, config.FullBackupName);
-            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), CurrentDevice.Id + "\n");
+            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "device.txt"), context.Device.Id + "\n", context);
             snapshot = new Snapshot { Name = pointName, TakenUtc = started.ToUniversalTime() };
             foreach (string folder in scan.Folders) snapshot.Folders.Add(folder.Substring(source.Length));
         }
@@ -316,12 +319,12 @@ namespace GearBackup
                     .Append(item.Size.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(item.ModifiedTicks.ToString(CultureInfo.InvariantCulture))
                     .Append('\t').Append(item.CreatedTicks.ToString(CultureInfo.InvariantCulture)).Append('\n');
             manifest = SafePath(SnapshotRoot(backup), snapshot.Name + ".manifest");
-            AtomicText(manifest, rows.ToString());
+            AtomicText(manifest, rows.ToString(), context);
             RestorePointNames.SaveMetadata(backup, snapshot.Name, started, incremental, incremental ? config.IncrementalBackupName : null);
-            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"), snapshot.Name + "\n");
+            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "current-snapshot.txt"), snapshot.Name + "\n", context);
             committed = true;
             SetBackupStatus(backup, Status.Complete);
-            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt"), DateTime.UtcNow.ToString("O") + "\n");
+            AtomicText(Path.Combine(AppIdentity.MetadataRoot(backup), "last-success.txt"), DateTime.UtcNow.ToString("O") + "\n", context);
             BackupDatabase.TryRefresh(backup, null, null, context);
         }
 
@@ -330,12 +333,12 @@ namespace GearBackup
         {
             zipPath = null; zipFailed = false;
             if (!config.Zip) return;
-            if (incremental) { OperationOutput.WriteLine("  --zip applies to full backups; no zip made for this incremental backup."); return; }
-            try { OperationOutput.WriteLine("  Saving zip..."); zipPath = BackupZip.ZipBackup(backup, context); OperationOutput.WriteLine("  Zip saved to " + zipPath); }
+            if (incremental) { context.WriteLine("  --zip applies to full backups; no zip made for this incremental backup."); return; }
+            try { context.WriteLine("  Saving zip..."); zipPath = BackupZip.ZipBackup(backup, context); context.WriteLine("  Zip saved to " + zipPath); }
             catch (Exception ex)
             {
                 if (ex is OperationCanceledException) throw;
-                zipFailed = true; OperationOutput.WriteLine("  Could not save the zip: " + ex.Message);
+                zipFailed = true; context.WriteLine("  Could not save the zip: " + ex.Message);
             }
         }
 
@@ -343,8 +346,8 @@ namespace GearBackup
         {
             string summary = "Restore point saved: " + (incremental ? snapshot.Name : started.ToString("yyyy-MM-dd HH:mm:ss")) + ". " + copied + " new/changed, " + unchanged + " unchanged; " + FormatSize(addedBytes) + " added to the content store." +
                 (zipPath != null ? " Zip: " + Path.GetFileName(zipPath) + "." : "") + (zipFailed ? " The zip could not be saved." : "");
-            OperationOutput.WriteLine("  " + summary);
-            return new OperationResult { Title = AppIdentity.Name + " complete", Summary = summary, ExitCode = zipFailed ? 2 : 0, OutputFolder = backup,
+            context.WriteLine("  " + summary);
+            return new OperationResult(zipFailed ? OperationOutcome.Failed : OperationOutcome.Success, zipFailed ? 2 : 0) { Title = AppIdentity.Name + " complete", Summary = summary, OutputFolder = backup,
                 Elapsed = timer.Elapsed, Counts = new OperationCounts { Copied = copied, Unchanged = unchanged } };
         }
 
@@ -357,7 +360,7 @@ namespace GearBackup
                 foreach (string path in new[] { manifest, Path.ChangeExtension(manifest, ".kind"), Path.ChangeExtension(manifest, ".taken"), Path.ChangeExtension(manifest, ".name") })
                 { RejectRootLinks(path); TryDelete(path); }
             }
-            catch (Exception ex) { OperationOutput.WriteLine("  Could not remove unpublished restore point: " + ex.Message); }
+            catch (Exception ex) { context.WriteLine("  Could not remove unpublished restore point: " + ex.Message); }
         }
     }
 

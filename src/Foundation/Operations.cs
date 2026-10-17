@@ -58,13 +58,30 @@ namespace GearBackup
         public int Files, TotalFiles;
     }
 
+    internal enum OperationOutcome { Success, Cancelled, Skipped, Preview, Failed }
+
     internal sealed class OperationResult
     {
-        public int ExitCode;
+        public OperationOutcome Outcome { get; private set; }
+        public int ExitCode { get; private set; }
+        public bool Cancelled { get { return Outcome == OperationOutcome.Cancelled; } }
+        public bool Succeeded { get { return Outcome == OperationOutcome.Success; } }
+        public OperationResult(OperationOutcome outcome, int exitCode = 0) { SetOutcome(outcome, exitCode); }
+        public void SetOutcome(OperationOutcome outcome, int exitCode = 0)
+        {
+            if (!Enum.IsDefined(typeof(OperationOutcome), outcome)) throw new ArgumentOutOfRangeException("outcome");
+            if (exitCode < 0 || (outcome != OperationOutcome.Failed && exitCode != 0)) throw new ArgumentOutOfRangeException("exitCode");
+            Outcome = outcome;
+            ExitCode = outcome == OperationOutcome.Failed && exitCode == 0 ? 1 : exitCode;
+        }
+        // A declined plan and a read-only preview both stop before applying changes.
+        public static OperationResult PlanStopped(OperationContext context)
+        {
+            return new OperationResult(context.PreviewOnly ? OperationOutcome.Preview : OperationOutcome.Cancelled);
+        }
         public string Title, Summary;
         public string OutputFolder;
         public OperationCounts Counts;
-        public bool Cancelled;
         public TimeSpan Elapsed;
     }
 
@@ -73,8 +90,8 @@ namespace GearBackup
         public int Copied, Unchanged, Removed, Failed;
     }
 
-    // Everything an operation needs from its caller: the front end, the cancellation token and per-run
-    // flags. Engines reach it through OperationContext.Current instead of passing it to every helper.
+    // Explicit dependencies for engines and workflows: interaction, cancellation, device and per-run
+    // state. Current remains a compatibility bridge for legacy frontend and hardware adapters.
     internal sealed class OperationContext
     {
         // Per thread, because the GUI runs operations on a worker thread. Every operation starts its own
@@ -124,6 +141,37 @@ namespace GearBackup
             Cancellation = cancellation;
         }
         public void CheckCancellation() { Cancellation.ThrowIfCancellationRequested(); }
+        // Explicit interaction for engines and workflows. Legacy frontend adapters delegate here.
+        public void Write(string text) { Interaction.Write(text); }
+        public void WriteLine(string text = "") { Interaction.WriteLine(text); }
+        public void WriteLine(string format, params object[] values) { WriteLine(string.Format(format, values)); }
+        public void WriteColored(string text, ConsoleColor color) { Interaction.WriteColored(text, color); }
+        public char Ask(string question, params Option[] options)
+        {
+            CheckCancellation();
+            char answer = Interaction.Choose(question, options);
+            CheckCancellation(); return answer;
+        }
+        public bool AskYesNo(string question) { return Ask(question, ConsoleUi.Yes, ConsoleUi.No) == 'y'; }
+        public int AskItem(string question, IList<string> items, string noneLabel = null)
+        {
+            CheckCancellation();
+            int answer = Interaction.ChooseItem(question, items, noneLabel);
+            CheckCancellation(); return answer;
+        }
+        public string AskText(string question)
+        {
+            CheckCancellation();
+            string answer = Interaction.AskText(question);
+            CheckCancellation(); return answer;
+        }
+        public bool ShowPlan(string label, List<string> actions, long bytes, bool showDetails, Dictionary<string, long> sizes = null)
+        {
+            CheckCancellation();
+            bool approved = Interaction.ReviewPlan(new OperationPlan { Label = label, Actions = actions,
+                Bytes = bytes, ShowDetails = showDetails, FileSizes = sizes, PreviewOnly = PreviewOnly });
+            CheckCancellation(); return approved && !PreviewOnly;
+        }
         // Reports progress, and checks for cancellation before and after, so a Cancel pressed while the
         // front end handles the update stops the operation right there.
         public void Progress(Stage stage, string path, long bytes, long totalBytes, int files = 0, int totalFiles = 0)
