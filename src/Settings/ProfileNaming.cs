@@ -27,13 +27,13 @@ namespace GearBackup
         // ("m8-card-1A2B3C4D"), so the same SD card keeps its history in another reader or drive letter. A
         // folder gets a short hash of its full path ("m8-folder-..."). A mirrored MTP device is named by its
         // mirror folder ("op1-field-L1PRC121"). A named Profile setting overrides all of these.
-        internal static string ProfileId(string source, string requested)
+        internal static string ProfileId(string source, string requested, DeviceProfile device = null)
         {
             if (requested.Length > 0) { ValidateProfile(requested); return requested; }
             string normalized = Rooted(source);
             if (Within(normalized, MirrorRoot) && Rooted(normalized) != Rooted(MirrorRoot))
                 return Path.GetFileName(normalized.TrimEnd('\\'));
-            return CurrentDevice.Id + "-" + SourceKey(normalized);
+            return (device ?? CurrentDevice).Id + "-" + SourceKey(normalized);
         }
 
         // What identifies a drive or folder, without the device: "card-1A2B3C4D" or "folder-<hash>". Before
@@ -53,9 +53,9 @@ namespace GearBackup
         }
 
         // Each device/source pair has its own history. A named profile uses the requested name directly.
-        internal static string ProfileFolder(string profiles, string source, string requested)
+        internal static string ProfileFolder(string profiles, string source, string requested, DeviceProfile device = null)
         {
-            return Path.Combine(profiles, ProfileId(source, requested));
+            return Path.Combine(profiles, ProfileId(source, requested, device));
         }
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

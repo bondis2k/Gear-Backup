@@ -12,14 +12,10 @@ partial class Tests
     static RestoreSection RestoreInventory(MainForm form)
     { return (RestoreSection)typeof(MainForm).GetField("restoreSection", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form); }
 
-    static CancellationTokenSource RestoreRead(RestoreSection section, string name)
-    { return (CancellationTokenSource)typeof(RestoreSection).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(section); }
+    static GuiBackgroundWork.Request RestoreRead(RestoreSection section, string name)
+    { return ((GuiBackgroundWork)typeof(RestoreSection).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(section)).Current; }
 
-    static bool RestoreReadDisposed(CancellationTokenSource source)
-    {
-        try { var token = source.Token; return false; }
-        catch (ObjectDisposedException) { return true; }
-    }
+    static bool RestoreReadDisposed(GuiBackgroundWork.Request request) { return request.IsDisposed; }
 
     static RestoreSet InventoryPoint(string backup, DeviceProfile device, OperationContext context)
     {

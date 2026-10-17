@@ -44,64 +44,67 @@ namespace GearBackup
         }
 
         internal static OperationResult Run(string path, SourceChoice detected, string target, Config config,
-            Action validateDevice = null, Func<string, long, string> checkSpace = null, string stagingParent = null)
+            Action validateDevice = null, Func<string, long, string> checkSpace = null, string stagingParent = null, OperationContext context = null)
         {
-            if (detected == null || detected.Detected == null) throw new IOException("Detect the destination device before restoring a ZIP archive.");
-            target = Rooted(target); path = Path.GetFullPath(path);
-            RejectRootLinks(path); RejectRootLinks(target);
-            if (!Directory.Exists(target)) throw new IOException("Restore destination does not exist: " + target);
-            if (detected.Mtp != null && Within(target, detected.Mtp.Mirror))
-                throw new IOException("Choose a PC folder outside the MTP mirror. Transfer the restored files to the device manually.");
-            if (validateDevice != null) validateDevice();
-            var context = OperationContext.Current;
-            var space = checkSpace ?? CheckSpace;
-            string parent = Rooted(stagingParent ?? Path.GetTempPath());
-            RejectRootLinks(parent);
-            if (!Directory.Exists(parent)) throw new IOException("Temporary extraction location does not exist.");
-            string stage = Path.Combine(parent, "GearBackup-ZipRestore-" + Guid.NewGuid().ToString("N"));
-            bool created = false;
-            try
+            context = context ?? OperationContext.Current;
+            using (context.Activate())
             {
-                using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                if (detected == null || detected.Detected == null) throw new IOException("Detect the destination device before restoring a ZIP archive.");
+                target = Rooted(target); path = Path.GetFullPath(path);
+                RejectRootLinks(path); RejectRootLinks(target);
+                if (!Directory.Exists(target)) throw new IOException("Restore destination does not exist: " + target);
+                if (detected.Mtp != null && Within(target, detected.Mtp.Mirror))
+                    throw new IOException("Choose a PC folder outside the MTP mirror. Transfer the restored files to the device manually.");
+                if (validateDevice != null) validateDevice();
+                    var space = checkSpace ?? CheckSpace;
+                string parent = Rooted(stagingParent ?? Path.GetTempPath());
+                RejectRootLinks(parent);
+                if (!Directory.Exists(parent)) throw new IOException("Temporary extraction location does not exist.");
+                string stage = Path.Combine(parent, "GearBackup-ZipRestore-" + Guid.NewGuid().ToString("N"));
+                bool created = false;
+                try
                 {
-                    ZipPreflight.Validate(file, MaxEntries, context);
-                    using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
+                    using (var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
-                        var inventory = Read(zip, context);
-                        if (inventory.Info.Device.Id != detected.Detected.Id)
-                            throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
-                        using (context.UseDevice(inventory.Info.Device))
+                        ZipPreflight.Validate(file, MaxEntries, context);
+                        using (var zip = new ZipArchive(file, ZipArchiveMode.Read))
                         {
-                            Snapshot snapshot = BuildSnapshot(inventory, path, target, stage);
-                            long reserve = RestoreFlow.RestoreSpaceNeeded(target, ChangedFiles(snapshot, target, config));
-                            bool sameVolume = string.Equals(Path.GetPathRoot(parent), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase);
-                            RequireSpace(space, target, checked(reserve + (sameVolume ? inventory.Info.ContentBytes : 0)));
-                            RequireSpace(space, parent, checked(inventory.Info.ContentBytes + (sameVolume ? reserve : 0)));
-                            OperationOutput.WriteLine("  ZIP backup: " + inventory.Info.Device.Name + " · taken " + inventory.Info.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
-                            OperationOutput.WriteLine("  Backup content: " + Formatting.FormatSize(inventory.Info.ContentBytes) + "; target working space: " + Formatting.FormatSize(reserve) + ".");
-                            OperationOutput.WriteLine("  Checking ZIP SHA-256 checksums before restore.");
-                            context.CheckCancellation();
-                            Directory.CreateDirectory(stage); created = true;
-                            ExtractAndVerify(inventory, snapshot, stage, context);
-                            // Recheck space and device after verification and again after the user approves the plan.
-                            Action guard = delegate {
-                                context.CheckCancellation(); RejectRootLinks(target);
-                                if (!Directory.Exists(target)) throw new IOException("Restore destination is no longer available.");
-                                if (validateDevice != null) validateDevice();
-                                RequireSpace(space, target, reserve);
-                            };
-                            guard();
-                            return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false, config, context, guard);
+                            var inventory = Read(zip, context);
+                            if (inventory.Info.Device.Id != detected.Detected.Id)
+                                throw new IOException("This ZIP contains a " + inventory.Info.Device.Name + " backup; the detected device is " + detected.Detected.Name + ". Restore is blocked.");
+                            using (context.UseDevice(inventory.Info.Device))
+                            {
+                                Snapshot snapshot = BuildSnapshot(inventory, path, target, stage);
+                                long reserve = RestoreFlow.RestoreSpaceNeeded(target, ChangedFiles(snapshot, target, config));
+                                bool sameVolume = string.Equals(Path.GetPathRoot(parent), Path.GetPathRoot(target), StringComparison.OrdinalIgnoreCase);
+                                RequireSpace(space, target, checked(reserve + (sameVolume ? inventory.Info.ContentBytes : 0)));
+                                RequireSpace(space, parent, checked(inventory.Info.ContentBytes + (sameVolume ? reserve : 0)));
+                                OperationOutput.WriteLine("  ZIP backup: " + inventory.Info.Device.Name + " · taken " + inventory.Info.TakenUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"));
+                                OperationOutput.WriteLine("  Backup content: " + Formatting.FormatSize(inventory.Info.ContentBytes) + "; target working space: " + Formatting.FormatSize(reserve) + ".");
+                                OperationOutput.WriteLine("  Checking ZIP SHA-256 checksums before restore.");
+                                context.CheckCancellation();
+                                Directory.CreateDirectory(stage); created = true;
+                                ExtractAndVerify(inventory, snapshot, stage, context);
+                                // Recheck space and device after verification and again after the user approves the plan.
+                                Action guard = delegate {
+                                    context.CheckCancellation(); RejectRootLinks(target);
+                                    if (!Directory.Exists(target)) throw new IOException("Restore destination is no longer available.");
+                                    if (validateDevice != null) validateDevice();
+                                    RequireSpace(space, target, reserve);
+                                };
+                                guard();
+                                return new RestoreEngine().RunSelected(target, snapshot, snapshot.Files, RestoreMode.All, null, false, config, context, guard);
+                            }
                         }
                     }
                 }
-            }
-            finally
-            {
-                if (created)
+                finally
                 {
-                    try { RejectRootLinks(stage); Directory.Delete(stage, true); }
-                    catch (Exception ex) { OperationOutput.WriteLine("  Could not remove temporary ZIP files: " + ex.Message); }
+                    if (created)
+                    {
+                        try { RejectRootLinks(stage); Directory.Delete(stage, true); }
+                        catch (Exception ex) { OperationOutput.WriteLine("  Could not remove temporary ZIP files: " + ex.Message); }
+                    }
                 }
             }
         }

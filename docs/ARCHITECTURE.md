@@ -49,9 +49,17 @@ A layer may use its own layer and the ones below it, never the ones above. `buil
 
 Engines never read the console or show windows. They talk to an `IOperationInteraction` (questions, output, plan approval, progress), which the CLI implements with the console, the GUI with dialogs, and the tests with a scripted fake.
 
-The running operation is reached through `OperationContext.Current`, a per-thread ambient value, so helpers do not need it passed to every call. It carries the interaction, the cancellation token, preview mode, the current device and per-operation caches. The engines (`BackupEngine`, `ContentStoreBackup`, `RestoreEngine`, `IntegrityEngine`, `ArchiveBackup`) take the context as a parameter and pass it on to the helpers that check for cancellation or report progress (file copy and hashing, the source scan, the SQLite catalog, ZIP reading and writing, the M8 card checks, the restore catalog). Those helpers take it as an optional last parameter and fall back to `OperationContext.Current` only at their entry point, so a caller that has the context passes it and a caller that does not still works. The ambient value is still read directly by the front-end question and output helpers (`ConsoleUi`, `OperationOutput`, `PlanReview`), the MTP and Fuji device loops and the storage scan. New engine code should take the context the same way. Every operation starts its own context (`new OperationContext(...).Activate()`): the CLI's `Main`, the GUI's operation runner and tool windows, and each test. Nothing in it outlives the operation.
+The caller supplies an OperationContext to engines and shared workflows. It carries interaction, cancellation, preview mode, device and per-operation caches. Engine code calls the context's output, question and plan-review methods directly, and passes it through file comparisons, recovery, history selection and checks. Device/profile resolution accepts the device explicitly, so another active operation cannot change the selected history or preferences.
+
+OperationContext.Current is retained as a compatibility bridge at optional-context entry points and in legacy frontend/hardware adapters. An adapter resolves it once when no context was supplied; code that already has a context passes it. Engines and hardware workflow boundaries activate their supplied context while calling adapters that still need the bridge. ConsoleUi, OperationOutput and PlanReview remain convenience adapters for frontend code. New business logic should use the explicit context instead of adding ambient lookups. The CLI, GUI worker and tests each create their own context; nested activation restores the previous one.
 
 Rules of thumb: ask the context for interaction and cancellation; pass a `DeviceProfile` explicitly when you have one rather than reading `CurrentDevice`, which is only for code that cannot easily be given it.
+
+Every `OperationResult` requires an `OperationOutcome`: `Success`, `Cancelled`, `Skipped`, `Preview` or `Failed`. Use `Succeeded` to authorize follow-up actions such as device eject, and `Cancelled` to identify cancellation. Titles and summaries are presentation data. Failed outcomes carry a nonzero exit code (normally 1, or 2 for verification/copy errors); other outcomes carry zero. `SetOutcome` updates the outcome and exit code together when a later verification or cancellation changes the result. A declined plan returns cancellation, while a read-only preview returns `Preview`.
+
+`RestorePlanner` owns a single request's comparison, conflict choices, target actions and capacity checks. Its private plan holds the preview data and target fingerprints; execution starts only after all checks and approvals. `RestoreEngine` is stateless across runs, and stages each file in a separate helper. `ContentStoreBackup` keeps one run's state and separates source planning from approval. The GUI dispatcher delegates each operation to a focused method.
+
+`RestoreCatalog.Load` coordinates SQLite inventory loading and recovery-record fallback in separate helpers. `M8SampleCheck.Run` coordinates reference collection, card path resolution, backup discovery and matching. Keep cancellation and per-backup error boundaries when extending these steps.
 
 ## Devices
 
@@ -94,6 +102,8 @@ The Song tab calls `IM8SongReader` (`Devices\M8SongReader.cs`). The one implemen
 
 ## The GUI
 
+`GuiBackgroundWork` owns cancellation and request identity for restore and migration inventory, M8 sample/card checks, Tracker inspection and ZIP inspection. Call `Begin()` on the UI thread, give only the request's token to the worker, and dispose the request in `finally` after the worker stops. Check `CanPublish` inside the UI callback before displaying results or progress. `IsCurrent` also permits displaying a user-cancellation notice. `Invalidate()` cancels and rejects all callbacks from an obsolete request; disposing the owner does the same when its controls close. Completing an old request cannot clear a newer request's busy state.
+
 `MainForm` is split over several files by concern: `MainForm.cs` (window, header, activity area), `.Navigation` (tabs and gear modes), `.Restore`, `.ZipRestore`, `.BackupSets`, `.Song` and `.WindowsTheme`. `GuiOperationRunner` owns the worker thread and talks to the engines; the form only displays. `GuiTheme`, `GuiPalette` and the `Gui*Theme` files give the four appearances. Several form fields are `internal` hooks (such as `SongFilePicker`) so tests can replace dialogs.
 
 A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` and `ContentHeight`) is the module's side, and `IWorkflowTabHost` is the small set of window services it may use (fonts, tooltips, the owner for dialogs, running on the UI thread, relayout, redraw freezing); `MainForm` implements the host in `MainForm.Song.cs`. The Song tab (`SongTab`) is the first module. Move another tab over by giving it the same shape, rather than adding more fields and partial files to `MainForm`.
@@ -105,7 +115,7 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 | `build.cmd`, `build-gui.cmd` | Build `GearBackup.Core.dll` from `src` (recursively, without `src\Cli`), then the CLI (`src\Cli`) or the GUI (`gui`) against it, in the same folder. The GUI build also builds `m8_reader.dll` and the HTML manual. |
 | `build\build-native.ps1` | Builds the Rust reader (`-Test` runs its tests), remaps build paths and checks the DLL's protections. |
 | `build-installer.cmd` | Builds the installer and portable packages. |
-| `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. |
+| `tests\run-tests.ps1`, `tests\run-gui-tests.ps1` | The core and GUI test suites. `-Filter text` runs only the tests whose name contains it, `-List` shows them. `-BuildDirectory path` overrides the build directory (relative paths start at the repository root). Defaults are `tests\.build\core` and `tests\.build\gui`, so both suites can run concurrently. |
 | `build\check-layers.ps1` | The layer check, run before the core tests and in CI. |
 | `build\check-catches.ps1` | Fails an empty `catch` without a comment, run before the core tests and in CI. |
 | `testsun-coverage.ps1` | Statement and branch coverage of the core by the core tests, per source file (needs OpenCover unzipped into `.tools\OpenCover`; CI does that and fails below 85% of statements). At the last run: 89% of statements, 80% of branches. The Windows device code is tested against fakes of the Portable Devices API (`tests\FakePortableDevice.cs`) and of the USB disk list; what stays uncovered is mostly ejecting through `cfgmgr32` and the interactive CLI source picker. |
@@ -113,7 +123,15 @@ A tab can also live outside `MainForm` as a module. `IWorkflowTab` (`Build()` an
 
 A test is a method of the `Tests` class marked `[Test("name")]` (`tests\TestHarness.cs`); the runners find them by reflection, so there is no list to keep. A test takes no argument or one fixture folder, and each runs in its own operation context. GUI tests are marked `Gui = true`, live in `tests\Gui*Tests.cs` by area, and run in the GUI test program on an STA thread.
 
+GUI screenshots are saved beside the test executable, including when a custom build directory is selected. Benchmarks use `tests\.build\benchmarks`; coverage uses `tests\.build\coverage`. For example, `powershell -File tests\run-gui-tests.ps1 -BuildDirectory tests/.build/gui-review -Filter "Restore inventory"` isolates an additional GUI run.
+
+Each suite creates its own fixture tree below `.test-runs`. Failed runs preserve it; `GEAR_KEEP_TEST_FIXTURES=1` also preserves passing runs. Cleanup checks that its target stays below that directory, refuses linked ancestors, unlinks reparse points without walking their targets, and clears read-only attributes only on unshared regular files or real directories. A cleanup failure fails the run instead of silently leaving fixtures behind.
+
 There are no namespaces: every type is in the global namespace, and `internal` means "inside this program". C# is limited to 7.3 because the programs run on .NET Framework.
+
+The [Tracker compatibility corpus](../tests/fixtures/tracker/README.md) contains pinned, licensed original-Tracker device saves with offline hash checks. It supplements synthetic fixtures with independent project, tempo, instrument and pattern expectations, including the final played step. Derived and damaged files are created only in scratch storage. Mini/Plus and newer-format fixture gaps are documented with the corpus.
+
+`TransferFailureTests.cs` injects MTP enumeration, later-transfer, cancellation and publication failures. It verifies that partial mirroring cannot publish a backup point, stale cleanup waits for successful transfers, staged files and locks are released, and reconnect resumes correctly. These deterministic tests supplement existing stream, disk-space and restore failure tests; physical USB disconnect and power-loss behavior still require hardware checks.
 
 ## Layers
 

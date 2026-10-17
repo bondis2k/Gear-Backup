@@ -4,8 +4,6 @@ using System.IO;
 using static GearBackup.BackupStatuses;
 using static GearBackup.Snapshots;
 using static GearBackup.StorageCatalog;
-using static GearBackup.ConsoleUi;
-using static GearBackup.PlanReview;
 
 namespace GearBackup
 {
@@ -14,30 +12,31 @@ namespace GearBackup
     internal sealed class IntegrityEngine
     {
         // Lets the user pick one backup, or all of them (the last entry), and checks them. Used by both the CLI and the
-        // GUI. Title is null if nothing was checked.
-        internal static OperationResult RunCheck(List<string> backups)
+        // GUI. The outcome records whether the selection was cancelled.
+        internal static OperationResult RunCheck(List<string> backups, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             if (backups.Count == 0)
             {
-                WriteColored("  No backups found to check.", ConsoleColor.Yellow);
-                return new OperationResult { ExitCode = 1 };
+                context.WriteColored("  No backups found to check.", ConsoleColor.Yellow);
+                return new OperationResult(OperationOutcome.Failed, 1);
             }
 
-            WriteColored("  Check backups for damaged files", ConsoleColor.Cyan);
+            context.WriteColored("  Check backups for damaged files", ConsoleColor.Cyan);
             var newestFirst = new List<string>(backups);
             newestFirst.Reverse();
             var labels = new List<string>();
             foreach (string backup in newestFirst) labels.Add(BackupSetNames.Label(backup) + " [" + BackupStatus(backup) + "]");
             labels.Add("All " + newestFirst.Count + " backups in this history");
-            int pick = AskItem("Check which backup?", labels);
+            int pick = context.AskItem("Check which backup?", labels);
             if (pick == 0)
             {
-                OperationOutput.WriteLine("  Check cancelled.");
-                return new OperationResult();
+                context.WriteLine("  Check cancelled.");
+                return new OperationResult(OperationOutcome.Cancelled);
             }
             List<string> toCheck = pick == labels.Count ? newestFirst : new List<string> { newestFirst[pick - 1] };
-            OperationOutput.WriteLine();
-            return new IntegrityEngine().Run(toCheck, OperationContext.Current);
+            context.WriteLine();
+            return new IntegrityEngine().Run(toCheck, context);
         }
 
         public OperationResult Run(List<string> backups, OperationContext context)
@@ -50,12 +49,12 @@ namespace GearBackup
                     context.CheckCancellation();
                     string title, summary;
                     int code = CheckSelected(backups, context, out title, out summary);
-                    return new OperationResult { ExitCode = code, Title = title, Summary = summary, Elapsed = timer.Elapsed,
+                    return new OperationResult(code == 0 ? OperationOutcome.Success : OperationOutcome.Failed, code) { Title = title, Summary = summary, Elapsed = timer.Elapsed,
                         OutputFolder = backups.Count == 0 ? null : backups.Count == 1 ? backups[0] : Path.GetDirectoryName(backups[0]) };
                 }
                 catch (OperationCanceledException)
                 {
-                    return new OperationResult { ExitCode = 0, Cancelled = true, Title = AppIdentity.Name + " check cancelled",
+                    return new OperationResult(OperationOutcome.Cancelled) { Title = AppIdentity.Name + " check cancelled",
                         Summary = "Integrity check cancelled; remaining files were not checked.", Elapsed = timer.Elapsed };
                 }
             }
@@ -66,25 +65,25 @@ namespace GearBackup
             foreach (string backup in toCheck)
             {
                 context.CheckCancellation();
-                OperationOutput.WriteLine("  " + Path.GetFileName(backup));
+                context.WriteLine("  " + Path.GetFileName(backup));
                 if (!ContentStore.IsContentStore(backup))
                 {
-                    WriteColored("    Made in a layout older versions used, which is no longer supported; not checked.", ConsoleColor.Yellow);
-                    OperationOutput.WriteLine();
+                    context.WriteColored("    Made in a layout older versions used, which is no longer supported; not checked.", ConsoleColor.Yellow);
+                    context.WriteLine();
                     unchecked_++;
                     continue;
                 }
                 var catalogResults = new List<CatalogVerification>();
                 int beforeOk = ok, beforeDamaged = damaged, beforeMissing = missing, beforeUnchecked = unchecked_;
-                CheckSnapshots(backup, ref ok, ref damaged, ref missing, catalogResults);
+                CheckSnapshots(backup, ref ok, ref damaged, ref missing, catalogResults, context);
                 // The latest restore point is also the backup's "current" listing in the catalog.
                 string latest = ContentStore.Current(backup).Name;
                 foreach (var result in catalogResults.FindAll(r => r.SnapshotId == latest))
                     catalogResults.Add(new CatalogVerification { Path = result.Path, ExpectedHash = result.ExpectedHash,
                         ObservedHash = result.ObservedHash, Result = result.Result, CheckedUtc = result.CheckedUtc });
-                try { if (!PreviewOnly) SaveCheckRecord(backup, ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked); }
+                try { if (!context.PreviewOnly) SaveCheckRecord(backup, ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked, context); }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { OperationOutput.WriteLine("  Could not save check result: " + ex.Message); }
+                catch (Exception ex) { context.WriteLine("  Could not save check result: " + ex.Message); }
                 BackupDatabase.TryRefresh(backup, catalogResults, string.Format("{0} OK, {1} damaged, {2} missing, {3} unchecked",
                     ok - beforeOk, damaged - beforeDamaged, missing - beforeMissing, unchecked_ - beforeUnchecked), context);
             }
@@ -95,7 +94,7 @@ namespace GearBackup
             if (unchecked_ > 0) summary += string.Format(", {0} backup(s) not checked", unchecked_);
             summary += ".";
             bool good = damaged == 0 && missing == 0;
-            WriteColored("  " + summary, good ? ConsoleColor.Green : ConsoleColor.Red);
+            context.WriteColored("  " + summary, good ? ConsoleColor.Green : ConsoleColor.Red);
             title = AppIdentity.Name + (good ? ": backups OK" : ": backup problems found");
             return good ? 0 : 2;
         }

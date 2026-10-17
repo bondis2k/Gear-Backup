@@ -116,7 +116,7 @@ partial class Tests
                 using (var bitmap = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
                 {
                     form.Controls[0].DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.ClientSize));
-                    bitmap.Save(Path.Combine(Environment.CurrentDirectory, "tests", ".build", "m8-sample-check.png"));
+                    bitmap.Save(Path.Combine(TestBuildDirectory, "m8-sample-check.png"));
                 }
                 acceptRestore = true;
                 doubleClick(0);

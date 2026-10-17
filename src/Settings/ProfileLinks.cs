@@ -47,9 +47,9 @@ namespace GearBackup
             return Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(history)));
         }
 
-        internal static string Find(Config config, string source)
+        internal static string Find(Config config, string source, DeviceProfile device = null)
         {
-            if (config.Profile.Length != 0 || DeviceSelection.CurrentDevice.Id != Devices.M8.Id) return null;
+            if (config.Profile.Length != 0 || (device ?? DeviceSelection.CurrentDevice).Id != Devices.M8.Id) return null;
             string history;
             return Read(config).TryGetValue("m8-" + ProfileNaming.SourceKey(PathSafety.Rooted(source)), out history) ? history : null;
         }

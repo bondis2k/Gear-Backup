@@ -137,7 +137,7 @@ namespace GearBackup.Cli
             var archived = RunArchive(prepared, destination);
             if (archived.Summary != null) OperationOutput.WriteLine("  " + archived.Summary);
             string pnpId = prepared.Source.PnpId;
-            if (!PreviewOnly && !archived.Cancelled && archived.ExitCode == 0 && pnpId != null && config.Eject != EjectMode.No)
+            if (!PreviewOnly && archived.Succeeded && pnpId != null && config.Eject != EjectMode.No)
             {
                 string changed = ConfirmSameDevice(prepared.Path, pnpId);
                 if (changed == null) Finish(pnpId, archived.Title, archived.Summary, config.Eject);
@@ -207,28 +207,23 @@ namespace GearBackup.Cli
         {
             Config config = prepared.Config;
             string pnpId = prepared.Source.PnpId;
-            if (result.Title != null && !PreviewOnly)
+            if (PreviewOnly || result.Outcome == OperationOutcome.Preview) return;
+            if (result.Cancelled || OperationContext.Current.Cancellation.IsCancellationRequested)
             {
-                if (result.Cancelled || OperationContext.Current.Cancellation.IsCancellationRequested)
-                {
-                    OperationOutput.WriteLine("  " + result.Summary);
-                    ShowToast(result.Title, result.Summary, false);
-                }
-                else if (pnpId != null)
-                {
-                    // Same check as the GUI: never eject a device that no longer owns this source.
-                    string changed = config.Eject == EjectMode.No ? null : ConfirmSameDevice(prepared.Path, pnpId);
-                    if (changed == null) Finish(pnpId, result.Title, result.Summary, config.Eject);
-                    else
-                    {
-                        OperationOutput.WriteLine("  " + changed);
-                        ShowToast(result.Title, result.Summary, false);
-                    }
-                }
-                else ShowToast(result.Title, result.Summary, false);
+                if (result.Summary != null) OperationOutput.WriteLine("  " + result.Summary);
             }
-            else if (result.Cancelled && result.Title == null && result.Summary != null)
-                OperationOutput.WriteLine("  " + result.Summary);
+            else if (result.Succeeded && pnpId != null)
+            {
+                // Same check as the GUI: never eject a device that no longer owns this source.
+                string changed = config.Eject == EjectMode.No ? null : ConfirmSameDevice(prepared.Path, pnpId);
+                if (changed == null)
+                {
+                    Finish(pnpId, result.Title ?? AppIdentity.Name + " complete", result.Summary ?? "Operation complete.", config.Eject);
+                    return;
+                }
+                OperationOutput.WriteLine("  " + changed);
+            }
+            if (result.Title != null) ShowToast(result.Title, result.Summary, false);
         }
 
         internal static string ArchiveDestination(string output, string suggested)

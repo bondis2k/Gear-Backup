@@ -567,7 +567,8 @@ namespace GearBackup.Gui
             elapsed.Stop();
             if (!previewOnly && (Selected == GuiOperation.FullBackup || Selected == GuiOperation.IncrementalBackup || Selected == GuiOperation.CameraSettings)) restoreSection.ForgetContext();
             SetBusy(false);
-            status.Text = result.Cancelled ? "Cancelled" : result.ExitCode != 0 ? "Needs attention" : previewOnly ? "Preview complete" : "Complete";
+            status.Text = result.Cancelled ? "Cancelled" : result.Outcome == OperationOutcome.Failed ? "Needs attention" :
+                result.Outcome == OperationOutcome.Skipped ? "No changes" : previewOnly || result.Outcome == OperationOutcome.Preview ? "Preview complete" : "Complete";
             status.ForeColor = result.ExitCode != 0 ? GuiTheme.Danger : GuiTheme.Ink;
             detail.Text = result.Summary ?? "No files changed.";
             counts.Text = result.Counts == null ? "" : string.Format("Copied {0:N0}   ·   Unchanged {1:N0}   ·   Removed {2:N0}   ·   Failed {3:N0}",
@@ -578,7 +579,7 @@ namespace GearBackup.Gui
             openFolder.Visible = !string.IsNullOrEmpty(outputFolder) && Directory.Exists(outputFolder);
             metrics.Text = "Elapsed " + FormatTime(result.Elapsed > TimeSpan.Zero ? result.Elapsed : elapsed.Elapsed);
             metrics.Visible = true;
-            progress.Value = result.ExitCode == 0 && !result.Cancelled ? 100 : 0;
+            progress.Value = result.Succeeded || result.Outcome == OperationOutcome.Preview ? 100 : 0;
             if (closeAfterCancel) Close();
         }
 

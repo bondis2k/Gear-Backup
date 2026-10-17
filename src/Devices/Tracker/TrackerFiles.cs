@@ -148,7 +148,9 @@ namespace GearBackup
             for (int track = 0; track < pattern.TrackCount; track++)
             {
                 int start = Header + track * TrackSize;
-                var read = new TrackerTrack { Length = Math.Min(Math.Max((int)data[start], 1), StepsPerTrack) };
+                // Stored lengths are zero based: 0 is one step, 127 is all 128 steps.
+                if (data[start] >= StepsPerTrack) throw new TrackerFileException("The pattern contains an invalid track length.");
+                var read = new TrackerTrack { Length = data[start] + 1 };
                 for (int step = 0; step < StepsPerTrack; step++)
                 {
                     int at = start + 1 + step * 6;

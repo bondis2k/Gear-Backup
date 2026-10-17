@@ -14,12 +14,12 @@ namespace GearBackup
 {
     static class Snapshots
     {
-        internal static void ValidateEntry(RestoreEntry item, bool verify = true)
+        internal static void ValidateEntry(RestoreEntry item, bool verify = true, OperationContext context = null)
         {
             RejectRootLinks(item.StoredPath);
             if (!File.Exists(item.StoredPath) || new FileInfo(item.StoredPath).Length != item.Size)
                 throw new DamagedContentException("Backup file is missing or truncated: " + item.Relative);
-            if (verify && item.Hash != null && HashFile(item.StoredPath) != item.Hash)
+            if (verify && item.Hash != null && HashFile(item.StoredPath, context) != item.Hash)
                 throw new DamagedContentException("Backup file is damaged: " + item.Relative);
         }
 
@@ -107,8 +107,9 @@ namespace GearBackup
         }
 
         // Lets the user pick a saved point in time, newest first. Null means the latest restore point.
-        internal static Snapshot ChooseSnapshot(string backup)
+        internal static Snapshot ChooseSnapshot(string backup, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             string root = SnapshotRoot(backup);
             if (!Directory.Exists(root)) return null;
             var files = RestorePointNames.OrderedManifests(backup);
@@ -120,7 +121,7 @@ namespace GearBackup
                 string custom = RestorePointNames.ReadName(backup, name);
                 names.Add((custom == null ? "" : custom + " · ") + name + " · Backup taken " + RestorePointNames.TakenUtc(backup, name).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
             }
-            int pick = AskItem("Restore from which saved point in time?", names,
+            int pick = context.AskItem("Restore from which saved point in time?", names,
                 "Latest restore point");
             return pick == 0 ? null : ReadSnapshot(backup, files[pick - 1]);
         }
@@ -132,8 +133,9 @@ namespace GearBackup
         }
 
         // Checks every history object referenced by any manifest in this backup; each object once.
-        internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing, List<CatalogVerification> catalogResults = null)
+        internal static void CheckSnapshots(string backup, ref int ok, ref int damaged, ref int missing, List<CatalogVerification> catalogResults = null, OperationContext context = null)
         {
+            context = context ?? OperationContext.Current;
             string root = SnapshotRoot(backup);
             if (!Directory.Exists(root)) return;
             var checkedObjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -141,7 +143,7 @@ namespace GearBackup
             var outcomes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (string manifest in Directory.GetFiles(root, "*.manifest"))
             {
-                OperationContext.Current.Progress(Stage.CheckingHistory, manifest, 0, 0);
+                context.Progress(Stage.CheckingHistory, manifest, 0, 0);
                 try
                 {
                     Snapshot snapshot = ReadSnapshot(backup, manifest, null, validNames);
@@ -149,12 +151,12 @@ namespace GearBackup
                     {
                         if (checkedObjects.Add(item.Hash))
                         {
-                            if (!File.Exists(item.StoredPath)) { missing++; outcomes[item.Hash] = "missing"; OperationOutput.WriteLine("    Missing history object: " + item.Hash); }
+                            if (!File.Exists(item.StoredPath)) { missing++; outcomes[item.Hash] = "missing"; context.WriteLine("    Missing history object: " + item.Hash); }
                             else
                             {
-                                try { ValidateEntry(item); ok++; outcomes[item.Hash] = "ok"; }
+                                try { ValidateEntry(item, true, context); ok++; outcomes[item.Hash] = "ok"; }
                                 catch (OperationCanceledException) { throw; }
-                                catch (Exception ex) { damaged++; outcomes[item.Hash] = "damaged"; OperationOutput.WriteLine("    Damaged history: " + ex.Message); }
+                                catch (Exception ex) { damaged++; outcomes[item.Hash] = "damaged"; context.WriteLine("    Damaged history: " + ex.Message); }
                             }
                         }
                         if (catalogResults != null) catalogResults.Add(new CatalogVerification { SnapshotId = snapshot.Name, Path = item.Relative,
@@ -162,9 +164,9 @@ namespace GearBackup
                     }
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception ex) { damaged++; OperationOutput.WriteLine("    Invalid snapshot: " + ex.Message); }
+                catch (Exception ex) { damaged++; context.WriteLine("    Invalid snapshot: " + ex.Message); }
             }
-            OperationOutput.WriteLine("    {0} unique history object(s) checked.", checkedObjects.Count);
+            context.WriteLine("    {0} unique history object(s) checked.", checkedObjects.Count);
         }
     }
 

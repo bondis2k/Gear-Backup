@@ -16,6 +16,11 @@ All notable changes to Gear Backup are listed here, newest first. Versions follo
 - M8 Sample check has a **Check all songs on card** button, which scans songs recursively, reports missing samples per song, distinguishes unreadable songs and invalid references, and supports selection of per-song details, progress and cancellation.
 
 ### Fixed
+- Tracker patterns now include the final played step when viewing notes and checking missing instruments; stored track lengths are zero based. Invalid lengths are refused.
+- MTP mirroring checks cancellation before publishing transfers even when a device sends no progress updates, and replaces existing files atomically with rollback protection.
+- Backup and restore orchestration passes its operation context explicitly for interaction, preview, device/profile resolution, history selection, hashing and recovery. Restore planning and GUI operation dispatch are split into focused steps; nested restores keep separate contexts, and late cancellation preserves an existing restore failure.
+- GUI inventory and inspection requests share cancellation, stale-result and disposal handling. Core and GUI tests use separate build directories, and fixture cleanup removes links without traversing their targets; cleanup failures now fail the run.
+- Cancelled restore/check selections and read-only previews now have explicit operation outcomes. Only successful operations qualify for automatic device eject; notification titles no longer determine success.
 - Coverage reporting returns a failing test process's exit code even when coverage meets the minimum. Restore inventory reads are cancelled when superseded or closed, and obsolete results cannot replace the current backup selection.
 - Tracker checks use the 392-byte Mini instrument layout, retain legacy `.mti` sample checks, and lock scan inputs to prevent stale results. Project/file discovery streams bounded entries and reports incomplete checks instead of claiming all instruments are usable.
 - M8 migration locks its path inputs while copying and cancels superseded inventory loads. Saved card-history links reject ambiguous relative paths and report duplicate identities clearly.

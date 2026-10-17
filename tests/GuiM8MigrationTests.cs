@@ -58,7 +58,7 @@ partial class Tests
                 using (var bitmap = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
                 {
                     form.Controls[0].DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.ClientSize));
-                    bitmap.Save(Path.Combine(Environment.CurrentDirectory, "tests", ".build", "m8-migration.png"));
+                    bitmap.Save(Path.Combine(TestBuildDirectory, "m8-migration.png"));
                 }
                 string cancelled = Folder(root, "cancelled"); named("MigrationTarget").Text = cancelled;
                 start.PerformClick(); DriveGui(form, state, "Cancelled", true);

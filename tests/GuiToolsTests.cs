@@ -252,7 +252,7 @@ partial class Tests
     static void TestManagementGui(string root)
     {
         Config config; BackupCatalog catalog = ManagementFixture(root, out config);
-        string output = Path.Combine(Environment.CurrentDirectory, "tests", ".build");
+        string output = TestBuildDirectory;
         using (var owner = new MainForm(true))
         {
             owner.Show(); Application.DoEvents();

@@ -85,6 +85,7 @@ namespace GearBackup
 
         internal static MirrorResult SyncMirror(IMtpSource source, string mirror, Func<string, long, string> checkSpace = null)
         {
+            var context = OperationContext.Current;
             var result = new MirrorResult();
             Directory.CreateDirectory(mirror);
             RejectRootLinks(mirror);
@@ -126,6 +127,7 @@ namespace GearBackup
             long done = 0;
             foreach (var download in downloads)
             {
+                context.CheckCancellation();
                 MtpObject item = download.Key;
                 string path = download.Value;
                 RejectRootLinks(path);
@@ -136,8 +138,10 @@ namespace GearBackup
                     long before = done;
                     source.Download(item, temp, bytes => {
                         if (bytes < 0 || bytes > item.Size) throw new IOException("MTP download exceeds its declared size: " + item.RelativePath);
-                        OperationContext.Current.Progress(Stage.Downloading, item.RelativePath, checked(before + bytes), total);
+                        context.Progress(Stage.Downloading, item.RelativePath, checked(before + bytes), total);
                     });
+                    // Some devices return a whole file without reporting progress.
+                    context.CheckCancellation();
                     long size = new FileInfo(temp).Length;
                     if (size != item.Size)
                         throw new IOException("the download of " + item.RelativePath + " was incomplete (" + size + " of " + item.Size + " bytes)");
@@ -146,8 +150,9 @@ namespace GearBackup
                     if (item.Modified != DateTime.MinValue)
                         try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { } // a date the file system cannot store keeps the download time
                     RejectRootLinks(path);
-                    TryDelete(path);
-                    File.Move(temp, path);
+                    context.CheckCancellation();
+                    if (File.Exists(path)) AtomicFile.ReplaceSafely(temp, path);
+                    else File.Move(temp, path);
                     done += size;
                     result.Downloaded++;
                     result.Bytes += size;

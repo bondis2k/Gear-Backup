@@ -16,8 +16,7 @@ namespace GearBackup.Gui
         Control field, details;
         ZipRestoreInfo info;
         bool loading, closed;
-        int reads;
-        CancellationTokenSource inspection;
+        readonly GuiBackgroundWork inspection = new GuiBackgroundWork();
         // Tests replace the file dialog, the reader and the device check.
         internal Func<string> SourcePicker { get; set; }
         internal Func<string, CancellationToken, ZipRestoreInfo> Inspector { get; set; }
@@ -35,7 +34,7 @@ namespace GearBackup.Gui
             get
             {
                 DeviceProfile device = host.DisplayedDevice;
-                return !host.Busy && !loading && info != null && device != null && device.Id == info.Device.Id &&
+                return !closed && !host.Busy && !loading && info != null && device != null && device.Id == info.Device.Id &&
                     (!device.Mtp || !string.IsNullOrWhiteSpace(host.RestoreDestinationText));
             }
         }
@@ -51,6 +50,7 @@ namespace GearBackup.Gui
             panel.Controls.Add(browse, 1, 1);
             browse.Click += delegate { Choose(); };
             host.Hints.SetToolTip(archivePath, "Standalone Gear Backup ZIP with gearbackup-info.txt and checksums.sha256.");
+            panel.Disposed += delegate { Close(); };
             field = panel;
             return panel;
         }
@@ -76,12 +76,12 @@ namespace GearBackup.Gui
         internal void Close()
         {
             closed = true;
-            if (inspection != null) inspection.Cancel();
+            inspection.Dispose();
         }
 
         internal async void Choose()
         {
-            if (host.Busy) return;
+            if (closed || host.Busy) return;
             string path;
             if (SourcePicker != null) path = SourcePicker();
             else using (var picker = new OpenFileDialog { Title = "Choose ZIP archive to restore", Filter = "ZIP archive (*.zip)|*.zip",
@@ -89,11 +89,9 @@ namespace GearBackup.Gui
                 path = picker.ShowDialog(host.Owner) == DialogResult.OK ? picker.FileName : null;
             if (string.IsNullOrEmpty(path)) return;
             archivePath.Text = path; info = null; loading = true;
-            if (inspection != null) inspection.Cancel();
-            var current = new CancellationTokenSource(); inspection = current;
+            var current = inspection.Begin();
             host.Hints.SetToolTip(archivePath, path);
             archivePath.Select(path.Length, 0); archivePath.ScrollToCaret();
-            int read = ++reads;
             notice.Text = "Reading ZIP device information…"; host.RefreshActionState();
             ZipRestoreInfo result = null; string error = null;
             try
@@ -106,11 +104,10 @@ namespace GearBackup.Gui
             catch (Exception ex) { error = ex.Message; }
             finally
             {
-                if (ReferenceEquals(inspection, current)) inspection = null;
                 current.Dispose();
             }
             host.RunOnUi(delegate {
-                if (read != reads || closed) return;
+                if (!current.IsCurrent) return;
                 loading = false; info = result;
                 if (result == null) notice.Text = "Cannot restore this ZIP: " + error;
                 else UpdateNotice();

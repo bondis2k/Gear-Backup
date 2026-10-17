@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -24,7 +23,7 @@ namespace GearBackup.Gui
         readonly DataGridView matches = new DataGridView { Name = "SampleBackupMatches", AccessibleName = "Copies in backups" };
         readonly TextBox warnings = new TextBox { Name = "SampleCheckWarnings", ReadOnly = true, Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Top, Height = 60, Visible = false };
         Control content;
-        CancellationTokenSource running;
+        readonly GuiBackgroundWork work = new GuiBackgroundWork();
         bool closed, initialized;
         Config checkedConfig;
         internal Func<string> SongPicker { get; set; }
@@ -51,7 +50,7 @@ namespace GearBackup.Gui
             check.Name = "CheckM8Samples"; cancel.Name = "CancelM8SampleCheck"; cancel.Enabled = false;
             actions.Controls.Add(check); actions.Controls.Add(cancel); panel.Controls.Add(actions);
             BuildCardCheck(panel, actions);
-            check.Click += delegate { Run(); }; cancel.Click += delegate { if (running != null) running.Cancel(); };
+            check.Click += delegate { Run(); }; cancel.Click += delegate { work.Cancel(); };
             notice.Name = "SampleCheckNotice"; notice.UseMnemonic = false; notice.MaximumSize = new Size(780, 0);
             panel.Controls.Add(notice);
             ConfigureGrid(samples, new[] { "Slots", "Sample reference", "Card", "Backup copies" }, 160);
@@ -63,7 +62,7 @@ namespace GearBackup.Gui
             var explanation = GuiTheme.Label("Select a sample to see backup copies below. Double-click a copy to prepare its restore. Filename-only matches are candidates; even an exact path may contain a different version.", 9, GuiTheme.Muted);
             explanation.MaximumSize = new Size(780, 0); panel.Controls.Add(explanation);
             panel.Controls.Add(matches); panel.Controls.Add(warnings);
-            panel.Disposed += delegate { closed = true; if (running != null) running.Cancel(); };
+            panel.Disposed += delegate { closed = true; work.Dispose(); };
             content = panel; return panel;
         }
 
@@ -77,7 +76,7 @@ namespace GearBackup.Gui
 
         internal void SuggestCard(string path)
         {
-            if (running == null && string.IsNullOrWhiteSpace(card.Text) && !string.IsNullOrWhiteSpace(path)) card.Text = path;
+            if (!work.IsRunning && string.IsNullOrWhiteSpace(card.Text) && !string.IsNullOrWhiteSpace(path)) card.Text = path;
         }
 
         void AddPath(TableLayoutPanel panel, string caption, TextBox path, Action browse)
@@ -86,7 +85,7 @@ namespace GearBackup.Gui
             var row = new TableLayoutPanel { AutoSize = true, Dock = DockStyle.Top, ColumnCount = 2 };
             row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             row.Controls.Add(new FieldPanel(path) { Dock = DockStyle.Fill }, 0, 0);
-            var button = GuiTheme.Button("Browse…", false); button.Click += delegate { if (running == null) browse(); };
+            var button = GuiTheme.Button("Browse…", false); button.Click += delegate { if (!work.IsRunning) browse(); };
             row.Controls.Add(button, 1, 0); panel.Controls.Add(row);
             path.TextChanged += delegate { ClearResults(); };
         }
@@ -129,7 +128,7 @@ namespace GearBackup.Gui
 
         void RefreshSearchMode()
         {
-            if (running != null || host.Busy) return;
+            if (work.IsRunning || host.Busy) return;
             if (!search.Checked)
             {
                 checkedConfig = null;
@@ -149,7 +148,7 @@ namespace GearBackup.Gui
 
         async void Run(bool preserveCardResults = false, string selectedSong = null)
         {
-            if (host.Busy || running != null) return;
+            if (closed || host.Busy || work.IsRunning) return;
             if (preserveCardResults)
             {
                 Report = null; checkedConfig = null; samples.Rows.Clear(); matches.Rows.Clear(); warnings.Visible = false;
@@ -165,7 +164,7 @@ namespace GearBackup.Gui
                 if (config == null && string.IsNullOrWhiteSpace(cardRoot)) throw new IOException("Choose a card folder or enable backup search.");
             }
             catch (Exception ex) { notice.Text = ex.Message; return; }
-            var cancellation = running = new CancellationTokenSource();
+            var cancellation = work.Begin();
             SetChecking(true);
             notice.Text = "Checking sample references and verifying matching backup objects…";
             try
@@ -177,9 +176,9 @@ namespace GearBackup.Gui
                         cancellation.Token.ThrowIfCancellationRequested();
                         return M8SampleCheck.Run(reader.Read(songFile), cardRoot, config, songFile);
                     }
-                }).ConfigureAwait(false);
+                });
                 host.RunOnUi(delegate {
-                    if (closed || cancellation.IsCancellationRequested) return;
+                    if (!cancellation.CanPublish) return;
                     Report = report;
                     checkedConfig = config;
                     foreach (var item in report.Samples)
@@ -197,18 +196,17 @@ namespace GearBackup.Gui
                     ShowMatches();
                 });
             }
-            catch (OperationCanceledException) { host.RunOnUi(delegate { if (!closed) notice.Text = "Sample check cancelled. Run it again for complete results."; }); }
-            catch (Exception ex) { host.RunOnUi(delegate { if (!closed) notice.Text = "Cannot check samples: " + ex.Message; }); }
+            catch (OperationCanceledException) { host.RunOnUi(delegate { if (cancellation.IsCurrent) notice.Text = "Sample check cancelled. Run it again for complete results."; }); }
+            catch (Exception ex) { host.RunOnUi(delegate { if (cancellation.IsCurrent) notice.Text = "Cannot check samples: " + ex.Message; }); }
             finally
             {
+                cancellation.Dispose();
                 host.RunOnUi(delegate {
-                    running = null;
-                    if (!closed)
+                    if (cancellation.IsCurrent)
                     {
                         if (cancellation.IsCancellationRequested) notice.Text = "Sample check cancelled. Run it again for complete results.";
                         SetChecking(false); host.RefreshLayout();
                     }
-                    cancellation.Dispose();
                 });
             }
         }
@@ -227,7 +225,7 @@ namespace GearBackup.Gui
 
         void AskRestoreCopy(int row)
         {
-            if (row < 0 || row >= matches.Rows.Count || running != null || host.Busy) return;
+            if (row < 0 || row >= matches.Rows.Count || work.IsRunning || host.Busy) return;
             var match = matches.Rows[row].Tag as M8SampleMatch;
             if (match == null || checkedConfig == null) return;
             if (match.Status != "Verified copy")

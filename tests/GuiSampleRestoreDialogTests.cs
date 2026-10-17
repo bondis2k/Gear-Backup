@@ -34,7 +34,7 @@ partial class Tests
                                 using (var bitmap = new Bitmap(dialog.ClientSize.Width, dialog.ClientSize.Height))
                                 {
                                     dialog.Controls[0].DrawToBitmap(bitmap, new Rectangle(Point.Empty, dialog.ClientSize));
-                                    bitmap.Save(Path.Combine(Environment.CurrentDirectory, "tests", ".build", "sample-restore-dialog.png"));
+                                    bitmap.Save(Path.Combine(TestBuildDirectory, "sample-restore-dialog.png"));
                                 }
                             if (accept) dialog.Accept.PerformClick(); else ((Button)dialog.CancelButton).PerformClick();
                         }

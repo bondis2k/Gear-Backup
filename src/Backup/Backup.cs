@@ -13,9 +13,9 @@ namespace GearBackup
         // The date/time suffix added to old versions of updated files, e.g. "Song_2026-10-01_143000" or "..._2"
 
         // The full result, including whether the backup was cancelled. Title is null if nothing was done.
-        internal static OperationResult RunBackup(string source, string backupRoot, string previous, bool incremental, Config config)
+        internal static OperationResult RunBackup(string source, string backupRoot, string previous, bool incremental, Config config, OperationContext context = null)
         {
-            return new BackupEngine().Run(source, backupRoot, previous, incremental, config, OperationContext.Current);
+            return new BackupEngine().Run(source, backupRoot, previous, incremental, config, context ?? OperationContext.Current);
         }
 
         // Returns the exit code; title/summary are for the final notification (null if nothing was done).

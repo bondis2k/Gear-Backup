@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -25,7 +24,7 @@ namespace GearBackup.Gui
             // SelectionChanged can run before CurrentRow changes, which would search the previous song.
             cardSongs.CurrentCellChanged += delegate { ShowCardSong(); };
             cardSongs.CellDoubleClick += delegate(object sender, DataGridViewCellEventArgs e) {
-                if (e.RowIndex < 0 || running != null || host.Busy) return;
+                if (e.RowIndex < 0 || work.IsRunning || host.Busy) return;
                 var selected = cardSongs.Rows[e.RowIndex].Tag as M8CardSongResult;
                 if (selected == null) return;
                 string path = Path.Combine(card.Text, selected.Relative);
@@ -58,7 +57,7 @@ namespace GearBackup.Gui
             warnings.Text = (cardReport == null ? "" : string.Join(Environment.NewLine, cardReport.Warnings)) +
                 (detail.Length == 0 ? "" : Environment.NewLine + detail);
             warnings.Visible = warnings.Text.Length != 0;
-            if (search.Checked && running == null && cardReport != null) SearchSelectedCardSong();
+            if (search.Checked && !work.IsRunning && cardReport != null) SearchSelectedCardSong();
         }
 
         void SearchSelectedCardSong()
@@ -74,11 +73,11 @@ namespace GearBackup.Gui
 
         async void RunCardCheck()
         {
-            if (host.Busy || running != null) return;
+            if (closed || host.Busy || work.IsRunning) return;
             ClearResults();
             string root = card.Text;
             if (string.IsNullOrWhiteSpace(root)) { notice.Text = "Choose the M8 card root first."; return; }
-            var cancellation = running = new CancellationTokenSource();
+            var cancellation = work.Begin();
             SetChecking(true);
             notice.Text = "Finding all M8 songs on the card…";
             var reader = M8SongReaders.Current;
@@ -90,11 +89,11 @@ namespace GearBackup.Gui
                         return M8CardCheck.Run(root, reader, (count, path) => {
                             if (update.ElapsedMilliseconds < 150) return;
                             update.Restart();
-                            host.RunOnUi(delegate { if (!closed && !cancellation.IsCancellationRequested) notice.Text = "Checked " + count + " songs: " + M8SongJson.Clean(path); });
+                            host.RunOnUi(delegate { if (cancellation.CanPublish) notice.Text = "Checked " + count + " songs: " + M8SongJson.Clean(path); });
                         });
-                }).ConfigureAwait(false);
+                });
                 host.RunOnUi(delegate {
-                    if (closed || cancellation.IsCancellationRequested) return;
+                    if (!cancellation.CanPublish) return;
                     foreach (var item in result.Songs)
                     {
                         string status = item.Error != null ? "Cannot read song" : item.Missing > 0 ? "Missing samples" : item.NeedsAttention ? "Needs attention" : item.Samples.Samples.Count == 0 ? "No sample references" : "All samples present";
@@ -110,18 +109,17 @@ namespace GearBackup.Gui
                     ShowCardSong();
                 });
             }
-            catch (OperationCanceledException) { host.RunOnUi(delegate { if (!closed) notice.Text = "Card check cancelled. Run again for complete results."; }); }
-            catch (Exception ex) { host.RunOnUi(delegate { if (!closed) notice.Text = "Cannot check card: " + ex.Message; }); }
+            catch (OperationCanceledException) { host.RunOnUi(delegate { if (cancellation.IsCurrent) notice.Text = "Card check cancelled. Run again for complete results."; }); }
+            catch (Exception ex) { host.RunOnUi(delegate { if (cancellation.IsCurrent) notice.Text = "Cannot check card: " + ex.Message; }); }
             finally
             {
+                cancellation.Dispose();
                 host.RunOnUi(delegate {
-                    running = null;
-                    if (!closed)
+                    if (cancellation.IsCurrent)
                     {
                         if (cancellation.IsCancellationRequested) notice.Text = "Card check cancelled. Run again for complete results.";
                         SetChecking(false); host.RefreshLayout();
                     }
-                    cancellation.Dispose();
                 });
             }
         }

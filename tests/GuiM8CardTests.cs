@@ -56,7 +56,7 @@ partial class Tests
                 using (var bitmap = new Bitmap(form.ClientSize.Width, form.ClientSize.Height))
                 {
                     form.Controls[0].DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.ClientSize));
-                    bitmap.Save(Path.Combine(Environment.CurrentDirectory, "tests", ".build", "m8-card-check.png"));
+                    bitmap.Save(Path.Combine(TestBuildDirectory, "m8-card-check.png"));
                 }
                 typeof(DataGridView).GetMethod("OnCellDoubleClick", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
                     .Invoke(songs, new object[] { new DataGridViewCellEventArgs(0, missing.Index) });
