@@ -179,21 +179,7 @@ namespace GearBackup.Gui
                 });
                 host.RunOnUi(delegate {
                     if (!cancellation.CanPublish) return;
-                    Report = report;
-                    checkedConfig = config;
-                    foreach (var item in report.Samples)
-                    {
-                        int index = samples.Rows.Add(item.Slots, item.Reference, item.CardStatus,
-                            config == null ? "Not searched" : item.Matches.Count(m => m.Exact && m.Status == "Verified copy") + " exact; " + item.Matches.Count(m => !m.Exact) + " candidates");
-                        samples.Rows[index].Tag = item;
-                        samples.Rows[index].Cells[1].ToolTipText = item.Relative == null ? item.CardStatus : "Card-relative path: " + item.Relative;
-                    }
-                    samples.Height = Math.Min(host.Font.Height * 9, samples.ColumnHeadersHeight + samples.RowTemplate.Height * Math.Max(1, samples.Rows.Count) + 5);
-                    notice.Text = report.Samples.Count + " unique sample reference(s); " + report.Samples.Count(s => s.CardStatus == "Missing on card") +
-                        " missing on card; " + report.BackupsSearched + " M8 backup set(s) searched. " + (report.Warnings.Count > 0 ? "See warnings below; results may be incomplete." : "") +
-                        " All sampler slots are included, even unused ones. Card presence does not verify audio contents.";
-                    warnings.Text = string.Join(Environment.NewLine, report.Warnings); warnings.Visible = report.Warnings.Count > 0;
-                    ShowMatches();
+                    ShowReport(report, config);
                 });
             }
             catch (OperationCanceledException) { host.RunOnUi(delegate { if (cancellation.IsCurrent) notice.Text = "Sample check cancelled. Run it again for complete results."; }); }
@@ -209,6 +195,25 @@ namespace GearBackup.Gui
                     }
                 });
             }
+        }
+
+        void ShowReport(M8SampleReport report, Config config)
+        {
+            Report = report;
+            checkedConfig = config;
+            foreach (var item in report.Samples)
+            {
+                int index = samples.Rows.Add(item.Slots, item.Reference, item.CardStatus,
+                    config == null ? "Not searched" : item.Matches.Count(m => m.Exact && m.Status == "Verified copy") + " exact; " + item.Matches.Count(m => !m.Exact) + " candidates");
+                samples.Rows[index].Tag = item;
+                samples.Rows[index].Cells[1].ToolTipText = item.Relative == null ? item.CardStatus : "Card-relative path: " + item.Relative;
+            }
+            samples.Height = Math.Min(host.Font.Height * 9, samples.ColumnHeadersHeight + samples.RowTemplate.Height * Math.Max(1, samples.Rows.Count) + 5);
+            notice.Text = report.Samples.Count + " unique sample reference(s); " + report.Samples.Count(s => s.CardStatus == "Missing on card") +
+                " missing on card; " + report.BackupsSearched + " M8 backup set(s) searched. " + (report.Warnings.Count > 0 ? "See warnings below; results may be incomplete." : "") +
+                " All sampler slots are included, even unused ones. Card presence does not verify audio contents.";
+            warnings.Text = string.Join(Environment.NewLine, report.Warnings); warnings.Visible = report.Warnings.Count > 0;
+            ShowMatches();
         }
 
         void ShowMatches()

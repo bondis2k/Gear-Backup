@@ -99,52 +99,70 @@ namespace GearBackup
                     "M8 card migration to " + target + (linkHistory ? " · Link backup history: " + history : ""));
                 if (!report.Operation.Succeeded) return report;
                 sameTarget();
-                foreach (var file in point.Snapshot.Files)
-                {
-                    context.CheckCancellation();
-                    try
-                    {
-                        string path = PathSafety.SafePath(target, file.Relative);
-                        Snapshots.ValidateEntry(new RestoreEntry { Relative = file.Relative, StoredPath = path, Size = file.Size, Hash = file.Hash }, true, context);
-                        report.VerifiedFiles++;
-                    }
-                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { report.Issues.Add(file.Relative + ": " + ex.Message); }
-                }
-                foreach (string folder in point.Snapshot.Folders)
-                {
-                    context.CheckCancellation();
-                    if (!Directory.Exists(PathSafety.SafePath(target, folder))) report.Issues.Add("Missing folder: " + folder);
-                }
+                VerifyMigratedContent(point, target, report, context);
                 sameTarget();
                 report.Songs = M8CardCheck.Run(target, reader, context: context);
                 sameTarget();
-                int missing = report.Songs.Songs.Count(s => s.Missing > 0), attention = report.Songs.Songs.Count(s => s.NeedsAttention);
-                bool problem = report.Issues.Count != 0 || missing != 0 || attention != 0 || report.Songs.Warnings.Count != 0;
-                report.Operation.SetOutcome(problem ? OperationOutcome.Failed : OperationOutcome.Success, problem ? 2 : 0);
-                report.Operation.Title = problem ? "M8 migration needs attention" : "M8 migration complete";
-                report.Operation.Summary = report.VerifiedFiles + " / " + point.Snapshot.Files.Count + " file(s) verified; " + report.Songs.Songs.Count +
-                    " song(s) checked; " + missing + " with missing samples; " + attention + " needing attention; " + report.Issues.Count + " verification issue(s)." +
-                    (report.Songs.Warnings.Count == 0 ? "" : " Song scan incomplete; see report.");
+                bool problem = Conclude(report, point);
                 if (linkHistory && !problem)
                 {
                     context.CheckCancellation(); sameTarget();
-                    try
-                    {
-                        if (ProfileLinks.Key(target) != linkKey) throw new IOException("The replacement card volume ID changed.");
-                        ProfileLinks.Save(config, linkKey, history);
-                        report.HistoryLink = "Linked to " + history;
-                        report.Operation.Summary += " Replacement card linked to the original backup history.";
-                    }
-                    catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-                    {
-                        report.HistoryLink = "Not saved: " + ex.Message;
-                        report.Operation.SetOutcome(OperationOutcome.Failed, 2); report.Operation.Title = "M8 migration needs attention";
-                        report.Operation.Summary += " Files migrated, but the history link could not be saved. See report.";
-                    }
+                    SaveHistoryLink(config, target, linkKey, history, report);
                 }
                 context.WriteLine(report.Text());
                 report.Operation.Elapsed = timer.Elapsed;
                 return report;
+            }
+        }
+
+        // Checks every copied file against its stored hash and every folder for existence; problems go to the report.
+        static void VerifyMigratedContent(RestorePoint point, string target, M8MigrationReport report, OperationContext context)
+        {
+            foreach (var file in point.Snapshot.Files)
+            {
+                context.CheckCancellation();
+                try
+                {
+                    string path = PathSafety.SafePath(target, file.Relative);
+                    Snapshots.ValidateEntry(new RestoreEntry { Relative = file.Relative, StoredPath = path, Size = file.Size, Hash = file.Hash }, true, context);
+                    report.VerifiedFiles++;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException) { report.Issues.Add(file.Relative + ": " + ex.Message); }
+            }
+            foreach (string folder in point.Snapshot.Folders)
+            {
+                context.CheckCancellation();
+                if (!Directory.Exists(PathSafety.SafePath(target, folder))) report.Issues.Add("Missing folder: " + folder);
+            }
+        }
+
+        // Sets the operation's outcome and summary from the checks; true when anything needs attention.
+        static bool Conclude(M8MigrationReport report, RestorePoint point)
+        {
+            int missing = report.Songs.Songs.Count(s => s.Missing > 0), attention = report.Songs.Songs.Count(s => s.NeedsAttention);
+            bool problem = report.Issues.Count != 0 || missing != 0 || attention != 0 || report.Songs.Warnings.Count != 0;
+            report.Operation.SetOutcome(problem ? OperationOutcome.Failed : OperationOutcome.Success, problem ? 2 : 0);
+            report.Operation.Title = problem ? "M8 migration needs attention" : "M8 migration complete";
+            report.Operation.Summary = report.VerifiedFiles + " / " + point.Snapshot.Files.Count + " file(s) verified; " + report.Songs.Songs.Count +
+                " song(s) checked; " + missing + " with missing samples; " + attention + " needing attention; " + report.Issues.Count + " verification issue(s)." +
+                (report.Songs.Warnings.Count == 0 ? "" : " Song scan incomplete; see report.");
+            return problem;
+        }
+
+        static void SaveHistoryLink(Config config, string target, string linkKey, string history, M8MigrationReport report)
+        {
+            try
+            {
+                if (ProfileLinks.Key(target) != linkKey) throw new IOException("The replacement card volume ID changed.");
+                ProfileLinks.Save(config, linkKey, history);
+                report.HistoryLink = "Linked to " + history;
+                report.Operation.Summary += " Replacement card linked to the original backup history.";
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                report.HistoryLink = "Not saved: " + ex.Message;
+                report.Operation.SetOutcome(OperationOutcome.Failed, 2); report.Operation.Title = "M8 migration needs attention";
+                report.Operation.Summary += " Files migrated, but the history link could not be saved. See report.";
             }
         }
     }

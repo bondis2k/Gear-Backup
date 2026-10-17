@@ -47,52 +47,15 @@ namespace GearBackup.Gui
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             ToolLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
-            var titleLabel = new Label { Text = title, UseMnemonic = false, AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(17), Margin = new Padding(0, 0, 0, 4) };
-            var heading = GuiTheme.Label(description, 10, GuiTheme.Muted);
-            heading.MaximumSize = new Size(940, 0);
-            top.Controls.Add(titleLabel);
-            top.Controls.Add(heading);
-            if (browserHeader)
-            {
-                var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 16) };
-                header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-                header.Controls.Add(new BrowserIcon { Size = new Size(48, 48), Margin = new Padding(0, 0, 16, 0) }, 0, 0);
-                top.Margin = Padding.Empty; header.Controls.Add(top, 1, 0); ToolLayout.Controls.Add(header, 0, 0);
-            }
-            else ToolLayout.Controls.Add(top, 0, 0);
+            Label heading = AddHeading(title, description, browserHeader);
             Notice = GuiTheme.Label("", 9, GuiTheme.Muted);
             Notice.MaximumSize = new Size(940, 130);
             Notice.Margin = new Padding(0, 10, 0, 0);
             Notice.Name = "ToolNotice";
             ToolLayout.Controls.Add(Notice, 0, 2);
-            // The bottom bar: the window's actions on the left, Close on the right.
-            var bar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 14, 0, 0), Margin = Padding.Empty };
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            // An auto-sizing flow panel in a stretching column measures its buttons stacked and keeps that height,
-            // leaving dead space under the bar, so its height is worked out here from the buttons that fit per line.
             Actions = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = false, WrapContents = true, Margin = Padding.Empty, Height = 40 };
-            Actions.Layout += delegate {
-                int width = Actions.ClientSize.Width, x = 0, lines = 1, rowHeight = 0;
-                if (width <= 0) return;
-                foreach (Control button in Actions.Controls)
-                {
-                    if (!button.Visible) continue;
-                    int w = button.Width + button.Margin.Horizontal;
-                    if (x > 0 && x + w > width) { lines++; x = 0; }
-                    x += w; rowHeight = Math.Max(rowHeight, button.Height + button.Margin.Vertical);
-                }
-                if (rowHeight > 0 && Actions.Height != lines * rowHeight) Actions.Height = lines * rowHeight;
-            };
-            var close = GuiTheme.Button("Close", false);
-            close.Margin = Padding.Empty;
-            close.Click += delegate { Close(); };
-            close.DialogResult = DialogResult.Cancel;
-            CancelButton = close;
-            bar.Controls.Add(Actions, 0, 0);
-            bar.Controls.Add(close, 1, 0);
-            ToolLayout.Controls.Add(bar, 0, 3);
+            KeepHeightToButtons(Actions);
+            ToolLayout.Controls.Add(BuildActionBar(), 0, 3);
             Controls.Add(ToolLayout);
 
             Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -112,6 +75,60 @@ namespace GearBackup.Gui
                 e.Cancel = true;
                 Notice.Text = "Stopping safely…";
             };
+        }
+
+        // The title and description at the top (beside the browser icon when asked); returns the description label.
+        Label AddHeading(string title, string description, bool browserHeader)
+        {
+            var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
+            var titleLabel = new Label { Text = title, UseMnemonic = false, AutoSize = true, ForeColor = GuiTheme.Ink, Font = GuiTheme.Heading(17), Margin = new Padding(0, 0, 0, 4) };
+            var heading = GuiTheme.Label(description, 10, GuiTheme.Muted);
+            heading.MaximumSize = new Size(940, 0);
+            top.Controls.Add(titleLabel);
+            top.Controls.Add(heading);
+            if (browserHeader)
+            {
+                var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Margin = new Padding(0, 0, 0, 16) };
+                header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                header.Controls.Add(new BrowserIcon { Size = new Size(48, 48), Margin = new Padding(0, 0, 16, 0) }, 0, 0);
+                top.Margin = Padding.Empty; header.Controls.Add(top, 1, 0); ToolLayout.Controls.Add(header, 0, 0);
+            }
+            else ToolLayout.Controls.Add(top, 0, 0);
+            return heading;
+        }
+
+        // An auto-sizing flow panel in a stretching column measures its buttons stacked and keeps that height,
+        // leaving dead space under the bar, so its height is worked out here from the buttons that fit per line.
+        static void KeepHeightToButtons(FlowLayoutPanel actions)
+        {
+            actions.Layout += delegate {
+                int width = actions.ClientSize.Width, x = 0, lines = 1, rowHeight = 0;
+                if (width <= 0) return;
+                foreach (Control button in actions.Controls)
+                {
+                    if (!button.Visible) continue;
+                    int w = button.Width + button.Margin.Horizontal;
+                    if (x > 0 && x + w > width) { lines++; x = 0; }
+                    x += w; rowHeight = Math.Max(rowHeight, button.Height + button.Margin.Vertical);
+                }
+                if (rowHeight > 0 && actions.Height != lines * rowHeight) actions.Height = lines * rowHeight;
+            };
+        }
+
+        // The bottom bar: the window's actions on the left, Close on the right.
+        Control BuildActionBar()
+        {
+            var bar = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 2, Padding = new Padding(0, 14, 0, 0), Margin = Padding.Empty };
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            bar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var close = GuiTheme.Button("Close", false);
+            close.Margin = Padding.Empty;
+            close.Click += delegate { Close(); };
+            close.DialogResult = DialogResult.Cancel;
+            CancelButton = close;
+            bar.Controls.Add(Actions, 0, 0);
+            bar.Controls.Add(close, 1, 0);
+            return bar;
         }
 
         protected bool Working { get { return cancellation != null; } }

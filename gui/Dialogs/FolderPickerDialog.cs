@@ -26,6 +26,16 @@ namespace GearBackup.Gui
             Text = "Choose a folder · " + AppIdentity.Name;
             Accept.Text = "Select folder";
             BuildHeader(description);
+            BuildContent();
+            AddRoots();
+            WireEvents(allowNew, initial);
+            // The tree needs a handle before it can be navigated; headless windows never show.
+            if (!string.IsNullOrEmpty(initial)) GoTo(initial);
+            ClearMessage(); UpdateUpButton();
+        }
+
+        void BuildContent()
+        {
             message.Name = "FolderPickerMessage"; message.Margin = new Padding(0, 6, 0, 0);
             var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Margin = Padding.Empty };
             content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -43,8 +53,10 @@ namespace GearBackup.Gui
             content.Controls.Add(browser, 0, 1);
             content.Controls.Add(message, 0, 2);
             layout.Controls.Add(content, 0, 1);
+        }
 
-            AddRoots();
+        void WireEvents(bool allowNew, string initial)
+        {
             tree.BeforeExpand += delegate(object sender, TreeViewCancelEventArgs e) { LoadChildren(e.Node); };
             tree.AfterSelect += delegate(object sender, TreeViewEventArgs e) {
                 if (syncing || e.Node.Tag == null) return;
@@ -79,9 +91,6 @@ namespace GearBackup.Gui
                 SelectedPath = Path.GetFullPath(chosen);
             };
             Shown += delegate { if (!string.IsNullOrEmpty(initial)) GoTo(initial); if (tree.SelectedNode == null && tree.Nodes.Count > 0) tree.SelectedNode = tree.Nodes[0]; tree.Focus(); };
-            // The tree needs a handle before it can be navigated; headless windows never show.
-            if (!string.IsNullOrEmpty(initial)) GoTo(initial);
-            ClearMessage(); UpdateUpButton();
         }
 
         void BuildHeader(string description)

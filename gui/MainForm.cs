@@ -83,17 +83,7 @@ namespace GearBackup.Gui
             StartPosition = FormStartPosition.CenterScreen;
             AutoScaleDimensions = new SizeF(96, 96); AutoScaleMode = AutoScaleMode.Dpi;
             if (GuiHeadless) { Opacity = 0; ShowInTaskbar = false; }
-            source.Name = "SourceFolder"; backupFolder.Name = "BackupFolder"; profile.Name = "Profile";
-            start.Name = "StartOperation"; preview.Name = "PreviewOperation";
-            cancel.Name = "CancelOperation"; status.Name = "OperationStatus";
-            about.Name = "AboutApplication";
-            settings.Name = "OpenSettings";
-            sourceCaption.Name = "SourceCaption";
-            metrics.Name = "ProgressMetrics"; counts.Name = "CompletionCounts"; openFolder.Name = "OpenOutputFolder";
-            detail.Name = "OperationDetail";
-            counts.Visible = false; metrics.Visible = false;
-            source.AccessibleName = "Source folder"; backupFolder.AccessibleName = "Backup location";
-            profile.AccessibleName = "History name"; log.AccessibleName = "Activity log";
+            NameControls();
 
             BuildLayout();
             Shown += delegate { GuiTheme.FitToScreen(this); };
@@ -114,6 +104,41 @@ namespace GearBackup.Gui
             backupFolder.Text = config.BackupFolder; profile.Text = config.Profile;
             selectedOperation = config.Mode == BackupMode.Incremental ? GuiOperation.IncrementalBackup : GuiOperation.FullBackup;
             InitializeWorkflow();
+            WireCommands();
+            RefreshOperationControls();
+            // Starts collapsed; the summary line under the buttons shows a set source folder, the backup
+            // location and the profile. Choosing Restore opens it, since a destination must be chosen.
+            SetOptionsExpanded(false);
+            detail.Text = "Connect your device, click Detect device, then Back up.";
+            SetToolTips();
+            // Closing while an operation runs cancels it first; CompleteOperation closes the window once it stops.
+            FormClosing += delegate(object sender, FormClosingEventArgs e) {
+                if (runner.IsBusy) { e.Cancel = true; closeAfterCancel = true; RequestCancel(); }
+            };
+            displayTimer.Tick += delegate { DrainDisplay(); };
+            displayTimer.Start();
+            Shown += delegate { RefreshRestoreBackups(); };
+            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); restoreSection.Close(); displayTimer.Dispose(); hints.Dispose(); deviceCard.Close(); };
+        }
+
+        // Names the controls so tests and screen readers can find them.
+        void NameControls()
+        {
+            source.Name = "SourceFolder"; backupFolder.Name = "BackupFolder"; profile.Name = "Profile";
+            start.Name = "StartOperation"; preview.Name = "PreviewOperation";
+            cancel.Name = "CancelOperation"; status.Name = "OperationStatus";
+            about.Name = "AboutApplication";
+            settings.Name = "OpenSettings";
+            sourceCaption.Name = "SourceCaption";
+            metrics.Name = "ProgressMetrics"; counts.Name = "CompletionCounts"; openFolder.Name = "OpenOutputFolder";
+            detail.Name = "OperationDetail";
+            counts.Visible = false; metrics.Visible = false;
+            source.AccessibleName = "Source folder"; backupFolder.AccessibleName = "Backup location";
+            profile.AccessibleName = "History name"; log.AccessibleName = "Activity log";
+        }
+
+        void WireCommands()
+        {
             start.Click += delegate { StartOperation(false); };
             preview.Click += delegate { StartOperation(true); };
             cancel.Click += delegate { RequestCancel(); };
@@ -130,25 +155,16 @@ namespace GearBackup.Gui
             dashboard.Name = "OpenDashboard"; storage.Name = "OpenStorage"; profiles.Name = "OpenProfiles";
             dashboard.Click += delegate { OpenTool(0); }; storage.Click += delegate { OpenTool(1); };
             profiles.Click += delegate { OpenTool(2); };
-            RefreshOperationControls();
-            // Starts collapsed; the summary line under the buttons shows a set source folder, the backup
-            // location and the profile. Choosing Restore opens it, since a destination must be chosen.
-            SetOptionsExpanded(false);
-            detail.Text = "Connect your device, click Detect device, then Back up.";
+        }
+
+        void SetToolTips()
+        {
             hints.SetToolTip(start, "Start the selected operation (Ctrl+Enter)");
             hints.SetToolTip(preview, "Preview without changing backup or restore files (Ctrl+P)");
             hints.SetToolTip(detect, "Detect a connected device (Ctrl+D)");
             hints.SetToolTip(settings, "Preferences (Ctrl+,)"); hints.SetToolTip(cancel, "Cancel safely (Esc)");
             hints.SetToolTip(help, "Open the manual (F1)");
             hints.SetToolTip(profile, "Leave blank: each card, folder or device keeps its own history automatically.\nA name keeps backups in a separate history under that name, e.g. for a second project on the same card.");
-            // Closing while an operation runs cancels it first; CompleteOperation closes the window once it stops.
-            FormClosing += delegate(object sender, FormClosingEventArgs e) {
-                if (runner.IsBusy) { e.Cancel = true; closeAfterCancel = true; RequestCancel(); }
-            };
-            displayTimer.Tick += delegate { DrainDisplay(); };
-            displayTimer.Start();
-            Shown += delegate { RefreshRestoreBackups(); };
-            FormClosed += delegate { zipRestore.Close(); backupSets.Close(); restoreSection.Close(); displayTimer.Dispose(); hints.Dispose(); deviceCard.Close(); };
         }
 
         void BuildLayout()
@@ -171,6 +187,19 @@ namespace GearBackup.Gui
             viewport.Resize += delegate { sizeLayout(); };
             viewport.Layout += delegate { sizeLayout(); };
 
+            layout.Controls.Add(BuildHeader(), 0, 0);
+            TableLayoutPanel inputLayout = BuildInputFields();
+            layout.Controls.Add(BuildWorkflowTabs(), 0, 1);
+            AddOperationControls(inputLayout);
+            layout.Controls.Add(BuildOperationState(), 0, 2);
+            layout.Controls.Add(BuildActivityCard(), 0, 3);
+            RefreshWorkflowLayout();
+
+        }
+
+        // The title, the gear icons and the Help, About and Settings buttons.
+        Control BuildHeader()
+        {
             var header = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 3, Margin = new Padding(0, 0, 0, 18), BackColor = GuiTheme.Background, Padding = new Padding(12) };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -194,8 +223,12 @@ namespace GearBackup.Gui
             var headerActions = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty };
             headerActions.Controls.Add(help); headerActions.Controls.Add(about); headerActions.Controls.Add(settings);
             header.Controls.Add(headerActions, 2, 0);
-            layout.Controls.Add(header, 0, 0);
+            return header;
+        }
 
+        // The input card with the optional source, backup location and history name fields; returns its layout.
+        TableLayoutPanel BuildInputFields()
+        {
             inputs.Dock = DockStyle.Top; inputs.AutoSize = true; inputs.Padding = new Padding(22, 16, 22, 18);
             inputs.Margin = new Padding(0, 0, 0, 0);
             var inputLayout = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1 };
@@ -214,8 +247,12 @@ namespace GearBackup.Gui
             profileField = new FieldPanel(profile) { Dock = DockStyle.Fill, Margin = Padding.Empty };
             fields.Controls.Add(profileField, 0, 5); fields.SetColumnSpan(profileField, 3);
             zip.Margin = new Padding(0, 12, 0, 0); fields.Controls.Add(zip, 0, 6); fields.SetColumnSpan(zip, 3);
-            layout.Controls.Add(BuildWorkflowTabs(), 0, 1);
+            return inputLayout;
+        }
 
+        // The operation selectors and Preview/Start buttons, the restore details, the destination summary and the optional fields.
+        void AddOperationControls(TableLayoutPanel inputLayout)
+        {
             var actions = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 5, Padding = new Padding(0, 0, 0, 12), Margin = Padding.Empty };
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
@@ -234,8 +271,12 @@ namespace GearBackup.Gui
             inputLayout.Controls.Add(destinationSummary, 0, 2);
             optionsToggle.Name = "ToggleBackupOptions"; optionsToggle.Margin = new Padding(0, 4, 0, 4);
             inputLayout.Controls.Add(optionsToggle, 0, 3);
-            inputLayout.Controls.Add(fields, 0, 4);
+            inputLayout.Controls.Add(optionalFields, 0, 4);
+        }
 
+        // The status line, counts, detail text, metrics and progress bar.
+        Control BuildOperationState()
+        {
             var state = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, RowCount = 5, Margin = new Padding(0, 0, 0, 14), BackColor = GuiTheme.Background, Padding = new Padding(12) };
             operationState = state;
             for (int i = 0; i < 5; i++) state.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -245,9 +286,12 @@ namespace GearBackup.Gui
             state.Controls.Add(counts, 0, 1); detail.AutoSize = false; detail.Height = 28; detail.Dock = DockStyle.Top; detail.AutoEllipsis = true;
             state.Controls.Add(detail, 0, 2); state.Controls.Add(metrics, 0, 3);
             progress.Dock = DockStyle.Top; progress.Height = 8; progress.Margin = new Padding(0, 4, 0, 0); state.Controls.Add(progress, 0, 4);
-            layout.Controls.Add(state, 0, 2);
+            return state;
+        }
 
-            // The activity card: a heading with the tools on the right, then the log.
+        // The activity card: a heading with the tools on the right, then the log.
+        Control BuildActivityCard()
+        {
             var activityCard = new CardPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(18, 12, 12, 14) };
             activityArea = activityCard;
             var activity = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = GuiTheme.Surface, RowCount = 3, ColumnCount = 2, Margin = Padding.Empty };
@@ -265,9 +309,8 @@ namespace GearBackup.Gui
             log.Dock = DockStyle.Fill; log.BorderStyle = BorderStyle.None; log.ReadOnly = true;
             log.BackColor = GuiTheme.Surface; log.ForeColor = GuiTheme.Ink; log.Font = new Font("Consolas", 9.5f);
             log.DetectUrls = false; log.WordWrap = false; activity.Controls.Add(log, 0, 2); activity.SetColumnSpan(log, 2);
-            activityCard.Controls.Add(activity); layout.Controls.Add(activityCard, 0, 3);
-            RefreshWorkflowLayout();
-
+            activityCard.Controls.Add(activity);
+            return activityCard;
         }
 
         // A small caption above a field.

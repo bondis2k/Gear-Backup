@@ -32,23 +32,11 @@ namespace GearBackup
             var timer = System.Diagnostics.Stopwatch.StartNew();
             DateTime takenUtc = DateTime.UtcNow;
             source = Rooted(source); destination = Path.GetFullPath(destination);
-            RejectRootLinks(source); RejectRootLinks(destination);
-            if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
-            if (Within(destination, source)) throw new IOException("Save the ZIP archive outside the source folder.");
-            string parent = Path.GetDirectoryName(destination);
-            if (!Directory.Exists(parent)) throw new IOException("Archive destination folder does not exist: " + parent);
-            if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
+            string parent = ValidateLocations(source, destination);
             var scan = new ScanResult(); SourceScan.CollectFiles(source, scan, context);
-            foreach (var item in Directory.EnumerateFileSystemEntries(source))
-                if (string.Equals(Path.GetFileName(item), ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("The source contains a reserved archive metadata name: " + Path.GetFileName(item) + ". Rename it before creating the ZIP.");
-            var actions = new List<string>(); var sizes = new Dictionary<string, long>(); long total = 0;
-            foreach (string folder in scan.Folders) actions.Add("Create folder: " + Relative(source, folder));
-            foreach (FileInfo file in scan.Files)
-            {
-                string path = Relative(source, file.FullName); actions.Add("Copy: " + path); sizes[path] = file.Length; total += file.Length;
-            }
+            RejectReservedNames(source);
+            var actions = new List<string>(); var sizes = new Dictionary<string, long>();
+            long total = PlanArchive(source, scan, actions, sizes);
             context.WriteLine("  ZIP archive: " + destination);
             if (!context.ShowPlan("ZIP archive preview", actions, total, config.Preview, sizes))
                 return new OperationResult(context.PreviewOnly ? OperationOutcome.Preview : OperationOutcome.Cancelled) { Summary = context.PreviewOnly ? "ZIP preview complete; no archive created." : "ZIP archive cancelled.", Elapsed = timer.Elapsed };
@@ -66,47 +54,7 @@ namespace GearBackup
                 {
                     created = true;
                     using (var zip = new ZipArchive(stream, ZipArchiveMode.Create))
-                    {
-                        foreach (string folder in scan.Folders)
-                        {
-                            context.CheckCancellation(); RejectRootLinks(folder);
-                            zip.CreateEntry(Relative(source, folder).Replace('\\', '/') + "/");
-                        }
-                        var buffer = new byte[65536]; long done = 0; int count = 0;
-                        foreach (FileInfo file in scan.Files)
-                        {
-                            context.CheckCancellation(); RejectRootLinks(file.FullName);
-                            string path = Relative(source, file.FullName), name = path.Replace('\\', '/');
-                            var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
-                            entry.LastWriteTime = BackupZip.ZipTime(file.LastWriteTime);
-                            using (var hash = SHA256.Create())
-                            using (var from = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
-                            using (var to = entry.Open())
-                            {
-                                long copied = 0; int read;
-                                while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
-                                {
-                                    context.CheckCancellation(); to.Write(buffer, 0, read);
-                                    hash.TransformBlock(buffer, 0, read, buffer, 0);
-                                    copied += read; done += read;
-                                    context.Progress(Stage.Zipping, path, done, total, count, scan.Files.Count);
-                                }
-                                if (copied != sizes[path]) throw new IOException("Source file changed during archiving: " + path);
-                                hash.TransformFinalBlock(new byte[0], 0, 0); hashes.Add(name, FileCopy.ToHex(hash.Hash));
-                            }
-                            context.Progress(Stage.Zipping, path, done, total, ++count, scan.Files.Count);
-                        }
-                        context.CheckCancellation();
-                        // A placeholder has the same length as the report's eventual SHA-256 checksum.
-                        hashes.Add(ArchiveMetadata.FileName, new string('0', 64));
-                        int checksumBytes = ArchiveMetadata.Utf8.GetByteCount(ArchiveMetadata.Checksums(hashes, context));
-                        byte[] info = ArchiveMetadata.Utf8.GetBytes(ArchiveMetadata.Create(source, config, choice, takenUtc,
-                            scan.Files.Count, scan.Folders.Count, total, checksumBytes));
-                        using (var hash = SHA256.Create()) hashes[ArchiveMetadata.FileName] = FileCopy.ToHex(hash.ComputeHash(info));
-                        using (var output = zip.CreateEntry(ArchiveMetadata.FileName, CompressionLevel.Fastest).Open()) output.Write(info, 0, info.Length);
-                        using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
-                            writer.Write(ArchiveMetadata.Checksums(hashes, context));
-                    }
+                        WriteEntries(zip, source, config, choice, takenUtc, scan, sizes, total, hashes, context);
                 }
                 if (config.Verify) Verify(temp, hashes, context);
                 context.CheckCancellation(); RejectRootLinks(destination);
@@ -118,6 +66,91 @@ namespace GearBackup
                     OutputFolder = parent, Counts = new OperationCounts { Copied = scan.Files.Count }, Elapsed = timer.Elapsed };
             }
             finally { if (created) FileCopy.TryDelete(temp); }
+        }
+
+        // Checks the source and destination before anything is scanned; returns the destination's folder.
+        static string ValidateLocations(string source, string destination)
+        {
+            RejectRootLinks(source); RejectRootLinks(destination);
+            if (!Directory.Exists(source)) throw new IOException("Source folder does not exist: " + source);
+            if (Within(destination, source)) throw new IOException("Save the ZIP archive outside the source folder.");
+            string parent = Path.GetDirectoryName(destination);
+            if (!Directory.Exists(parent)) throw new IOException("Archive destination folder does not exist: " + parent);
+            if (Directory.Exists(destination)) throw new IOException("Archive destination is a folder: " + destination);
+            return parent;
+        }
+
+        static void RejectReservedNames(string source)
+        {
+            foreach (var item in Directory.EnumerateFileSystemEntries(source))
+                if (string.Equals(Path.GetFileName(item), ArchiveMetadata.ChecksumFileName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetFileName(item), ArchiveMetadata.FileName, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("The source contains a reserved archive metadata name: " + Path.GetFileName(item) + ". Rename it before creating the ZIP.");
+        }
+
+        // The preview lines and file sizes for the scan; returns the total bytes.
+        static long PlanArchive(string source, ScanResult scan, List<string> actions, Dictionary<string, long> sizes)
+        {
+            long total = 0;
+            foreach (string folder in scan.Folders) actions.Add("Create folder: " + Relative(source, folder));
+            foreach (FileInfo file in scan.Files)
+            {
+                string path = Relative(source, file.FullName); actions.Add("Copy: " + path); sizes[path] = file.Length; total += file.Length;
+            }
+            return total;
+        }
+
+        // Writes every folder and file, hashing as it copies, then the metadata and checksum entries.
+        static void WriteEntries(ZipArchive zip, string source, Config config, SourceChoice choice, DateTime takenUtc, ScanResult scan,
+            Dictionary<string, long> sizes, long total, Dictionary<string, string> hashes, OperationContext context)
+        {
+            foreach (string folder in scan.Folders)
+            {
+                context.CheckCancellation(); RejectRootLinks(folder);
+                zip.CreateEntry(Relative(source, folder).Replace('\\', '/') + "/");
+            }
+            var buffer = new byte[65536]; long done = 0; int count = 0;
+            foreach (FileInfo file in scan.Files)
+            {
+                context.CheckCancellation(); RejectRootLinks(file.FullName);
+                string path = Relative(source, file.FullName), name = path.Replace('\\', '/');
+                done = AddFile(zip, file, path, name, sizes[path], buffer, done, total, count, scan.Files.Count, hashes, context);
+                context.Progress(Stage.Zipping, path, done, total, ++count, scan.Files.Count);
+            }
+            context.CheckCancellation();
+            // A placeholder has the same length as the report's eventual SHA-256 checksum.
+            hashes.Add(ArchiveMetadata.FileName, new string('0', 64));
+            int checksumBytes = ArchiveMetadata.Utf8.GetByteCount(ArchiveMetadata.Checksums(hashes, context));
+            byte[] info = ArchiveMetadata.Utf8.GetBytes(ArchiveMetadata.Create(source, config, choice, takenUtc,
+                scan.Files.Count, scan.Folders.Count, total, checksumBytes));
+            using (var hash = SHA256.Create()) hashes[ArchiveMetadata.FileName] = FileCopy.ToHex(hash.ComputeHash(info));
+            using (var output = zip.CreateEntry(ArchiveMetadata.FileName, CompressionLevel.Fastest).Open()) output.Write(info, 0, info.Length);
+            using (var writer = new StreamWriter(zip.CreateEntry(ArchiveMetadata.ChecksumFileName, CompressionLevel.Fastest).Open(), ArchiveMetadata.Utf8))
+                writer.Write(ArchiveMetadata.Checksums(hashes, context));
+        }
+
+        // Copies one file into the archive and records its hash; returns the running byte count.
+        static long AddFile(ZipArchive zip, FileInfo file, string path, string name, long expectedSize, byte[] buffer, long done, long total, int count, int files,
+            Dictionary<string, string> hashes, OperationContext context)
+        {
+            var entry = zip.CreateEntry(name, CompressionLevel.Fastest);
+            entry.LastWriteTime = BackupZip.ZipTime(file.LastWriteTime);
+            using (var hash = SHA256.Create())
+            using (var from = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, buffer.Length, FileOptions.SequentialScan))
+            using (var to = entry.Open())
+            {
+                long copied = 0; int read;
+                while ((read = from.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    context.CheckCancellation(); to.Write(buffer, 0, read);
+                    hash.TransformBlock(buffer, 0, read, buffer, 0);
+                    copied += read; done += read;
+                    context.Progress(Stage.Zipping, path, done, total, count, files);
+                }
+                if (copied != expectedSize) throw new IOException("Source file changed during archiving: " + path);
+                hash.TransformFinalBlock(new byte[0], 0, 0); hashes.Add(name, FileCopy.ToHex(hash.Hash));
+            }
+            return done;
         }
 
         static string Relative(string root, string path) { return path.Substring(root.Length).TrimStart('\\', '/'); }

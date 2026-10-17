@@ -98,8 +98,30 @@ namespace GearBackup
             if (items.Count > MaxItems) throw new IOException("The device lists " + items.Count.ToString("N0") + " items, more than the " + MaxItems.ToString("N0") + " Gear Backup will read.");
 
             var onDevice = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var cleanFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var downloads = new List<KeyValuePair<MtpObject, string>>();
+            long total = PlanDownloads(items, mirror, result, onDevice, downloads);
+            // Sizes come from the device, so check the room before the first download rather than part-way through.
+            string shortage = (checkSpace ?? ((where, needed) => DiskSpace.Shortage(where, needed, "the download from the device")))(mirror, total);
+            if (shortage != null) throw new IOException(shortage);
+
+            long done = 0;
+            foreach (var download in downloads)
+            {
+                context.CheckCancellation();
+                done += DownloadOne(source, download.Key, download.Value, done, total, context);
+                result.Downloaded++;
+                result.Bytes += download.Key.Size;
+            }
+
+            RemoveStale(mirror, onDevice, result, files, folders);
+            return result;
+        }
+
+        // Creates the device's folders in the mirror, skips names that can't be mirrored, and returns the bytes to download;
+        // files that already match (size and date) count as unchanged.
+        static long PlanDownloads(List<MtpObject> items, string mirror, MirrorResult result, HashSet<string> onDevice, List<KeyValuePair<MtpObject, string>> downloads)
+        {
+            var cleanFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long total = 0;
             foreach (MtpObject item in items)
             {
@@ -120,47 +142,42 @@ namespace GearBackup
                 downloads.Add(new KeyValuePair<MtpObject, string>(item, path));
                 total = checked(total + item.Size);
             }
-            // Sizes come from the device, so check the room before the first download rather than part-way through.
-            string shortage = (checkSpace ?? ((where, needed) => DiskSpace.Shortage(where, needed, "the download from the device")))(mirror, total);
-            if (shortage != null) throw new IOException(shortage);
+            return total;
+        }
 
-            long done = 0;
-            foreach (var download in downloads)
+        // Downloads one file to a temporary name and moves it into place once it is complete; returns its size.
+        static long DownloadOne(IMtpSource source, MtpObject item, string path, long before, long total, OperationContext context)
+        {
+            RejectRootLinks(path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            string temp = Path.Combine(Path.GetDirectoryName(path), ".geardownload-" + Guid.NewGuid().ToString("N") + ".tmp");
+            try
             {
+                source.Download(item, temp, bytes => {
+                    if (bytes < 0 || bytes > item.Size) throw new IOException("MTP download exceeds its declared size: " + item.RelativePath);
+                    context.Progress(Stage.Downloading, item.RelativePath, checked(before + bytes), total);
+                });
+                // Some devices return a whole file without reporting progress.
                 context.CheckCancellation();
-                MtpObject item = download.Key;
-                string path = download.Value;
+                long size = new FileInfo(temp).Length;
+                if (size != item.Size)
+                    throw new IOException("the download of " + item.RelativePath + " was incomplete (" + size + " of " + item.Size + " bytes)");
+                // Keep the device's date, however old: the next sync compares it to spot changes. (The OP-1
+                // reports some factory sounds as 1970, which FAT cards can't store but the PC's disk can.)
+                if (item.Modified != DateTime.MinValue)
+                    try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { } // a date the file system cannot store keeps the download time
                 RejectRootLinks(path);
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                string temp = Path.Combine(Path.GetDirectoryName(path), ".geardownload-" + Guid.NewGuid().ToString("N") + ".tmp");
-                try
-                {
-                    long before = done;
-                    source.Download(item, temp, bytes => {
-                        if (bytes < 0 || bytes > item.Size) throw new IOException("MTP download exceeds its declared size: " + item.RelativePath);
-                        context.Progress(Stage.Downloading, item.RelativePath, checked(before + bytes), total);
-                    });
-                    // Some devices return a whole file without reporting progress.
-                    context.CheckCancellation();
-                    long size = new FileInfo(temp).Length;
-                    if (size != item.Size)
-                        throw new IOException("the download of " + item.RelativePath + " was incomplete (" + size + " of " + item.Size + " bytes)");
-                    // Keep the device's date, however old: the next sync compares it to spot changes. (The OP-1
-                    // reports some factory sounds as 1970, which FAT cards can't store but the PC's disk can.)
-                    if (item.Modified != DateTime.MinValue)
-                        try { File.SetLastWriteTime(temp, item.Modified); } catch (ArgumentException) { } // a date the file system cannot store keeps the download time
-                    RejectRootLinks(path);
-                    context.CheckCancellation();
-                    if (File.Exists(path)) AtomicFile.ReplaceSafely(temp, path);
-                    else File.Move(temp, path);
-                    done += size;
-                    result.Downloaded++;
-                    result.Bytes += size;
-                }
-                finally { TryDelete(temp); }
+                context.CheckCancellation();
+                if (File.Exists(path)) AtomicFile.ReplaceSafely(temp, path);
+                else File.Move(temp, path);
+                return size;
             }
+            finally { TryDelete(temp); }
+        }
 
-            // Remove what's no longer on the device (and any download left over from an interrupted run).
+        // Remove what's no longer on the device (and any download left over from an interrupted run).
+        static void RemoveStale(string mirror, HashSet<string> onDevice, MirrorResult result, List<string> files, List<string> folders)
+        {
             files.Clear();
             folders.Clear();
             ReadMirrorTree(mirror, files, folders);
@@ -179,7 +196,6 @@ namespace GearBackup
                 if (!onDevice.Contains(folder.Substring(Rooted(mirror).Length)) && Directory.GetFileSystemEntries(folder).Length == 0)
                     Directory.Delete(folder);
             }
-            return result;
         }
 
         static string Shorten(string text)
